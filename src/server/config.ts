@@ -1,56 +1,54 @@
-import { config } from 'dotenv';
 import type { AppConfig } from '../types';
+import 'dotenv/config';
 
-// Only load .env file in development
-if (process.env.NODE_ENV !== 'production') {
-    config();
-}
+// Load and validate environment variables
+const env = process.env;
 
-// Helper function to get required environment variables
-function getRequiredEnvVar(name: string): string {
-    const value = process.env[name];
-    if (!value) {
-        throw new Error(`Missing required environment variable: ${name}`);
+// Validate required environment variables
+const required = [
+    'PORT',
+    'NODE_ENV',
+    'CF_ACCOUNT_ID',
+    'CF_GATEWAY_ID',
+    'CF_GATEWAY_API_KEY',
+    'LLM_PROVIDER',
+    'LLM_API_KEY',
+    'PACE_NOTE_MODEL',
+    'S3_BUCKET_NAME',
+    'S3_ACCESS_KEY',
+    'S3_SECRET_KEY'
+];
+
+for (const key of required) {
+    if (!env[key]) {
+        throw new Error(`Missing required environment variable: ${key}`);
     }
-    return value;
 }
 
-// Helper function to get optional environment variables with default
-function getEnvVar(name: string, defaultValue: string): string {
-    return process.env[name] || defaultValue;
-}
-
-// Configuration object
+// Export typed configuration
 export const CONFIG: AppConfig = {
+    server: {
+        port: parseInt(env.PORT || '3000', 10),
+        environment: env.NODE_ENV || 'development',
+        isDev: (env.NODE_ENV || 'development') === 'development'
+    },
     cloudflare: {
-        accountId: getRequiredEnvVar('CF_ACCOUNT_ID'),
-        gatewayId: getRequiredEnvVar('CF_GATEWAY_ID'),
-        gatewayApiKey: getRequiredEnvVar('CF_GATEWAY_API_KEY'),
-        endpoint: `https://gateway.ai.cloudflare.com/v1/${getRequiredEnvVar('CF_ACCOUNT_ID')}/${getRequiredEnvVar('CF_GATEWAY_ID')}`,
+        accountId: env.CF_ACCOUNT_ID!,
+        gatewayId: env.CF_GATEWAY_ID!,
+        gatewayApiKey: env.CF_GATEWAY_API_KEY!,
+        endpoint: `https://gateway.ai.cloudflare.com/v1/${env.CF_ACCOUNT_ID}/${env.CF_GATEWAY_ID}`
     },
     llm: {
-        provider: getRequiredEnvVar('LLM_PROVIDER'),
-        apiKey: getRequiredEnvVar('LLM_API_KEY'),
+        provider: env.LLM_PROVIDER!,
+        apiKey: env.LLM_API_KEY!,
+        models: {
+            paceNote: env.PACE_NOTE_MODEL!
+        }
     },
     s3: {
-        bucketName: getRequiredEnvVar('S3_BUCKET_NAME'),
-        accessKeyId: getRequiredEnvVar('S3_ACCESS_KEY'),
-        secretAccessKey: getRequiredEnvVar('S3_SECRET_KEY'),
-        endpoint: 'https://gateway.storjshare.io',
-    },
-    server: {
-        port: parseInt(getEnvVar('PORT', '3000'), 10),
-        environment: getEnvVar('NODE_ENV', 'development'),
-        isDev: process.env.NODE_ENV !== 'production',
+        bucketName: env.S3_BUCKET_NAME!,
+        accessKeyId: env.S3_ACCESS_KEY!,
+        secretAccessKey: env.S3_SECRET_KEY!,
+        endpoint: 'https://gateway.storjshare.io'
     }
-};
-
-// Log startup configuration (excluding sensitive data)
-if (CONFIG.server.isDev) {
-    console.log('Development mode: Loading configuration from .env file');
-    console.log(`LLM Provider: ${CONFIG.llm.provider}`);
-    console.log(`S3 Endpoint: ${CONFIG.s3.endpoint}`);
-    console.log(`S3 Bucket Name: ${CONFIG.s3.bucketName}`);
-} else {
-    console.log('Production mode: Using environment variables from container runtime');
-} 
+}; 

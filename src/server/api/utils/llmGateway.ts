@@ -35,9 +35,9 @@ class LLMGateway {
         logger.debug('Request messages:', messages.map(m => trimMessage(m)));
 
         const body = {
-            model: 'openai/gpt-3.5-turbo',
+            model: request.model || CONFIG.llm.models.paceNote, // Use provided model or default
             messages,
-            temperature: 0.1, // Low temperature for consistent responses
+            temperature: request.temperature ?? 0.1, // Low temperature for consistent responses
             stream: false,    // Always false for our use case
         };
 
@@ -122,12 +122,13 @@ class LLMGateway {
     }
 
     // Helper method to create a conversation
-    public createConversation(systemPrompt?: string): Conversation {
+    public createConversation(systemPrompt?: string, model?: string): Conversation {
         logger.debug('Creating new conversation', { 
             hasSystemPrompt: !!systemPrompt,
+            model: model || CONFIG.llm.models.paceNote,
             systemPrompt: systemPrompt ? trimMessage({ role: 'system' as MessageRole, content: systemPrompt }) : undefined
         });
-        return new Conversation(this, systemPrompt);
+        return new Conversation(this, systemPrompt, model);
     }
 }
 
@@ -136,12 +137,15 @@ class Conversation {
     private messages: Message[] = [];
     private readonly gateway: LLMGateway;
     private readonly systemPrompt?: string;
+    private readonly model?: string;
 
-    constructor(gateway: LLMGateway, systemPrompt?: string) {
+    constructor(gateway: LLMGateway, systemPrompt?: string, model?: string) {
         this.gateway = gateway;
         this.systemPrompt = systemPrompt;
+        this.model = model;
         logger.debug('Conversation initialized', { 
             hasSystemPrompt: !!systemPrompt,
+            model: model || CONFIG.llm.models.paceNote,
             systemPrompt: systemPrompt ? trimMessage({ role: 'system' as MessageRole, content: systemPrompt }) : undefined
         });
     }
@@ -157,6 +161,7 @@ class Conversation {
         const response = await this.gateway.query({
             messages: this.messages,
             systemPrompt: this.systemPrompt,
+            model: this.model,
         });
 
         const assistantMessage = { role: 'assistant' as MessageRole, content: response.content };

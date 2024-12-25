@@ -9,25 +9,38 @@ import type { PaceNoteRequest, PaceNoteResponse } from "../../../types";
 
 class PaceNoteAgent {
     private readonly promptPath: string;
+    private readonly examplesPath: string;
     private systemPrompt: string = '';
+    private examples: string = '';
 
     constructor() {
-        this.promptPath = join(process.cwd(), 'src', 'prompts', 'paceNote.md');
-        // Initialize by loading the prompt
-        this.initializePrompt().catch(error => {
-            logger.error('Failed to initialize prompt:', error);
+        this.promptPath = join(process.cwd(), 'src', 'prompts', 'paceNote', 'paceNote.md');
+        this.examplesPath = join(process.cwd(), 'src', 'prompts', 'paceNote', 'examples.md');
+        // Initialize by loading the prompts
+        this.initializePrompts().catch(error => {
+            logger.error('Failed to initialize prompts:', error);
         });
     }
 
-    // Initialize by loading the prompt file (read-only)
-    private async initializePrompt(): Promise<void> {
+    // Initialize by loading the prompt files (read-only)
+    private async initializePrompts(): Promise<void> {
         try {
             logger.debug('Loading system prompt from:', this.promptPath);
-            this.systemPrompt = await readFile(this.promptPath, 'utf-8');
-            logger.info('System prompt loaded successfully');
+            logger.debug('Loading examples from:', this.examplesPath);
+
+            // Read both files concurrently
+            const [promptContent, examplesContent] = await Promise.all([
+                readFile(this.promptPath, 'utf-8'),
+                readFile(this.examplesPath, 'utf-8')
+            ]);
+
+            this.systemPrompt = promptContent;
+            this.examples = examplesContent;
+
+            logger.info('System prompt and examples loaded successfully');
         } catch (error) {
-            logger.error('Failed to load prompt file:', error);
-            throw new Error('Failed to load prompt file');
+            logger.error('Failed to load prompt files:', error);
+            throw new Error('Failed to load prompt files');
         }
     }
 
@@ -55,18 +68,20 @@ class PaceNoteAgent {
 
     // Generate pace note
     public async generateNote(request: PaceNoteRequest): Promise<PaceNoteResponse> {
-        // Ensure prompt is loaded
-        if (!this.systemPrompt) {
-            logger.info('System prompt not loaded, loading now...');
-            await this.initializePrompt();
+        // Ensure prompts are loaded
+        if (!this.systemPrompt || !this.examples) {
+            logger.info('Prompts not loaded, loading now...');
+            await this.initializePrompts();
         }
 
         // Read competencies
         const competencies = await this.readCompetencies();
 
         // Fill the prompt template
-        logger.debug('Preparing prompt with competencies');
-        const filledPrompt = this.systemPrompt.replace('{competency_list}', competencies);
+        logger.debug('Preparing prompt with competencies and examples');
+        const filledPrompt = this.systemPrompt
+            .replace('{competency_list}', competencies)
+            .replace('{examples}', this.examples);
         
         logger.debug('Sending request to LLM');
         const response = await llmGateway.query({

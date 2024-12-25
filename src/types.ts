@@ -9,6 +9,10 @@ export interface CloudflareConfig {
 export interface LLMConfig {
     provider: string;
     apiKey: string;
+    models: {
+        paceNote: string;
+        // Add other tool models as needed
+    };
 }
 
 export interface S3Config {
@@ -43,6 +47,7 @@ export interface LLMRequest {
     messages: Message[];
     systemPrompt?: string;
     temperature?: number;
+    model?: string;  // Optional model override
 }
 
 export interface LLMResponse {
