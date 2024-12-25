@@ -1,20 +1,21 @@
 import { S3Client } from "@aws-sdk/client-s3";
-import { CONFIG } from "../../config";
 import { logger } from "../../logger";
 
+const S3_ENDPOINT = 'https://gateway.storjshare.io';
+
 logger.debug('Initializing S3 client with config:', {
-    endpoint: CONFIG.s3.endpoint,
-    bucket: CONFIG.s3.bucketName,
+    endpoint: S3_ENDPOINT,
+    bucket: process.env.S3_BUCKET_NAME,
     forcePathStyle: true
 });
 
 // Initialize S3 client with read-only access
 export const s3Client = new S3Client({
-    endpoint: CONFIG.s3.endpoint,
-    region: 'auto',
+    endpoint: S3_ENDPOINT,
+    region: 'us-1',
     credentials: {
-        accessKeyId: CONFIG.s3.accessKeyId,
-        secretAccessKey: CONFIG.s3.secretAccessKey,
+        accessKeyId: process.env.S3_ACCESS_KEY || '',
+        secretAccessKey: process.env.S3_SECRET_KEY || '',
     },
     forcePathStyle: true // Required for Storj compatibility
 });

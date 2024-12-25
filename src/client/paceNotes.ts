@@ -6,13 +6,13 @@ interface OutputBox {
 
 interface PaceNoteRequest {
     input: string;
-    format?: 'markdown' | 'text';
+    rank: string;
 }
 
 interface PaceNoteResponse {
     content: string;
     timestamp: string;
-    format: 'markdown' | 'text';
+    rank: string;
 }
 
 interface ApiResponse<T> {
@@ -27,13 +27,13 @@ class PaceNotesUI {
     private readonly outputs: OutputBox[] = [];
     private readonly inputBox: HTMLTextAreaElement;
     private readonly generateButton: HTMLButtonElement;
-    private readonly formatSelect: HTMLSelectElement;
+    private readonly rankSelect: HTMLSelectElement;
 
     constructor() {
         this.outputSection = document.querySelector('.output-section')!;
         this.inputBox = document.querySelector('.input-box')!;
         this.generateButton = document.getElementById('generate-btn') as HTMLButtonElement;
-        this.formatSelect = document.getElementById('format-select') as HTMLSelectElement;
+        this.rankSelect = document.getElementById('rank-select') as HTMLSelectElement;
         
         this.setupEventListeners();
     }
@@ -45,6 +45,9 @@ class PaceNotesUI {
                 e.preventDefault();
                 this.handleGenerate();
             }
+        });
+        this.rankSelect.addEventListener('change', () => {
+            this.generateButton.disabled = !this.rankSelect.value;
         });
     }
 
@@ -103,14 +106,22 @@ class PaceNotesUI {
 
     private async handleGenerate(): Promise<void> {
         const input = this.inputBox.value.trim();
+        const rank = this.rankSelect.value;
+
         if (!input) {
             this.showError('Please enter some text to generate a pace note.');
+            return;
+        }
+
+        if (!rank) {
+            this.showError('Please select a rank before generating.');
             return;
         }
 
         // Disable input and button during generation
         this.generateButton.disabled = true;
         this.inputBox.disabled = true;
+        this.rankSelect.disabled = true;
 
         // Add loading box
         const loadingBox = this.createOutputBox('', new Date().toISOString(), true);
@@ -119,7 +130,7 @@ class PaceNotesUI {
         try {
             const request: PaceNoteRequest = {
                 input,
-                format: this.formatSelect?.value as 'text' | 'markdown' || 'text'
+                rank
             };
 
             const response = await fetch('/api/paceNotes/generate', {
@@ -145,8 +156,9 @@ class PaceNotesUI {
             this.showError('Failed to connect to server. Please try again.');
             console.error('Error:', error);
         } finally {
-            this.generateButton.disabled = false;
+            this.generateButton.disabled = !this.rankSelect.value;
             this.inputBox.disabled = false;
+            this.rankSelect.disabled = false;
         }
     }
 

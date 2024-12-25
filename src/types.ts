@@ -1,27 +1,4 @@
 // Configuration Types
-export interface CloudflareConfig {
-    accountId: string;
-    gatewayId: string;
-    gatewayApiKey: string;
-    endpoint: string;
-}
-
-export interface LLMConfig {
-    provider: string;
-    apiKey: string;
-    models: {
-        paceNote: string;
-        // Add other tool models as needed
-    };
-}
-
-export interface S3Config {
-    bucketName: string;
-    accessKeyId: string;
-    secretAccessKey: string;
-    endpoint: string;
-}
-
 export interface ServerConfig {
     port: number;
     environment: string;
@@ -29,9 +6,6 @@ export interface ServerConfig {
 }
 
 export interface AppConfig {
-    cloudflare: CloudflareConfig;
-    llm: LLMConfig;
-    s3: S3Config;
     server: ServerConfig;
 }
 

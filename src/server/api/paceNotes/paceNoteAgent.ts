@@ -49,7 +49,7 @@ class PaceNoteAgent {
         try {
             logger.debug('Reading competencies from S3:', path);
             const response = await s3Client.send(new GetObjectCommand({
-                Bucket: CONFIG.s3.bucketName,
+                Bucket: process.env.S3_BUCKET_NAME,
                 Key: path,
             }));
 

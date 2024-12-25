@@ -22,15 +22,16 @@
         <section class="input-section">
             <textarea 
                 class="input-box" 
-                placeholder="Enter your observations here... (Press Ctrl+Enter to generate)"
+                placeholder="I ordered pizza for the shop and it improved morale. (Press Ctrl+Enter to generate)"
                 aria-label="Enter your observations"
             ></textarea>
             <div class="submit-container">
-                <select id="format-select" class="format-select" aria-label="Output format">
-                    <option value="text">Plain Text</option>
-                    <option value="markdown">Markdown</option>
+                <select id="rank-select" class="rank-select" aria-label="Select Rank" required>
+                    <option value="">Select Rank</option>
+                    <option value="cpl-mcpl">Cpl/MCpl</option>
+                    <!-- <option value="sgt">Sgt</option> -->
                 </select>
-                <button class="button" id="generate-btn">Generate Pace Notes</button>
+                <button class="button" id="generate-btn" disabled>Generate Pace Notes</button>
             </div>
         </section>
 

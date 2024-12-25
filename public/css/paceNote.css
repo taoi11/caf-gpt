@@ -30,8 +30,8 @@
   margin-bottom: 2rem;
 }
 
-/* Format select styles */
-.format-select {
+/* Rank select styles */
+.rank-select {
   padding: 0.5rem;
   border: 2px solid var(--primary-color);
   border-radius: 4px;
@@ -39,12 +39,17 @@
   color: var(--text-color);
   font-size: 1rem;
   cursor: pointer;
+  min-width: 150px;
 }
 
-.format-select:focus {
+.rank-select:focus {
   outline: none;
   border-color: var(--secondary-color);
   box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.2);
+}
+
+.rank-select:invalid {
+  border-color: var(--disabled-color);
 }
 
 /* Output section styles */

@@ -6,7 +6,7 @@ class PaceNotesUI {
         this.outputSection = document.querySelector('.output-section');
         this.inputBox = document.querySelector('.input-box');
         this.generateButton = document.getElementById('generate-btn');
-        this.formatSelect = document.getElementById('format-select');
+        this.rankSelect = document.getElementById('rank-select');
         this.setupEventListeners();
     }
     setupEventListeners() {
@@ -16,6 +16,9 @@ class PaceNotesUI {
                 e.preventDefault();
                 this.handleGenerate();
             }
+        });
+        this.rankSelect.addEventListener('change', () => {
+            this.generateButton.disabled = !this.rankSelect.value;
         });
     }
     createOutputBox(content, timestamp, isLoading = false) {
@@ -68,20 +71,26 @@ class PaceNotesUI {
     }
     async handleGenerate() {
         const input = this.inputBox.value.trim();
+        const rank = this.rankSelect.value;
         if (!input) {
             this.showError('Please enter some text to generate a pace note.');
+            return;
+        }
+        if (!rank) {
+            this.showError('Please select a rank before generating.');
             return;
         }
         // Disable input and button during generation
         this.generateButton.disabled = true;
         this.inputBox.disabled = true;
+        this.rankSelect.disabled = true;
         // Add loading box
         const loadingBox = this.createOutputBox('', new Date().toISOString(), true);
         this.outputSection.insertBefore(loadingBox, this.outputSection.firstChild);
         try {
             const request = {
                 input,
-                format: this.formatSelect?.value || 'text'
+                rank
             };
             const response = await fetch('/api/paceNotes/generate', {
                 method: 'POST',
@@ -106,8 +115,9 @@ class PaceNotesUI {
             console.error('Error:', error);
         }
         finally {
-            this.generateButton.disabled = false;
+            this.generateButton.disabled = !this.rankSelect.value;
             this.inputBox.disabled = false;
+            this.rankSelect.disabled = false;
         }
     }
     showError(message) {

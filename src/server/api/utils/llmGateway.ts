@@ -1,4 +1,4 @@
-import { CONFIG } from '../../config';
+import { CONFIG, AI_GATEWAY_URL } from '../../config';
 import { logger } from '../../logger';
 import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from '../../../types';
 
@@ -7,6 +7,12 @@ const MAX_CONCURRENT_REQUESTS = 50;
 const REQUEST_TIMEOUT = 30000; // 30 seconds
 const RETRY_ATTEMPTS = 2;
 const MESSAGE_TRIM_LENGTH = 100;
+
+// LLM configuration from environment
+const LLM_PROVIDER = process.env.LLM_PROVIDER || 'openrouter';
+const LLM_API_KEY = process.env.LLM_API_KEY || '';
+const LLM_GATEWAY_KEY = process.env.CF_GATEWAY_API_KEY || '';
+const LLM_MODEL_PACE_NOTE = process.env.PACE_NOTE_MODEL || '';
 
 function trimMessage(message: { role: MessageRole; content: string }): { role: MessageRole; content: string } {
     if (message.content.length <= MESSAGE_TRIM_LENGTH * 2) {
@@ -35,7 +41,7 @@ class LLMGateway {
         logger.debug('Request messages:', messages.map(m => trimMessage(m)));
 
         const body = {
-            model: request.model || CONFIG.llm.models.paceNote, // Use provided model or default
+            model: request.model || LLM_MODEL_PACE_NOTE, // Use provided model or default
             messages,
             temperature: request.temperature ?? 0.1, // Low temperature for consistent responses
             stream: false,    // Always false for our use case
@@ -47,14 +53,21 @@ class LLMGateway {
             roles: messages.map(m => m.role).join(',')
         });
 
-        const response = await fetch(`${CONFIG.cloudflare.endpoint}/openrouter/v1/chat/completions`, {
+        const response = await fetch(AI_GATEWAY_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${CONFIG.llm.apiKey}`,
-                'cf-aig-authorization': `Bearer ${CONFIG.cloudflare.gatewayApiKey}`,
+                'cf-aig-authorization': `Bearer ${LLM_GATEWAY_KEY}`,
             },
-            body: JSON.stringify(body),
+            body: JSON.stringify([{
+                provider: LLM_PROVIDER,
+                endpoint: 'chat/completions',
+                headers: {
+                    'Authorization': `Bearer ${LLM_API_KEY}`,
+                    'Content-Type': 'application/json'
+                },
+                query: body
+            }]),
         });
 
         if (!response.ok) {
@@ -125,7 +138,7 @@ class LLMGateway {
     public createConversation(systemPrompt?: string, model?: string): Conversation {
         logger.debug('Creating new conversation', { 
             hasSystemPrompt: !!systemPrompt,
-            model: model || CONFIG.llm.models.paceNote,
+            model: model || LLM_MODEL_PACE_NOTE,
             systemPrompt: systemPrompt ? trimMessage({ role: 'system' as MessageRole, content: systemPrompt }) : undefined
         });
         return new Conversation(this, systemPrompt, model);
@@ -145,7 +158,7 @@ class Conversation {
         this.model = model;
         logger.debug('Conversation initialized', { 
             hasSystemPrompt: !!systemPrompt,
-            model: model || CONFIG.llm.models.paceNote,
+            model: model || LLM_MODEL_PACE_NOTE,
             systemPrompt: systemPrompt ? trimMessage({ role: 'system' as MessageRole, content: systemPrompt }) : undefined
         });
     }
