@@ -9,6 +9,7 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
 - Provide simple and minimal tool interfaces
 - Use minimal dependencies and frameworks
 - Maintain clear separation of client and server code
+- Use read-only data access patterns
 
 ## Technology Stack
 - Node.js for server-side logic
@@ -17,79 +18,72 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
   - ES modules for modern import/export
   - Strict type checking enabled
 - Custom CSS for styling
-- HTML with Web Components
+- HTML with vanilla JavaScript
 - Docker for containerization
+- Storj S3-compatible storage
+  - Uses AWS S3 SDK
+  - Gateway endpoint at gateway.storjshare.io
+  - Read-only access configuration
 
-## Complete Project Structure
+## Project Structure
 ```
 cap-gpt/
 ├── .appLogic/                    # Application documentation
 │   ├── overview.md              # Main project documentation
 │   └── paceNote.md             # Pace Notes tool documentation
-├── src/                          # Source code directory
-│   ├── client/                  # Client-side TypeScript
-│   │   ├── common/             # Shared client utilities
-│   │   │   ├── types.ts       # Shared type definitions
-│   │   │   └── utils.ts       # Utility functions
-│   │   ├── index.ts           # Main client entry point
-│   │   └── paceNotes/         # Pace notes client code
-│   │       ├── components/    # Web Components
-│   │       │   ├── input-box.ts
-│   │       │   └── output-box.ts
-│   │       ├── index.ts      # Pace Notes entry point
-│   │       └── types.ts      # Pace Notes types
+├── src/                         # Source code directory
+│   ├── types.ts                # Global type definitions
+│   ├── prompts/                # System prompts
+│   │   └── paceNote.md        # Pace Notes prompt
+│   ├── client/                 # Client-side TypeScript
+│   │   └── paceNotes.ts       # Pace Notes client code
 │   └── server/                 # Server-side TypeScript
+│       ├── config.ts          # Server configuration
 │       ├── api/               # API endpoints
-│       │   └── paceNotes/    # Pace notes API
-│       │       ├── index.ts  # Route handler
-│       │       ├── prompt.ts # System prompt
-│       │       └── types.ts  # API types
-│       ├── middleware.ts     # Request handling
-│       └── index.ts         # Main server entry point
-├── public/                      # Static assets
-│   ├── index.html              # Landing page
-│   ├── paceNotes.html          # Pace notes tool page
-│   ├── favicon.ico             # Site favicon
-│   ├── css/                    # CSS files
-│   │   ├── main.css           # Main styles
-│   │   └── paceNote.css       # Pace note tool styles
-│   └── js/                     # Compiled client JavaScript
-│       ├── common/            # Compiled common utilities
-│       │   ├── types.js      
-│       │   └── utils.js
-│       ├── index.js           # Compiled main client
-│       └── paceNotes/        # Compiled Pace Notes
-│           ├── components/
-│           ├── index.js
-│           └── types.js
-├── dist/                        # Compiled server code
-│   └── server/                 # Server-side compiled JS
-│       ├── api/
-│       │   └── paceNotes/
-│       ├── middleware.js
-│       └── index.js
-├── node_modules/                # Project dependencies
-├── .gitignore                  # Git ignore file
-├── Dockerfile                  # Docker configuration
-├── package.json                # Project configuration
-├── tsconfig.json              # Server TypeScript config
-└── tsconfig.client.json       # Client TypeScript config
+│       │   ├── utils/         # Server utilities
+│       │   │   ├── llmGateway.ts # LLM Gateway
+│       │   │   └── s3Client.ts   # S3/Storj client
+│       │   └── paceNotes/     # Pace Notes API
+│       │       ├── paceNoteAgent.ts # Core logic
+│       │       └── paceNotes.ts     # Route handler
+│       └── index.ts           # Main server entry point
+├── public/                     # Static assets
+│   ├── index.html             # Landing page
+│   ├── paceNotes.html         # Pace Notes tool page
+│   ├── css/                   # CSS files
+│   │   ├── common.css        # Common styles
+│   │   ├── index.css        # Landing page styles
+│   │   └── paceNote.css     # Pace Notes styles
+│   └── js/                    # Compiled client JavaScript
+├── dist/                      # Compiled server code
+├── .env.example               # Environment variables template
+├── .gitignore                # Git ignore file
+├── Dockerfile                # Docker configuration
+├── package.json              # Project configuration
+├── tsconfig.client.json      # Client TypeScript config
+└── tsconfig.server.json      # Server TypeScript config
 ```
 
+## Storage Architecture
+### S3-Compatible Storage (Storj)
+- Uses AWS S3 SDK for compatibility
+- Fixed endpoint at gateway.storjshare.io
+- Read-only access configuration:
+  - List bucket contents
+  - Read object data
+  - No write or delete permissions
+- Configuration via environment variables:
+  - `S3_BUCKET_NAME`: Target bucket
+  - `S3_ACCESS_KEY_ID`: Read-only access credentials
+  - `S3_SECRET_ACCESS_KEY`: Read-only secret credentials
+
 ## Frontend Architecture
-
-### Main Page Layout
-- nav bar on top of page
-- Tools cards
-   - Each card has a title and description of the tool
-   - One line status of the implementation progress
-   - Clickable button to navigate to the tool page
-
-### Styling Strategy
-- Write custom CSS for styling
-- Focus on simplicity and maintainability
-- Single main.css file for core styles
-- Tool-specific CSS files when needed
+- Simple, clean interfaces
+- Responsive design with custom CSS
+- Real-time feedback and loading states
+- Error handling with user feedback
+- Copy-to-clipboard functionality
+- Keyboard shortcuts where appropriate
 
 ## Development Environment
 - Separate TypeScript configurations for client and server
@@ -101,57 +95,34 @@ cap-gpt/
 
 ## Development Scripts
 - `npm run dev` - Start development environment
-  - Watches and compiles server TypeScript
-  - Watches and compiles client TypeScript
-  - Serves static files from public directory
-- `npm run build` - Build both client and server
-- `npm run build:client` - Build only client code
-- `npm run build:server` - Build only server code
-- `npm run clean` - Clean compiled files
+  - Concurrent compilation of client and server
+  - Creates necessary directories
+  - Watches for changes
+- `npm run build` - Build production files
+- `npm run clean` - Clean and recreate directories
 
 ## Container Architecture
 - Multi-stage Docker build process:
   1. Build Stage:
-     - Installs all dependencies (including dev dependencies)
-     - Compiles client TypeScript to `public/js`
-     - Compiles server TypeScript to `dist/server`
+     - Installs dependencies
+     - Compiles TypeScript
   2. Production Stage:
-     - Copies only production dependencies
-     - Copies compiled server code (`dist/server`)
-     - Copies static files (`public` directory)
-     - Runs server using `node dist/server/index.js`
-
-### Container File Structure
-```
-/app/
-├── dist/                    # Compiled server code
-│   └── server/             # Server-side JS
-├── public/                 # Static assets
-│   ├── js/                # Compiled client JS
-│   ├── css/               # CSS files
-│   └── *.html             # HTML files
-├── node_modules/          # Production dependencies only
-└── package.json
-```
+     - Copies production files
+     - Runs server
 
 ## Deployment Strategy
 - Local Development:
   - Uses `npm run dev` with file watching
-  - Separate processes for client and server
+  - Concurrent compilation
 - Docker Deployment:
-  - Single container runs compiled server code
-  - Server serves static files from `public` directory
-  - No TypeScript compilation in production
-- Cloudflare Pages Alternative:
-  - Static content deployed to Cloudflare Pages
-  - Edge functions for API endpoints
-  - Static assets served from /public directory
-  - Server code deployed as Edge Functions
+  - Single container runs compiled code
+  - Server serves static files
+  - No runtime compilation
 
 ## Recent Changes
-- Implemented ES modules for modern import/export
-- Separated client and server TypeScript builds
-- Added proper TypeScript project references
-- Set up multi-stage Docker build process
-- Organized static file serving structure
-- Added development watch mode for both client and server
+- Implemented read-only data access patterns
+- Moved system prompts to markdown files
+- Simplified client-side code
+- Improved error handling
+- Added concurrent compilation
+- Enhanced documentation

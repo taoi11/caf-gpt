@@ -10,11 +10,14 @@ RUN npm install
 # Copy source code
 COPY . .
 
-# Build both client and server TypeScript
+# Build server code
 RUN npm run build
 
 # Production stage
 FROM node:20-alpine
+
+# Set production environment
+ENV NODE_ENV=production
 
 WORKDIR /app
 
@@ -32,4 +35,5 @@ COPY --from=builder /app/public ./public
 EXPOSE 3000
 
 # Start the server
+# Note: Environment variables should be passed at runtime
 CMD ["node", "dist/server/index.js"] 

@@ -5,9 +5,12 @@
   "type": "module",
   "scripts": {
     "start": "node dist/server/index.js",
-    "dev": "concurrently \"tsx watch src/server/index.ts\" \"serve public -l 3000\"",
-    "build": "tsc -p tsconfig.server.json",
-    "clean": "rm -rf dist"
+    "dev": "npm run clean && concurrently \"tsx watch src/server/index.ts\" \"npm run watch-client\"",
+    "build": "npm run clean && npm run build-server && npm run build-client",
+    "build-server": "tsc -p tsconfig.server.json",
+    "build-client": "tsc -p tsconfig.client.json",
+    "watch-client": "tsc -p tsconfig.client.json --watch",
+    "clean": "rm -rf dist public/js && mkdir -p dist public/js"
   },
   "author": "",
   "license": "AGPL-3.0",
@@ -17,5 +20,9 @@
     "serve": "^14.2.1",
     "tsx": "^4.7.0",
     "typescript": "^5.1.6"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.717.0",
+    "dotenv": "^16.4.7"
   }
 }

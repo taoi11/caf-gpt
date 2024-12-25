@@ -1,19 +1,11 @@
-# Dependencies
+# Node
 node_modules/
-.npm
-.yarn/
-.pnp.*
-
-# Environment
-.env
-
-# Build outputs
-dist/
-build/
-public/js/
 
 # TypeScript
 *.tsbuildinfo
 
-# Node
-node_modules/
+# Build output
+dist/
+
+# Environment variables
+.env

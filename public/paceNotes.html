@@ -22,10 +22,14 @@
         <section class="input-section">
             <textarea 
                 class="input-box" 
-                placeholder="Enter your observations here..."
+                placeholder="Enter your observations here... (Press Ctrl+Enter to generate)"
                 aria-label="Enter your observations"
             ></textarea>
             <div class="submit-container">
+                <select id="format-select" class="format-select" aria-label="Output format">
+                    <option value="text">Plain Text</option>
+                    <option value="markdown">Markdown</option>
+                </select>
                 <button class="button" id="generate-btn">Generate Pace Notes</button>
             </div>
         </section>
@@ -36,76 +40,6 @@
         </section>
     </main>
 
-    <script type="module">
-        // Keep track of output boxes
-        const outputSection = document.querySelector('.output-section');
-        const maxOutputs = 5;
-        let outputs = [];
-
-        function createOutputBox(content, isLoading = false) {
-            const box = document.createElement('div');
-            box.className = 'output-box';
-            
-            if (isLoading) {
-                box.innerHTML = '<div class="loading"></div>';
-            } else {
-                box.innerHTML = `
-                    <pre>${content}</pre>
-                    <button class="copy-button" aria-label="Copy to clipboard">
-                        Copy
-                    </button>
-                `;
-
-                // Add copy functionality
-                const copyBtn = box.querySelector('.copy-button');
-                copyBtn.addEventListener('click', () => {
-                    navigator.clipboard.writeText(content)
-                        .then(() => {
-                            copyBtn.textContent = 'Copied!';
-                            setTimeout(() => copyBtn.textContent = 'Copy', 2000);
-                        })
-                        .catch(err => console.error('Failed to copy:', err));
-                });
-            }
-
-            return box;
-        }
-
-        function addOutput(content) {
-            // Remove oldest output if we have too many
-            if (outputs.length >= maxOutputs) {
-                outputs[0].remove();
-                outputs.shift();
-            }
-
-            const box = createOutputBox(content);
-            outputSection.insertBefore(box, outputSection.firstChild);
-            outputs.push(box);
-        }
-
-        // Handle form submission
-        document.getElementById('generate-btn').addEventListener('click', async () => {
-            const input = document.querySelector('.input-box').value.trim();
-            if (!input) return;
-
-            // Add loading box
-            const loadingBox = createOutputBox('', true);
-            outputSection.insertBefore(loadingBox, outputSection.firstChild);
-
-            try {
-                // TODO: Replace with actual API call
-                await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay
-                const response = "Sample pace note output.\nThis is where the AI-generated content will appear.";
-                
-                // Replace loading box with result
-                loadingBox.remove();
-                addOutput(response);
-            } catch (error) {
-                loadingBox.remove();
-                addOutput('Error generating pace notes. Please try again.');
-                console.error('Error:', error);
-            }
-        });
-    </script>
+    <script type="module" src="/js/paceNotes.js"></script>
 </body>
 </html> 
