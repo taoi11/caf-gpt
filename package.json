@@ -1,0 +1,21 @@
+{
+  "name": "caf-gpt",
+  "version": "1.0.0",
+  "description": "A collection of AI tools and agents for CAF personnel",
+  "type": "module",
+  "scripts": {
+    "start": "node dist/server/index.js",
+    "dev": "concurrently \"tsx watch src/server/index.ts\" \"serve public -l 3000\"",
+    "build": "tsc -p tsconfig.server.json",
+    "clean": "rm -rf dist"
+  },
+  "author": "",
+  "license": "AGPL-3.0",
+  "devDependencies": {
+    "@types/node": "^20.4.5",
+    "concurrently": "^8.2.2",
+    "serve": "^14.2.1",
+    "tsx": "^4.7.0",
+    "typescript": "^5.1.6"
+  }
+}

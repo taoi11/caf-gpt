@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Pace Notes - CAF-GPT Tools</title>
+    <link rel="stylesheet" href="/css/common.css">
+    <link rel="stylesheet" href="/css/paceNote.css">
+</head>
+<body>
+    <nav>
+        <div class="container">
+            <h1>Pace Notes</h1>
+            <div class="nav-links">
+                <a href="/" class="button">Back to Tools</a>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container">
+        <!-- Input Section -->
+        <section class="input-section">
+            <textarea 
+                class="input-box" 
+                placeholder="Enter your observations here..."
+                aria-label="Enter your observations"
+            ></textarea>
+            <div class="submit-container">
+                <button class="button" id="generate-btn">Generate Pace Notes</button>
+            </div>
+        </section>
+
+        <!-- Output Section -->
+        <section class="output-section">
+            <!-- Output boxes will be dynamically inserted here -->
+        </section>
+    </main>
+
+    <script type="module">
+        // Keep track of output boxes
+        const outputSection = document.querySelector('.output-section');
+        const maxOutputs = 5;
+        let outputs = [];
+
+        function createOutputBox(content, isLoading = false) {
+            const box = document.createElement('div');
+            box.className = 'output-box';
+            
+            if (isLoading) {
+                box.innerHTML = '<div class="loading"></div>';
+            } else {
+                box.innerHTML = `
+                    <pre>${content}</pre>
+                    <button class="copy-button" aria-label="Copy to clipboard">
+                        Copy
+                    </button>
+                `;
+
+                // Add copy functionality
+                const copyBtn = box.querySelector('.copy-button');
+                copyBtn.addEventListener('click', () => {
+                    navigator.clipboard.writeText(content)
+                        .then(() => {
+                            copyBtn.textContent = 'Copied!';
+                            setTimeout(() => copyBtn.textContent = 'Copy', 2000);
+                        })
+                        .catch(err => console.error('Failed to copy:', err));
+                });
+            }
+
+            return box;
+        }
+
+        function addOutput(content) {
+            // Remove oldest output if we have too many
+            if (outputs.length >= maxOutputs) {
+                outputs[0].remove();
+                outputs.shift();
+            }
+
+            const box = createOutputBox(content);
+            outputSection.insertBefore(box, outputSection.firstChild);
+            outputs.push(box);
+        }
+
+        // Handle form submission
+        document.getElementById('generate-btn').addEventListener('click', async () => {
+            const input = document.querySelector('.input-box').value.trim();
+            if (!input) return;
+
+            // Add loading box
+            const loadingBox = createOutputBox('', true);
+            outputSection.insertBefore(loadingBox, outputSection.firstChild);
+
+            try {
+                // TODO: Replace with actual API call
+                await new Promise(resolve => setTimeout(resolve, 1500)); // Simulate API delay
+                const response = "Sample pace note output.\nThis is where the AI-generated content will appear.";
+                
+                // Replace loading box with result
+                loadingBox.remove();
+                addOutput(response);
+            } catch (error) {
+                loadingBox.remove();
+                addOutput('Error generating pace notes. Please try again.');
+                console.error('Error:', error);
+            }
+        });
+    </script>
+</body>
+</html> 
