@@ -1,0 +1,12 @@
+# Node
+node_modules/
+
+# TypeScript
+*.tsbuildinfo
+
+# Docker
+docker-compose.yml
+
+# Project files
+.appLogic
+.env
