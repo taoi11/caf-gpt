@@ -30,7 +30,8 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
 cap-gpt/
 ├── .appLogic/                    # Application documentation
 │   ├── overview.md              # Main project documentation
-│   └── paceNote.md             # Pace Notes tool documentation
+│   ├── paceNote.md             # Pace Notes tool documentation
+│   └── rateLimiter.md          # Rate Limiter documentation
 ├── src/                         # Source code directory
 │   ├── types.ts                # Global type definitions
 │   ├── prompts/                # System prompts
@@ -41,8 +42,9 @@ cap-gpt/
 │       ├── config.ts          # Server configuration
 │       ├── api/               # API endpoints
 │       │   ├── utils/         # Server utilities
-│       │   │   ├── llmGateway.ts # LLM Gateway
-│       │   │   └── s3Client.ts   # S3/Storj client
+│       │   │   ├── llmGateway.ts  # LLM Gateway
+│       │   │   ├── s3Client.ts    # S3/Storj client
+│       │   │   └── rateLimiter.ts # Rate limiting logic
 │       │   └── paceNotes/     # Pace Notes API
 │       │       ├── paceNoteAgent.ts # Core logic
 │       │       └── paceNotes.ts     # Route handler
@@ -85,21 +87,17 @@ cap-gpt/
 - Copy-to-clipboard functionality
 - Keyboard shortcuts where appropriate
 
-## Development Environment
-- Separate TypeScript configurations for client and server
-- Client TypeScript (`src/client/`) → Compiles to `public/js/`
-- Server TypeScript (`src/server/`) → Compiles to `dist/server/`
-- Development server runs on port 3000
-- Watch mode for both client and server code
-- ES modules used throughout the codebase
+## Development Setup
+- TypeScript configurations split for client/server:
+  - Client code (`src/client/`) compiles to `public/js/`
+  - Server code (`src/server/`) compiles to `dist/server/`
+- Development runs on port 3000 with file watching
+- ES modules used throughout
 
-## Development Scripts
-- `npm run dev` - Start development environment
-  - Concurrent compilation of client and server
-  - Creates necessary directories
-  - Watches for changes
-- `npm run build` - Build production files
-- `npm run clean` - Clean and recreate directories
+Available scripts:
+- `npm run dev`: Start development with concurrent compilation
+- `npm run build`: Build production files
+- `npm run clean`: Reset build directories
 
 ## Container Architecture
 - Multi-stage Docker build process:

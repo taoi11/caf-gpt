@@ -1,7 +1,7 @@
 import { createServer } from 'http';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { CONFIG } from './config';
+import { PORT } from './config';
 import { handlePaceNoteRequest } from './api/paceNotes/paceNotes';
 import { logger } from './logger';
 
@@ -45,8 +45,7 @@ const server = createServer(async (req, res) => {
     }
 });
 
-const port = CONFIG.server.port;
-server.listen(port, () => {
-    logger.info(`Server running in ${CONFIG.server.environment} mode on port ${port}`);
+server.listen(PORT, () => {
+    logger.info(`Server running on port ${PORT}`);
     logger.debug('Debug logging enabled');
 }); 

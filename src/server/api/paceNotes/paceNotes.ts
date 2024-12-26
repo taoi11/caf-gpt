@@ -1,6 +1,7 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { paceNoteAgent } from './paceNoteAgent';
 import { logger } from '../../logger';
+import { rateLimitMiddleware } from '../middleware/rateLimitMiddleware';
 import type { PaceNoteRequest, ApiResponse, PaceNoteResponse } from '../../../types';
 
 export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerResponse) {
@@ -12,6 +13,11 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         res.writeHead(405, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ success: false, error: 'Method not allowed' }));
         logger.logRequest(method, url, 405);
+        return;
+    }
+
+    // Check rate limit
+    if (!rateLimitMiddleware(req, res)) {
         return;
     }
 

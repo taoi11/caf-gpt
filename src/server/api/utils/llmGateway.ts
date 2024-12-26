@@ -1,4 +1,4 @@
-import { CONFIG, AI_GATEWAY_URL } from '../../config';
+import { AI_GATEWAY_URL } from '../../config';
 import { logger } from '../../logger';
 import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from '../../../types';
 

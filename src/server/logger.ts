@@ -1,4 +1,4 @@
-import { CONFIG } from './config';
+import { IS_DEV } from './config';
 
 // Log levels in order of verbosity
 enum LogLevel {
@@ -10,11 +10,9 @@ enum LogLevel {
 
 class Logger {
     private readonly currentLevel: LogLevel;
-    private readonly isDev: boolean;
 
     constructor() {
-        this.isDev = CONFIG.server.isDev;
-        this.currentLevel = this.isDev ? LogLevel.DEBUG : LogLevel.INFO;
+        this.currentLevel = IS_DEV ? LogLevel.DEBUG : LogLevel.INFO;
     }
 
     private formatMessage(level: string, message: string): string {

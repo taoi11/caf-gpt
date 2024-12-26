@@ -1,14 +1,3 @@
-// Configuration Types
-export interface ServerConfig {
-    port: number;
-    environment: string;
-    isDev: boolean;
-}
-
-export interface AppConfig {
-    server: ServerConfig;
-}
-
 // LLM Types
 export type MessageRole = 'system' | 'user' | 'assistant';
 

@@ -1,4 +1,3 @@
-import type { AppConfig } from '../types';
 import 'dotenv/config';
 
 // Load and validate environment variables
@@ -25,14 +24,9 @@ for (const key of required) {
     }
 }
 
-// Export typed configuration
-export const CONFIG: AppConfig = {
-    server: {
-        port: parseInt(env.PORT || '3000', 10),
-        environment: env.NODE_ENV || 'development',
-        isDev: (env.NODE_ENV || 'development') === 'development'
-    }
-};
+// Export environment helpers
+export const IS_DEV = (env.NODE_ENV || 'development') === 'development';
+export const PORT = parseInt(env.PORT || '3000', 10);
 
 // Export AI Gateway base URL
 export const AI_GATEWAY_URL = `https://gateway.ai.cloudflare.com/v1/${env.CF_ACCOUNT_ID}/${env.CF_GATEWAY_ID}`; 
