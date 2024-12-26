@@ -1,3 +1,32 @@
+// Rate Limiting Types
+export interface RequestWindow {
+    count: number;
+    timestamp: number;
+}
+
+export interface RateLimitInfo {
+    hourly: RequestWindow;
+    daily: RequestWindow;
+}
+
+// Cost Tracking Types
+export interface CostData {
+    monthlyTotal: number;    // In USD (excluding server cost)
+    lastReset: string;       // YYYY-MM-DD of last monthly reset
+    lastUpdated: string;
+    requests: {
+        id: string;
+        timestamp: string;
+        model: string;
+        cost: number;        // In USD
+        tokens: {
+            prompt: number;
+            completion: number;
+            total: number;
+        };
+    }[];
+}
+
 // LLM Types
 export type MessageRole = 'system' | 'user' | 'assistant';
 

@@ -1,5 +1,7 @@
 # Node
 node_modules/
+dist/
+
 
 # TypeScript
 *.tsbuildinfo
@@ -10,3 +12,4 @@ docker-compose.yml
 # Project files
 .appLogic
 .env
+data/

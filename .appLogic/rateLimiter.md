@@ -4,7 +4,9 @@
 Simple sliding window rate limiter with hourly and daily limits per IP address.
 
 ## Implementation
-Located in: `src/server/api/utils/rateLimiter.ts`
+Located in: 
+`src/server/api/utils/rateLimiter.ts`
+`src/server/api/middleware/rateLimitMiddleware.ts`
 
 ### Core Features
 - Sliding window implementation

@@ -1,20 +1,13 @@
 import { logger } from '../../logger';
+import { IS_DEV } from '../../config';
+import type { RequestWindow, RateLimitInfo } from '../../../types';
 
 // Rate limit configuration
 const HOURLY_LIMIT = 10;
 const DAILY_LIMIT = 30;
-const WHITELISTED_IP = ['131.136.0.0/16'];
-
-// Types for rate limiting
-interface RequestWindow {
-    count: number;
-    timestamp: number;
-}
-
-interface RateLimitInfo {
-    hourly: RequestWindow;
-    daily: RequestWindow;
-}
+const WHITELISTED_IP = [
+    '131.136.0.0/16' // DND network - bypasses rate limits
+];
 
 class RateLimiter {
     private readonly limits: Map<string, RateLimitInfo> = new Map();
@@ -72,6 +65,12 @@ class RateLimiter {
     }
 
     public checkLimit(ip: string): boolean {
+        // Bypass rate limits in development
+        if (IS_DEV) {
+            logger.debug('Rate limits bypassed in development');
+            return true;
+        }
+
         if (this.isWhitelisted(ip)) {
             logger.debug(`Whitelisted IP: ${ip}`);
             return true;

@@ -1,18 +1,15 @@
-import { AI_GATEWAY_URL } from '../../config';
 import { logger } from '../../logger';
+import { costTracker } from './costTracker';
 import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from '../../../types';
 
 // Connection pool configuration
 const MAX_CONCURRENT_REQUESTS = 50;
-const REQUEST_TIMEOUT = 30000; // 30 seconds
-const RETRY_ATTEMPTS = 2;
 const MESSAGE_TRIM_LENGTH = 100;
 
-// LLM configuration from environment
-const LLM_PROVIDER = process.env.LLM_PROVIDER || 'openrouter';
-const LLM_API_KEY = process.env.LLM_API_KEY || '';
-const LLM_GATEWAY_KEY = process.env.CF_GATEWAY_API_KEY || '';
-const LLM_MODEL_PACE_NOTE = process.env.PACE_NOTE_MODEL || '';
+// OpenRouter configuration
+const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
+const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
 
 function trimMessage(message: { role: MessageRole; content: string }): { role: MessageRole; content: string } {
     if (message.content.length <= MESSAGE_TRIM_LENGTH * 2) {
@@ -41,10 +38,10 @@ class LLMGateway {
         logger.debug('Request messages:', messages.map(m => trimMessage(m)));
 
         const body = {
-            model: request.model || LLM_MODEL_PACE_NOTE, // Use provided model or default
+            model: request.model || LLM_MODEL,
             messages,
-            temperature: request.temperature ?? 0.1, // Low temperature for consistent responses
-            stream: false,    // Always false for our use case
+            temperature: request.temperature ?? 0.1,
+            stream: false
         };
 
         logger.debug('Making LLM request', { 
@@ -53,21 +50,14 @@ class LLMGateway {
             roles: messages.map(m => m.role).join(',')
         });
 
-        const response = await fetch(AI_GATEWAY_URL, {
+        const response = await fetch(OPENROUTER_API_URL, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'cf-aig-authorization': `Bearer ${LLM_GATEWAY_KEY}`,
+                'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                'HTTP-Referer': 'https://caf-gpt.pages.dev'
             },
-            body: JSON.stringify([{
-                provider: LLM_PROVIDER,
-                endpoint: 'chat/completions',
-                headers: {
-                    'Authorization': `Bearer ${LLM_API_KEY}`,
-                    'Content-Type': 'application/json'
-                },
-                query: body
-            }]),
+            body: JSON.stringify(body)
         });
 
         if (!response.ok) {
@@ -81,7 +71,7 @@ class LLMGateway {
             const error: LLMError = {
                 code: response.status.toString(),
                 message: errorText,
-                type: 'api_error',
+                type: this.mapErrorType(response.status)
             };
             throw error;
         }
@@ -92,6 +82,18 @@ class LLMGateway {
             content: data.choices[0].message.content 
         };
 
+        // Track request cost
+        await costTracker.trackRequest({
+            id: data.id,
+            model: data.model,
+            cost: data.usage.total_tokens * 0.0000015, // Example rate, adjust based on model
+            tokens: {
+                prompt: data.usage.prompt_tokens,
+                completion: data.usage.completion_tokens,
+                total: data.usage.total_tokens
+            }
+        });
+
         logger.debug('LLM response received', {
             model: data.model,
             usage: data.usage,
@@ -101,8 +103,26 @@ class LLMGateway {
         return {
             content: responseMessage.content,
             model: data.model,
-            usage: data.usage,
+            usage: {
+                promptTokens: data.usage.prompt_tokens,
+                completionTokens: data.usage.completion_tokens,
+                totalTokens: data.usage.total_tokens
+            }
         };
+    }
+
+    private mapErrorType(status: number): LLMError['type'] {
+        switch (status) {
+            case 429:
+                return 'rate_limit';
+            case 400:
+                return 'invalid_request';
+            case 401:
+            case 403:
+                return 'api_error';
+            default:
+                return 'connection_error';
+        }
     }
 
     private async processQueue() {
@@ -138,7 +158,7 @@ class LLMGateway {
     public createConversation(systemPrompt?: string, model?: string): Conversation {
         logger.debug('Creating new conversation', { 
             hasSystemPrompt: !!systemPrompt,
-            model: model || LLM_MODEL_PACE_NOTE,
+            model: model || LLM_MODEL,
             systemPrompt: systemPrompt ? trimMessage({ role: 'system' as MessageRole, content: systemPrompt }) : undefined
         });
         return new Conversation(this, systemPrompt, model);
@@ -158,7 +178,7 @@ class Conversation {
         this.model = model;
         logger.debug('Conversation initialized', { 
             hasSystemPrompt: !!systemPrompt,
-            model: model || LLM_MODEL_PACE_NOTE,
+            model: model || LLM_MODEL,
             systemPrompt: systemPrompt ? trimMessage({ role: 'system' as MessageRole, content: systemPrompt }) : undefined
         });
     }
