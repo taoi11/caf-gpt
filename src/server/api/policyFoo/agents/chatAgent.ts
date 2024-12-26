@@ -1,13 +1,13 @@
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { BaseAgent, BaseAgentOptions } from './baseAgent';
-import { logger } from '../../logger';
-import type { PolicyContent, ChatResponse } from '../../../types';
+import { BaseAgent, AgentOptions } from '../baseAgent';
+import { logger } from '../../../logger';
+import type { ChatResponse } from '../../../../types';
 
 export class ChatAgent extends BaseAgent {
     private chatPrompt: string = '';
 
-    constructor(options: BaseAgentOptions = {}) {
+    constructor(options: AgentOptions = {}) {
         super(options);
         this.initializePrompts().catch(error => {
             logger.error('Failed to initialize chat prompt:', error);
@@ -27,17 +27,12 @@ export class ChatAgent extends BaseAgent {
         }
     }
 
-    public async process(contents: PolicyContent[], query: string): Promise<ChatResponse> {
-        const policyExtracts = contents.map(content => `
-            <policy_extract>
-                <doc_title>${content.docTitle}</doc_title>
-                <section>${content.section}</section>
-                <content>${content.content}</content>
-            </policy_extract>
-        `).join('\n');
-
-        const systemPrompt = this.chatPrompt.replace('{policy_extracts}', policyExtracts);
-        const response = await this.query([{ role: 'user', content: query }], systemPrompt);
+    public async process(input: string, context?: string): Promise<ChatResponse> {
+        if (!context) {
+            throw new Error('ChatAgent requires policy content context');
+        }
+        const systemPrompt = this.chatPrompt.replace('{policy_extracts}', context);
+        const response = await this.query([{ role: 'user', content: input }], systemPrompt);
 
         // Parse XML response
         const answer = response.match(/<answer>(.*?)<\/answer>/s)?.[1]?.trim() || '';

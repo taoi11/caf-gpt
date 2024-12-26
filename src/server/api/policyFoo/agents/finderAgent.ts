@@ -1,14 +1,14 @@
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { BaseAgent, BaseAgentOptions } from './baseAgent';
-import { logger } from '../../logger';
-import type { PolicyReference } from '../../../types';
+import { BaseAgent, AgentOptions } from '../baseAgent';
+import { logger } from '../../../logger';
+import type { PolicyReference } from '../../../../types';
 
 export class FinderAgent extends BaseAgent {
     private finderPrompt: string = '';
     private doadList: string = '';
 
-    constructor(options: BaseAgentOptions = {}) {
+    constructor(options: AgentOptions = {}) {
         super(options);
         this.initializePrompts().catch(error => {
             logger.error('Failed to initialize finder prompts:', error);
@@ -42,6 +42,9 @@ export class FinderAgent extends BaseAgent {
         return response.split(',')
             .map(id => id.trim())
             .filter(id => id)
-            .map(id => ({ docId: id }));
+            .map(id => ({
+                docId: id,
+                policyGroup: 'doad'  // Default to DOAD policy group
+            }));
     }
 } 

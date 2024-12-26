@@ -3,6 +3,7 @@ import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { PORT } from './config';
 import { handlePaceNoteRequest } from './api/paceNotes/paceNotes';
+import { handlePolicyFooRequest } from './api/policyFoo/handler';
 import { costTracker } from './api/utils/costTracker';
 import { logger } from './logger';
 import { rateLimiter } from './api/utils/rateLimiter';
@@ -16,6 +17,10 @@ const server = createServer(async (req, res) => {
     // API endpoints
     if (url === '/api/paceNotes/generate') {
         return handlePaceNoteRequest(req, res);
+    }
+
+    if (url === '/api/policyfoo/generate') {
+        return handlePolicyFooRequest(req, res);
     }
 
     // Cost endpoint

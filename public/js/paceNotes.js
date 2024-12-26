@@ -145,7 +145,7 @@ class RateLimitDisplay {
         return `${minutes}m`;
     }
     formatLimit(info) {
-        return `${info.remaining} (${this.formatTime(info.resetIn)})`;
+        return `${info.remaining} messages`;
     }
     async updateLimits() {
         try {

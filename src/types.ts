@@ -70,14 +70,22 @@ export interface ApiResponse<T> {
 
 // Policy Types
 export interface PolicyReference {
-    docId: string;      // e.g., "DOAD-5003-1"
-    section?: string;   // e.g., "5.1"
+    docId: string;          // e.g., "5003-1"
+    policyGroup?: string;   // e.g., "doad", defaults to "doad"
+    section?: string;       // e.g., "5.1"
 }
 
 export interface PolicyContent {
     docTitle: string;
     section: string;
     content: string;
+}
+
+export interface PolicyDocument {
+    docId: string;
+    content: string;
+    lastModified: Date;
+    policyGroup: string;
 }
 
 export interface ChatResponse {

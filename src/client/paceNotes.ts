@@ -203,7 +203,7 @@ class RateLimitDisplay {
     }
 
     private formatLimit(info: { remaining: number; resetIn: number }): string {
-        return `${info.remaining} (${this.formatTime(info.resetIn)})`;
+        return `${info.remaining} messages`;
     }
 
     private async updateLimits(): Promise<void> {

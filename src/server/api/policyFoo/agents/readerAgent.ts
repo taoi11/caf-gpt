@@ -1,15 +1,12 @@
-import { readFile } from 'fs/promises';
-import { join } from 'path';
-import { BaseAgent, BaseAgentOptions } from './baseAgent';
-import { logger } from '../../logger';
-import { s3Client } from '../utils/s3Client';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
-import type { PolicyReference, PolicyContent } from '../../../types';
+import { BaseAgent, AgentOptions } from '../baseAgent';
+import { logger } from '../../../logger';
+import { policyStorage } from '../../utils/policyStorage';
+import type { PolicyReference, PolicyContent } from '../../../../types';
 
 export class ReaderAgent extends BaseAgent {
     private readerPrompt: string = '';
 
-    constructor(options: BaseAgentOptions = {}) {
+    constructor(options: AgentOptions = {}) {
         super(options);
         this.initializePrompts().catch(error => {
             logger.error('Failed to initialize reader prompt:', error);
@@ -18,6 +15,9 @@ export class ReaderAgent extends BaseAgent {
 
     private async initializePrompts(): Promise<void> {
         try {
+            const { readFile } = await import('fs/promises');
+            const { join } = await import('path');
+            
             this.readerPrompt = await readFile(
                 join(process.cwd(), 'src', 'prompts', 'policyFoo', 'policyReader.md'),
                 'utf-8'
@@ -31,24 +31,15 @@ export class ReaderAgent extends BaseAgent {
 
     private async fetchPolicyContent(ref: PolicyReference): Promise<string> {
         try {
-            const response = await s3Client.send(new GetObjectCommand({
-                Bucket: process.env.S3_BUCKET_NAME,
-                Key: `policies/${ref.docId}.md`,
-            }));
-
-            const content = await response.Body?.transformToString();
-            if (!content) {
-                throw new Error(`Empty content for policy ${ref.docId}`);
-            }
-
-            return content;
+            const doc = await policyStorage.fetchPolicy(ref.docId, ref.policyGroup);
+            return doc.content;
         } catch (error) {
             logger.error(`Failed to fetch policy ${ref.docId}:`, error);
             throw error;
         }
     }
 
-    public async process(refs: PolicyReference[], query: string): Promise<PolicyContent[]> {
+    public async process(input: string, refs: PolicyReference[]): Promise<PolicyContent[]> {
         const results: PolicyContent[] = [];
 
         for (const ref of refs) {
@@ -56,7 +47,7 @@ export class ReaderAgent extends BaseAgent {
                 const content = await this.fetchPolicyContent(ref);
                 const systemPrompt = this.readerPrompt.replace('{POLICY_CONTENT}', content);
                 
-                const response = await this.query([{ role: 'user', content: query }], systemPrompt);
+                const response = await this.query([{ role: 'user', content: input }], systemPrompt);
                 
                 // Parse XML response
                 const matches = response.matchAll(/<policy_extract>(.*?)<\/policy_extract>/gs);
