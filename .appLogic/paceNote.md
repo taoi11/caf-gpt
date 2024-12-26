@@ -8,15 +8,16 @@ An AI-powered tool for generating standardized performance notes for CAF Members
 ### Core Components
 1. **PaceNoteAgent**
    - Reads system prompt and examples from local markdown files
-   - Fetches competencies list from S3 (read-only)
+   - Fetches competencies from S3 at submission time
    - Handles prompt template filling
+   - Uses environment variables directly for configuration
    - Manages LLM interactions via Gateway
 
 2. **Frontend UI**
-   - Clean, responsive interface
-   - Input area with format selection
-   - Real-time feedback with loading states
-   - Maintains history of 5 most recent outputs
+   - Clean, responsive interface with slim navigation
+   - Competency rank selector (1-5)
+   - Real-time validation and feedback
+   - Submit button enabled only with valid rank
    - Copy-to-clipboard functionality
    - Keyboard shortcuts (Ctrl+Enter)
 
@@ -29,24 +30,23 @@ An AI-powered tool for generating standardized performance notes for CAF Members
    ```
 
 2. **Template Variables**
-   - `{competency_list}`: Competencies from S3
+   - `{competency_list}`: Fetched from S3 at submission
    - `{examples}`: Example pace notes for context
 
 ### Data Flow
 1. System prompts loaded from local files
-2. Competencies fetched from S3 (`paceNote/cpl_mcpl.md`)
-3. User input collected with format preference
-4. Prompt template filled with:
-   - Competencies from S3
-   - Local examples
-5. LLM generates structured feedback
-6. Response displayed with timestamp
+2. User selects competency rank and enters observation
+3. On submission:
+   - Competencies fetched from S3
+   - Prompt template filled
+   - LLM generates structured feedback
+4. Response displayed with timestamp
 
 ### Technical Details
 - TypeScript throughout (client/server)
 - Read-only data access pattern
-- Comprehensive error handling
-- Detailed logging system (4 levels)
+- Direct environment variable usage
+- No configuration interfaces
 - Clean functional programming approach
 - No state persistence needed
 
@@ -56,7 +56,7 @@ An AI-powered tool for generating standardized performance notes for CAF Members
   ```typescript
   {
     input: string;
-    format?: 'text' | 'markdown';
+    rank: number;
   }
   ```
 - Response:
@@ -66,25 +66,17 @@ An AI-powered tool for generating standardized performance notes for CAF Members
     data?: {
       content: string;
       timestamp: string;
-      format: string;
     };
     error?: string;
   }
   ```
 
-### Logging System
-- DEBUG: Detailed development information
-- INFO: General operational messages
-- WARN: Warning conditions
-- ERROR: Error conditions
-- Environment-aware:
-  - Development: Shows all logs
-  - Production: INFO and above only
-
 ### Recent Changes
-- Moved prompts to dedicated directory
-- Added example pace notes
-- Improved error handling
-- Enhanced logging system
-- Fixed text overflow issues
-- Maintained input after submission
+- Added competency rank selector (1-5)
+- Removed format selection
+- Slimmed down navigation bar
+- Improved UI responsiveness
+- Removed configuration interfaces
+- Added submission validation
+- Optimized competency fetching
+- Enhanced error handling

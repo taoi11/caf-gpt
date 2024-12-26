@@ -1,12 +1,13 @@
 // Rate Limiting Types
-export interface RequestWindow {
+export interface RateWindow {
     count: number;
     timestamp: number;
 }
 
-export interface RateLimitInfo {
-    hourly: RequestWindow;
-    daily: RequestWindow;
+export interface RateLimit {
+    ip: string;
+    hourly: RateWindow;
+    daily: RateWindow;
 }
 
 // Cost Tracking Types
