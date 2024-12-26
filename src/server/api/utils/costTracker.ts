@@ -11,8 +11,7 @@ class CostTracker {
     private data: CostData = {
         monthlyTotal: 0,
         lastReset: new Date().toISOString().split('T')[0],
-        lastUpdated: new Date().toISOString(),
-        requests: []
+        lastUpdated: new Date().toISOString()
     };
 
     constructor() {
@@ -43,7 +42,6 @@ class CostTracker {
         if (lastResetDate.getMonth() !== currentMonth) {
             logger.info('Performing monthly cost reset');
             this.data.monthlyTotal = 0;
-            this.data.requests = [];
             this.data.lastReset = today;
             await this.saveData();
         }
@@ -86,11 +84,6 @@ class CostTracker {
         };
     }): Promise<void> {
         await this.checkMonthlyReset();
-
-        this.data.requests.push({
-            ...requestData,
-            timestamp: new Date().toISOString()
-        });
 
         this.data.monthlyTotal += requestData.cost;
         this.data.lastUpdated = new Date().toISOString();
