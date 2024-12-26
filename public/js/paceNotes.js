@@ -128,6 +128,42 @@ class PaceNotesUI {
         setTimeout(() => errorBox.remove(), 5000);
     }
 }
+class RateLimitDisplay {
+    constructor() {
+        this.updateInterval = 5000; // 5 seconds
+        this.initialize();
+    }
+    initialize() {
+        // Update immediately and start interval
+        this.updateLimits();
+        setInterval(() => this.updateLimits(), this.updateInterval);
+    }
+    formatTime(ms) {
+        const minutes = Math.floor(ms / 60000);
+        if (minutes < 1)
+            return 'soon';
+        return `${minutes}m`;
+    }
+    formatLimit(info) {
+        return `${info.remaining} (${this.formatTime(info.resetIn)})`;
+    }
+    async updateLimits() {
+        try {
+            const response = await fetch('/api/ratelimit');
+            const data = await response.json();
+            // Update breakdown directly
+            document.querySelector('.hourly-remaining').textContent = this.formatLimit(data.hourly);
+            document.querySelector('.daily-remaining').textContent = this.formatLimit(data.daily);
+        }
+        catch (error) {
+            console.error('Failed to fetch rate limits:', error);
+            document.querySelector('.hourly-remaining').textContent = 'Error';
+            document.querySelector('.daily-remaining').textContent = 'Error';
+        }
+    }
+}
+// Initialize rate limit display
+new RateLimitDisplay();
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new PaceNotesUI();

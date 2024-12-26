@@ -13,30 +13,32 @@ const WHITELISTED_SUBNET = '131.136'; // DND network prefix
 class RateLimiter {
     private readonly limits: Map<string, RateLimit> = new Map();
 
-    private checkWindow(window: RateWindow, now: number, limit: number, size: number): boolean {
+    private checkWindow(window: RateWindow, now: number, limit: number, size: number, increment: boolean = false): boolean {
         const timeDiff = now - window.timestamp;
         
         // If outside window, reset
         if (timeDiff >= size) {
-            window.count = 1;
+            window.count = increment ? 1 : 0;
             window.timestamp = now;
             return true;
         }
 
         // Calculate remaining requests in sliding window
         const remainingRatio = (size - timeDiff) / size;
-        const adjustedCount = Math.ceil(window.count * remainingRatio) + 1;
+        const adjustedCount = Math.ceil(window.count * remainingRatio) + (increment ? 1 : 0);
 
         if (adjustedCount > limit) {
             return false;
         }
 
-        window.count = adjustedCount;
-        window.timestamp = now;
+        if (increment) {
+            window.count = adjustedCount;
+            window.timestamp = now;
+        }
         return true;
     }
 
-    public checkRateLimit(req: IncomingMessage, res: ServerResponse): boolean {
+    public canMakeRequest(req: IncomingMessage): boolean {
         // Skip rate limiting in development
         if (IS_DEV) {
             return true;
@@ -53,7 +55,26 @@ class RateLimiter {
         const now = Date.now();
         let limit = this.limits.get(ip);
 
-        // First request from this IP
+        // First request check
+        if (!limit) {
+            return true;
+        }
+
+        // Check limits without incrementing
+        return this.checkWindow(limit.hourly, now, HOURLY_LIMIT, HOUR) &&
+               this.checkWindow(limit.daily, now, DAILY_LIMIT, DAY);
+    }
+
+    public trackSuccessfulRequest(req: IncomingMessage): void {
+        if (IS_DEV) return;
+
+        const ip = req.socket.remoteAddress || '0.0.0.0';
+        if (ip.startsWith(WHITELISTED_SUBNET)) return;
+
+        const now = Date.now();
+        let limit = this.limits.get(ip);
+
+        // Initialize limits if first request
         if (!limit) {
             limit = {
                 ip,
@@ -61,27 +82,15 @@ class RateLimiter {
                 daily: { count: 1, timestamp: now }
             };
             this.limits.set(ip, limit);
-            return true;
+            return;
         }
 
-        // Check hourly limit
-        if (!this.checkWindow(limit.hourly, now, HOURLY_LIMIT, HOUR)) {
-            logger.warn(`Hourly rate limit exceeded for IP: ${ip}`);
-            this.sendLimitResponse(res, 'hourly');
-            return false;
-        }
-
-        // Check daily limit
-        if (!this.checkWindow(limit.daily, now, DAILY_LIMIT, DAY)) {
-            logger.warn(`Daily rate limit exceeded for IP: ${ip}`);
-            this.sendLimitResponse(res, 'daily');
-            return false;
-        }
-
-        return true;
+        // Update both windows
+        this.checkWindow(limit.hourly, now, HOURLY_LIMIT, HOUR, true);
+        this.checkWindow(limit.daily, now, DAILY_LIMIT, DAY, true);
     }
 
-    private sendLimitResponse(res: ServerResponse, window: 'hourly' | 'daily'): void {
+    public sendLimitResponse(res: ServerResponse, window: 'hourly' | 'daily'): void {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: false,

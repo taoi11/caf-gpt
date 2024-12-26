@@ -1,7 +1,7 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { paceNoteAgent } from './paceNoteAgent';
 import { logger } from '../../logger';
-import { rateLimitMiddleware } from '../middleware/rateLimitMiddleware';
+import { rateLimiter } from '../utils/rateLimiter';
 import type { PaceNoteRequest, ApiResponse, PaceNoteResponse } from '../../../types';
 
 export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerResponse) {
@@ -16,8 +16,14 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         return;
     }
 
-    // Check rate limit
-    if (!rateLimitMiddleware(req, res)) {
+    // Check if request can be made
+    if (!rateLimiter.canMakeRequest(req)) {
+        const hourlyInfo = rateLimiter.getLimitInfo(req.socket.remoteAddress || '0.0.0.0');
+        if (hourlyInfo?.hourly.remaining === 0) {
+            rateLimiter.sendLimitResponse(res, 'hourly');
+        } else {
+            rateLimiter.sendLimitResponse(res, 'daily');
+        }
         return;
     }
 
@@ -42,6 +48,9 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
 
         logger.debug('Generating pace note for input:', request.input.substring(0, 50) + '...');
         const response = await paceNoteAgent.generateNote(request);
+        
+        // Only track the request if we successfully got a response
+        rateLimiter.trackSuccessfulRequest(req);
         
         const apiResponse: ApiResponse<PaceNoteResponse> = {
             success: true,

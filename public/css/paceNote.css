@@ -151,4 +151,35 @@
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+/* Rate Display Specific Styles */
+.rate-box {
+  text-align: right;
+  position: relative;
+  background: rgba(255, 255, 255, 0.1);
+  padding: 0.4rem 0.8rem;
+  border-radius: 4px;
+  font-size: 0.9rem;
+}
+
+.rate-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.8rem;
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+/* Navigation styles */
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.nav-left .button {
+  margin-left: 1rem;
+  font-size: 0.9rem;
+  padding: 0.4rem 0.8rem;
 } 

@@ -12,9 +12,10 @@ export interface RateLimit {
 
 // Cost Tracking Types
 export interface CostData {
-    monthlyTotal: number;    // In USD (excluding server cost)
+    apiCosts: number;        // Monthly LLM API costs in USD
+    serverCosts: number;     // Monthly server costs in USD
     lastReset: string;       // YYYY-MM-DD of last monthly reset
-    lastUpdated: string;
+    lastUpdated: string;     // Last update timestamp
 }
 
 // LLM Types
@@ -65,4 +66,22 @@ export interface ApiResponse<T> {
     success: boolean;
     data?: T;
     error?: string;
+}
+
+// Policy Types
+export interface PolicyReference {
+    docId: string;      // e.g., "DOAD-5003-1"
+    section?: string;   // e.g., "5.1"
+}
+
+export interface PolicyContent {
+    docTitle: string;
+    section: string;
+    content: string;
+}
+
+export interface ChatResponse {
+    answer: string;
+    citations: string[];
+    followUp: string;
 } 

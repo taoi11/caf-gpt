@@ -3,7 +3,9 @@ import { join } from 'path';
 import { readFile } from 'fs/promises';
 import { PORT } from './config';
 import { handlePaceNoteRequest } from './api/paceNotes/paceNotes';
+import { costTracker } from './api/utils/costTracker';
 import { logger } from './logger';
+import { rateLimiter } from './api/utils/rateLimiter';
 
 const server = createServer(async (req, res) => {
     const url = req.url || '/';
@@ -14,6 +16,27 @@ const server = createServer(async (req, res) => {
     // API endpoints
     if (url === '/api/paceNotes/generate') {
         return handlePaceNoteRequest(req, res);
+    }
+
+    // Cost endpoint
+    if (url === '/api/costs') {
+        const costs = {
+            apiCosts: costTracker.getMonthlyAPITotal(),
+            serverCosts: costTracker.getMonthlyServerCost(),
+            lastUpdated: costTracker.getLastUpdated()
+        };
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(costs));
+        return;
+    }
+
+    // Rate limit info endpoint
+    if (url === '/api/ratelimit') {
+        const ip = req.socket.remoteAddress || '0.0.0.0';
+        const limits = rateLimiter.getLimitInfo(ip);
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(limits));
+        return;
     }
 
     // Serve static files

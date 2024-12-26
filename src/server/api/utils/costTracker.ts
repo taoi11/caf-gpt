@@ -9,7 +9,8 @@ class CostTracker {
     private readonly dataPath: string;
     private readonly dataDir: string;
     private data: CostData = {
-        monthlyTotal: 0,
+        apiCosts: 0,
+        serverCosts: MONTHLY_SERVER_COST,
         lastReset: new Date().toISOString().split('T')[0],
         lastUpdated: new Date().toISOString()
     };
@@ -34,16 +35,22 @@ class CostTracker {
     }
 
     private async checkMonthlyReset(): Promise<void> {
-        const today = new Date().toISOString().split('T')[0];
-        const lastResetDate = new Date(this.data.lastReset);
-        const currentMonth = new Date().getMonth();
-
-        // Check if we've moved to a new month
-        if (lastResetDate.getMonth() !== currentMonth) {
-            logger.info('Performing monthly cost reset');
-            this.data.monthlyTotal = 0;
-            this.data.lastReset = today;
-            await this.saveData();
+        const now = new Date();
+        const today = now.toISOString().split('T')[0];
+        
+        // Check if it's the first day of the month
+        if (now.getDate() === 1) {
+            const lastResetDate = new Date(this.data.lastReset);
+            
+            // Only reset if we haven't already reset this month
+            if (lastResetDate.getMonth() !== now.getMonth() || 
+                lastResetDate.getFullYear() !== now.getFullYear()) {
+                logger.info('Performing monthly cost reset on the first of the month');
+                this.data.apiCosts = 0;
+                this.data.serverCosts = MONTHLY_SERVER_COST;
+                this.data.lastReset = today;
+                await this.saveData();
+            }
         }
     }
 
@@ -51,6 +58,8 @@ class CostTracker {
         try {
             const content = await readFile(this.dataPath, 'utf-8');
             this.data = JSON.parse(content);
+            // Ensure server costs are set
+            this.data.serverCosts = MONTHLY_SERVER_COST;
             logger.info('Cost data loaded successfully');
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -85,7 +94,7 @@ class CostTracker {
     }): Promise<void> {
         await this.checkMonthlyReset();
 
-        this.data.monthlyTotal += requestData.cost;
+        this.data.apiCosts += requestData.cost;
         this.data.lastUpdated = new Date().toISOString();
 
         await this.saveData();
@@ -93,20 +102,21 @@ class CostTracker {
             id: requestData.id,
             model: requestData.model,
             cost: requestData.cost.toFixed(4),
-            monthlyTotal: this.data.monthlyTotal.toFixed(4)
+            apiTotal: this.data.apiCosts.toFixed(4),
+            serverCost: this.data.serverCosts.toFixed(2)
         });
     }
 
     public getMonthlyTotal(): number {
-        return this.data.monthlyTotal + MONTHLY_SERVER_COST;
+        return this.data.apiCosts + this.data.serverCosts;
     }
 
     public getMonthlyAPITotal(): number {
-        return this.data.monthlyTotal;
+        return this.data.apiCosts;
     }
 
     public getMonthlyServerCost(): number {
-        return MONTHLY_SERVER_COST;
+        return this.data.serverCosts;
     }
 
     public getLastReset(): string {
