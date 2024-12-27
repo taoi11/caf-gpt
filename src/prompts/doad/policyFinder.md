@@ -13,3 +13,6 @@ Rules:
 - Maximum 5 policies per response
 - If no policies are relevant, return "none"
 - Do not include explanations or other text
+
+List of DOAD Policies:
+{policies_table}

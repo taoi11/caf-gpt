@@ -13,6 +13,9 @@
             <div class="nav-left">
                 <h1>Policy Finder</h1>
                 <a href="/" class="button">Back to Tools</a>
+                <select id="policy-selector" class="policy-selector">
+                    <option value="doadFoo">DOAD Policy</option>
+                </select>
             </div>
             <div class="nav-links">
                 <div class="info-box rate-box">
@@ -31,12 +34,13 @@
 
     <main class="container">
         <div class="chat-container">
-            <div id="chat-history"></div>
+            <div id="chat-history" class="chat-history"></div>
             <div class="input-container">
                 <textarea 
                     id="user-input" 
                     placeholder="Ask about CAF policies... (Press Ctrl+Enter to send)"
                     rows="3"
+                    aria-label="Enter your policy question"
                 ></textarea>
                 <button id="send-button" class="button">Send</button>
             </div>

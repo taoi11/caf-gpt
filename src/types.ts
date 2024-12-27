@@ -70,26 +70,18 @@ export interface ApiResponse<T> {
 
 // Policy Types
 export interface PolicyReference {
-    docId: string;          // e.g., "5003-1"
-    policyGroup?: string;   // e.g., "doad", defaults to "doad"
-    section?: string;       // e.g., "5.1"
+    docId: string;          // DOAD number (e.g., "10001-1")
+    section?: string;       // Policy section (e.g., "5.1")
 }
 
 export interface PolicyContent {
-    docTitle: string;
-    section: string;
-    content: string;
-}
-
-export interface PolicyDocument {
-    docId: string;
-    content: string;
-    lastModified: Date;
-    policyGroup: string;
+    docTitle: string;       // Title of the DOAD
+    content: string;        // Content of the section
+    lastUpdated: string;    // Last update date
 }
 
 export interface ChatResponse {
-    answer: string;
-    citations: string[];
-    followUp: string;
+    answer: string;         // Main response to user
+    citations: string[];    // List of DOAD references used
+    followUp?: string;      // Optional follow-up suggestions
 } 

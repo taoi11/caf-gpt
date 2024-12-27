@@ -34,15 +34,24 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
 cap-gpt/
 ├── .appLogic/                    # Application documentation
 │   ├── overview.md              # Main project documentation
-│   ├── paceNote.md             # Pace Notes tool documentation
+│   ���── paceNote.md             # Pace Notes tool documentation
 │   ├── costTracker.md          # Cost tracking documentation
-│   └── rateLimiter.md          # Rate Limiter documentation
+│   ├── rateLimiter.md          # Rate Limiter documentation
+│   ├── policyFoo.md            # Policy tool base documentation
+│   └── doadFoo.md             # DOAD policy tool documentation
 ├── src/                         # Source code directory
 │   ├── types.ts                # Global type definitions
 │   ├── prompts/                # System prompts
-│   │   └── paceNote.md        # Pace Notes prompt
+│   │   ├── paceNote/          # Pace Notes prompts
+│   │   │   └── paceNote.md    # Pace Notes prompt
+│   │   └── policyFoo/         # Policy tool prompts
+│   │       └── doad/          # DOAD-specific prompts
+│   │           ├── policyFinder.md    # DOAD finder prompt
+│   │           ├── policyReader.md    # DOAD reader prompt
+│   │           └── DOAD-list-table.md # Available DOADs list
 │   ├── client/                 # Client-side TypeScript
-│   │   └── paceNotes.ts       # Pace Notes client code
+│   │   ├── paceNotes.ts       # Pace Notes client code
+│   │   └── policyFoo.ts       # Policy tool client code
 │   └── server/                 # Server-side TypeScript
 │       ├── api/               # API endpoints
 │       │   ├── utils/         # Server utilities
@@ -50,14 +59,26 @@ cap-gpt/
 │       │   │   ├── s3Client.ts    # S3/Storj client
 │       │   │   ├── costTracker.ts # Cost tracking
 │       │   │   └── rateLimiter.ts # Rate limiting
-│       │   └── paceNotes/     # Pace Notes API
-│       │       ├── paceNoteAgent.ts # Core logic
-│       │       └── paceNotes.ts     # Route handler
+│       │   ├── paceNotes/     # Pace Notes API
+│       │   │   ├── paceNoteAgent.ts # Core logic
+│       │   │   └── paceNotes.ts     # Route handler
+│       │   └── policyFoo/     # Policy tool API
+│       │       ├── policyFoo.ts     # Base handler
+│       │       └── doad/            # DOAD implementation
+│       │           ├── doadFoo.ts   # DOAD base class
+│       │           └── agents/      # DOAD agents
+│       │               ├── finderAgent.ts  # Policy finder
+│       │               ├── readerAgent.ts  # Policy reader
+│       │               └── chatAgent.ts    # User interaction
 │       └── index.ts           # Main server entry point
 ├── public/                     # Static assets
 │   ├── index.html             # Landing page
 │   ├── paceNotes.html         # Pace Notes tool page
+│   ├── policyFoo.html         # Policy tool page
 │   ├── css/                   # CSS files
+│   │   ├── common.css         # Shared styles
+│   │   ├── paceNotes.css      # Pace Notes styles
+│   │   └── policyFoo.css      # Policy tool styles
 │   └── js/                    # Compiled client JavaScript
 ├── dist/                      # Compiled server code
 ├── .env.example               # Environment variables template

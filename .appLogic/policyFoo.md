@@ -1,71 +1,25 @@
-# Policy-Foo Tool Overview
-## Frontend
-### Layout
+# PolicyFoo Base Handler
+## Core Structure
+### Frontend
+- one fontend for all subFoo backends
 - Top navigation bar
-- Conversation panel (75% width)
-  - Rate limit display (top-right, floating)
-    - Hourly remaining
-    - Daily remaining
-  - Chat history
-    - Session retention
-    - Max 5 messages
-    - User messages (gray background, editable)
-    - AI responses (white background)
-      - Answer
-      - Citations
-      - Follow-up
-  - Input area (expandable)
-  - Send button (streaming disabled)
-## Backend
-### Base Agent Structure
-#### BaseAgent
-- Simple logic to orchestrate the child agents
-- Handles flow of info between child agents
-- Paasses the llmGateway connection to the child agents
-- Handles the rate limit
-  - Checks if the rate limit is not exceeded before starting logic
-#### Child Agents
-1. **Finder Agent**
-  - Main purpose: Policy identification
-  - Inherits from BaseAgent
-    - user message or conversation history if not first message
-    - LLM connection
-  - system prompt
-    - base: src/prompts/paceNote/policyFinder.md
-    - DOAD List: src/prompts/paceNote/DOAD-list-table.md
-2. **Reader Agent**
-  - Main purpose: Content extraction
-  - Inherits from BaseAgent
-    - policy or documentation full text
-    - user message
-    - LLM connection
-  - system prompt
-    - base: src/prompts/paceNote/policyReader.md
-    - Policy or documentation full text from Finder Agent
+- Common UI elements
+  - Rate limit display
+  - Chat interface
+  - Input controls
+- Dropdown menu for policy group selection
 
-3. **Chat Agent**
-   - Inherits from: BaseAgent
-   - Main purpose: User interaction
-   - Key method: chat()
+### Base Agent Architecture
+#### PolicyFooBase
+- Core orchestration logic
+- Rate limit handling
+- Sends user messages and conversation history to the correct subFoo
 
-## Data Types
-- PolicyAgentOptions
-- PolicyReference
-- PolicyContent
-- ChatResponse
-- Message
+---
 
-## Monitoring
-- Privacy-focused logging
-- No logging of:
-  - User messages
-  - Personal information
-  - Session data
+# Policy-Specific Implementations
+## DOAD Policy Tool (doadFoo.md)
+> See detailed implementation in doadFoo.md
 
-## API Endpoint
-`POST /llm/policyfoo/generate`
-- Parameters:
-  - content (string)
-  - conversation_history (optional)
-  - options (optional)
-- Response: Streaming text
+## Future Policy Types
+- drmisFoo

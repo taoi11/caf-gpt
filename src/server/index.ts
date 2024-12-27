@@ -1,12 +1,15 @@
 import { createServer } from 'http';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { PORT } from './config';
+import { PORT, IS_DEV } from './config';
 import { handlePaceNoteRequest } from './api/paceNotes/paceNotes';
-import { handlePolicyFooRequest } from './api/policyFoo/handler';
+import { createPolicyRouter } from './api/policyFoo/policyFoo';
 import { costTracker } from './api/utils/costTracker';
 import { logger } from './logger';
 import { rateLimiter } from './api/utils/rateLimiter';
+
+// Initialize policy router
+const policyRouter = createPolicyRouter();
 
 const server = createServer(async (req, res) => {
     const url = req.url || '/';
@@ -19,8 +22,32 @@ const server = createServer(async (req, res) => {
         return handlePaceNoteRequest(req, res);
     }
 
-    if (url === '/api/policyfoo/generate') {
-        return handlePolicyFooRequest(req, res);
+    if (url === '/api/policyfoo/doad/generate' && method === 'POST') {
+        let body = '';
+        req.on('data', chunk => body += chunk);
+        req.on('end', async () => {
+            try {
+                const data = JSON.parse(body);
+                const response = await policyRouter.handleRequest(
+                    data.tool,
+                    data.message,
+                    data.conversationHistory,
+                    req
+                );
+                res.writeHead(200, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify(response));
+                logger.logRequest(method, url, 200);
+            } catch (error) {
+                logger.error('Policy request error:', error);
+                res.writeHead(500, { 'Content-Type': 'application/json' });
+                res.end(JSON.stringify({ 
+                    success: false, 
+                    error: 'Internal server error' 
+                }));
+                logger.logRequest(method, url, 500);
+            }
+        });
+        return;
     }
 
     // Cost endpoint
@@ -36,7 +63,15 @@ const server = createServer(async (req, res) => {
     }
 
     // Rate limit info endpoint
-    if (url === '/api/ratelimit') {
+    if (url === '/api/rate-limits') {
+        if (IS_DEV) {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                hourly: { remaining: Infinity, resetIn: 0 },
+                daily: { remaining: Infinity, resetIn: 0 }
+            }));
+            return;
+        }
         const ip = req.socket.remoteAddress || '0.0.0.0';
         const limits = rateLimiter.getLimitInfo(ip);
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -57,7 +92,7 @@ const server = createServer(async (req, res) => {
         const contentTypes: Record<string, string> = {
             'html': 'text/html',
             'css': 'text/css',
-            'js': 'text/javascript',
+            'js': 'application/javascript',
             'json': 'application/json',
             'ico': 'image/x-icon'
         };

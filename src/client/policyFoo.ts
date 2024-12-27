@@ -1,160 +1,145 @@
-import type { ChatResponse } from '../types';
-
 // Types
-interface RateLimitInfo {
-    hourly: {
-        remaining: number;
-        resetIn: number;
-    };
-    daily: {
-        remaining: number;
-        resetIn: number;
-    };
+interface ChatResponse {
+    answer: string;
+    citations: string[];
+    followUp: string;
 }
 
-class RateLimitDisplay {
-    private readonly updateInterval = 5000; // 5 seconds
-
-    constructor() {
-        this.initialize();
-    }
-
-    private initialize(): void {
-        // Update immediately and start interval
-        this.updateLimits();
-        setInterval(() => this.updateLimits(), this.updateInterval);
-    }
-
-    private formatTime(ms: number): string {
-        const minutes = Math.floor(ms / 60000);
-        if (minutes < 1) return 'soon';
-        return `${minutes}m`;
-    }
-
-    private formatLimit(info: { remaining: number; resetIn: number }): string {
-        return `${info.remaining} messages`;
-    }
-
-    private async updateLimits(): Promise<void> {
-        try {
-            const response = await fetch('/api/ratelimit');
-            const data: RateLimitInfo = await response.json();
-            
-            // Update breakdown directly
-            document.querySelector('.hourly-remaining')!.textContent = this.formatLimit(data.hourly);
-            document.querySelector('.daily-remaining')!.textContent = this.formatLimit(data.daily);
-        } catch (error) {
-            console.error('Failed to fetch rate limits:', error);
-            document.querySelector('.hourly-remaining')!.textContent = 'Error';
-            document.querySelector('.daily-remaining')!.textContent = 'Error';
-        }
-    }
+interface ApiResponse<T> {
+    success: boolean;
+    data?: T;
+    error?: string;
 }
 
-class PolicyFooUI {
-    private readonly chatHistory: HTMLDivElement;
-    private readonly userInput: HTMLTextAreaElement;
-    private readonly sendButton: HTMLButtonElement;
-    private isProcessing = false;
-    private readonly conversationHistory: string[] = [];
+// DOM Elements
+const userInput = document.getElementById('user-input') as HTMLTextAreaElement;
+const sendButton = document.getElementById('send-button') as HTMLButtonElement;
+const chatHistory = document.getElementById('chat-history') as HTMLDivElement;
+const policySelector = document.getElementById('policy-selector') as HTMLSelectElement;
 
-    constructor() {
-        // Initialize DOM elements
-        this.chatHistory = document.getElementById('chat-history') as HTMLDivElement;
-        this.userInput = document.getElementById('user-input') as HTMLTextAreaElement;
-        this.sendButton = document.getElementById('send-button') as HTMLButtonElement;
+// Rate limit display elements
+const hourlyRemaining = document.querySelector('.hourly-remaining') as HTMLSpanElement;
+const dailyRemaining = document.querySelector('.daily-remaining') as HTMLSpanElement;
 
-        this.setupEventListeners();
-    }
+// Chat state
+let conversationHistory: { role: string; content: string; }[] = [];
 
-    private setupEventListeners(): void {
-        this.userInput.addEventListener('keydown', (e: KeyboardEvent) => {
-            if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                e.preventDefault();
-                this.handleSubmit();
-            }
+// Message handling
+async function sendMessage() {
+    const message = userInput.value.trim();
+    if (!message) return;
+
+    try {
+        // Disable input while processing
+        userInput.disabled = true;
+        sendButton.disabled = true;
+
+        // Add user message to UI
+        appendMessage('user', message);
+        userInput.value = '';
+
+        // Send to backend
+        const response = await fetch('/api/policyfoo/doad/generate', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                tool: policySelector.value,
+                message,
+                conversationHistory
+            })
         });
 
-        this.sendButton.addEventListener('click', () => this.handleSubmit());
-    }
+        const result = await response.json() as ApiResponse<ChatResponse>;
 
-    private addMessage(content: string, isUser: boolean): void {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = `message ${isUser ? 'user-message' : 'ai-message'}`;
-        messageDiv.textContent = content;
-        this.chatHistory.appendChild(messageDiv);
-        this.chatHistory.scrollTop = this.chatHistory.scrollHeight;
-    }
-
-    private addAIResponse(response: ChatResponse): void {
-        const messageDiv = document.createElement('div');
-        messageDiv.className = 'message ai-message';
-
-        // Main answer
-        const answerP = document.createElement('p');
-        answerP.textContent = response.answer;
-        messageDiv.appendChild(answerP);
-
-        // Citations
-        if (response.citations.length > 0) {
-            const citationsDiv = document.createElement('div');
-            citationsDiv.className = 'citations';
-            citationsDiv.textContent = 'References: ' + response.citations.join(', ');
-            messageDiv.appendChild(citationsDiv);
+        if (!result.success || !result.data) {
+            throw new Error(result.error || 'Failed to get response');
         }
 
-        // Follow-up
-        if (response.followUp) {
-            const followUpDiv = document.createElement('div');
-            followUpDiv.className = 'follow-up';
-            followUpDiv.textContent = response.followUp;
-            messageDiv.appendChild(followUpDiv);
+        // Add assistant response to UI
+        appendMessage('assistant', result.data.answer, result.data.citations);
+
+        // Update conversation history
+        conversationHistory.push(
+            { role: 'user', content: message },
+            { role: 'assistant', content: result.data.answer }
+        );
+
+        // Update rate limits
+        updateRateLimits();
+
+        // Add follow-up if present
+        if (result.data.followUp) {
+            appendFollowUp(result.data.followUp);
         }
 
-        this.chatHistory.appendChild(messageDiv);
-        this.chatHistory.scrollTop = this.chatHistory.scrollHeight;
-    }
-
-    private async handleSubmit(): Promise<void> {
-        if (this.isProcessing || !this.userInput.value.trim()) return;
-
-        const message = this.userInput.value.trim();
-        this.userInput.value = '';
-        this.isProcessing = true;
-        this.sendButton.disabled = true;
-
-        try {
-            this.addMessage(message, true);
-            this.conversationHistory.push(message);
-
-            const response = await fetch('/api/policyfoo/generate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    content: message,
-                    conversation_history: this.conversationHistory
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to get response');
-            }
-
-            const data: ChatResponse = await response.json();
-            this.addAIResponse(data);
-
-        } catch (error) {
-            console.error('Error:', error);
-            this.addMessage('Sorry, there was an error processing your request. Please try again.', false);
-        } finally {
-            this.isProcessing = false;
-            this.sendButton.disabled = false;
-        }
+    } catch (error) {
+        console.error('Error:', error);
+        appendErrorMessage(error instanceof Error ? error.message : 'An error occurred');
+    } finally {
+        userInput.disabled = false;
+        sendButton.disabled = false;
     }
 }
 
-// Initialize when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    new PolicyFooUI();
-    new RateLimitDisplay();
-}); 
+// UI Helpers
+function appendMessage(role: 'user' | 'assistant', content: string, citations?: string[]) {
+    const messageDiv = document.createElement('div');
+    messageDiv.className = `message ${role}-message`;
+    
+    const contentP = document.createElement('p');
+    contentP.textContent = content;
+    messageDiv.appendChild(contentP);
+
+    if (citations?.length) {
+        const citationsDiv = document.createElement('div');
+        citationsDiv.className = 'citations';
+        citationsDiv.textContent = `Referenced DOADs: ${citations.join(', ')}`;
+        messageDiv.appendChild(citationsDiv);
+    }
+
+    chatHistory.appendChild(messageDiv);
+    chatHistory.scrollTop = chatHistory.scrollHeight;
+}
+
+function appendFollowUp(followUp: string) {
+    const followUpDiv = document.createElement('div');
+    followUpDiv.className = 'follow-up';
+    followUpDiv.textContent = `Suggested follow-up: ${followUp}`;
+    followUpDiv.onclick = () => {
+        userInput.value = followUp;
+        userInput.focus();
+    };
+    chatHistory.appendChild(followUpDiv);
+}
+
+function appendErrorMessage(error: string) {
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'message error-message';
+    errorDiv.textContent = `Error: ${error}`;
+    chatHistory.appendChild(errorDiv);
+}
+
+async function updateRateLimits() {
+    try {
+        const response = await fetch('/api/rate-limits');
+        const limits = await response.json();
+        
+        hourlyRemaining.textContent = `${limits.hourly.remaining}/${limits.hourly.limit}`;
+        dailyRemaining.textContent = `${limits.daily.remaining}/${limits.daily.limit}`;
+    } catch (error) {
+        console.error('Failed to update rate limits:', error);
+    }
+}
+
+// Event Listeners
+sendButton.onclick = sendMessage;
+
+userInput.onkeydown = (e: KeyboardEvent) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        sendMessage();
+    }
+};
+
+// Initial setup
+updateRateLimits(); 
