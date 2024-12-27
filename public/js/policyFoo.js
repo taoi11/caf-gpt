@@ -1,4 +1,4 @@
-"use strict";
+import { parseDOADResponse } from './doadFoo.js';
 // DOM Elements
 const userInput = document.getElementById('user-input');
 const sendButton = document.getElementById('send-button');
@@ -59,14 +59,26 @@ async function sendMessage() {
 function appendMessage(role, content, citations) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}-message`;
-    const contentP = document.createElement('p');
-    contentP.textContent = content;
-    messageDiv.appendChild(contentP);
-    if (citations?.length) {
-        const citationsDiv = document.createElement('div');
-        citationsDiv.className = 'citations';
-        citationsDiv.textContent = `Referenced DOADs: ${citations.join(', ')}`;
-        messageDiv.appendChild(citationsDiv);
+    if (role === 'assistant') {
+        // Parse DOAD response
+        const parsed = parseDOADResponse(content);
+        // Main answer
+        const contentP = document.createElement('p');
+        contentP.textContent = parsed.answer;
+        messageDiv.appendChild(contentP);
+        // Citations if any
+        if (parsed.citations.length) {
+            const citationsDiv = document.createElement('div');
+            citationsDiv.className = 'citations';
+            citationsDiv.textContent = `Referenced sections: ${parsed.citations.join(', ')}`;
+            messageDiv.appendChild(citationsDiv);
+        }
+    }
+    else {
+        // User message - no parsing needed
+        const contentP = document.createElement('p');
+        contentP.textContent = content;
+        messageDiv.appendChild(contentP);
     }
     chatHistory.appendChild(messageDiv);
     chatHistory.scrollTop = chatHistory.scrollHeight;
@@ -89,13 +101,15 @@ function appendErrorMessage(error) {
 }
 async function updateRateLimits() {
     try {
-        const response = await fetch('/api/rate-limits');
+        const response = await fetch('/api/ratelimit');
         const limits = await response.json();
-        hourlyRemaining.textContent = `${limits.hourly.remaining}/${limits.hourly.limit}`;
-        dailyRemaining.textContent = `${limits.daily.remaining}/${limits.daily.limit}`;
+        hourlyRemaining.textContent = `${limits.hourly.remaining} messages`;
+        dailyRemaining.textContent = `${limits.daily.remaining} messages`;
     }
     catch (error) {
         console.error('Failed to update rate limits:', error);
+        hourlyRemaining.textContent = 'Error';
+        dailyRemaining.textContent = 'Error';
     }
 }
 // Event Listeners
