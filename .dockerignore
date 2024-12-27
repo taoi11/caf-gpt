@@ -5,6 +5,7 @@ dist/
 
 # TypeScript
 *.tsbuildinfo
+public/js/
 
 # Docker
 docker-compose.yml

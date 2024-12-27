@@ -20,10 +20,11 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
     if (!rateLimiter.canMakeRequest(req)) {
         const hourlyInfo = rateLimiter.getLimitInfo(req.socket.remoteAddress || '0.0.0.0');
         if (hourlyInfo?.hourly.remaining === 0) {
-            rateLimiter.sendLimitResponse(res, 'hourly');
+            rateLimiter.sendLimitResponse(req, res, 'hourly');
         } else {
-            rateLimiter.sendLimitResponse(res, 'daily');
+            rateLimiter.sendLimitResponse(req, res, 'daily');
         }
+        logger.logRequest(method, url, 429);
         return;
     }
 
@@ -49,16 +50,13 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         logger.debug('Generating pace note for input:', request.input.substring(0, 50) + '...');
         const response = await paceNoteAgent.generateNote(request);
         
-        // Only track the request if we successfully got a response
-        rateLimiter.trackSuccessfulRequest(req);
+        // Only track successful generations
+        if (response.content) {
+            rateLimiter.trackSuccessfulRequest(req);
+        }
         
-        const apiResponse: ApiResponse<PaceNoteResponse> = {
-            success: true,
-            data: response
-        };
-
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(apiResponse));
+        res.end(JSON.stringify(response));
         logger.logRequest(method, url, 200);
     } catch (error) {
         logger.error('Pace Note generation error:', error);

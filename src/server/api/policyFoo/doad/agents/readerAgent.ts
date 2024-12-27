@@ -1,5 +1,5 @@
 import { ChatResponse, Message, LLMRequest } from '../../../../../types';
-import { DOADHandler, baseDOADImplementation } from '../doadFoo';
+import { DOADHandler, DOADReader, baseDOADImplementation } from '../doadFoo';
 import { logger } from '../../../../logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -8,7 +8,7 @@ import { s3Client } from '../../../utils/s3Client';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { MODELS } from '../../../../config';
 
-export function createDOADReader(llm = llmGateway): DOADHandler {
+export function createDOADReader(llm = llmGateway): DOADReader {
     let systemPrompt = '';
 
     // Load prompt immediately
@@ -40,46 +40,39 @@ export function createDOADReader(llm = llmGateway): DOADHandler {
         
         async handleMessage(message: string, history?: Message[]): Promise<ChatResponse> {
             try {
-                // Get policies from finder response
-                const policies = history?.[0]?.content.split(',')
-                    .map(p => p.trim())
-                    .filter(p => baseDOADImplementation.isValidDOADNumber(p)) || [];
-
-                if (policies.length === 0) {
+                // Get policy number from history
+                const policyNumber = history?.[1]?.content;
+                if (!policyNumber || !baseDOADImplementation.isValidDOADNumber(policyNumber)) {
+                    logger.warn('Invalid policy number');
                     return {
-                        answer: 'No valid policies to read.',
+                        answer: '',
                         citations: [],
                         followUp: ''
                     };
                 }
 
-                logger.info(`Reading DOADs: ${policies.join(', ')}`);
+                logger.info(`Reading DOAD: ${policyNumber}`);
                 
-                // Process each policy with a small delay
-                const responses: string[] = [];
-                for (const policy of policies) {
-                    const content = await fetchPolicy(policy);
-                    const request: LLMRequest = {
-                        messages: [
-                            {
-                                role: 'system',
-                                content: systemPrompt.replace('{POLICY_CONTENT}', content)
-                            },
-                            { role: 'user', content: message }
-                        ],
-                        model: MODELS.doad.reader,
-                        temperature: 0.1
-                    };
+                // Fetch and process single policy
+                const content = await fetchPolicy(policyNumber);
+                logger.debug(`Fetched content for ${policyNumber}`);
+                
+                const request: LLMRequest = {
+                    messages: [
+                        {
+                            role: 'system',
+                            content: systemPrompt.replace('{POLICY_CONTENT}', content)
+                        },
+                        { role: 'user', content: message }
+                    ],
+                    model: MODELS.doad.reader,
+                    temperature: 0.1
+                };
 
-                    const response = await llm.query(request);
-                    responses.push(response.content);
-                    await new Promise(resolve => setTimeout(resolve, 250)); // Small delay between requests
-                }
-
-                // Combine all responses into one
+                const response = await llm.query(request);
                 return {
-                    answer: responses.join('\n---\n'),
-                    citations: policies,
+                    answer: response.content,
+                    citations: [policyNumber],
                     followUp: ''
                 };
             } catch (error) {

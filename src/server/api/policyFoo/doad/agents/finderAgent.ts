@@ -1,12 +1,12 @@
 import { ChatResponse, Message, LLMRequest } from '../../../../../types';
-import { DOADHandler, baseDOADImplementation } from '../doadFoo';
+import { DOADHandler, DOADFinder, baseDOADImplementation } from '../doadFoo';
 import { logger } from '../../../../logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { llmGateway } from '../../../utils/llmGateway';
 import { MODELS } from '../../../../config';
 
-export function createDOADFinder(llm = llmGateway): DOADHandler {
+export function createDOADFinder(llm = llmGateway): DOADFinder {
     let systemPrompt = '';
 
     // Load prompts immediately
@@ -24,43 +24,40 @@ export function createDOADFinder(llm = llmGateway): DOADHandler {
     return {
         ...baseDOADImplementation,
         
-        async handleMessage(message: string, history?: Message[]): Promise<ChatResponse> {
+        async handleMessage(message: string): Promise<string[]> {
             try {
                 logger.info('Finding relevant DOADs');
                 
                 const request: LLMRequest = {
                     messages: [
                         { role: 'system', content: systemPrompt },
-                        ...(history || []),
                         { role: 'user', content: message }
                     ],
                     model: MODELS.doad.finder,
                     temperature: 0.1
                 };
 
-                // Just get raw response and extract policy numbers
                 const response = await llm.query(request);
-                const content = response.content.trim();
                 
-                // Handle 'none' response
+                // Clean up response - replace newlines with commas and handle multiple spaces
+                const content = response.content
+                    .replace(/\n/g, ',')  // Replace newlines with commas
+                    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+                    .trim();
+                
                 if (content.toLowerCase() === 'none') {
-                    return {
-                        answer: 'No relevant policies found.',
-                        citations: [],
-                        followUp: ''
-                    };
+                    logger.info('No relevant policies found');
+                    return [];
                 }
 
-                // Extract and validate policy numbers
-                const policies = content.split(',')
+                // Split by comma and clean up
+                const policies = content
+                    .split(',')
                     .map(p => p.trim())
-                    .filter(p => baseDOADImplementation.isValidDOADNumber(p));
+                    .filter(p => p && p.includes('-')); // Basic validation
 
-                return {
-                    answer: policies.join(', '),
-                    citations: policies,
-                    followUp: ''
-                };
+                logger.info(`Found policies: ${policies.join(', ')}`);
+                return policies;
             } catch (error) {
                 logger.error('Error in DOADFinder:', error);
                 throw error;

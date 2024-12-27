@@ -7,10 +7,23 @@ import { createDOADReader } from './agents/readerAgent';
 import { createDOADChat } from './agents/chatAgent';
 
 // Base interface for DOAD handlers
-export interface DOADHandler extends PolicyHandler {
+export interface DOADHandler {
     getDOADPath(doadNumber: string): string;
     isValidDOADNumber(doadNumber: string): boolean;
     extractDOADNumbers(text: string): string[];
+}
+
+// Specific interfaces for each agent type
+export interface DOADFinder extends DOADHandler {
+    handleMessage(message: string): Promise<string[]>;
+}
+
+export interface DOADReader extends DOADHandler {
+    handleMessage(message: string, history?: Message[]): Promise<ChatResponse>;
+}
+
+export interface DOADChat extends DOADHandler {
+    handleMessage(message: string, history?: Message[]): Promise<ChatResponse>;
 }
 
 // Base implementation for DOAD handlers
@@ -28,11 +41,12 @@ export const baseDOADImplementation = {
     },
     
     getDOADPath(doadNumber: string): string {
-        return `/doad/${doadNumber}.md`;
+        return `/doad/${doadNumber.trim()}.md`;
     },
     
     isValidDOADNumber(doadNumber: string): boolean {
-        return /^\d{5}-\d$/.test(doadNumber);
+        // Just check if it has a number, dash, and number format
+        return doadNumber.includes('-');
     },
     
     extractDOADNumbers(text: string): string[] {
@@ -42,10 +56,10 @@ export const baseDOADImplementation = {
 };
 
 // DOAD Manager interface
-interface DOADManager extends DOADHandler {
-    finder: DOADHandler;
-    reader: DOADHandler;
-    chat: DOADHandler;
+interface DOADManager extends PolicyHandler {
+    finder: DOADFinder;
+    reader: DOADReader;
+    chat: DOADChat;
     models: typeof MODELS.doad;
 }
 
@@ -62,49 +76,59 @@ function createDOADManagerImpl(): DOADManager {
         chat,
         models: MODELS.doad,
 
-        async handleMessage(message: string, history?: Message[]): Promise<ChatResponse> {
+        async handleMessage(message: string): Promise<ChatResponse> {
             try {
                 logger.info('Starting DOAD agent chain');
 
-                // Build conversation history for agents
-                const conversationHistory: Message[] = [];
-                if (history?.length) {
-                    // Add previous conversation pairs
-                    for (let i = 0; i < history.length; i += 2) {
-                        if (history[i] && history[i + 1]) {
-                            conversationHistory.push(
-                                { role: 'user', content: history[i].content },
-                                { role: 'assistant', content: history[i + 1].content }
-                            );
-                        }
-                    }
-                }
-
                 // 1. Find relevant policies
-                const finderResponse = await this.finder.handleMessage(message);
-                if (!finderResponse.citations?.length) {
-                    return finderResponse;
+                const policies = await this.finder.handleMessage(message);
+                logger.debug('Finder returned policies:', policies);
+
+                if (policies.length === 0) {
+                    logger.info('No policies found, returning early');
+                    return {
+                        answer: 'No relevant policies found.',
+                        citations: [],
+                        followUp: ''
+                    };
                 }
 
-                // Add finder result to history
-                conversationHistory.push(
-                    { role: 'user', content: message },
-                    { role: 'assistant', content: finderResponse.answer }
+                logger.info(`Processing policies: ${policies.join(', ')}`);
+
+                // 2. Read each policy in parallel with delay
+                const readerPromises = policies.map((policy, index) => 
+                    new Promise<string>(async (resolve) => {
+                        // Add delay offset for each policy
+                        await new Promise(r => setTimeout(r, index * 250));
+                        try {
+                            const response = await this.reader.handleMessage(message, [
+                                { role: 'user', content: message },
+                                { role: 'assistant', content: policy }
+                            ]);
+                            resolve(response.answer);
+                        } catch (error) {
+                            logger.error(`Error reading policy ${policy}:`, error);
+                            resolve(''); // Skip failed policies
+                        }
+                    })
                 );
 
-                // 2. Read policy content
-                const readerResponse = await this.reader.handleMessage(
-                    message,
-                    conversationHistory
-                );
+                const policyExtracts = await Promise.all(readerPromises);
+                const validExtracts = policyExtracts.filter(Boolean);
 
-                // Add reader result to history
-                conversationHistory.push(
-                    { role: 'assistant', content: readerResponse.answer }
-                );
+                if (validExtracts.length === 0) {
+                    return {
+                        answer: 'No relevant information found in policies.',
+                        citations: [],
+                        followUp: ''
+                    };
+                }
 
                 // 3. Generate final response
-                return this.chat.handleMessage(message, conversationHistory);
+                return this.chat.handleMessage(message, [
+                    { role: 'user', content: message },
+                    { role: 'assistant', content: validExtracts.join('\n---\n') }
+                ]);
 
             } catch (error) {
                 logger.error('Error in DOAD manager:', error);

@@ -3,6 +3,8 @@ node_modules/
 
 # TypeScript
 *.tsbuildinfo
+public/js/
+
 
 # Build output
 dist/

@@ -77,8 +77,8 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
                     };
                 }
 
-                // Rate limit check (rateLimiter handles dev mode internally)
-                if (req && !rateLimiter.canMakeRequest(req)) {
+                // Check if we can make more requests
+                if (req && !(await rateLimiter.canMakeRequest(req))) {
                     logger.warn('Rate limit exceeded for request');
                     return {
                         success: false,
@@ -91,7 +91,8 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
                 
                 const response = await handler.handleMessage(message, history);
                 
-                if (req) {
+                // Only track successful DOAD chat responses
+                if (req && tool === 'doadFoo' && response.answer) {
                     rateLimiter.trackSuccessfulRequest(req);
                 }
 

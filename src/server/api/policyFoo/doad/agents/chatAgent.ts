@@ -1,12 +1,12 @@
 import { ChatResponse, Message, LLMRequest } from '../../../../../types';
-import { DOADHandler, baseDOADImplementation } from '../doadFoo';
+import { DOADHandler, DOADChat, baseDOADImplementation } from '../doadFoo';
 import { logger } from '../../../../logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { llmGateway } from '../../../utils/llmGateway';
 import { MODELS } from '../../../../config';
 
-export function createDOADChat(llm = llmGateway): DOADHandler {
+export function createDOADChat(llm = llmGateway): DOADChat {
     let systemPrompt = '';
 
     // Load prompt immediately
@@ -28,8 +28,16 @@ export function createDOADChat(llm = llmGateway): DOADHandler {
                 logger.info('Processing chat response');
 
                 // Get policy extracts from previous reader response
-                const policyExtracts = history?.[history.length - 1]?.content || '';
-                const policies = history?.[0]?.content.split(',').map(p => p.trim()) || [];
+                const readerMessage = history?.find(msg => 
+                    msg.role === 'assistant' && msg.content.includes('<policy_extract>')
+                );
+                const policyExtracts = readerMessage?.content || '';
+
+                // Get policies from finder response
+                const finderMessage = history?.find(msg => 
+                    msg.role === 'assistant' && !msg.content.includes('<policy_extract>')
+                );
+                const policies = finderMessage?.content.split(',').map(p => p.trim()) || [];
 
                 const request: LLMRequest = {
                     messages: [
@@ -37,8 +45,8 @@ export function createDOADChat(llm = llmGateway): DOADHandler {
                             role: 'system',
                             content: systemPrompt.replace('{policy_extracts}', policyExtracts)
                         },
-                        ...(history?.slice(0, -1) || []),
-                        { role: 'user', content: message }
+                        // Include full conversation history except reader response
+                        ...(history?.filter(msg => !msg.content.includes('<policy_extract>')) || [])
                     ],
                     model: MODELS.doad.chat,
                     temperature: 0.7

@@ -63,7 +63,7 @@ const server = createServer(async (req, res) => {
     }
 
     // Rate limit info endpoint
-    if (url === '/api/rate-limits') {
+    if (url === '/api/ratelimit') {
         if (IS_DEV) {
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({

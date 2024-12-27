@@ -34,4 +34,14 @@ export const MODELS = {
         reader: env.DOAD_READER_MODEL,
         chat: env.DOAD_CHAT_MODEL
     }
+} as const;
+
+// Rate limiting configuration
+export const RATE_LIMITS = {
+    WHITELISTED_CIDRS: [
+        '131.136.0.0/16'  // DND network range
+    ],
+    HOURLY_LIMIT: 10,
+    DAILY_LIMIT: 30,
+    CLEANUP_INTERVAL: 15 * 60 * 1000  // 15 minutes in milliseconds
 } as const; 

@@ -5,12 +5,13 @@
   "type": "module",
   "scripts": {
     "start": "node dist/server/index.js",
-    "dev": "npm run clean && concurrently \"tsx watch src/server/index.ts\" \"npm run watch-client\"",
+    "dev": "npm run clean && concurrently \"tsx watch src/server/index.ts\" \"npm run build:client -- --watch\"",
     "build": "npm run clean && npm run build-server && npm run build-client",
     "build-server": "tsc -p tsconfig.server.json",
     "build-client": "tsc -p tsconfig.client.json",
     "watch-client": "tsc -p tsconfig.client.json --watch",
-    "clean": "rm -rf dist public/js && mkdir -p dist public/js"
+    "clean": "rm -rf dist public/js && mkdir -p dist public/js",
+    "build:client": "esbuild src/client/*.ts --bundle --outdir=public/js --sourcemap --format=esm --loader:.ts=ts --resolve-extensions=.ts,.js"
   },
   "author": "",
   "license": "AGPL-3.0",
