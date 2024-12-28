@@ -21,16 +21,7 @@ interface ApiResponse<T> {
     error?: string;
 }
 
-interface RateLimitInfo {
-    hourly: {
-        remaining: number;
-        resetIn: number;
-    };
-    daily: {
-        remaining: number;
-        resetIn: number;
-    };
-}
+import { rateLimiter } from './utils/rateLimiter.js';
 
 class PaceNotesUI {
     private readonly outputSection: HTMLElement;
@@ -159,6 +150,8 @@ class PaceNotesUI {
             
             if (data.success && data.data) {
                 this.addOutput(data.data.content, data.data.timestamp);
+                // Update rate limits after successful request
+                await rateLimiter.forceUpdate();
             } else {
                 this.showError(data.error || 'Failed to generate pace note');
             }
@@ -183,49 +176,9 @@ class PaceNotesUI {
     }
 }
 
-class RateLimitDisplay {
-    private readonly updateInterval = 5000; // 5 seconds
-
-    constructor() {
-        this.initialize();
-    }
-
-    private initialize(): void {
-        // Update immediately and start interval
-        this.updateLimits();
-        setInterval(() => this.updateLimits(), this.updateInterval);
-    }
-
-    private formatTime(ms: number): string {
-        const minutes = Math.floor(ms / 60000);
-        if (minutes < 1) return 'soon';
-        return `${minutes}m`;
-    }
-
-    private formatLimit(info: { remaining: number; resetIn: number }): string {
-        return `${info.remaining} messages`;
-    }
-
-    private async updateLimits(): Promise<void> {
-        try {
-            const response = await fetch('/api/ratelimit');
-            const data: RateLimitInfo = await response.json();
-            
-            // Update breakdown directly
-            document.querySelector('.hourly-remaining')!.textContent = this.formatLimit(data.hourly);
-            document.querySelector('.daily-remaining')!.textContent = this.formatLimit(data.daily);
-        } catch (error) {
-            console.error('Failed to fetch rate limits:', error);
-            document.querySelector('.hourly-remaining')!.textContent = 'Error';
-            document.querySelector('.daily-remaining')!.textContent = 'Error';
-        }
-    }
-}
-
-// Initialize rate limit display
-new RateLimitDisplay();
-
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
     new PaceNotesUI();
+    // Only initialize the singleton once
+    rateLimiter;
 }); 

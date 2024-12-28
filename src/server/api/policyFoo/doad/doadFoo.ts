@@ -5,6 +5,8 @@ import { MODELS } from '../../../config';
 import { createDOADFinder } from './agents/finderAgent';
 import { createDOADReader } from './agents/readerAgent';
 import { createDOADChat } from './agents/chatAgent';
+import { rateLimiter } from '../../../api/utils/rateLimiter';
+import { IncomingMessage } from 'http';
 
 // Base interface for DOAD handlers
 export interface DOADHandler {
@@ -23,7 +25,7 @@ export interface DOADReader extends DOADHandler {
 }
 
 export interface DOADChat extends DOADHandler {
-    handleMessage(message: string, history?: Message[]): Promise<ChatResponse>;
+    handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse>;
 }
 
 // Base implementation for DOAD handlers
@@ -61,6 +63,7 @@ interface DOADManager extends PolicyHandler {
     reader: DOADReader;
     chat: DOADChat;
     models: typeof MODELS.doad;
+    handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse>;
 }
 
 // Create DOAD manager implementation
@@ -76,16 +79,14 @@ function createDOADManagerImpl(): DOADManager {
         chat,
         models: MODELS.doad,
 
-        async handleMessage(message: string): Promise<ChatResponse> {
+        async handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse> {
             try {
                 logger.info('Starting DOAD agent chain');
 
-                // 1. Find relevant policies
+                // 1. Find relevant policies (don't track rate limit)
                 const policies = await this.finder.handleMessage(message);
-                logger.debug('Finder returned policies:', policies);
-
+                
                 if (policies.length === 0) {
-                    logger.info('No policies found, returning early');
                     return {
                         answer: 'No relevant policies found.',
                         citations: [],
@@ -93,9 +94,7 @@ function createDOADManagerImpl(): DOADManager {
                     };
                 }
 
-                logger.info(`Processing policies: ${policies.join(', ')}`);
-
-                // 2. Read each policy in parallel with delay
+                // 2. Read policies (don't track rate limit)
                 const readerPromises = policies.map((policy, index) => 
                     new Promise<string>(async (resolve) => {
                         // Add delay offset for each policy
@@ -113,25 +112,17 @@ function createDOADManagerImpl(): DOADManager {
                     })
                 );
 
-                const policyExtracts = await Promise.all(readerPromises);
-                const validExtracts = policyExtracts.filter(Boolean);
+                const policyContents = await Promise.all(readerPromises);
 
-                if (validExtracts.length === 0) {
-                    return {
-                        answer: 'No relevant information found in policies.',
-                        citations: [],
-                        followUp: ''
-                    };
-                }
-
-                // 3. Generate final response
-                return this.chat.handleMessage(message, [
+                // 3. Chat response (track rate limit only for this)
+                const chatResponse = await this.chat.handleMessage(message, [
                     { role: 'user', content: message },
-                    { role: 'assistant', content: validExtracts.join('\n---\n') }
-                ]);
+                    { role: 'assistant', content: policyContents.join('\n\n') }
+                ], req);
 
+                return chatResponse;
             } catch (error) {
-                logger.error('Error in DOAD manager:', error);
+                logger.error('Error in DOAD chain:', error);
                 throw error;
             }
         }

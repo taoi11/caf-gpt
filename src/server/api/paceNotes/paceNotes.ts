@@ -50,13 +50,14 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         logger.debug('Generating pace note for input:', request.input.substring(0, 50) + '...');
         const response = await paceNoteAgent.generateNote(request);
         
-        // Only track successful generations
-        if (response.content) {
-            rateLimiter.trackSuccessfulRequest(req);
-        }
+        // Only track rate limit after successful generation
+        rateLimiter.trackSuccessfulRequest(req);
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(response));
+        res.end(JSON.stringify({
+            success: true,
+            data: response
+        }));
         logger.logRequest(method, url, 200);
     } catch (error) {
         logger.error('Pace Note generation error:', error);

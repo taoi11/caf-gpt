@@ -118,12 +118,4 @@
     outline: none;
     border-color: var(--secondary-color);
     box-shadow: 0 0 0 2px rgba(52, 152, 219, 0.1);
-}
-
-/* Rate limit display */
-.rate-line {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.5rem;
-    font-size: 0.9rem;
 } 

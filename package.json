@@ -2,11 +2,10 @@
   "name": "caf-gpt",
   "version": "1.0.0",
   "description": "A collection of AI tools and agents for CAF personnel",
-  "type": "module",
   "scripts": {
     "start": "node dist/server/index.js",
     "dev": "npm run clean && concurrently \"tsx watch src/server/index.ts\" \"npm run build:client -- --watch\"",
-    "build": "npm run clean && npm run build-server && npm run build-client",
+    "build": "npm run clean && tsc -p tsconfig.json && esbuild src/client/*.ts --bundle --outdir=public/js --minify --sourcemap",
     "build-server": "tsc -p tsconfig.server.json",
     "build-client": "tsc -p tsconfig.client.json",
     "watch-client": "tsc -p tsconfig.client.json --watch",

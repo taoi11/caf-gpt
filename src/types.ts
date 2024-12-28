@@ -52,13 +52,14 @@ export interface LLMError {
 // Pace Notes Types
 export interface PaceNoteRequest {
     input: string;
+    rank: string;
     format?: 'markdown' | 'text';
 }
 
 export interface PaceNoteResponse {
     content: string;
     timestamp: string;
-    format: 'markdown' | 'text';
+    rank: string;
 }
 
 // API Response Types
@@ -84,4 +85,11 @@ export interface ChatResponse {
     answer: string;         // Main response to user
     citations: string[];    // List of DOAD references used
     followUp?: string;      // Optional follow-up suggestions
+}
+
+export interface PolicyDocument {
+    docId: string;
+    content: string;
+    lastModified: Date;
+    policyGroup: string;
 } 

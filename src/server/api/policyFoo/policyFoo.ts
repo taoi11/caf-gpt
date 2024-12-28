@@ -21,7 +21,7 @@ export interface ResponseFormatter {
 }
 
 export interface PolicyHandler extends ResponseFormatter {
-    handleMessage(message: string, history?: Message[]): Promise<ChatResponse>;
+    handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse>;
 }
 
 // Default response formatter implementation
@@ -89,13 +89,8 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
                 const handler = handlers.get(tool)!;
                 logger.info(`Processing ${tool} request`);
                 
-                const response = await handler.handleMessage(message, history);
+                const response = await handler.handleMessage(message, history, req);
                 
-                // Only track successful DOAD chat responses
-                if (req && tool === 'doadFoo' && response.answer) {
-                    rateLimiter.trackSuccessfulRequest(req);
-                }
-
                 return {
                     success: true,
                     data: response

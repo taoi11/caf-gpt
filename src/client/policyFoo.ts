@@ -1,4 +1,5 @@
 import { parseDOADResponse } from './doadFoo.js';
+import { rateLimiter } from './utils/rateLimiter.js';
 
 // Types
 interface ChatResponse {
@@ -18,10 +19,6 @@ const userInput = document.getElementById('user-input') as HTMLTextAreaElement;
 const sendButton = document.getElementById('send-button') as HTMLButtonElement;
 const chatHistory = document.getElementById('chat-history') as HTMLDivElement;
 const policySelector = document.getElementById('policy-selector') as HTMLSelectElement;
-
-// Rate limit display elements
-const hourlyRemaining = document.querySelector('.hourly-remaining') as HTMLSpanElement;
-const dailyRemaining = document.querySelector('.daily-remaining') as HTMLSpanElement;
 
 // Chat state
 let conversationHistory: { role: string; content: string; }[] = [];
@@ -59,15 +56,15 @@ async function sendMessage() {
 
         // Add assistant response to UI
         appendMessage('assistant', result.data.answer, result.data.citations);
+        
+        // Update rate limits after successful request
+        await rateLimiter.forceUpdate();
 
         // Update conversation history
         conversationHistory.push(
             { role: 'user', content: message },
             { role: 'assistant', content: result.data.answer }
         );
-
-        // Update rate limits
-        updateRateLimits();
 
         // Add follow-up if present
         if (result.data.followUp) {
@@ -133,20 +130,6 @@ function appendErrorMessage(error: string) {
     chatHistory.appendChild(errorDiv);
 }
 
-async function updateRateLimits() {
-    try {
-        const response = await fetch('/api/ratelimit');
-        const limits = await response.json();
-        
-        hourlyRemaining.textContent = `${limits.hourly.remaining} messages`;
-        dailyRemaining.textContent = `${limits.daily.remaining} messages`;
-    } catch (error) {
-        console.error('Failed to update rate limits:', error);
-        hourlyRemaining.textContent = 'Error';
-        dailyRemaining.textContent = 'Error';
-    }
-}
-
 // Event Listeners
 sendButton.onclick = sendMessage;
 
@@ -158,4 +141,7 @@ userInput.onkeydown = (e: KeyboardEvent) => {
 };
 
 // Initial setup
-updateRateLimits(); 
+document.addEventListener('DOMContentLoaded', () => {
+    // Only initialize the singleton once
+    rateLimiter;
+}); 

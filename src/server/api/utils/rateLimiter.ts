@@ -3,30 +3,41 @@ import { logger } from '../../logger';
 import { IS_DEV, RATE_LIMITS } from '../../config';
 import type { RateLimit, RateWindow } from '../../../types';
 
-// Rate limit time windows
+// Constants
 const HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
-const DAY = 24 * 60 * 60 * 1000; // 24 hours in milliseconds
+const DAY = 24 * 60 * 60 * 1000; // 1 day in milliseconds
+const MAX_IPS = 10000; // Maximum number of IPs to track
 
 class RateLimiter {
     private readonly limits: Map<string, RateLimit> = new Map();
+    private readonly ipv6Limits: Map<string, RateLimit> = new Map(); // Separate IPv6 tracking
 
     constructor() {
-        // Start cleanup interval using config value
         setInterval(() => this.cleanupOldEntries(), RATE_LIMITS.CLEANUP_INTERVAL);
     }
 
     private cleanupOldEntries(): void {
-        const now = this.getUTCTimestamp();
-        for (const [ip, limit] of this.limits.entries()) {
-            // Check if both windows are at max count or expired
-            const hourlyExpired = now - limit.hourly.timestamp >= HOUR;
-            const dailyExpired = now - limit.daily.timestamp >= DAY;
+        const now = Date.now(); // Use milliseconds directly
+        
+        // Helper to cleanup a map
+        const cleanupMap = (map: Map<string, RateLimit>) => {
+            const entries = Array.from(map.entries());
+            // Sort by timestamp (newest first) and keep only MAX_IPS entries
+            entries.sort((a, b) => b[1].hourly.timestamp - a[1].hourly.timestamp);
             
-            if (hourlyExpired && dailyExpired) {
-                this.limits.delete(ip);
-                logger.debug(`Cleaned up rate limit entry for IP: ${ip}`);
-            }
-        }
+            map.clear();
+            entries.slice(0, MAX_IPS).forEach(([ip, limit]) => {
+                const hourlyExpired = now - limit.hourly.timestamp >= HOUR;
+                const dailyExpired = now - limit.daily.timestamp >= DAY;
+                
+                if (!hourlyExpired || !dailyExpired) {
+                    map.set(ip, limit);
+                }
+            });
+        };
+
+        cleanupMap(this.limits);
+        cleanupMap(this.ipv6Limits);
     }
 
     private isIPInCIDR(ip: string, cidr: string): boolean {
@@ -44,10 +55,19 @@ class RateLimiter {
 
     // Normalize IPv4 address to standard format
     private normalizeIP(ip: string): string {
+        // Handle localhost
+        if (ip === '::ffff:127.0.0.1') {
+            return '127.0.0.1';
+        }
+        
+        // Remove IPv6 prefix if present
+        if (ip.startsWith('::ffff:')) {
+            ip = ip.substring(7);
+        }
+        
         // Handle IPv6 addresses
         if (ip.includes(':')) {
-            logger.debug('IPv6 address detected, using fallback');
-            return '0.0.0.0';
+            return ip; // Keep original IPv6 address
         }
 
         // Basic IPv4 validation and normalization
@@ -57,31 +77,22 @@ class RateLimiter {
             return '0.0.0.0';
         }
 
-        // Normalize each octet
-        const normalized = parts.map(part => {
+        return parts.map(part => {
             const num = parseInt(part, 10);
             return (num >= 0 && num <= 255) ? num : 0;
         }).join('.');
-
-        return normalized;
     }
 
     // Improved whitelist check
     private isWhitelisted(ip: string): boolean {
-        // Only process IPv4 addresses
+        // Only process IPv4 addresses for whitelist
         if (ip.includes(':')) {
             return false;
         }
 
-        // Check if IP is in any whitelisted CIDR range
-        const isWhitelisted = RATE_LIMITS.WHITELISTED_CIDRS.some(cidr => 
+        return RATE_LIMITS.WHITELISTED_CIDRS.some(cidr => 
             this.isIPInCIDR(ip, cidr)
         );
-
-        if (isWhitelisted) {
-            logger.debug(`Whitelisted IP detected: ${ip}`);
-        }
-        return isWhitelisted;
     }
 
     private checkWindow(window: RateWindow, now: number, limit: number, size: number): boolean {
@@ -89,65 +100,42 @@ class RateLimiter {
         
         // If outside window, reset
         if (timeDiff >= size) {
-            window.count = 1; // Set to 1 since we're consuming the request
+            window.count = 1;
             window.timestamp = now;
             return true;
         }
 
-        // Calculate remaining requests in sliding window
-        const remainingRatio = (size - timeDiff) / size;
-        const adjustedCount = Math.ceil(window.count * remainingRatio) + 1;
-
-        if (adjustedCount > limit) {
+        // Use precise timestamp-based counting
+        if (window.count >= limit) {
             return false;
         }
 
-        window.count = adjustedCount;
-        window.timestamp = now;
+        window.count++;
         return true;
     }
 
     public canMakeRequest(req: IncomingMessage): boolean {
-        // Skip rate limiting in development
-        if (IS_DEV) {
-            return true;
-        }
+        if (IS_DEV) return true;
 
-        // Get and normalize IP address
         const rawIP = req.socket.remoteAddress || '0.0.0.0';
         const ip = this.normalizeIP(rawIP);
+        
+        if (this.isWhitelisted(ip)) return true;
 
-        // Whitelist check with normalized IP
-        if (this.isWhitelisted(ip)) {
-            return true;
-        }
+        const now = Date.now();
+        const limitsMap = ip.includes(':') ? this.ipv6Limits : this.limits;
+        let limit = limitsMap.get(ip);
 
-        const now = this.getUTCTimestamp();
-        let limit = this.limits.get(ip);
+        if (!limit) return true;
 
-        // If no previous requests, allow it
-        if (!limit) {
-            return true;
-        }
-
-        // Just check if we're at limit, don't increment
-        const hourlyOk = this.checkWindowLimit(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR);
-        const dailyOk = this.checkWindowLimit(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
-
-        return hourlyOk && dailyOk;
+        return this.checkWindowLimit(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR) &&
+               this.checkWindowLimit(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
     }
 
     // New method to only check limits without incrementing
     private checkWindowLimit(window: RateWindow, now: number, limit: number, size: number): boolean {
-        const timeDiff = now - Math.floor(window.timestamp / 1000) * 1000;
-        
-        // If outside window, it's ok
-        if (timeDiff >= size) {
-            return true;
-        }
-
-        // Simple count check
-        return window.count < limit;
+        const timeDiff = now - window.timestamp;
+        return timeDiff >= size || window.count < limit;
     }
 
     // Track only successful API calls
@@ -159,28 +147,27 @@ class RateLimiter {
         
         if (this.isWhitelisted(ip)) return;
 
-        const now = this.getUTCTimestamp();
-        let limit = this.limits.get(ip);
+        const now = Date.now();
+        const limitsMap = ip.includes(':') ? this.ipv6Limits : this.limits;
+        let limit = limitsMap.get(ip);
 
-        // Initialize or update limits
         if (!limit) {
             limit = {
                 ip,
                 hourly: { count: 1, timestamp: now },
                 daily: { count: 1, timestamp: now }
             };
-            this.limits.set(ip, limit);
+            limitsMap.set(ip, limit);
             return;
         }
 
-        // Update both windows
         this.incrementWindow(limit.hourly, now, HOUR);
         this.incrementWindow(limit.daily, now, DAY);
     }
 
     // Helper to increment window counts
     private incrementWindow(window: RateWindow, now: number, size: number): void {
-        const timeDiff = now - Math.floor(window.timestamp / 1000) * 1000;
+        const timeDiff = now - window.timestamp;
         
         if (timeDiff >= size) {
             window.count = 1;
@@ -211,9 +198,9 @@ class RateLimiter {
             };
         }
 
-        const now = this.getUTCTimestamp();
+        const now = Date.now();
         const getWindowInfo = (window: RateWindow, limit: number, size: number) => {
-            const timeDiff = now - Math.floor(window.timestamp / 1000) * 1000;
+            const timeDiff = now - window.timestamp;
             const remainingRatio = (size - timeDiff) / size;
             const adjustedCount = Math.ceil(window.count * remainingRatio);
             
@@ -227,11 +214,6 @@ class RateLimiter {
             hourly: getWindowInfo(limit.hourly, RATE_LIMITS.HOURLY_LIMIT, HOUR),
             daily: getWindowInfo(limit.daily, RATE_LIMITS.DAILY_LIMIT, DAY)
         };
-    }
-
-    // Helper to get UTC timestamp in seconds
-    private getUTCTimestamp(): number {
-        return Math.floor(Date.now() / 1000) * 1000; // Floor to nearest second
     }
 }
 

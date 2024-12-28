@@ -5,6 +5,8 @@ import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { llmGateway } from '../../../utils/llmGateway';
 import { MODELS } from '../../../../config';
+import { rateLimiter } from '../../../../api/utils/rateLimiter';
+import { IncomingMessage } from 'http';
 
 export function createDOADChat(llm = llmGateway): DOADChat {
     let systemPrompt = '';
@@ -23,7 +25,7 @@ export function createDOADChat(llm = llmGateway): DOADChat {
     return {
         ...baseDOADImplementation,
         
-        async handleMessage(message: string, history?: Message[]): Promise<ChatResponse> {
+        async handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse> {
             try {
                 logger.info('Processing chat response');
 
@@ -53,8 +55,12 @@ export function createDOADChat(llm = llmGateway): DOADChat {
                 };
 
                 const response = await llm.query(request);
+                
+                // Only track if req is provided
+                if (req) {
+                    rateLimiter.trackSuccessfulRequest(req);
+                }
 
-                // Let frontend handle XML parsing
                 return {
                     answer: response.content,
                     citations: policies,

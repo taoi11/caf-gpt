@@ -6,7 +6,6 @@ const env = process.env;
 // Validate required environment variables
 const required = [
     'PORT',
-    'NODE_ENV',
     'LLM_API_KEY',
     'PACE_NOTE_MODEL',
     'DOAD_FINDER_MODEL',
@@ -24,7 +23,7 @@ for (const key of required) {
 }
 
 // Export environment helpers
-export const IS_DEV = (env.NODE_ENV || 'development') === 'development';
+export const IS_DEV = env.NODE_ENV !== 'production';
 export const PORT = parseInt(env.PORT || '3000', 10);
 
 // Export model configurations
@@ -39,9 +38,10 @@ export const MODELS = {
 // Rate limiting configuration
 export const RATE_LIMITS = {
     WHITELISTED_CIDRS: [
-        '131.136.0.0/16'  // DND network range
+        '131.136.0.0/16',  // DND network range
+        '127.0.0.1/32',    // Localhost
     ],
-    HOURLY_LIMIT: 10,
-    DAILY_LIMIT: 30,
+    HOURLY_LIMIT: IS_DEV ? 100 : 10,    // Higher limit for development
+    DAILY_LIMIT: IS_DEV ? 300 : 30,     // Higher limit for development
     CLEANUP_INTERVAL: 15 * 60 * 1000  // 15 minutes in milliseconds
 } as const; 

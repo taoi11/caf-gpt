@@ -92,7 +92,7 @@ class PaceNoteAgent {
         return {
             content: response.content,
             timestamp: new Date().toISOString(),
-            format: request.format || 'text',
+            rank: request.rank
         };
     }
 }

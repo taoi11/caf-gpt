@@ -79,6 +79,16 @@ const server = createServer(async (req, res) => {
         return;
     }
 
+    // IP info endpoint
+    if (url === '/api/ratelimit/ip-info') {
+        const ip = req.socket.remoteAddress || '0.0.0.0';
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({
+            isIPv6: ip.includes(':') && !ip.startsWith('::ffff:')
+        }));
+        return;
+    }
+
     // Serve static files
     try {
         // Default to index.html for root path
