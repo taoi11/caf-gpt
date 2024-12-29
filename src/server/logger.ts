@@ -17,16 +17,71 @@ class Logger {
 
     private formatMessage(level: string, message: string): string {
         const timestamp = new Date().toISOString();
-        return `[${timestamp}] ${level}: ${message}`;
+        return `[${timestamp.split('.')[0]}Z] ${level}: ${message}`;
     }
 
     private shouldLog(level: LogLevel): boolean {
         return level >= this.currentLevel;
     }
 
+    // Add helper method to truncate long objects
+    private truncateObject(obj: any, maxLength: number = 100): any {
+        if (typeof obj !== 'object' || obj === null) {
+            return obj;
+        }
+        
+        const truncated: any = {};
+        for (const [key, value] of Object.entries(obj)) {
+            if (typeof value === 'string' && value.length > maxLength) {
+                truncated[key] = `${value.substring(0, maxLength)}...`;
+            } else if (Array.isArray(value)) {
+                truncated[key] = value.slice(0, 3); // Only show first 3 items
+                if (value.length > 3) {
+                    truncated[key].push(`... ${value.length - 3} more`);
+                }
+            } else if (typeof value === 'object') {
+                truncated[key] = this.truncateObject(value, maxLength);
+            } else {
+                truncated[key] = value;
+            }
+        }
+        return truncated;
+    }
+
+    private formatRateLimit(info: any): string {
+        if (!info?.current || !info?.calculated) return 'Invalid rate limit info';
+        
+        const { current, calculated } = info;
+        return `h:${calculated.hourly.remaining}/${current.hourly.count} d:${calculated.daily.remaining}/${current.daily.count}`;
+    }
+
+    private formatResetTime(ms: number): string {
+        const minutes = Math.floor(ms / 60000);
+        return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes/60)}h`;
+    }
+
+    private formatRateLimitInfo(info: any): any {
+        if (!info?.current || !info?.calculated) return info;
+        
+        return {
+            limits: this.formatRateLimit(info),
+            reset: {
+                hourly: this.formatResetTime(info.calculated.hourly.resetIn),
+                daily: this.formatResetTime(info.calculated.daily.resetIn)
+            }
+        };
+    }
+
     debug(message: string, ...args: any[]): void {
         if (this.shouldLog(LogLevel.DEBUG)) {
-            console.debug(this.formatMessage('DEBUG', message), ...args);
+            const formattedArgs = args.map(arg => {
+                // Special handling for rate limit info
+                if (message.includes('Rate limit info')) {
+                    return this.formatRateLimitInfo(arg);
+                }
+                return typeof arg === 'object' ? this.truncateObject(arg) : arg;
+            });
+            console.debug(this.formatMessage('DEBUG', message), ...formattedArgs);
         }
     }
 
@@ -55,7 +110,9 @@ class Logger {
                      statusCode >= 400 ? LogLevel.WARN :
                      LogLevel.INFO;
         
-        const message = `${method} ${url} - ${statusCode}`;
+        // Only log path portion of URL
+        const path = url.split('?')[0];
+        const message = `${method} ${path} - ${statusCode}`;
         
         switch (level) {
             case LogLevel.ERROR:
@@ -65,7 +122,12 @@ class Logger {
                 this.warn(message);
                 break;
             default:
-                this.info(message);
+                // Only log non-200 responses at INFO level
+                if (statusCode !== 200) {
+                    this.info(message);
+                } else {
+                    this.debug(message);
+                }
         }
     }
 }
