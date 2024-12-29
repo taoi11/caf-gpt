@@ -74,13 +74,21 @@ export class RateLimitDisplay {
             const response = await fetch('/api/ratelimit');
             const data: RateLimitInfo = await response.json();
             
+            console.info('Rate limit update:', data);
+            
             // Update displays with reset times
-            this.hourlyElement.textContent = this.formatLimit(data.hourly);
-            this.dailyElement.textContent = this.formatLimit(data.daily);
+            this.hourlyElement.textContent = this.formatLimit({
+                remaining: Math.max(0, data.hourly.remaining),  // Ensure non-negative
+                resetIn: data.hourly.resetIn
+            });
+            this.dailyElement.textContent = this.formatLimit({
+                remaining: Math.max(0, data.daily.remaining),   // Ensure non-negative
+                resetIn: data.daily.resetIn
+            });
 
-            // Add warning class if close to limit
-            this.hourlyElement.classList.toggle('warning', data.hourly.remaining <= 2);
-            this.dailyElement.classList.toggle('warning', data.daily.remaining <= 5);
+            // Add warning class if close to limit (adjusted thresholds)
+            this.hourlyElement.classList.toggle('warning', data.hourly.remaining <= 3);  // Increased threshold
+            this.dailyElement.classList.toggle('warning', data.daily.remaining <= 10);   // Increased threshold
 
         } catch (error) {
             console.error('Failed to fetch rate limits:', error);

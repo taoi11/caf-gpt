@@ -55,16 +55,15 @@ class RateLimiter {
 
     // Normalize IPv4 address to standard format
     private normalizeIP(ip: string): string {
-        // Handle localhost
-        if (ip === '::ffff:127.0.0.1') {
-            return '127.0.0.1';
-        }
-        
-        // Remove IPv6 prefix if present
+        // Always normalize IPv4-mapped IPv6 addresses to IPv4
         if (ip.startsWith('::ffff:')) {
             ip = ip.substring(7);
         }
         
+        if (ip === '::1') {
+            return '127.0.0.1';
+        }
+
         // Handle IPv6 addresses
         if (ip.includes(':')) {
             return ip; // Keep original IPv6 address
@@ -77,10 +76,13 @@ class RateLimiter {
             return '0.0.0.0';
         }
 
-        return parts.map(part => {
+        const normalized = parts.map(part => {
             const num = parseInt(part, 10);
             return (num >= 0 && num <= 255) ? num : 0;
         }).join('.');
+
+        logger.debug(`Normalized IP ${ip} to ${normalized}`);
+        return normalized;
     }
 
     // Improved whitelist check
@@ -98,25 +100,24 @@ class RateLimiter {
     private checkWindow(window: RateWindow, now: number, limit: number, size: number): boolean {
         const timeDiff = now - window.timestamp;
         
-        // If outside window, reset
+        // If the window has expired, reset it
         if (timeDiff >= size) {
-            window.count = 1;
+            window.count = 1; // Set to 1 instead of incrementing
             window.timestamp = now;
             return true;
         }
 
-        // Use precise timestamp-based counting
+        // If we're within the window, check if we've hit the limit
         if (window.count >= limit) {
             return false;
         }
 
+        // Only increment the count here, not in checkLimit
         window.count++;
         return true;
     }
 
     public canMakeRequest(req: IncomingMessage): boolean {
-        if (IS_DEV) return true;
-
         const rawIP = req.socket.remoteAddress || '0.0.0.0';
         const ip = this.normalizeIP(rawIP);
         
@@ -126,7 +127,15 @@ class RateLimiter {
         const limitsMap = ip.includes(':') ? this.ipv6Limits : this.limits;
         let limit = limitsMap.get(ip);
 
-        if (!limit) return true;
+        // Initialize limits if they don't exist
+        if (!limit) {
+            limit = {
+                ip,
+                hourly: { count: 0, timestamp: now },
+                daily: { count: 0, timestamp: now }
+            };
+            limitsMap.set(ip, limit);
+        }
 
         return this.checkWindowLimit(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR) &&
                this.checkWindowLimit(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
@@ -140,15 +149,16 @@ class RateLimiter {
 
     // Track only successful API calls
     public trackSuccessfulRequest(req: IncomingMessage): void {
-        if (IS_DEV) return;
-
         const rawIP = req.socket.remoteAddress || '0.0.0.0';
         const ip = this.normalizeIP(rawIP);
         
-        if (this.isWhitelisted(ip)) return;
+        if (this.isWhitelisted(ip)) {
+            logger.debug(`IP ${ip} is whitelisted, skipping rate limit tracking`);
+            return;
+        }
 
         const now = Date.now();
-        const limitsMap = ip.includes(':') ? this.ipv6Limits : this.limits;
+        const limitsMap = this.limits; // Always use IPv4 map after normalization
         let limit = limitsMap.get(ip);
 
         if (!limit) {
@@ -158,11 +168,18 @@ class RateLimiter {
                 daily: { count: 1, timestamp: now }
             };
             limitsMap.set(ip, limit);
+            logger.debug(`New rate limit created for IP ${ip}:`, limit);
             return;
         }
 
         this.incrementWindow(limit.hourly, now, HOUR);
         this.incrementWindow(limit.daily, now, DAY);
+        limitsMap.set(ip, limit);
+        
+        logger.debug(`Updated rate limit for IP ${ip}:`, {
+            hourly: { count: limit.hourly.count, timestamp: limit.hourly.timestamp },
+            daily: { count: limit.daily.count, timestamp: limit.daily.timestamp }
+        });
     }
 
     // Helper to increment window counts
@@ -189,16 +206,26 @@ class RateLimiter {
     public getLimitInfo(ip: string): { 
         hourly: { remaining: number; resetIn: number };
         daily: { remaining: number; resetIn: number };
-    } | null {
-        const limit = this.limits.get(ip);
+    } {
+        const normalizedIP = this.normalizeIP(ip);
+        const limitsMap = this.limits; // Always use IPv4 map after normalization
+        const limit = limitsMap.get(normalizedIP);
+        const now = Date.now();
+
         if (!limit) {
+            logger.debug(`No existing rate limit for IP ${normalizedIP}, creating new one`);
+            const newLimit = {
+                ip: normalizedIP,
+                hourly: { count: 0, timestamp: now },
+                daily: { count: 0, timestamp: now }
+            };
+            limitsMap.set(normalizedIP, newLimit);
             return {
                 hourly: { remaining: RATE_LIMITS.HOURLY_LIMIT, resetIn: HOUR },
                 daily: { remaining: RATE_LIMITS.DAILY_LIMIT, resetIn: DAY }
             };
         }
 
-        const now = Date.now();
         const getWindowInfo = (window: RateWindow, limit: number, size: number) => {
             const timeDiff = now - window.timestamp;
             const remainingRatio = (size - timeDiff) / size;
@@ -210,10 +237,44 @@ class RateLimiter {
             };
         };
 
-        return {
+        const info = {
             hourly: getWindowInfo(limit.hourly, RATE_LIMITS.HOURLY_LIMIT, HOUR),
             daily: getWindowInfo(limit.daily, RATE_LIMITS.DAILY_LIMIT, DAY)
         };
+
+        logger.debug(`Rate limit info for IP ${normalizedIP}:`, {
+            current: {
+                hourly: { count: limit.hourly.count, timestamp: limit.hourly.timestamp },
+                daily: { count: limit.daily.count, timestamp: limit.daily.timestamp }
+            },
+            calculated: info
+        });
+
+        return info;
+    }
+
+    public checkLimit(ip: string): boolean {
+        const normalizedIP = this.normalizeIP(ip);
+        const limitsMap = this.limits; // Always use IPv4 map after normalization
+        const limit = limitsMap.get(normalizedIP);
+        const now = Date.now();
+
+        if (!limit) {
+            logger.debug(`No existing rate limit for IP ${normalizedIP}, creating new one`);
+            const newLimit = {
+                ip: normalizedIP,
+                hourly: { count: 0, timestamp: now }, // Start at 0 instead of 1
+                daily: { count: 0, timestamp: now }   // Start at 0 instead of 1
+            };
+            limitsMap.set(normalizedIP, newLimit);
+            return true;
+        }
+
+        // Check both windows without incrementing
+        const hourlyOk = this.checkWindow(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR);
+        const dailyOk = this.checkWindow(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
+
+        return hourlyOk && dailyOk;
     }
 }
 

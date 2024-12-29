@@ -19,6 +19,11 @@ const server = createServer(async (req, res) => {
 
     // API endpoints
     if (url === '/api/paceNotes/generate') {
+        res.on('finish', () => {
+            if (res.statusCode === 200) {
+                rateLimiter.trackSuccessfulRequest(req);
+            }
+        });
         return handlePaceNoteRequest(req, res);
     }
 
@@ -64,14 +69,6 @@ const server = createServer(async (req, res) => {
 
     // Rate limit info endpoint
     if (url === '/api/ratelimit') {
-        if (IS_DEV) {
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                hourly: { remaining: Infinity, resetIn: 0 },
-                daily: { remaining: Infinity, resetIn: 0 }
-            }));
-            return;
-        }
         const ip = req.socket.remoteAddress || '0.0.0.0';
         const limits = rateLimiter.getLimitInfo(ip);
         res.writeHead(200, { 'Content-Type': 'application/json' });
