@@ -32,7 +32,8 @@ export const MODELS = {
         finder: env.DOAD_FINDER_MODEL,
         reader: env.DOAD_READER_MODEL,
         chat: env.DOAD_CHAT_MODEL
-    }
+    },
+    paceNote: env.PACE_NOTE_MODEL
 } as const;
 
 // Rate limiting configuration

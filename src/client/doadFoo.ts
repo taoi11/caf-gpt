@@ -11,7 +11,7 @@ export function parseDOADResponse(content: string): ParsedResponse {
     };
 
     try {
-        // Simple tag extraction
+        // Extract answer from XML tags if present
         if (content.includes('<answer>')) {
             const start = content.indexOf('<answer>') + 8;
             const end = content.indexOf('</answer>');
@@ -20,18 +20,16 @@ export function parseDOADResponse(content: string): ParsedResponse {
             }
         }
 
-        if (content.includes('<citations>')) {
-            const start = content.indexOf('<citations>') + 11;
-            const end = content.indexOf('</citations>');
-            if (end > start) {
-                result.citations = content
-                    .substring(start, end)
-                    .split(':')[1]  // Split on colon to get just the sections
-                    ?.split(',')
-                    .map(c => c.trim())
-                    .filter(Boolean) || [];
-            }
+        // Extract citations from content
+        const citations: string[] = [];
+        const citationPattern = /DAOD (\d{4}-\d):/g;
+        let match;
+        
+        while ((match = citationPattern.exec(content)) !== null) {
+            citations.push(match[1]);
         }
+        
+        result.citations = [...new Set(citations)]; // Remove duplicates
 
         return result;
     } catch (error) {

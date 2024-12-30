@@ -1,5 +1,6 @@
 import { parseDOADResponse } from './doadFoo.js';
 import { rateLimiter } from './utils/rateLimiter.js';
+import { Message } from '../types';
 
 // Types
 interface ChatResponse {
@@ -20,8 +21,8 @@ const sendButton = document.getElementById('send-button') as HTMLButtonElement;
 const chatHistory = document.getElementById('chat-history') as HTMLDivElement;
 const policySelector = document.getElementById('policy-selector') as HTMLSelectElement;
 
-// Chat state
-let conversationHistory: { role: string; content: string; }[] = [];
+// Chat state with proper typing
+let conversationHistory: Message[] = [];
 
 // Message handling
 async function sendMessage() {
@@ -29,22 +30,28 @@ async function sendMessage() {
     if (!message) return;
 
     try {
-        // Disable input while processing
         userInput.disabled = true;
         sendButton.disabled = true;
 
-        // Add user message to UI
+        // Add user message to UI and history
+        const userMessage: Message = {
+            role: 'user',
+            content: message,
+            timestamp: new Date().toISOString()
+        };
+        
         appendMessage('user', message);
         userInput.value = '';
+        conversationHistory.push(userMessage);
 
-        // Send to backend
+        // Send to backend with full conversation history
         const response = await fetch('/api/policyfoo/doad/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 tool: policySelector.value,
                 message,
-                conversationHistory
+                conversationHistory: conversationHistory.slice(-10) // Keep last 10 messages
             })
         });
 
@@ -54,19 +61,18 @@ async function sendMessage() {
             throw new Error(result.error || 'Failed to get response');
         }
 
-        // Add assistant response to UI
-        appendMessage('assistant', result.data.answer, result.data.citations);
+        // Add assistant response to UI and history
+        const assistantMessage: Message = {
+            role: 'assistant',
+            content: result.data.answer,
+            timestamp: new Date().toISOString()
+        };
         
-        // Update rate limits after successful request
+        appendMessage('assistant', result.data.answer, result.data.citations);
+        conversationHistory.push(assistantMessage);
+        
         await rateLimiter.forceUpdate();
 
-        // Update conversation history
-        conversationHistory.push(
-            { role: 'user', content: message },
-            { role: 'assistant', content: result.data.answer }
-        );
-
-        // Add follow-up if present
         if (result.data.followUp) {
             appendFollowUp(result.data.followUp);
         }
@@ -144,4 +150,10 @@ userInput.onkeydown = (e: KeyboardEvent) => {
 document.addEventListener('DOMContentLoaded', () => {
     // Only initialize the singleton once
     rateLimiter;
-}); 
+});
+
+// Add function to clear conversation
+function clearConversation() {
+    conversationHistory = [];
+    chatHistory.innerHTML = '';
+} 

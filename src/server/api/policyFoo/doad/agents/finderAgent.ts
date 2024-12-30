@@ -28,6 +28,14 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
             try {
                 logger.info('Finding relevant DOADs');
                 
+                // Log trimmed version of system prompt for debugging
+                logger.debug('Finder system prompt:', {
+                    role: 'system',
+                    content: systemPrompt.length > 200 ? 
+                        `${systemPrompt.substring(0, 100)}...${systemPrompt.substring(systemPrompt.length - 100)}` : 
+                        systemPrompt
+                });
+                
                 const request: LLMRequest = {
                     messages: [
                         { role: 'system', content: systemPrompt },
@@ -39,11 +47,8 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
 
                 const response = await llm.query(request);
                 
-                // Clean up response - replace newlines with commas and handle multiple spaces
-                const content = response.content
-                    .replace(/\n/g, ',')  // Replace newlines with commas
-                    .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-                    .trim();
+                // Clean up response - just trim newlines
+                const content = response.content.trim();
                 
                 if (content.toLowerCase() === 'none') {
                     logger.info('No relevant policies found');
@@ -55,6 +60,11 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
                     .split(',')
                     .map(p => p.trim())
                     .filter(p => p && p.includes('-')); // Basic validation
+
+                // Log each policy after trimming
+                policies.forEach(p => {
+                    logger.debug(`Trimmed policy number: "${p}"`);  // Added quotes to see whitespace
+                });
 
                 logger.info(`Found policies: ${policies.join(', ')}`);
                 return policies;

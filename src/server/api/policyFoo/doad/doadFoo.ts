@@ -5,8 +5,9 @@ import { MODELS } from '../../../config';
 import { createDOADFinder } from './agents/finderAgent';
 import { createDOADReader } from './agents/readerAgent';
 import { createDOADChat } from './agents/chatAgent';
-import { rateLimiter } from '../../../api/utils/rateLimiter';
+import { s3Client } from '../../../api/utils/s3Client';
 import { IncomingMessage } from 'http';
+import { GetObjectCommand } from '@aws-sdk/client-s3';
 
 // Base interface for DOAD handlers
 export interface DOADHandler {
@@ -25,7 +26,12 @@ export interface DOADReader extends DOADHandler {
 }
 
 export interface DOADChat extends DOADHandler {
-    handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse>;
+    handleMessage(
+        message: string, 
+        history?: Message[], 
+        req?: IncomingMessage,
+        policyContext?: string
+    ): Promise<ChatResponse>;
 }
 
 // Base implementation for DOAD handlers
@@ -43,17 +49,51 @@ export const baseDOADImplementation = {
     },
     
     getDOADPath(doadNumber: string): string {
-        return `/doad/${doadNumber.trim()}.md`;
+        // Clean the policy number before creating path
+        const cleaned = doadNumber
+            .trim()
+            .replace(/\s+/g, '')
+            .replace(/[^\d-]/g, '');
+        return `doad/${cleaned}.md`;
     },
     
     isValidDOADNumber(doadNumber: string): boolean {
-        // Just check if it has a number, dash, and number format
-        return doadNumber.includes('-');
+        // Clean the policy number
+        const cleaned = doadNumber
+            .trim()
+            .replace(/\s+/g, '')     // Remove all whitespace
+            .replace(/[^\d-]/g, ''); // Keep only digits and hyphen
+        
+        // Strict DOAD format validation (5 digits, hyphen, 1 digit)
+        return /^\d{5}-\d$/.test(cleaned);
     },
     
     extractDOADNumbers(text: string): string[] {
+        // Enhanced DOAD pattern matching
         const doadPattern = /\b\d{5}-\d\b/g;
-        return [...new Set(text.match(doadPattern) || [])];
+        const matches = text.match(doadPattern) || [];
+        
+        // Clean and validate each match
+        return [...new Set(
+            matches
+                .map(match => match.trim().replace(/\s+/g, ''))
+                .filter(match => this.isValidDOADNumber(match))
+        )];
+    },
+
+    async getDOADContent(doadNumber: string): Promise<string> {
+        try {
+            const path = this.getDOADPath(doadNumber);
+            const response = await s3Client.send(new GetObjectCommand({
+                Bucket: process.env.S3_BUCKET || 'policies',
+                Key: path
+            }));
+
+            return response.Body?.toString() || '';
+        } catch (error) {
+            logger.error(`Failed to get DOAD ${doadNumber}:`, error);
+            return '';
+        }
     }
 };
 
@@ -63,6 +103,7 @@ interface DOADManager extends PolicyHandler {
     reader: DOADReader;
     chat: DOADChat;
     models: typeof MODELS.doad;
+    getDOADContent(doadNumber: string): Promise<string>;
     handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse>;
 }
 
@@ -81,44 +122,49 @@ function createDOADManagerImpl(): DOADManager {
 
         async handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse> {
             try {
-                logger.info('Starting DOAD agent chain');
-
-                // 1. Find relevant policies (don't track rate limit)
+                // 1. Find relevant policies
                 const policies = await this.finder.handleMessage(message);
+                logger.debug(`Found ${policies.length} relevant policies`);
                 
-                if (policies.length === 0) {
-                    return {
-                        answer: 'No relevant policies found.',
-                        citations: [],
-                        followUp: ''
-                    };
-                }
-
-                // 2. Read policies (don't track rate limit)
-                const readerPromises = policies.map((policy, index) => 
-                    new Promise<string>(async (resolve) => {
-                        // Add delay offset for each policy
-                        await new Promise(r => setTimeout(r, index * 250));
-                        try {
-                            const response = await this.reader.handleMessage(message, [
-                                { role: 'user', content: message },
-                                { role: 'assistant', content: policy }
-                            ]);
-                            resolve(response.answer);
-                        } catch (error) {
-                            logger.error(`Error reading policy ${policy}:`, error);
-                            resolve(''); // Skip failed policies
-                        }
+                // 2. Get policy contents from S3
+                const policyContents = await Promise.all(
+                    policies.map(async doadNumber => {
+                        const content = await this.getDOADContent(doadNumber);
+                        return { doadNumber, content };
                     })
                 );
+                
+                // 3. Have reader process each policy
+                const readerPromises = policyContents.map(({ content }) => {
+                    logger.debug('Policy content before reader:', content); // Add debug log
+                    return this.reader.handleMessage(
+                        message,
+                        [{ role: 'system', content: content.toString() }] // Ensure string conversion
+                    );
+                });
+                
+                // Wait for all reader responses
+                const readerResponses = await Promise.all(readerPromises);
+                
+                // 4. Combine all XML responses into single context
+                const policyContext = readerResponses
+                    .map(r => r.answer)  // Each answer is an XML response
+                    .join('\n\n');       // Join with double newline for readability
 
-                const policyContents = await Promise.all(readerPromises);
-
-                // 3. Chat response (track rate limit only for this)
-                const chatResponse = await this.chat.handleMessage(message, [
-                    { role: 'user', content: message },
-                    { role: 'assistant', content: policyContents.join('\n\n') }
-                ], req);
+                // 5. Send combined XML context + conversation history to chat agent
+                const chatResponse = await this.chat.handleMessage(
+                    message,
+                    [
+                        // Policy extracts will be handled by chatAgent's system prompt
+                        // Only include conversation history, excluding system messages
+                        ...(history?.filter(msg => 
+                            msg.role !== 'system' && 
+                            !(msg.role === 'user' && msg.content === message)
+                        ) || [])
+                    ],
+                    req,
+                    policyContext  // Pass policy context separately for system prompt
+                );
 
                 return chatResponse;
             } catch (error) {

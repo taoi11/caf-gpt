@@ -13,15 +13,10 @@ The .appLogic/ folder has Markdown notes of may plans for this app.
   - use easy to understand function names.
 
 ## Guide lines for your actions. 
+
 ### Adding new features
   - prioritize using the built in libraries and frameworks.
   - ask user to use `npm install ...` to install dependencies. avoid adding dependencies directly to the package.json file.
-
-## Debugging
-  - DO NOT emidiatly jump to edding the code to fix the issue.
-  - explain the issue in simple terms.
-  - present solutions and options.
-  - ask for approval before proceeding and making code changes.
 
 This is a very simple project lets keep the code simple and to the point.
 Use simple and basic libraries and frameworks.

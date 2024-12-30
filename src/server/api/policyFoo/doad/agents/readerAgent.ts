@@ -40,10 +40,10 @@ export function createDOADReader(llm = llmGateway): DOADReader {
         
         async handleMessage(message: string, history?: Message[]): Promise<ChatResponse> {
             try {
-                // Get policy number from history
-                const policyNumber = history?.[1]?.content;
-                if (!policyNumber || !baseDOADImplementation.isValidDOADNumber(policyNumber)) {
-                    logger.warn('Invalid policy number');
+                // Get policy content from system message
+                const policyContent = history?.[0]?.content;
+                if (!policyContent) {
+                    logger.warn('Missing policy content');
                     return {
                         answer: '',
                         citations: [],
@@ -51,18 +51,26 @@ export function createDOADReader(llm = llmGateway): DOADReader {
                     };
                 }
 
-                logger.info(`Reading DOAD: ${policyNumber}`);
+                logger.info('Processing policy content');
+                logger.debug('Raw policy content:', policyContent);
                 
-                // Fetch and process single policy
-                const content = await fetchPolicy(policyNumber);
-                logger.debug(`Fetched content for ${policyNumber}`);
+                // Ensure systemPrompt is loaded
+                if (!systemPrompt) {
+                    logger.info('Loading system prompt');
+                    await this.initializePrompts();
+                }
+
+                // Create the full system prompt with policy content
+                const fullSystemPrompt = systemPrompt.replace(
+                    'The policy content is below:\n{POLICY_CONTENT}', 
+                    `The policy content is below:\n${policyContent}`
+                );
+
+                logger.debug('Full system prompt prepared');
                 
                 const request: LLMRequest = {
                     messages: [
-                        {
-                            role: 'system',
-                            content: systemPrompt.replace('{POLICY_CONTENT}', content)
-                        },
+                        { role: 'system', content: fullSystemPrompt },
                         { role: 'user', content: message }
                     ],
                     model: MODELS.doad.reader,
@@ -70,9 +78,14 @@ export function createDOADReader(llm = llmGateway): DOADReader {
                 };
 
                 const response = await llm.query(request);
+                
+                // Extract DOAD number from response XML
+                const docTitleMatch = response.content.match(/<policy_number>(.+?)<\/policy_number>/);
+                const doadNumber = docTitleMatch?.[1] || '';
+
                 return {
                     answer: response.content,
-                    citations: [policyNumber],
+                    citations: doadNumber ? [doadNumber] : [],
                     followUp: ''
                 };
             } catch (error) {

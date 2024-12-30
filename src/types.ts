@@ -24,13 +24,15 @@ export type MessageRole = 'system' | 'user' | 'assistant';
 export interface Message {
     role: MessageRole;
     content: string;
+    timestamp?: string; // Optional timestamp for UI purposes
 }
 
 export interface LLMRequest {
     messages: Message[];
     systemPrompt?: string;
     temperature?: number;
-    model?: string;  // Optional model override
+    model?: string;
+    maxContextLength?: number; // Optional limit for conversation history
 }
 
 export interface LLMResponse {
@@ -92,4 +94,10 @@ export interface PolicyDocument {
     content: string;
     lastModified: Date;
     policyGroup: string;
+}
+
+// Add ConversationHistory type
+export interface ConversationHistory {
+    messages: Message[];
+    lastUpdated?: string;
 } 

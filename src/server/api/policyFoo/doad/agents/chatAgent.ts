@@ -24,46 +24,40 @@ export function createDOADChat(llm = llmGateway): DOADChat {
 
     return {
         ...baseDOADImplementation,
-        
-        async handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse> {
+
+        async handleMessage(
+            message: string, 
+            history?: Message[], 
+            req?: IncomingMessage,
+            policyContext?: string
+        ): Promise<ChatResponse> {
             try {
                 logger.info('Processing chat response');
-
-                // Get policy extracts from previous reader response
-                const readerMessage = history?.find(msg => 
-                    msg.role === 'assistant' && msg.content.includes('<policy_extract>')
-                );
-                const policyExtracts = readerMessage?.content || '';
-
-                // Get policies from finder response
-                const finderMessage = history?.find(msg => 
-                    msg.role === 'assistant' && !msg.content.includes('<policy_extract>')
-                );
-                const policies = finderMessage?.content.split(',').map(p => p.trim()) || [];
 
                 const request: LLMRequest = {
                     messages: [
                         {
                             role: 'system',
-                            content: systemPrompt.replace('{policy_extracts}', policyExtracts)
+                            content: systemPrompt.replace('{policy_extracts}', policyContext || '')
                         },
-                        // Include full conversation history except reader response
-                        ...(history?.filter(msg => !msg.content.includes('<policy_extract>')) || [])
+                        ...(history || [])
                     ],
                     model: MODELS.doad.chat,
                     temperature: 0.7
                 };
 
+                // Log full messages for debugging
+                logger.debug('Chat agent messages:', request.messages);
+
                 const response = await llm.query(request);
                 
-                // Only track if req is provided
                 if (req) {
                     rateLimiter.trackSuccessfulRequest(req);
                 }
 
                 return {
                     answer: response.content,
-                    citations: policies,
+                    citations: [], // Let frontend handle citation extraction
                     followUp: ''
                 };
 

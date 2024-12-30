@@ -4,6 +4,7 @@ import { llmGateway } from "../utils/llmGateway";
 import { logger } from "../../logger";
 import { readFile } from 'fs/promises';
 import { join } from 'path';
+import { MODELS } from '../../config';
 import type { PaceNoteRequest, PaceNoteResponse } from "../../../types";
 
 class PaceNoteAgent {
@@ -84,8 +85,12 @@ class PaceNoteAgent {
         
         logger.debug('Sending request to LLM');
         const response = await llmGateway.query({
-            messages: [{ role: 'user', content: request.input }],
-            systemPrompt: filledPrompt,
+            messages: [
+                { role: 'system', content: filledPrompt },
+                { role: 'user', content: request.input }
+            ],
+            model: MODELS.paceNote,
+            temperature: 0.7
         });
 
         logger.debug('LLM response received, preparing response');

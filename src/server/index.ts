@@ -33,12 +33,23 @@ const server = createServer(async (req, res) => {
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
+                
+                // Validate conversation history
+                const history = Array.isArray(data.conversationHistory) 
+                    ? data.conversationHistory.filter((msg: any) => 
+                        msg && typeof msg.role === 'string' && 
+                        typeof msg.content === 'string' &&
+                        (msg.role === 'user' || msg.role === 'assistant')
+                      )
+                    : [];
+
                 const response = await policyRouter.handleRequest(
                     data.tool,
                     data.message,
-                    data.conversationHistory,
+                    history,
                     req
                 );
+                
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(response));
                 logger.logRequest(method, url, 200);

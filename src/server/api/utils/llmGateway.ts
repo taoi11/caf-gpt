@@ -4,22 +4,12 @@ import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from '..
 
 // Connection pool configuration
 const MAX_CONCURRENT_REQUESTS = 50;
-const MESSAGE_TRIM_LENGTH = 100;
+const DEFAULT_MAX_CONTEXT = 10; // Default number of messages to keep in context
 
 // OpenRouter configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
-
-function trimMessage(message: { role: MessageRole; content: string }): { role: MessageRole; content: string } {
-    if (message.content.length <= MESSAGE_TRIM_LENGTH * 2) {
-        return message;
-    }
-    return {
-        role: message.role,
-        content: `${message.content.slice(0, MESSAGE_TRIM_LENGTH)}...${message.content.slice(-MESSAGE_TRIM_LENGTH)}`
-    };
-}
 
 class LLMGateway {
     private activeRequests: number = 0;
@@ -30,12 +20,11 @@ class LLMGateway {
     }> = [];
 
     private async makeRequest(request: LLMRequest): Promise<LLMResponse> {
-        const messages = request.systemPrompt 
-            ? [{ role: 'system' as MessageRole, content: request.systemPrompt }, ...request.messages]
-            : request.messages;
+        // Get messages and apply context limit if specified
+        const messages = this.prepareMessages(request);
 
-        // Log trimmed messages
-        logger.debug('Request messages:', messages.map(m => trimMessage(m)));
+        // Log full messages to file
+        logger.debug('Request messages:', messages);
 
         const body = {
             model: request.model || LLM_MODEL,
@@ -47,7 +36,8 @@ class LLMGateway {
         logger.debug('Making LLM request', { 
             model: body.model, 
             messageCount: messages.length,
-            roles: messages.map(m => m.role).join(',')
+            roles: messages.map(m => m.role).join(','),
+            contextLength: request.maxContextLength || DEFAULT_MAX_CONTEXT
         });
 
         const response = await fetch(OPENROUTER_API_URL, {
@@ -77,37 +67,32 @@ class LLMGateway {
         }
 
         const data = await response.json();
-        const responseMessage = { 
-            role: 'assistant' as MessageRole, 
-            content: data.choices[0].message.content 
-        };
+        
+        // Track request cost - Make usage check optional
+        if (data.usage) {
+            await costTracker.trackRequest({
+                id: data.id,
+                model: data.model,
+                cost: data.usage.total_tokens * 0.0000015,
+                tokens: {
+                    prompt: data.usage.prompt_tokens,
+                    completion: data.usage.completion_tokens,
+                    total: data.usage.total_tokens
+                }
+            });
+        }
 
-        // Track request cost
-        await costTracker.trackRequest({
-            id: data.id,
-            model: data.model,
-            cost: data.usage.total_tokens * 0.0000015, // Example rate, adjust based on model
-            tokens: {
-                prompt: data.usage.prompt_tokens,
-                completion: data.usage.completion_tokens,
-                total: data.usage.total_tokens
-            }
-        });
-
-        logger.debug('LLM response received', {
-            model: data.model,
-            usage: data.usage,
-            response: trimMessage(responseMessage)
-        });
+        // Log full response data
+        logger.debug('LLM response received:', data);
 
         return {
-            content: responseMessage.content,
+            content: data.choices[0].message.content,
             model: data.model,
-            usage: {
+            usage: data.usage ? {
                 promptTokens: data.usage.prompt_tokens,
                 completionTokens: data.usage.completion_tokens,
                 totalTokens: data.usage.total_tokens
-            }
+            } : undefined
         };
     }
 
@@ -159,9 +144,32 @@ class LLMGateway {
         logger.debug('Creating new conversation', { 
             hasSystemPrompt: !!systemPrompt,
             model: model || LLM_MODEL,
-            systemPrompt: systemPrompt ? trimMessage({ role: 'system' as MessageRole, content: systemPrompt }) : undefined
+            systemPrompt: systemPrompt ? { role: 'system', content: systemPrompt } : undefined
         });
         return new Conversation(this, systemPrompt, model);
+    }
+
+    private prepareMessages(request: LLMRequest): Message[] {
+        let messages = request.messages;
+
+        // Apply context length limit if specified
+        const maxContext = request.maxContextLength || DEFAULT_MAX_CONTEXT;
+        if (messages.length > maxContext) {
+            // Keep system message if present, then most recent messages
+            const systemMessage = messages.find(m => m.role === 'system');
+            const recentMessages = messages.slice(-maxContext);
+            
+            messages = systemMessage 
+                ? [systemMessage, ...recentMessages]
+                : recentMessages;
+
+            logger.debug('Trimmed conversation history', {
+                originalLength: request.messages.length,
+                trimmedLength: messages.length
+            });
+        }
+
+        return messages;
     }
 }
 
@@ -171,37 +179,57 @@ class Conversation {
     private readonly gateway: LLMGateway;
     private readonly systemPrompt?: string;
     private readonly model?: string;
+    private readonly maxContextLength: number;
 
-    constructor(gateway: LLMGateway, systemPrompt?: string, model?: string) {
+    constructor(
+        gateway: LLMGateway, 
+        systemPrompt?: string, 
+        model?: string,
+        maxContextLength: number = DEFAULT_MAX_CONTEXT
+    ) {
         this.gateway = gateway;
         this.systemPrompt = systemPrompt;
         this.model = model;
+        this.maxContextLength = maxContextLength;
+
         logger.debug('Conversation initialized', { 
             hasSystemPrompt: !!systemPrompt,
             model: model || LLM_MODEL,
-            systemPrompt: systemPrompt ? trimMessage({ role: 'system' as MessageRole, content: systemPrompt }) : undefined
+            maxContextLength,
+            systemPrompt: systemPrompt ? { role: 'system', content: systemPrompt } : undefined
         });
     }
 
     public async sendMessage(content: string): Promise<string> {
-        const userMessage = { role: 'user' as MessageRole, content };
+        const userMessage = { 
+            role: 'user' as MessageRole, 
+            content,
+            timestamp: new Date().toISOString()
+        };
         this.messages.push(userMessage);
+
         logger.debug('Sending message', { 
             messageCount: this.messages.length,
-            message: trimMessage(userMessage)
+            message: userMessage
         });
 
         const response = await this.gateway.query({
             messages: this.messages,
             systemPrompt: this.systemPrompt,
             model: this.model,
+            maxContextLength: this.maxContextLength
         });
 
-        const assistantMessage = { role: 'assistant' as MessageRole, content: response.content };
+        const assistantMessage = { 
+            role: 'assistant' as MessageRole, 
+            content: response.content,
+            timestamp: new Date().toISOString()
+        };
         this.messages.push(assistantMessage);
+
         logger.debug('Response received', {
             messageCount: this.messages.length,
-            response: trimMessage(assistantMessage)
+            response: assistantMessage
         });
 
         return response.content;
@@ -214,7 +242,7 @@ class Conversation {
     public clearHistory(): void {
         logger.debug('Clearing conversation history', { 
             messageCount: this.messages.length,
-            messages: this.messages.map(m => trimMessage(m))
+            messages: this.messages
         });
         this.messages = [];
     }
