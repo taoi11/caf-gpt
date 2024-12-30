@@ -1,14 +1,9 @@
 import { parseDOADResponse } from './doadFoo.js';
 import { rateLimiter } from './utils/rateLimiter.js';
-import { Message } from '../types';
+import { Message, UIElements, DisplayOptions } from './utils/types';
+import { ChatResponse } from '../server/api/policyFoo/doad/types';
 
 // Types
-interface ChatResponse {
-    answer: string;
-    citations: string[];
-    followUp: string;
-}
-
 interface ApiResponse<T> {
     success: boolean;
     data?: T;
@@ -36,8 +31,7 @@ async function sendMessage() {
         // Add user message to UI and history
         const userMessage: Message = {
             role: 'user',
-            content: message,
-            timestamp: new Date().toISOString()
+            content: message
         };
         
         appendMessage('user', message);
@@ -64,8 +58,7 @@ async function sendMessage() {
         // Add assistant response to UI and history
         const assistantMessage: Message = {
             role: 'assistant',
-            content: result.data.answer,
-            timestamp: new Date().toISOString()
+            content: result.data.answer
         };
         
         appendMessage('assistant', result.data.answer, result.data.citations);

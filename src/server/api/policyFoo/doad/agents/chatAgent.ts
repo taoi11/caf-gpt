@@ -1,5 +1,6 @@
-import { ChatResponse, Message, LLMRequest } from '../../../../../types';
-import { DOADHandler, DOADChat, baseDOADImplementation } from '../doadFoo';
+import { LLMRequest, Message } from '../../../../../types';
+import { DOADChat, ChatResponse } from '../types';
+import { baseDOADImplementation } from '../doadFoo';
 import { logger } from '../../../../logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -11,7 +12,6 @@ import { IncomingMessage } from 'http';
 export function createDOADChat(llm = llmGateway): DOADChat {
     let systemPrompt = '';
 
-    // Load prompt immediately
     readFile(join(process.cwd(), 'src/prompts/doad/chatAgent.md'), 'utf-8')
         .then(content => {
             systemPrompt = content;
@@ -27,9 +27,9 @@ export function createDOADChat(llm = llmGateway): DOADChat {
 
         async handleMessage(
             message: string, 
-            history?: Message[], 
-            req?: IncomingMessage,
-            policyContext?: string
+            userHistory: Message[], 
+            policyContext: string,
+            req?: IncomingMessage
         ): Promise<ChatResponse> {
             try {
                 logger.info('Processing chat response');
@@ -38,15 +38,14 @@ export function createDOADChat(llm = llmGateway): DOADChat {
                     messages: [
                         {
                             role: 'system',
-                            content: systemPrompt.replace('{policy_extracts}', policyContext || '')
+                            content: systemPrompt.replace('{policy_extracts}', policyContext)
                         },
-                        ...(history || [])
+                        ...userHistory
                     ],
                     model: MODELS.doad.chat,
                     temperature: 0.7
                 };
 
-                // Log full messages for debugging
                 logger.debug('Chat agent messages:', request.messages);
 
                 const response = await llm.query(request);

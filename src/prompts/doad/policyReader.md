@@ -7,6 +7,7 @@ Your task:
 4. Extract and format the relevant information in basic XML format
 5. Reply in full VERBATIM for the relevant section of the policy
 6. Reply with ALL the relevant sections of the policy
+7. Do not answer the user's question, only return the relevant section of the policy
 
 When RELEVANT information is found, return your response in this XML format:
 <policy_extract>

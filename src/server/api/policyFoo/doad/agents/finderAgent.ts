@@ -1,5 +1,6 @@
-import { ChatResponse, Message, LLMRequest } from '../../../../../types';
-import { DOADHandler, DOADFinder, baseDOADImplementation } from '../doadFoo';
+import { LLMRequest, Message } from '../../../../../types';
+import { DOADFinder } from '../types';
+import { baseDOADImplementation } from '../doadFoo';
 import { logger } from '../../../../logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
@@ -24,21 +25,14 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
     return {
         ...baseDOADImplementation,
         
-        async handleMessage(message: string): Promise<string[]> {
+        async handleMessage(message: string, history?: Message[]): Promise<string[]> {
             try {
                 logger.info('Finding relevant DOADs');
-                
-                // Log trimmed version of system prompt for debugging
-                logger.debug('Finder system prompt:', {
-                    role: 'system',
-                    content: systemPrompt.length > 200 ? 
-                        `${systemPrompt.substring(0, 100)}...${systemPrompt.substring(systemPrompt.length - 100)}` : 
-                        systemPrompt
-                });
                 
                 const request: LLMRequest = {
                     messages: [
                         { role: 'system', content: systemPrompt },
+                        ...(history || []).slice(0, -1),
                         { role: 'user', content: message }
                     ],
                     model: MODELS.doad.finder,
@@ -47,7 +41,6 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
 
                 const response = await llm.query(request);
                 
-                // Clean up response - just trim newlines
                 const content = response.content.trim();
                 
                 if (content.toLowerCase() === 'none') {
@@ -55,15 +48,13 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
                     return [];
                 }
 
-                // Split by comma and clean up
                 const policies = content
                     .split(',')
                     .map(p => p.trim())
-                    .filter(p => p && p.includes('-')); // Basic validation
+                    .filter(p => p && p.includes('-'));
 
-                // Log each policy after trimming
                 policies.forEach(p => {
-                    logger.debug(`Trimmed policy number: "${p}"`);  // Added quotes to see whitespace
+                    logger.debug(`Trimmed policy number: "${p}"`);
                 });
 
                 logger.info(`Found policies: ${policies.join(', ')}`);

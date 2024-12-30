@@ -1,5 +1,5 @@
 import { PolicyHandler } from '../policyFoo';
-import { ChatResponse, Message } from '../../../../types';
+import { Message } from '../../../../types';
 import { logger } from '../../../logger';
 import { MODELS } from '../../../config';
 import { createDOADFinder } from './agents/finderAgent';
@@ -8,34 +8,10 @@ import { createDOADChat } from './agents/chatAgent';
 import { s3Client } from '../../../api/utils/s3Client';
 import { IncomingMessage } from 'http';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-
-// Base interface for DOAD handlers
-export interface DOADHandler {
-    getDOADPath(doadNumber: string): string;
-    isValidDOADNumber(doadNumber: string): boolean;
-    extractDOADNumbers(text: string): string[];
-}
-
-// Specific interfaces for each agent type
-export interface DOADFinder extends DOADHandler {
-    handleMessage(message: string): Promise<string[]>;
-}
-
-export interface DOADReader extends DOADHandler {
-    handleMessage(message: string, history?: Message[]): Promise<ChatResponse>;
-}
-
-export interface DOADChat extends DOADHandler {
-    handleMessage(
-        message: string, 
-        history?: Message[], 
-        req?: IncomingMessage,
-        policyContext?: string
-    ): Promise<ChatResponse>;
-}
+import { DOADFinder, DOADReader, DOADChat, ChatResponse, DOADImplementation } from './types';
 
 // Base implementation for DOAD handlers
-export const baseDOADImplementation = {
+export const baseDOADImplementation: DOADImplementation = {
     validateRequest(message: string): boolean {
         return message.trim().length > 0;
     },
@@ -49,7 +25,6 @@ export const baseDOADImplementation = {
     },
     
     getDOADPath(doadNumber: string): string {
-        // Clean the policy number before creating path
         const cleaned = doadNumber
             .trim()
             .replace(/\s+/g, '')
@@ -58,22 +33,16 @@ export const baseDOADImplementation = {
     },
     
     isValidDOADNumber(doadNumber: string): boolean {
-        // Clean the policy number
         const cleaned = doadNumber
             .trim()
-            .replace(/\s+/g, '')     // Remove all whitespace
-            .replace(/[^\d-]/g, ''); // Keep only digits and hyphen
-        
-        // Strict DOAD format validation (5 digits, hyphen, 1 digit)
+            .replace(/\s+/g, '')
+            .replace(/[^\d-]/g, '');
         return /^\d{5}-\d$/.test(cleaned);
     },
     
     extractDOADNumbers(text: string): string[] {
-        // Enhanced DOAD pattern matching
         const doadPattern = /\b\d{5}-\d\b/g;
         const matches = text.match(doadPattern) || [];
-        
-        // Clean and validate each match
         return [...new Set(
             matches
                 .map(match => match.trim().replace(/\s+/g, ''))
@@ -131,8 +100,8 @@ function createDOADManagerImpl(): DOADManager {
 
         async handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse> {
             try {
-                // 1. Find relevant policies
-                const policies = await this.finder.handleMessage(message);
+                // 1. Find relevant policies with history
+                const policies = await this.finder.handleMessage(message, history);
                 logger.debug(`Found ${policies.length} relevant policies`);
                 
                 // 2. Get policy contents from S3
@@ -143,26 +112,19 @@ function createDOADManagerImpl(): DOADManager {
                     })
                 );
                 
-                // 3. Have reader process each policy
+                // 3. Have reader process each policy with history
                 const readerPromises = policyContents.map(({ doadNumber, content }) => {
                     logger.debug(`Processing DOAD ${doadNumber} with content length: ${content.length}`);
                     
                     if (!content) {
                         logger.warn(`Empty content for DOAD ${doadNumber}`);
                         return Promise.resolve({
-                            answer: '',
-                            citations: [],
-                            followUp: ''
+                            content: '',
+                            metadata: { doadNumber }
                         });
                     }
 
-                    return this.reader.handleMessage(
-                        message,
-                        [{ 
-                            role: 'system', 
-                            content: content.toString().trim() 
-                        }]
-                    );
+                    return this.reader.handleMessage(message, content, history);
                 });
                 
                 // Wait for all reader responses
@@ -170,24 +132,16 @@ function createDOADManagerImpl(): DOADManager {
                 
                 // 4. Combine all XML responses into single context
                 const policyContext = readerResponses
-                    .map(r => r.answer)  // Each answer is an XML response
-                    .join('\n\n');       // Join with double newline for readability
+                    .map(r => r.content)
+                    .join('\n\n');
 
                 // 5. Send combined XML context + conversation history to chat agent
-                const chatResponse = await this.chat.handleMessage(
+                return await this.chat.handleMessage(
                     message,
-                    [
-                        { role: 'user', content: message },  // Add the user's message
-                        ...(history?.filter(msg => 
-                            msg.role !== 'system' && 
-                            !(msg.role === 'user' && msg.content === message)
-                        ) || [])
-                    ],
-                    req,
-                    policyContext  // Pass policy context separately for system prompt
+                    history || [],
+                    policyContext,
+                    req
                 );
-
-                return chatResponse;
             } catch (error) {
                 logger.error('Error in DOAD chain:', error);
                 throw error;

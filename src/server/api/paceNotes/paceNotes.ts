@@ -2,7 +2,7 @@ import { IncomingMessage, ServerResponse } from 'http';
 import { paceNoteAgent } from './paceNoteAgent';
 import { logger } from '../../logger';
 import { rateLimiter } from '../utils/rateLimiter';
-import type { PaceNoteRequest, ApiResponse, PaceNoteResponse } from '../../../types';
+import type { ApiResponse, PaceNoteRequest, PaceNoteResponse } from '../../../types';
 
 export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerResponse) {
     const method = req.method || 'GET';
@@ -17,7 +17,7 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
     }
 
     // Check if request can be made
-    if (!rateLimiter.canMakeRequest(req)) {
+    if (!(await rateLimiter.canMakeRequest(req))) {
         const hourlyInfo = rateLimiter.getLimitInfo(req.socket.remoteAddress || '0.0.0.0');
         if (hourlyInfo?.hourly.remaining === 0) {
             rateLimiter.sendLimitResponse(req, res, 'hourly');
@@ -50,8 +50,8 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         logger.debug('Generating pace note for input:', request.input.substring(0, 50) + '...');
         const response = await paceNoteAgent.generateNote(request);
         
-        // Only track rate limit after successful generation
-        rateLimiter.trackSuccessfulRequest(req);
+        // Track the request only ONCE after successful completion
+        await rateLimiter.trackSuccessfulRequest(req);
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({

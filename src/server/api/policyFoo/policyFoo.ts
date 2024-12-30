@@ -1,8 +1,9 @@
-import { ApiResponse, ChatResponse, Message } from '../../../types';
+import { ApiResponse, Message } from '../../../types';
 import { logger } from '../../logger';
 import { rateLimiter } from '../utils/rateLimiter';
 import { IncomingMessage } from 'http';
 import { createDOADHandler } from './doad/doadFoo';
+import { ChatResponse } from './doad/types';
 import { IS_DEV } from '../../config';
 
 // Policy tool types
@@ -21,7 +22,11 @@ export interface ResponseFormatter {
 }
 
 export interface PolicyHandler extends ResponseFormatter {
-    handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse>;
+    handleMessage(
+        message: string, 
+        history?: Message[], 
+        req?: IncomingMessage
+    ): Promise<ChatResponse>;
 }
 
 // Default response formatter implementation
@@ -89,7 +94,12 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
                 const handler = handlers.get(tool)!;
                 logger.info(`Processing ${tool} request`);
                 
-                const response = await handler.handleMessage(message, history, req);
+                // Filter out system messages and keep only user-assistant interaction
+                const userHistory = history?.filter(msg => 
+                    msg.role === 'user' || msg.role === 'assistant'
+                ) || [];
+
+                const response = await handler.handleMessage(message, userHistory, req);
                 
                 return {
                     success: true,

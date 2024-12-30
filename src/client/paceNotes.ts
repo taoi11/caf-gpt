@@ -1,18 +1,10 @@
+import { PaceNoteRequest, PaceNoteResponse, DisplayOptions } from './utils/types';
+import { rateLimiter } from './utils/rateLimiter';
+
 // Types
 interface OutputBox {
     element: HTMLDivElement;
     timestamp: string;
-}
-
-interface PaceNoteRequest {
-    input: string;
-    rank: string;
-}
-
-interface PaceNoteResponse {
-    content: string;
-    timestamp: string;
-    rank: string;
 }
 
 interface ApiResponse<T> {
@@ -20,8 +12,6 @@ interface ApiResponse<T> {
     data?: T;
     error?: string;
 }
-
-import { rateLimiter } from './utils/rateLimiter.js';
 
 class PaceNotesUI {
     private readonly outputSection: HTMLElement;
@@ -38,9 +28,6 @@ class PaceNotesUI {
         this.rankSelect = document.getElementById('rank-select') as HTMLSelectElement;
         
         this.setupEventListeners();
-        
-        // Initialize rate limit display
-        rateLimiter.initializeDisplay().catch(console.error);
     }
 
     private setupEventListeners(): void {
@@ -146,19 +133,24 @@ class PaceNotesUI {
                 body: JSON.stringify(request),
             });
 
-            const data: ApiResponse<PaceNoteResponse> = await response.json();
+            const result = await response.json() as ApiResponse<PaceNoteResponse>;
             
-            // Remove loading box
+            // Remove loading box first
             loadingBox.remove();
             
-            if (data.success && data.data) {
-                this.addOutput(data.data.content, data.data.timestamp);
-                // Update rate limits after successful generation
-                await rateLimiter.updateLimits();
-            } else {
-                this.showError(data.error || 'Failed to generate pace note');
+            if (!result.success || !result.data) {
+                this.showError(result.error || 'Failed to generate pace note');
+                return;
             }
+
+            // Display the result
+            this.addOutput(result.data.content, result.data.timestamp);
+            
+            // Update rate limits after successful generation
+            await rateLimiter.updateLimits();
+
         } catch (error) {
+            // Remove loading box on error too
             loadingBox.remove();
             this.showError('Failed to connect to server. Please try again.');
             console.error('Error:', error);
@@ -181,7 +173,6 @@ class PaceNotesUI {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
-    new PaceNotesUI();
-    // Only initialize the singleton once
-    rateLimiter;
+    const ui = new PaceNotesUI();
+    rateLimiter.initializeDisplay();
 }); 

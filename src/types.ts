@@ -1,4 +1,18 @@
-// Rate Limiting Types
+// Message Types (shared between client and server)
+export type MessageRole = 'user' | 'system' | 'assistant';
+
+export interface Message {
+    role: MessageRole;
+    content: string;
+    timestamp?: string;
+}
+
+export interface ConversationHistory {
+    messages: Message[];
+    lastUpdated?: string;
+}
+
+// Infrastructure Types
 export interface RateWindow {
     count: number;
     timestamp: number;
@@ -10,7 +24,6 @@ export interface RateLimit {
     daily: RateWindow;
 }
 
-// Cost Tracking Types
 export interface CostData {
     apiCosts: number;        // Monthly LLM API costs in USD
     serverCosts: number;     // Monthly server costs in USD
@@ -18,21 +31,19 @@ export interface CostData {
     lastUpdated: string;     // Last update timestamp
 }
 
-// LLM Types
-export type MessageRole = 'system' | 'user' | 'assistant';
-
-export interface Message {
-    role: MessageRole;
-    content: string;
-    timestamp?: string; // Optional timestamp for UI purposes
+export interface ApiResponse<T> {
+    success: boolean;
+    data?: T;
+    error?: string;
 }
 
+// LLM Core Types
 export interface LLMRequest {
     messages: Message[];
     systemPrompt?: string;
     temperature?: number;
     model?: string;
-    maxContextLength?: number; // Optional limit for conversation history
+    maxContextLength?: number;
 }
 
 export interface LLMResponse {
@@ -51,11 +62,11 @@ export interface LLMError {
     type: 'rate_limit' | 'invalid_request' | 'api_error' | 'connection_error';
 }
 
-// Pace Notes Types
+// PaceNote Types
 export interface PaceNoteRequest {
     input: string;
     rank: string;
-    format?: 'markdown' | 'text';
+    options?: DisplayOptions;
 }
 
 export interface PaceNoteResponse {
@@ -64,40 +75,10 @@ export interface PaceNoteResponse {
     rank: string;
 }
 
-// API Response Types
-export interface ApiResponse<T> {
-    success: boolean;
-    data?: T;
-    error?: string;
-}
-
-// Policy Types
-export interface PolicyReference {
-    docId: string;          // DOAD number (e.g., "10001-1")
-    section?: string;       // Policy section (e.g., "5.1")
-}
-
-export interface PolicyContent {
-    docTitle: string;       // Title of the DOAD
-    content: string;        // Content of the section
-    lastUpdated: string;    // Last update date
-}
-
-export interface ChatResponse {
-    answer: string;         // Main response to user
-    citations: string[];    // List of DOAD references used
-    followUp?: string;      // Optional follow-up suggestions
-}
-
-export interface PolicyDocument {
-    docId: string;
-    content: string;
-    lastModified: Date;
-    policyGroup: string;
-}
-
-// Add ConversationHistory type
-export interface ConversationHistory {
-    messages: Message[];
-    lastUpdated?: string;
+// Add DisplayOptions to shared types
+export interface DisplayOptions {
+    timestamp?: boolean;
+    showCitations?: boolean;
+    showFollowUp?: boolean;
+    format?: 'markdown' | 'text';
 } 

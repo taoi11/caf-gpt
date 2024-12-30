@@ -34,7 +34,7 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
 cap-gpt/
 ├── .appLogic/                    # Application documentation
 │   ├── overview.md              # Main project documentation
-│   ���── paceNote.md             # Pace Notes tool documentation
+│   ├── paceNote.md             # Pace Notes tool documentation
 │   ├── costTracker.md          # Cost tracking documentation
 │   ├── rateLimiter.md          # Rate Limiter documentation
 │   ├── policyFoo.md            # Policy tool base documentation
@@ -126,12 +126,8 @@ Available scripts:
 - `npm run clean`: Reset build
 
 ## Recent Changes
-- Removed configuration interfaces
-- Simplified rate limiting
-- Enhanced cost tracking
-- Updated UI components
-- Improved error handling
-- Optimized data fetching
-- Added competency ranking
-- Streamlined documentation
-- Environment-based configurations
+- **Type Restructuring**: 
+  - Frontend-specific types have been moved to `src/client/utils/types.ts`.
+  - Consolidated UI-related types into structured interfaces for better management.
+  - Simplified tool-specific types to focus on core functionality.
+  - Maintained clear separation of concerns between frontend, backend, and shared types.
