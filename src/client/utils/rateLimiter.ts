@@ -11,7 +11,6 @@ interface RateLimitInfo {
 }
 
 export class RateLimitDisplay {
-    private readonly updateInterval = 5000; // 5 seconds
     private readonly hourlyElement: HTMLElement;
     private readonly dailyElement: HTMLElement;
     private isIPv6: boolean = false;
@@ -53,8 +52,7 @@ export class RateLimitDisplay {
     }
 
     private formatLimit(info: { remaining: number; resetIn: number }): string {
-        const timeLeft = this.formatTime(info.resetIn);
-        return `${info.remaining} left (resets ${timeLeft})`;
+        return `${info.remaining} left`;
     }
 
     public async updateLimits(): Promise<void> {
@@ -64,7 +62,7 @@ export class RateLimitDisplay {
             
             console.info('Rate limit update:', data);
             
-            // Update displays with reset times
+            // Update displays with just the remaining counts
             this.hourlyElement.textContent = this.formatLimit({
                 remaining: Math.max(0, data.hourly.remaining),
                 resetIn: data.hourly.resetIn
@@ -87,15 +85,15 @@ export class RateLimitDisplay {
         }
     }
 
-    // Add method to initialize with immediate update
+    // Update initializeDisplay to remove the interval
     public async initializeDisplay(): Promise<void> {
         try {
-            // Check IP version and update limits immediately
+            // Check IP version and update limits only once at startup
             await this.checkIPVersion();
             await this.updateLimits();
             
-            // Then start regular interval updates
-            setInterval(() => this.updateLimits(), this.updateInterval);
+            // Remove the interval setup
+            // setInterval(() => this.updateLimits(), this.updateInterval);
         } catch (error) {
             console.error('Failed to initialize rate limit display:', error);
         }

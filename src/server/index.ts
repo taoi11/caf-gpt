@@ -19,11 +19,6 @@ const server = createServer(async (req, res) => {
 
     // API endpoints
     if (url === '/api/paceNotes/generate') {
-        res.on('finish', () => {
-            if (res.statusCode === 200) {
-                rateLimiter.trackSuccessfulRequest(req);
-            }
-        });
         return handlePaceNoteRequest(req, res);
     }
 
