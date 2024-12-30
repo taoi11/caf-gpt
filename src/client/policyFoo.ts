@@ -71,7 +71,8 @@ async function sendMessage() {
         appendMessage('assistant', result.data.answer, result.data.citations);
         conversationHistory.push(assistantMessage);
         
-        await rateLimiter.forceUpdate();
+        // Update rate limits after each message
+        await rateLimiter.updateLimits();
 
         if (result.data.followUp) {
             appendFollowUp(result.data.followUp);
@@ -147,9 +148,8 @@ userInput.onkeydown = (e: KeyboardEvent) => {
 };
 
 // Initial setup
-document.addEventListener('DOMContentLoaded', () => {
-    // Only initialize the singleton once
-    rateLimiter;
+document.addEventListener('DOMContentLoaded', async () => {
+    await rateLimiter.initializeDisplay();
 });
 
 // Add function to clear conversation

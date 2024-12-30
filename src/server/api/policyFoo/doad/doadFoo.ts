@@ -84,12 +84,21 @@ export const baseDOADImplementation = {
     async getDOADContent(doadNumber: string): Promise<string> {
         try {
             const path = this.getDOADPath(doadNumber);
+            logger.debug(`Fetching DOAD content from path: ${path}`);
+            
             const response = await s3Client.send(new GetObjectCommand({
                 Bucket: process.env.S3_BUCKET || 'policies',
                 Key: path
             }));
 
-            return response.Body?.toString() || '';
+            const content = await response.Body?.transformToString() || '';
+            logger.debug(`Fetched DOAD ${doadNumber} content length: ${content.length}`);
+            
+            if (!content) {
+                logger.warn(`Empty content received for DOAD ${doadNumber}`);
+            }
+
+            return content;
         } catch (error) {
             logger.error(`Failed to get DOAD ${doadNumber}:`, error);
             return '';
@@ -135,11 +144,24 @@ function createDOADManagerImpl(): DOADManager {
                 );
                 
                 // 3. Have reader process each policy
-                const readerPromises = policyContents.map(({ content }) => {
-                    logger.debug('Policy content before reader:', content); // Add debug log
+                const readerPromises = policyContents.map(({ doadNumber, content }) => {
+                    logger.debug(`Processing DOAD ${doadNumber} with content length: ${content.length}`);
+                    
+                    if (!content) {
+                        logger.warn(`Empty content for DOAD ${doadNumber}`);
+                        return Promise.resolve({
+                            answer: '',
+                            citations: [],
+                            followUp: ''
+                        });
+                    }
+
                     return this.reader.handleMessage(
                         message,
-                        [{ role: 'system', content: content.toString() }] // Ensure string conversion
+                        [{ 
+                            role: 'system', 
+                            content: content.toString().trim() 
+                        }]
                     );
                 });
                 
@@ -155,8 +177,7 @@ function createDOADManagerImpl(): DOADManager {
                 const chatResponse = await this.chat.handleMessage(
                     message,
                     [
-                        // Policy extracts will be handled by chatAgent's system prompt
-                        // Only include conversation history, excluding system messages
+                        { role: 'user', content: message },  // Add the user's message
                         ...(history?.filter(msg => 
                             msg.role !== 'system' && 
                             !(msg.role === 'user' && msg.content === message)

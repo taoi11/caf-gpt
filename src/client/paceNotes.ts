@@ -38,6 +38,9 @@ class PaceNotesUI {
         this.rankSelect = document.getElementById('rank-select') as HTMLSelectElement;
         
         this.setupEventListeners();
+        
+        // Initialize rate limit display
+        rateLimiter.initializeDisplay().catch(console.error);
     }
 
     private setupEventListeners(): void {
@@ -150,8 +153,8 @@ class PaceNotesUI {
             
             if (data.success && data.data) {
                 this.addOutput(data.data.content, data.data.timestamp);
-                // Update rate limits after successful request
-                await rateLimiter.forceUpdate();
+                // Update rate limits after successful generation
+                await rateLimiter.updateLimits();
             } else {
                 this.showError(data.error || 'Failed to generate pace note');
             }

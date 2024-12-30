@@ -11,16 +11,17 @@ import { MODELS } from '../../../../config';
 export function createDOADReader(llm = llmGateway): DOADReader {
     let systemPrompt = '';
 
+    // Add private initialize function
+    async function initializePrompts() {
+        systemPrompt = await readFile(join(process.cwd(), 'src/prompts/doad/policyReader.md'), 'utf-8');
+        logger.debug('Loaded reader prompt');
+    }
+
     // Load prompt immediately
-    readFile(join(process.cwd(), 'src/prompts/doad/policyReader.md'), 'utf-8')
-        .then(content => {
-            systemPrompt = content;
-            logger.debug('Loaded reader prompt');
-        })
-        .catch(error => {
-            logger.error('Failed to load reader prompt:', error);
-            throw new Error('Failed to initialize DOADReader');
-        });
+    initializePrompts().catch(error => {
+        logger.error('Failed to load reader prompt:', error);
+        throw new Error('Failed to initialize DOADReader');
+    });
 
     async function fetchPolicy(doadNumber: string): Promise<string> {
         try {
@@ -42,6 +43,9 @@ export function createDOADReader(llm = llmGateway): DOADReader {
             try {
                 // Get policy content from system message
                 const policyContent = history?.[0]?.content;
+                logger.debug('Reader received policy content length:', policyContent?.length || 0);
+                logger.debug('Reader received history:', history?.map(h => ({ role: h.role, contentLength: h.content.length })));
+                
                 if (!policyContent) {
                     logger.warn('Missing policy content');
                     return {
@@ -51,13 +55,10 @@ export function createDOADReader(llm = llmGateway): DOADReader {
                     };
                 }
 
-                logger.info('Processing policy content');
-                logger.debug('Raw policy content:', policyContent);
-                
                 // Ensure systemPrompt is loaded
                 if (!systemPrompt) {
                     logger.info('Loading system prompt');
-                    await this.initializePrompts();
+                    await initializePrompts();
                 }
 
                 // Create the full system prompt with policy content
@@ -65,9 +66,9 @@ export function createDOADReader(llm = llmGateway): DOADReader {
                     'The policy content is below:\n{POLICY_CONTENT}', 
                     `The policy content is below:\n${policyContent}`
                 );
-
-                logger.debug('Full system prompt prepared');
                 
+                logger.debug('Full system prompt length:', fullSystemPrompt.length);
+
                 const request: LLMRequest = {
                     messages: [
                         { role: 'system', content: fullSystemPrompt },

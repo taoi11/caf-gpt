@@ -45,7 +45,8 @@ class LLMGateway {
             headers: {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
-                'HTTP-Referer': 'https://caf-gpt.pages.dev'
+                'HTTP-Referer': 'https://caf-gpt.com',
+                'X-Title': 'CAF-GPT'
             },
             body: JSON.stringify(body)
         });

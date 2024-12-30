@@ -6,6 +6,7 @@ Your task:
 3. Identify sections relevant to the query
 4. Extract and format the relevant information in basic XML format
 5. Reply in full VERBATIM for the relevant section of the policy
+6. Reply with ALL the relevant sections of the policy
 
 When RELEVANT information is found, return your response in this XML format:
 <policy_extract>
@@ -25,10 +26,10 @@ When NO relevant information is found, still return XML but indicate no relevant
     </content>
 </policy_extract>
 
-CRITICAL RULES:
+FORMAT RULES:
 1. ALWAYS return XML format, even if no relevant information is found
 2. NEVER skip the XML tags or return plain text
-3. ALWAYS include the policy or documentation title
+3. ALWAYS include the policy number
 4. ALWAYS include the section number (e.g., "5.1", "6.2") for each extract
 5. Copy text EXACTLY from the document when replying with a relevant section
 6. DO NOT summarize or paraphrase policy content

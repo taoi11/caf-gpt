@@ -19,12 +19,6 @@ export class RateLimitDisplay {
     constructor() {
         this.hourlyElement = document.querySelector('.hourly-remaining')!;
         this.dailyElement = document.querySelector('.daily-remaining')!;
-        
-        // Check IP version
-        this.checkIPVersion();
-        
-        // Initialize display
-        this.initialize();
     }
 
     private async checkIPVersion(): Promise<void> {
@@ -46,12 +40,6 @@ export class RateLimitDisplay {
         }
     }
 
-    private initialize(): void {
-        // Update immediately and start interval
-        this.updateLimits();
-        setInterval(() => this.updateLimits(), this.updateInterval);
-    }
-
     private formatTime(ms: number): string {
         if (ms < 60000) { // Less than a minute
             return 'soon';
@@ -69,7 +57,7 @@ export class RateLimitDisplay {
         return `${info.remaining} left (resets ${timeLeft})`;
     }
 
-    private async updateLimits(): Promise<void> {
+    public async updateLimits(): Promise<void> {
         try {
             const response = await fetch('/api/ratelimit');
             const data: RateLimitInfo = await response.json();
@@ -78,32 +66,39 @@ export class RateLimitDisplay {
             
             // Update displays with reset times
             this.hourlyElement.textContent = this.formatLimit({
-                remaining: Math.max(0, data.hourly.remaining),  // Ensure non-negative
+                remaining: Math.max(0, data.hourly.remaining),
                 resetIn: data.hourly.resetIn
             });
             this.dailyElement.textContent = this.formatLimit({
-                remaining: Math.max(0, data.daily.remaining),   // Ensure non-negative
+                remaining: Math.max(0, data.daily.remaining),
                 resetIn: data.daily.resetIn
             });
 
-            // Add warning class if close to limit (adjusted thresholds)
-            this.hourlyElement.classList.toggle('warning', data.hourly.remaining <= 3);  // Increased threshold
-            this.dailyElement.classList.toggle('warning', data.daily.remaining <= 10);   // Increased threshold
+            // Add warning class if close to limit
+            this.hourlyElement.classList.toggle('warning', data.hourly.remaining <= 3);
+            this.dailyElement.classList.toggle('warning', data.daily.remaining <= 10);
 
         } catch (error) {
             console.error('Failed to fetch rate limits:', error);
             this.hourlyElement.textContent = 'Error';
             this.dailyElement.textContent = 'Error';
-            
-            // Add error class
             this.hourlyElement.classList.add('error');
             this.dailyElement.classList.add('error');
         }
     }
 
-    // Add public method to force update
-    public async forceUpdate(): Promise<void> {
-        await this.updateLimits();
+    // Add method to initialize with immediate update
+    public async initializeDisplay(): Promise<void> {
+        try {
+            // Check IP version and update limits immediately
+            await this.checkIPVersion();
+            await this.updateLimits();
+            
+            // Then start regular interval updates
+            setInterval(() => this.updateLimits(), this.updateInterval);
+        } catch (error) {
+            console.error('Failed to initialize rate limit display:', error);
+        }
     }
 }
 
