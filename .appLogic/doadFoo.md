@@ -5,7 +5,10 @@
 #### doadFoo
 - manages the internal logic of the agents
 - manages the flow of information between the agents
-- manager of all the sub tool logic.
+- Gets the policies from S3
+  - Full Policy: from S3 
+    Bucket: policies
+    key: /doad/DOAD-Number.md  example: /doad/10001-1.md
 
 #### DOADFinder Agent
 - Inherits from doadFoo
@@ -14,23 +17,13 @@
   - Base: src/prompts/paceNote/policyFinder.md
   - DOAD List: src/prompts/paceNote/DOAD-list-table.md
 
-#### DOADReader Agent
-- Inherits from doadFoo
-- DOAD-specific content extraction
-- System prompt:
-  - Base: src/prompts/paceNote/policyReader.md
-  - Full Policy: from S3 
-    Bucket: policies
-    key: /doad/DOAD-Number.md  example: /doad/10001-1.md
-
-
 #### DOADChat Agent
 - Inherits from doadFoo
 - DOAD-specific user interaction
 - get the extracted policy sections from the reader agent.
 - system prompt: 
   - base: src/prompts/paceNote/chatAgent.md
-  - policy sections: from reader agent
+  - policies: from doadFoo
 
 
 ## DOAD-Specific Data Types
@@ -42,3 +35,8 @@
 `POST /llm/policyfoo/doad/generate`
 - Inherits base endpoint structure
 - DOAD-specific parameters and handling 
+
+## changes to implement
+- Rework from remove reader agent
+- doadFoo now gets the policies from S3
+- Passes full policies text to the chat agent

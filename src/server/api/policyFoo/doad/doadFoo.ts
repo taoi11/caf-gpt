@@ -3,12 +3,11 @@ import { Message } from '../../../../types';
 import { logger } from '../../../logger';
 import { MODELS } from '../../../config';
 import { createDOADFinder } from './agents/finderAgent';
-import { createDOADReader } from './agents/readerAgent';
 import { createDOADChat } from './agents/chatAgent';
 import { s3Client } from '../../../api/utils/s3Client';
 import { IncomingMessage } from 'http';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { DOADFinder, DOADReader, DOADChat, ChatResponse, DOADImplementation } from './types';
+import { DOADFinder, DOADChat, ChatResponse, DOADImplementation } from './types';
 
 // Base implementation for DOAD handlers
 export const baseDOADImplementation: DOADImplementation = {
@@ -78,7 +77,6 @@ export const baseDOADImplementation: DOADImplementation = {
 // DOAD Manager interface
 interface DOADManager extends PolicyHandler {
     finder: DOADFinder;
-    reader: DOADReader;
     chat: DOADChat;
     models: typeof MODELS.doad;
     getDOADContent(doadNumber: string): Promise<string>;
@@ -88,13 +86,11 @@ interface DOADManager extends PolicyHandler {
 // Create DOAD manager implementation
 function createDOADManagerImpl(): DOADManager {
     const finder = createDOADFinder();
-    const reader = createDOADReader();
     const chat = createDOADChat();
 
     return {
         ...baseDOADImplementation,
         finder,
-        reader,
         chat,
         models: MODELS.doad,
 
@@ -112,30 +108,18 @@ function createDOADManagerImpl(): DOADManager {
                     })
                 );
                 
-                // 3. Have reader process each policy with history
-                const readerPromises = policyContents.map(({ doadNumber, content }) => {
-                    logger.debug(`Processing DOAD ${doadNumber} with content length: ${content.length}`);
-                    
-                    if (!content) {
-                        logger.warn(`Empty content for DOAD ${doadNumber}`);
-                        return Promise.resolve({
-                            content: '',
-                            metadata: { doadNumber }
-                        });
-                    }
-
-                    return this.reader.handleMessage(message, content, history);
-                });
-                
-                // Wait for all reader responses
-                const readerResponses = await Promise.all(readerPromises);
-                
-                // 4. Combine all XML responses into single context
-                const policyContext = readerResponses
-                    .map(r => r.content)
+                // 3. Combine all policy contents into a single context
+                const policyContext = policyContents
+                    .map(({ doadNumber, content }) => {
+                        if (!content) {
+                            logger.warn(`Empty content for DOAD ${doadNumber}`);
+                            return '';
+                        }
+                        return `<policy number="${doadNumber}">\n${content}\n</policy>`;
+                    })
                     .join('\n\n');
 
-                // 5. Send combined XML context + conversation history to chat agent
+                // 4. Send combined policy context + conversation history to chat agent
                 return await this.chat.handleMessage(
                     message,
                     history || [],

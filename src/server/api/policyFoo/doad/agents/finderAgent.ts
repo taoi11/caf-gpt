@@ -27,7 +27,8 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
         
         async handleMessage(message: string, history?: Message[]): Promise<string[]> {
             try {
-                logger.info('Finding relevant DOADs');
+                // Log initial request for file logging
+                logger.debug('Finding relevant DOADs', { message, history });
                 
                 const request: LLMRequest = {
                     messages: [
@@ -39,7 +40,13 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
                     temperature: 0.1
                 };
 
+                // Log request messages for file logging
+                logger.debug('Finder agent request messages:', request.messages);
+
                 const response = await llm.query(request);
+                
+                // Log LLM response for file logging
+                logger.debug('Finder agent LLM response received:', response);
                 
                 const content = response.content.trim();
                 

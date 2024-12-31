@@ -38,7 +38,7 @@ export function createDOADChat(llm = llmGateway): DOADChat {
                     messages: [
                         {
                             role: 'system',
-                            content: systemPrompt.replace('{policy_extracts}', policyContext)
+                            content: systemPrompt.replace('{policies_content}', policyContext)
                         },
                         ...userHistory
                     ],
@@ -46,9 +46,15 @@ export function createDOADChat(llm = llmGateway): DOADChat {
                     temperature: 0.7
                 };
 
-                logger.debug('Chat agent messages:', request.messages);
+                logger.debug('Chat agent request messages:', request.messages);
 
                 const response = await llm.query(request);
+                
+                logger.debug('LLM response received:', {
+                    content: response.content,
+                    model: response.model,
+                    usage: response.usage
+                });
                 
                 if (req) {
                     rateLimiter.trackSuccessfulRequest(req);
@@ -56,7 +62,7 @@ export function createDOADChat(llm = llmGateway): DOADChat {
 
                 return {
                     answer: response.content,
-                    citations: [], // Let frontend handle citation extraction
+                    citations: [],
                     followUp: ''
                 };
 

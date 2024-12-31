@@ -9,7 +9,6 @@ const required = [
     'LLM_API_KEY',
     'PACE_NOTE_MODEL',
     'DOAD_FINDER_MODEL',
-    'DOAD_READER_MODEL',
     'DOAD_CHAT_MODEL',
     'S3_BUCKET_NAME',
     'S3_ACCESS_KEY',
@@ -30,7 +29,6 @@ export const PORT = parseInt(env.PORT || '3000', 10);
 export const MODELS = {
     doad: {
         finder: env.DOAD_FINDER_MODEL,
-        reader: env.DOAD_READER_MODEL,
         chat: env.DOAD_CHAT_MODEL
     },
     paceNote: env.PACE_NOTE_MODEL

@@ -7,12 +7,6 @@ export interface PolicyReference {
     section?: string;       // Policy section (e.g., "5.1")
 }
 
-export interface PolicyContent {
-    docTitle: string;       // Title of the DOAD
-    content: string;        // Content of the section
-    lastUpdated: string;    // Last update date
-}
-
 export interface PolicyDocument {
     docId: string;
     content: string;
@@ -21,15 +15,6 @@ export interface PolicyDocument {
 }
 
 // Agent Communication Types
-export interface AgentResponse {
-    content: string;
-    metadata?: {
-        doadNumber?: string;
-        section?: string;
-        context?: string;
-    };
-}
-
 export interface ChatResponse {
     answer: string;         // Main response to user
     citations: string[];    // List of DOAD references used
@@ -46,10 +31,6 @@ export interface DOADHandler {
 // Agent-Specific Interfaces
 export interface DOADFinder extends DOADHandler {
     handleMessage(message: string, history?: Message[]): Promise<string[]>;
-}
-
-export interface DOADReader extends DOADHandler {
-    handleMessage(message: string, policyContent: string, history?: Message[]): Promise<AgentResponse>;
 }
 
 export interface DOADChat extends DOADHandler {
