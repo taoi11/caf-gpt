@@ -32,8 +32,6 @@
 | 5039-8 | Canadian Armed Forces Second Official Language Certification Testing|
 | 5045-1 | Canadian Armed Forces Sports Program|
 | 5039-6 | Canadian Armed Forces Training and Education in Both Official Languages|
-| 7016-1 | Canadian Forces Administration in Respect of a Pardon|
-| 5037-1 | Canadian Forces Band Engagements|
 | 5031-5 | Canadian Forces Continuing Education Program|
 | 8009-0 | Canadian Forces Diving|
 | 8009-1 | Canadian Forces Diving – Organization and Operating Principles|
@@ -42,7 +40,6 @@
 | 5041-0 | Canadian Forces Music
 | 5041-1 | Canadian Forces Music Support
 | 8002-2 | Canadian Forces National Counter-Intelligence Unit|
-| 2008-7 | Canadian Forces Parliamentary Program|
 | 5050-0 | Canadian Forces Personnel Records|
 | 5050-1 | Canadian Forces Personnel Records of the Director General Military Careers and the Director Human Resources Information Management, and Service Estate Records of the Judge Advocate General|
 | 5002-5 | Canadian Forces Personnel Selection|
@@ -63,7 +60,6 @@
 | 5008-0 | Civilian Labour-Management Relations|
 | 5006-0 | Civilian Performance Planning and Review|
 | 5006-1 | Performance Management Program for DND Employees|
-| 5031-53 | Civilian Personnel Education Support Program|
 | 5029-0 | Civilian Staffing|
 | 7004-1 | Claims and Ex gratia Procedures|
 | 7004-0 | Claims By or Against the Crown and Ex gratia Payments|
@@ -87,13 +83,10 @@
 | 5516-2 | Conscientious Objection|
 | 5003-6 | Contingency Cost Moves for Personal Reasons, Compassionate Status and Compassionate Posting|
 | 5002-6 | Continuing Education Officer Training Plan – Regular Force|
-| 3004-0 | Contracting|
 | 3003-0 | Controlled Technology Access and Transfer|
 | 5029-2 | Corrective Action and Revocation|
 | 8002-0 | Counter-Intelligence|
 | 5031-9 | Course Reporting and Certificates|
-| 2003-0 | Cyber Mission Assurance|
-| 2003-1 | Cyber Mission Assurance Program|
 | 6500-1 | Data Access|
 | 6500-0 | Data Management and Analytics|
 | 1000-1 | Defence Administrative Orders and Directives|
@@ -101,8 +94,6 @@
 | 7023-1 | Defence Ethics Programme|
 | 8008-0 | Defence Intelligence|
 | 2006-0 | Defence Security|
-| 6004-0 | Defence Terminology|
-| 6004-1 | Defence Terminology Programme|
 | 5005-2 | Delegation of Authorities for Civilian Human Resources Management|
 | 5024-0 | Department of National Defence Living Accommodations|
 | 5029-3 | Deployments|
@@ -113,13 +104,10 @@
 | 7024-0 | Disclosure of Wrongdoings in the Workplace|
 | 3002-6 | Display Fireworks|
 | 3013-0 | Disposal of Materiel|
-| 3013-1 | Disposal of Surplus Materiel|
 | 2015-1 | DND/CF Airworthiness Program|
 | 3020-1 | DND Vehicle Use for Ground Transport and Driver Licensing|
 | 7004-3 | Document Preservation and Collection in Support of Claims and Other Legal Proceedings|
 | 5031-2 | Individual Training and Education Strategic Framework|
-| 1001-2 | Informal Access to Departmental Information|
-| 1002-2 | Informal Requests for Personal Information|
 | 6001-0 | Information Management|
 | 6001-1 | Information Management Programme|
 | 6000-0 | Information Management and Information Technology|
@@ -136,26 +124,20 @@
 | 3007-0 | Integrated Logistics Support|
 | 7024-1 | Internal Procedures for Disclosure of Wrongdoings in the Workplace|
 | 6002-7 | Internal Use of Social Media Technologies|
-| 6111-0 | Internet|
 | 2008-6 | Internet Publishing|
 | 2008-3 | Issue and Crisis Management|
 | 7026-1 | Management of Administrative Investigations|
 | 8014-1 | Management of Animal Use in Research, Teaching and Testing|
 | 3012-2 | Management of Food Safety and Food Defence|
-| 3014-1 | Management of Fuels and Lubricants|
 | 3015-1 | Management of Green Procurement|
 | 6002-1 | Management of Information Technology|
 | 6002-10 | Management of Information Technology Projects|
 | 6002-3 | Management of Mobile Wireless Devices|
-| 6423-0 | Management of Publications|
 | 4001-0 | Real Property Life Cycle Management|
-| 6420-0 | Management of Recorded Information|
 | 3017-1 | Management of the Transfer of Materiel to Other Government Departments|
 | 3003-1 | Management, Security and Access Requirements Relating to Controlled Goods|
 | 3003-2 | Management, Security and Access Requirements Relating to Dual-Use Goods|
 | 3000-0 | Materiel Acquisition and Support|
-| 3001-0 | Materiel Acquisition and Support Information Management|
-| 3001-1 | Materiel Acquisition and Support Information Management Instruction|
 | 3035-0 | Materiel Assurance|
 | 3038-0 | Materiel Identification|
 | 3005-0 | Materiel Sustainment|
@@ -202,7 +184,6 @@
 | 1002-5 | Privacy Impact Assessments|
 | 1002-4 | Privacy Incident Management|
 | 5019-8 | Private Debts|
-| 3004-1 | Procedural Overview - Contracting|
 | 2001-1 | Procedures for Visits to the DND and the CF by Foreign Nationals|
 | 3012-1 | Provision of Food Services|
 | 2008-4 | Public Affairs, Military Doctrine and Canadian Forces Operations|
@@ -212,9 +193,7 @@
 | 3026-0 | Radio Frequency Safety|
 | 3026-1 | Radio Frequency Safety Program|
 | 6002-4 | Radio Frequency Spectrum Management|
-| 6112-0 | Radio Frequency Spectrum Management|
 | 2051-0 | Range Safety|
-| 6421-0 | Records Management|
 | 7016-0 | Record Suspension|
 | 5027-0 | Recognition|
 | 2015-3 | Release to Service – New and Modified Aircraft, Including Unmanned Aircraft Systems|
@@ -232,7 +211,6 @@
 | 5021-1 | Respiratory Protection|
 | 5024-1 | Residential Housing Units and Furnished Quarters|
 | 7011-1 | Responsibilities for Service Estates and Personal Belongings|
-| 5003-1 | Restrictions on Duty|
 | 5003-0 | Restrictions on Duty and Individual Limitations|
 | 5018-4 | Return to Duty Program for Canadian Armed Forces Members|
 | 1018-0 | Revenue Management|
@@ -241,7 +219,6 @@
 | 5039-7 | Second Official Language Education and Training for CF Members|
 | 8002-3 | Security Intelligence Liaison Program|
 | 9005-1 | Sexual Misconduct Response|
-| 3004-2 | Service Contracts|
 | 7011-0 | Service Estates and Personal Belongings|
 | 2005-0 | Service Dogs|
 | 2005-1 | Service Dog Access to Defence Establishments|
@@ -254,5 +231,4 @@
 | 5016-0 | Standards of Civilian Conduct and Discipline|
 | 7002-3 | Subjects of Investigation and References|
 | 7002-2 | Summary Investigations|
-| 2020-4 | Supplementary Reserve|
 | 5018-0 | Support Management for Injured or Ill Canadian Armed Forces Members and Military Casualties|
