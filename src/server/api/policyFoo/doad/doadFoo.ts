@@ -1,7 +1,7 @@
 import { PolicyHandler } from '../policyFoo';
 import { Message } from '../../../../types';
 import { logger } from '../../utils/logger';
-import { MODELS } from '../../../config';
+import { MODELS } from '../../utils/config';
 import { createDOADFinder } from './agents/finderAgent';
 import { createDOADChat } from './agents/chatAgent';
 import { s3Client } from '../../../api/utils/s3Client';

@@ -4,7 +4,7 @@ import { llmGateway } from "../utils/llmGateway";
 import { logger } from "../utils/logger";
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { MODELS } from '../../config';
+import { MODELS } from '../utils/config';
 import type { PaceNoteRequest, PaceNoteResponse } from "../../../types";
 
 class PaceNoteAgent {

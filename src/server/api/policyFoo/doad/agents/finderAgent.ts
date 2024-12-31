@@ -5,7 +5,7 @@ import { logger } from '../../../utils/logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { llmGateway } from '../../../utils/llmGateway';
-import { MODELS } from '../../../../config';
+import { MODELS } from '../../../utils/config';
 
 export function createDOADFinder(llm = llmGateway): DOADFinder {
     let systemPrompt = '';

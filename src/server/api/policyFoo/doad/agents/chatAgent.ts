@@ -5,7 +5,7 @@ import { logger } from '../../../utils/logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { llmGateway } from '../../../utils/llmGateway';
-import { MODELS } from '../../../../config';
+import { MODELS } from '../../../utils/config';
 import { rateLimiter } from '../../../../api/utils/rateLimiter';
 import { IncomingMessage } from 'http';
 

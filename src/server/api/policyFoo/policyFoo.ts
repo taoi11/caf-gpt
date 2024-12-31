@@ -4,7 +4,7 @@ import { rateLimiter } from '../utils/rateLimiter';
 import { IncomingMessage } from 'http';
 import { createDOADHandler } from './doad/doadFoo';
 import { ChatResponse } from './doad/types';
-import { IS_DEV } from '../../config';
+import { IS_DEV } from '../utils/config';
 
 // Policy tool types
 export type PolicyTool = 'doadFoo';

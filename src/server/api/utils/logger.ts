@@ -1,4 +1,4 @@
-import { IS_DEV } from '../../config';
+import { IS_DEV } from './config';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 

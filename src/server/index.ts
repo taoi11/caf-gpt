@@ -1,7 +1,7 @@
 import { createServer } from 'http';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { PORT, IS_DEV } from './config';
+import { PORT, IS_DEV } from './api/utils/config';
 import { handlePaceNoteRequest } from './api/paceNotes/paceNotes';
 import { createPolicyRouter } from './api/policyFoo/policyFoo';
 import { costTracker } from './api/utils/costTracker';
