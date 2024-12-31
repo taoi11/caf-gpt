@@ -1,6 +1,6 @@
 import { PolicyHandler } from '../policyFoo';
 import { Message } from '../../../../types';
-import { logger } from '../../../logger';
+import { logger } from '../../utils/logger';
 import { MODELS } from '../../../config';
 import { createDOADFinder } from './agents/finderAgent';
 import { createDOADChat } from './agents/chatAgent';

@@ -1,4 +1,4 @@
-import { logger } from '../../logger';
+import { logger } from './logger';
 import { costTracker } from './costTracker';
 import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from '../../../types';
 

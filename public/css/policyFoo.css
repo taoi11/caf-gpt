@@ -26,7 +26,7 @@
     margin: 0 auto;
     background: white;
     border-radius: 8px;
-    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+    box-shadow: var(--shadow-sm);
     display: flex;
     flex-direction: column;
     height: calc(100vh - 200px);
@@ -95,7 +95,7 @@
 /* Input container */
 .input-container {
     padding: 1rem;
-    border-top: 1px solid #e2e8f0;
+    border-top: 1px solid var(--border-color);
     display: flex;
     gap: 1rem;
     background: white;
@@ -106,7 +106,7 @@
 #user-input {
     flex: 1;
     padding: 0.75rem;
-    border: 1px solid #e2e8f0;
+    border: 1px solid var(--border-color);
     border-radius: 4px;
     resize: none;
     font-family: inherit;

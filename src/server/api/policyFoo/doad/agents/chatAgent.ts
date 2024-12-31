@@ -1,7 +1,7 @@
 import { LLMRequest, Message } from '../../../../../types';
 import { DOADChat, ChatResponse } from '../types';
 import { baseDOADImplementation } from '../doadFoo';
-import { logger } from '../../../../logger';
+import { logger } from '../../../utils/logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { llmGateway } from '../../../utils/llmGateway';

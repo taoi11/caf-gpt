@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { paceNoteAgent } from './paceNoteAgent';
-import { logger } from '../../logger';
+import { logger } from '../utils/logger';
 import { rateLimiter } from '../utils/rateLimiter';
 import type { ApiResponse, PaceNoteRequest, PaceNoteResponse } from '../../../types';
 

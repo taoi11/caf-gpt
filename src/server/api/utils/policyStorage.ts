@@ -1,6 +1,6 @@
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { s3Client } from './s3Client';
-import { logger } from '../../logger';
+import { logger } from './logger';
 import type { PolicyDocument } from '../../../types';
 
 class PolicyStorage {

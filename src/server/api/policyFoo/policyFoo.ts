@@ -1,5 +1,5 @@
 import { ApiResponse, Message } from '../../../types';
-import { logger } from '../../logger';
+import { logger } from '../utils/logger';
 import { rateLimiter } from '../utils/rateLimiter';
 import { IncomingMessage } from 'http';
 import { createDOADHandler } from './doad/doadFoo';

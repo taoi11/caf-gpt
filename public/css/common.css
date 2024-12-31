@@ -5,6 +5,8 @@
   --background-color: #f8f9fa;
   --text-color: #333;
   --disabled-color: #95a5a6;
+  --border-color: #e2e8f0;
+  --shadow-sm: 0 2px 4px rgba(0,0,0,0.1);
 }
 
 /* Base styles */
@@ -38,6 +40,24 @@ nav h1 {
   margin: 0;
   font-size: 1.5rem;
   line-height: 1.6;
+}
+
+/* Nav sections */
+.nav-left {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.nav-left .button {
+  font-size: 0.9rem;
+  padding: 0.4rem 0.8rem;
+}
+
+.nav-links {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
 }
 
 /* Info Box - Common Styles */
@@ -76,7 +96,6 @@ nav h1 {
   background-color: #2980b9;
 }
 
-/* Common disabled button styles */
 .button[disabled] {
   background-color: var(--disabled-color);
   cursor: not-allowed;
@@ -84,34 +103,18 @@ nav h1 {
   pointer-events: none;
 }
 
-/* Add to existing rate limit styles */
-.rate-line {
-    display: flex;
-    justify-content: space-between;
-    gap: 0.5rem;
-    font-size: 0.9rem;
+/* Common rate limit and cost display styles */
+.rate-line, .cost-line {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  font-size: 0.9rem;
 }
 
 .rate-line.warning {
-    color: #f39c12;
+  color: #f39c12;
 }
 
 .rate-line.error {
-    color: #e74c3c;
-}
-
-.info-box.ipv6 {
-    background: rgba(52, 152, 219, 0.1);
-}
-
-.info-box.ipv6::before {
-    content: 'IPv6';
-    position: absolute;
-    top: -0.5rem;
-    right: -0.5rem;
-    font-size: 0.7rem;
-    background: #3498db;
-    color: white;
-    padding: 0.1rem 0.3rem;
-    border-radius: 2px;
+  color: #e74c3c;
 } 

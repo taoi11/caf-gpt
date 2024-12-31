@@ -1,7 +1,7 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client } from "../utils/s3Client";
 import { llmGateway } from "../utils/llmGateway";
-import { logger } from "../../logger";
+import { logger } from "../utils/logger";
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { MODELS } from '../../config';

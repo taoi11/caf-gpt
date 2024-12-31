@@ -63,7 +63,7 @@
   border-radius: 8px;
   padding: 1.5rem;
   margin-bottom: 1rem;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  box-shadow: var(--shadow-sm);
   position: relative;
 }
 
@@ -91,9 +91,25 @@
   align-items: center;
   margin-top: 1rem;
   padding-top: 0.5rem;
-  border-top: 1px solid #eee;
+  border-top: 1px solid var(--border-color);
   font-size: 0.9rem;
   color: #666;
+}
+
+/* Copy button */
+.copy-button {
+  padding: 0.5rem 1rem;
+  background: none;
+  border: 1px solid var(--secondary-color);
+  border-radius: 4px;
+  cursor: pointer;
+  color: var(--secondary-color);
+  transition: all 0.2s ease;
+}
+
+.copy-button:hover {
+  background-color: var(--secondary-color);
+  color: white;
 }
 
 /* Loading animation */
@@ -121,22 +137,6 @@
   100% { transform: rotate(360deg); }
 }
 
-/* Copy button */
-.copy-button {
-  padding: 0.5rem 1rem;
-  background: none;
-  border: 1px solid var(--secondary-color);
-  border-radius: 4px;
-  cursor: pointer;
-  color: var(--secondary-color);
-  transition: all 0.2s ease;
-}
-
-.copy-button:hover {
-  background-color: var(--secondary-color);
-  color: white;
-}
-
 /* Error message */
 .error-message {
   background-color: #fee;
@@ -151,17 +151,4 @@
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
-}
-
-/* Navigation styles */
-.nav-left {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-}
-
-.nav-left .button {
-  margin-left: 1rem;
-  font-size: 0.9rem;
-  padding: 0.4rem 0.8rem;
 } 

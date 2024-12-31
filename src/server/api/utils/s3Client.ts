@@ -1,5 +1,5 @@
 import { S3Client } from '@aws-sdk/client-s3';
-import { logger } from '../../logger';
+import { logger } from './logger';
 
 const s3Config = {
     endpoint: process.env.S3_ENDPOINT || 'https://gateway.storjshare.io',
