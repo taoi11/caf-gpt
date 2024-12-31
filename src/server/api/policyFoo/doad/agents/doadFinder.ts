@@ -1,6 +1,6 @@
 import { LLMRequest, Message } from '../../../../../types';
 import { DOADFinder } from '../types';
-import { baseDOADImplementation } from '../doadFoo';
+import { baseDOADImplementation } from '../doad';
 import { logger } from '../../../utils/logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';

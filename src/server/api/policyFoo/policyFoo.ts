@@ -2,7 +2,7 @@ import { ApiResponse, Message } from '../../../types';
 import { logger } from '../utils/logger';
 import { rateLimiter } from '../utils/rateLimiter';
 import { IncomingMessage } from 'http';
-import { createDOADHandler } from './doad/doadFoo';
+import { createDOADHandler } from './doad/doad';
 import { ChatResponse } from './doad/types';
 import { IS_DEV } from '../utils/config';
 
