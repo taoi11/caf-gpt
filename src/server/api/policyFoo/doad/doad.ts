@@ -1,5 +1,5 @@
 import { PolicyHandler } from '../policyFoo';
-import { Message } from '../../../../types';
+import { Message } from '../../utils/types';
 import { logger } from '../../utils/logger';
 import { MODELS } from '../../utils/config';
 import { createDOADFinder } from './agents/doadFinder';

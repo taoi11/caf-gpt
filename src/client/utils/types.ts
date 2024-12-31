@@ -1,4 +1,4 @@
-import { Message, MessageRole, DisplayOptions } from '../../types';
+import { Message, MessageRole, DisplayOptions } from '../../server/api/utils/types';
 
 // Re-export shared types
 export { Message, MessageRole, DisplayOptions };

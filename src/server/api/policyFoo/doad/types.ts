@@ -1,4 +1,4 @@
-import { Message } from '../../../../types';
+import { Message } from '../../utils/types';
 import { IncomingMessage } from 'http';
 
 // Core DOAD Types

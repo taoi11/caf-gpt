@@ -5,7 +5,7 @@ import { logger } from "../utils/logger";
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { MODELS } from '../utils/config';
-import type { PaceNoteRequest, PaceNoteResponse } from "../../../types";
+import type { PaceNoteRequest, PaceNoteResponse } from "../utils/types";
 
 class PaceNoteAgent {
     private readonly promptPath: string;

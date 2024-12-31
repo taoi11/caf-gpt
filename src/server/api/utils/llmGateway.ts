@@ -1,6 +1,6 @@
 import { logger } from './logger';
 import { costTracker } from './costTracker';
-import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from '../../../types';
+import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from './types';
 
 // Connection pool configuration
 const MAX_CONCURRENT_REQUESTS = 50;

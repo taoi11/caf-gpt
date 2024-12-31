@@ -1,4 +1,4 @@
-import { ApiResponse, Message } from '../../../types';
+import { ApiResponse, Message } from '../utils/types';
 import { logger } from '../utils/logger';
 import { rateLimiter } from '../utils/rateLimiter';
 import { IncomingMessage } from 'http';

@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { logger } from './logger';
-import type { CostData } from '../../../types';
+import type { CostData } from './types';
 
 const MONTHLY_SERVER_COST = 15.70; // Base monthly server cost in USD
 

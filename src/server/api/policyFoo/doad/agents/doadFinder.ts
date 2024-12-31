@@ -1,4 +1,4 @@
-import { LLMRequest, Message } from '../../../../../types';
+import { LLMRequest, Message } from '../../../utils/types';
 import { DOADFinder } from '../types';
 import { baseDOADImplementation } from '../doad';
 import { logger } from '../../../utils/logger';
