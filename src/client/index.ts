@@ -6,16 +6,14 @@ interface CostResponse {
 
 class CostDisplay {
     private readonly USD_TO_CAD = 1.70;
-    private readonly updateInterval = 60000; // 1 minute
 
     constructor() {
         this.initialize();
     }
 
     private initialize(): void {
-        // Update costs immediately and start interval
+        // Update costs only once on load
         this.updateCosts();
-        setInterval(() => this.updateCosts(), this.updateInterval);
     }
 
     private formatCost(usdAmount: number): string {
