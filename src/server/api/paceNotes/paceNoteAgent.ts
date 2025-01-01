@@ -1,11 +1,11 @@
 import { GetObjectCommand } from "@aws-sdk/client-s3";
-import { s3Client } from "../utils/s3Client";
-import { llmGateway } from "../utils/llmGateway";
-import { logger } from "../utils/logger";
+import { s3Client } from "../../utils/s3Client";
+import { llmGateway } from "../../utils/llmGateway";
+import { logger } from "../../utils/logger";
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { MODELS } from '../utils/config';
-import type { PaceNoteRequest, PaceNoteResponse } from "../utils/types";
+import { MODELS } from '../../utils/config';
+import type { PaceNoteRequest, PaceNoteResponse } from "../../utils/types";
 
 class PaceNoteAgent {
     private readonly promptPath: string;

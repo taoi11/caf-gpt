@@ -1,8 +1,8 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { paceNoteAgent } from './paceNoteAgent';
-import { logger } from '../utils/logger';
-import { rateLimiter } from '../utils/rateLimiter';
-import type { ApiResponse, PaceNoteRequest, PaceNoteResponse } from '../utils/types';
+import { logger } from '../../utils/logger';
+import { rateLimiter } from '../../utils/rateLimiter';
+import type { ApiResponse, PaceNoteRequest, PaceNoteResponse } from '../../utils/types';
 
 export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerResponse) {
     const method = req.method || 'GET';

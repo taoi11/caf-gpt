@@ -1,10 +1,10 @@
 import { PolicyHandler } from '../policyFoo';
-import { Message } from '../../utils/types';
-import { logger } from '../../utils/logger';
-import { MODELS } from '../../utils/config';
+import { Message } from '../../../utils/types';
+import { logger } from '../../../utils/logger';
+import { MODELS } from '../../../utils/config';
 import { createDOADFinder } from './agents/doadFinder';
 import { createDOADChat } from './agents/doadChat';
-import { s3Client } from '../../utils/s3Client';
+import { s3Client } from '../../../utils/s3Client';
 import { IncomingMessage } from 'http';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { DOADFinder, DOADChat, ChatResponse, DOADImplementation } from './types';
