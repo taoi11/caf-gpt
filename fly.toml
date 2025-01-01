@@ -1,0 +1,26 @@
+# fly.toml app configuration file generated for caf-gpt on 2025-01-01T12:14:50-07:00
+#
+# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
+#
+
+app = 'caf-gpt'
+primary_region = 'yul'
+
+[build]
+
+[http_service]
+  internal_port = 3000
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  min_machines_running = 0
+  processes = ['app']
+
+[[vm]]
+  size = 'shared-cpu-1x'
+
+[env]
+  PACE_NOTE_MODEL=amazon/nova-pro-v1
+  DOAD_FINDER_MODEL=google/gemini-pro-1.5
+  DOAD_CHAT_MODEL=amazon/nova-pro-v1
+  S3_BUCKET_NAME=policies
