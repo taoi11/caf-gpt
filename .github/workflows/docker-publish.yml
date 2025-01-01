@@ -3,13 +3,27 @@ name: Docker Build and Publish
 on:
   push:
     branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - 'tsconfig*.json'
+      - 'docker-compose.yml'
+      - '.env.example'
   pull_request:
     branches: [ "main" ]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'Dockerfile'
+      - 'tsconfig*.json'
+      - 'docker-compose.yml''
+      - '.env.example'
   workflow_dispatch:
-
-env:
-  REGISTRY: ghcr.io
-  IMAGE_NAME: caf-gpt
 
 jobs:
   build-and-push:
@@ -39,4 +53,4 @@ jobs:
           context: .
           push: true
           tags: |
-            ${{ env.REGISTRY }}/${{ github.repository_owner }}/${{ env.IMAGE_NAME }}:${{ env.BRANCH_NAME }}
+            ghcr.io/${{ github.repository }}:${{ env.BRANCH_NAME }}
