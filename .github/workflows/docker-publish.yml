@@ -12,6 +12,7 @@ on:
       - 'tsconfig*.json'
       - 'docker-compose.yml'
       - '.env.example'
+      - '.github/workflows/**'
   pull_request:
     branches: [ "main" ]
     paths:
@@ -21,8 +22,9 @@ on:
       - 'package-lock.json'
       - 'Dockerfile'
       - 'tsconfig*.json'
-      - 'docker-compose.yml''
+      - 'docker-compose.yml'
       - '.env.example'
+      - '.github/workflows/**'
   workflow_dispatch:
 
 jobs:
