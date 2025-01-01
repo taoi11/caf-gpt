@@ -1,5 +1,5 @@
-import { PaceNoteRequest, PaceNoteResponse, DisplayOptions } from './utils/types';
-import { rateLimiter } from './utils/rateLimiter';
+import { PaceNoteRequest, PaceNoteResponse, DisplayOptions } from './utils/types.js';
+import { rateLimiter } from './utils/rateLimiter.js';
 
 // Types
 interface OutputBox {

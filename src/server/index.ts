@@ -1,12 +1,11 @@
 import { createServer } from 'http';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { PORT, IS_DEV } from './utils/config';
-import { handlePaceNoteRequest } from './api/paceNotes/paceNotes';
-import { createPolicyRouter } from './api/policyFoo/policyFoo';
-import { costTracker } from './utils/costTracker';
-import { logger } from './utils/logger';
-import { rateLimiter } from './utils/rateLimiter';
+import { PORT, IS_DEV } from './utils/config.js';
+import { handlePaceNoteRequest } from './api/paceNotes/paceNotes.js';
+import { createPolicyRouter } from './api/policyFoo/policyFoo.js';
+import { logger } from './utils/logger.js';
+import { rateLimiter } from './utils/rateLimiter.js';
 
 // Initialize policy router
 const policyRouter = createPolicyRouter();
@@ -58,18 +57,6 @@ const server = createServer(async (req, res) => {
                 logger.logRequest(method, url, 500);
             }
         });
-        return;
-    }
-
-    // Cost endpoint
-    if (url === '/api/costs') {
-        const costs = {
-            apiCosts: costTracker.getMonthlyAPITotal(),
-            serverCosts: costTracker.getMonthlyServerCost(),
-            lastUpdated: costTracker.getLastUpdated()
-        };
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(costs));
         return;
     }
 

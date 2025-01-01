@@ -1,6 +1,5 @@
-import { logger } from './logger';
-import { costTracker } from './costTracker';
-import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from './types';
+import { logger } from './logger.js';
+import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from './types.js';
 
 // Connection pool configuration
 const MAX_CONCURRENT_REQUESTS = 50;
@@ -69,20 +68,6 @@ class LLMGateway {
 
         const data = await response.json();
         
-        // Track request cost - Make usage check optional
-        if (data.usage) {
-            await costTracker.trackRequest({
-                id: data.id,
-                model: data.model,
-                cost: data.usage.total_tokens * 0.0000015,
-                tokens: {
-                    prompt: data.usage.prompt_tokens,
-                    completion: data.usage.completion_tokens,
-                    total: data.usage.total_tokens
-                }
-            });
-        }
-
         // Log full response data
         logger.debug('LLM response received:', data);
 

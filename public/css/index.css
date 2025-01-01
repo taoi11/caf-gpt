@@ -30,15 +30,10 @@
   margin: 1rem 0;
 }
 
-/* Cost Display Specific Styles */
-.cost-box {
-  text-align: right;
-  position: relative;
-}
-
-.cost-total {
-  font-size: 0.9rem;
-  font-weight: 500;
+.status {
+    font-size: 0.9rem;
+    color: var(--text-muted);
+    margin-bottom: 1rem;
 }
 
 .cost-breakdown {

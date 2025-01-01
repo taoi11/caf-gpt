@@ -1,10 +1,9 @@
-import { ApiResponse, Message } from '../../utils/types';
-import { logger } from '../../utils/logger';
-import { rateLimiter } from '../../utils/rateLimiter';
+import { ApiResponse, Message } from '../../utils/types.js';
+import { logger } from '../../utils/logger.js';
+import { rateLimiter } from '../../utils/rateLimiter.js';
 import { IncomingMessage } from 'http';
-import { createDOADHandler } from './doad/doad';
-import { ChatResponse } from './doad/types';
-import { IS_DEV } from '../../utils/config';
+import { createDOADHandler } from './doad/doad.js';
+import { ChatResponse } from './doad/types.js';
 
 // Policy tool types
 export type PolicyTool = 'doadFoo';

@@ -1,7 +1,7 @@
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { s3Client } from './s3Client';
-import { logger } from './logger';
-import type { PolicyDocument } from './types';
+import { s3Client } from './s3Client.js';
+import { logger } from './logger.js';
+import type { PolicyDocument } from './types.js';
 
 class PolicyStorage {
     private readonly bucketName: string;

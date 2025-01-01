@@ -103,12 +103,12 @@ nav h1 {
   pointer-events: none;
 }
 
-/* Common rate limit and cost display styles */
-.rate-line, .cost-line {
-  display: flex;
-  justify-content: space-between;
-  gap: 0.5rem;
-  font-size: 0.9rem;
+/* Common rate limit display styles */
+.rate-line {
+    display: flex;
+    justify-content: space-between;
+    margin: 2px 0;
+    white-space: nowrap;
 }
 
 .rate-line.warning {

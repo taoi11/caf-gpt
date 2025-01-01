@@ -1,10 +1,19 @@
 # Build stage
-FROM node:alpine-slim as builder
+FROM node:lts as builder
 WORKDIR /app
 
-# Install dependencies
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    python3 \
+    make \
+    g++ \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install dependencies with better error logging
 COPY package*.json ./
-RUN npm ci && \
+RUN npm install && \
     npm cache clean --force && \
     rm -rf /root/.npm
 
@@ -14,17 +23,22 @@ COPY src/ ./src/
 COPY public/ ./public/
 
 # Production build without source maps
-RUN npm run build:prod && \
-    rm -rf src
+RUN npm run build:prod
 
 # Production stage
-FROM node:alpine-slim
+FROM node:lts
 ENV NODE_ENV=production
 
+# Install curl for healthcheck and clean up
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
 # Create non-root user
-RUN addgroup -S appgroup && \
-    adduser -S appuser -G appgroup && \
-    rm -rf /var/cache/apk/*
+RUN groupadd -r appgroup && \
+    useradd -r -g appgroup appuser && \
+    mkdir -p /app
 
 WORKDIR /app
 
@@ -32,9 +46,10 @@ WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/dist/server ./dist/server
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/src/prompts ./src/prompts
 
-# Install production dependencies only
-RUN npm ci --only=production && \
+# Install production dependencies with better error logging
+RUN npm install --verbose --only=production && \
     npm cache clean --force && \
     rm -rf /root/.npm /tmp/*
 

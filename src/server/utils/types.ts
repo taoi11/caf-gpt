@@ -81,4 +81,12 @@ export interface DisplayOptions {
     showCitations?: boolean;
     showFollowUp?: boolean;
     format?: 'markdown' | 'text';
+}
+
+// Policy Types
+export interface PolicyDocument {
+    docId: string;
+    content: string;
+    lastModified: Date;
+    policyGroup: string;
 } 

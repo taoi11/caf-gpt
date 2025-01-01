@@ -14,12 +14,14 @@ primary_region = 'yul'
   auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
+  max_machines_running = 1
   processes = ['app']
 
 [[vm]]
   size = 'shared-cpu-1x'
 
 [env]
+  PORT = "3000"
   PACE_NOTE_MODEL = "amazon/nova-pro-v1"
   DOAD_FINDER_MODEL = "google/gemini-pro-1.5"
   DOAD_CHAT_MODEL = "amazon/nova-pro-v1"

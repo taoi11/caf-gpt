@@ -39,16 +39,16 @@ cap-gpt/
 │   ├── rateLimiter.md          # Rate Limiter documentation
 │   ├── policyFoo.md            # Policy tool base documentation
 │   └── doadFoo.md             # DOAD policy tool documentation
-├── src/                         # Source code directory
-│   ├── types.ts                # Global type definitions
-│   ├── prompts/                # System prompts
-│   │   ├── paceNote/          # Pace Notes prompts
-│   │   │   └── paceNote.md    # Pace Notes prompt
-│   │   └── policyFoo/         # Policy tool prompts
-│   │       └── doad/          # DOAD-specific prompts
-│   │           ├── policyFinder.md    # DOAD finder prompt
-│   │           ├── policyReader.md    # DOAD reader prompt
-│   │           └── DOAD-list-table.md # Available DOADs list
+src/
+├── prompts/
+│   ├── paceNote/
+│   │   └── paceNote.md    # Pace Notes prompt
+│   └── policyFoo/
+│       └── doad/
+│           ├── policyFinder.md    # DOAD finder prompt
+│           ├── policyReader.md    # DOAD reader prompt
+│           └── chatAgent.md       # DOAD chat agent prompt
+│           └── DOAD-list-table.md # Available DOADs list
 │   ├── client/                 # Client-side TypeScript
 │   │   ├── paceNotes.ts       # Pace Notes client code
 │   │   └── policyFoo.ts       # Policy tool client code

@@ -2,6 +2,7 @@
   "name": "caf-gpt",
   "version": "1.0.0",
   "description": "A collection of AI tools and agents for CAF personnel",
+  "type": "module",
   "scripts": {
     "start": "node dist/server/index.js",
     "dev": "npm run clean && concurrently \"tsx watch src/server/index.ts\" \"npm run build:client -- --watch\"",

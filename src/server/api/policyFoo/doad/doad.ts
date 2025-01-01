@@ -1,13 +1,13 @@
-import { PolicyHandler } from '../policyFoo';
-import { Message } from '../../../utils/types';
-import { logger } from '../../../utils/logger';
-import { MODELS } from '../../../utils/config';
-import { createDOADFinder } from './agents/doadFinder';
-import { createDOADChat } from './agents/doadChat';
-import { s3Client } from '../../../utils/s3Client';
+import { PolicyHandler } from '../policyFoo.js';
+import { Message } from '../../../utils/types.js';
+import { logger } from '../../../utils/logger.js';
+import { MODELS } from '../../../utils/config.js';
+import { createDOADFinder } from './agents/doadFinder.js';
+import { createDOADChat } from './agents/doadChat.js';
+import { s3Client } from '../../../utils/s3Client.js';
 import { IncomingMessage } from 'http';
 import { GetObjectCommand } from '@aws-sdk/client-s3';
-import { DOADFinder, DOADChat, ChatResponse, DOADImplementation } from './types';
+import { DOADFinder, DOADChat, ChatResponse, DOADImplementation } from './types.js';
 
 // Base implementation for DOAD handlers
 export const baseDOADImplementation: DOADImplementation = {
