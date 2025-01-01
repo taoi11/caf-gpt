@@ -20,7 +20,7 @@ primary_region = 'yul'
   size = 'shared-cpu-1x'
 
 [env]
-  PACE_NOTE_MODEL=amazon/nova-pro-v1
-  DOAD_FINDER_MODEL=google/gemini-pro-1.5
-  DOAD_CHAT_MODEL=amazon/nova-pro-v1
-  S3_BUCKET_NAME=policies
+  PACE_NOTE_MODEL = "amazon/nova-pro-v1"
+  DOAD_FINDER_MODEL = "google/gemini-pro-1.5"
+  DOAD_CHAT_MODEL = "amazon/nova-pro-v1"
+  S3_BUCKET_NAME = "policies"
