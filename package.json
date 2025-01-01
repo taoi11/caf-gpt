@@ -5,19 +5,20 @@
   "scripts": {
     "start": "node dist/server/index.js",
     "dev": "npm run clean && concurrently \"tsx watch src/server/index.ts\" \"npm run build:client -- --watch\"",
-    "build": "npm run clean && tsc -p tsconfig.json && esbuild src/client/*.ts --bundle --outdir=public/js --minify --sourcemap",
-    "build-server": "tsc -p tsconfig.server.json",
-    "build-client": "tsc -p tsconfig.client.json",
-    "watch-client": "tsc -p tsconfig.client.json --watch",
-    "clean": "rm -rf dist public/js && mkdir -p dist public/js",
-    "build:client": "esbuild src/client/*.ts --bundle --outdir=public/js --sourcemap --format=esm --loader:.ts=ts --resolve-extensions=.ts,.js"
+    "build": "npm run clean && npm run build:server && npm run build:client",
+    "build:prod": "NODE_ENV=production npm run clean && npm run build:server:prod && npm run build:client:prod",
+    "build:server": "tsc -p tsconfig.server.json",
+    "build:server:prod": "tsc -p tsconfig.server.json --removeComments",
+    "build:client": "esbuild src/client/*.ts --bundle --outdir=public/js --sourcemap --format=esm",
+    "build:client:prod": "esbuild src/client/*.ts --bundle --outdir=public/js --minify --format=esm",
+    "clean": "rm -rf dist public/js && mkdir -p dist public/js"
   },
   "author": "",
   "license": "AGPL-3.0",
   "devDependencies": {
     "@types/node": "^20.4.5",
     "concurrently": "^8.2.2",
-    "serve": "^14.2.1",
+    "esbuild": "^0.19.0",
     "tsx": "^4.7.0",
     "typescript": "^5.1.6"
   },

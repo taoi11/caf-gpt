@@ -92,6 +92,13 @@ const server = createServer(async (req, res) => {
         return;
     }
 
+    // Health check endpoint
+    if (url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok' }));
+        return;
+    }
+
     // Serve static files
     try {
         // Default to index.html for root path
