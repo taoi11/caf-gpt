@@ -31,29 +31,31 @@
 }
 
 .status {
-    font-size: 0.9rem;
-    color: var(--text-muted);
-    margin-bottom: 1rem;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+  margin-bottom: 1rem;
+}
+
+/* Cost display styles */
+#costDisplay {
+  min-width: 120px;
 }
 
 .cost-breakdown {
+  display: none;
   position: absolute;
   top: 100%;
   right: 0;
   background: var(--primary-color);
-  padding: 0.5rem;
+  padding: 0.5rem 1rem;
   border-radius: 4px;
   margin-top: 0.5rem;
-  display: none;
-  opacity: 0;
-  transition: opacity 0.3s ease;
   min-width: 150px;
   box-shadow: var(--shadow-sm);
 }
 
 .info-box:hover .cost-breakdown {
   display: block;
-  opacity: 1;
 }
 
 .cost-line {

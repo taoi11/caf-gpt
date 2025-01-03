@@ -6,6 +6,7 @@ import { handlePaceNoteRequest } from './api/paceNotes/paceNotes.js';
 import { createPolicyRouter } from './api/policyFoo/policyFoo.js';
 import { logger } from './utils/logger.js';
 import { rateLimiter } from './utils/rateLimiter.js';
+import { costTracker } from './utils/costTracker.js';
 
 // Initialize policy router
 const policyRouter = createPolicyRouter();
@@ -84,6 +85,23 @@ const server = createServer(async (req, res) => {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok' }));
         return;
+    }
+
+    // Cost endpoint
+    if (url === '/api/costs' && method === 'GET') {
+        try {
+            const costs = costTracker.getCostData();
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(costs));
+            logger.logRequest(method, url, 200);
+            return;
+        } catch (error) {
+            logger.error('Error fetching costs:', error);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: 'Failed to fetch costs' }));
+            logger.logRequest(method, url, 500);
+            return;
+        }
     }
 
     // Serve static files

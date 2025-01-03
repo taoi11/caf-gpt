@@ -1,4 +1,5 @@
 import { logger } from './logger.js';
+import { costTracker } from './costTracker.js';
 import type { LLMRequest, LLMResponse, LLMError, Message, MessageRole } from './types.js';
 
 // Connection pool configuration
@@ -70,6 +71,11 @@ class LLMGateway {
         
         // Log full response data
         logger.debug('LLM response received:', data);
+
+        // Trigger cost tracking with generation ID
+        if (data.id) {
+            await costTracker.trackRequest(data.id);
+        }
 
         return {
             content: data.choices[0].message.content,

@@ -4,10 +4,11 @@ import { logger } from './logger.js';
 import type { CostData } from './types.js';
 
 const MONTHLY_SERVER_COST = 15.70; // Base monthly server cost in USD
+const DATA_DIR = join(process.cwd(), 'data');
+const COST_FILE = join(DATA_DIR, 'costs.json');
+const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 
 class CostTracker {
-    private readonly dataPath: string;
-    private readonly dataDir: string;
     private data: CostData = {
         apiCosts: 0,
         serverCosts: MONTHLY_SERVER_COST,
@@ -16,8 +17,6 @@ class CostTracker {
     };
 
     constructor() {
-        this.dataDir = join(process.cwd(), 'data');
-        this.dataPath = join(this.dataDir, 'costs.json');
         this.initializeStorage().catch(error => {
             logger.error('Failed to initialize cost tracker:', error);
         });
@@ -25,7 +24,8 @@ class CostTracker {
 
     private async initializeStorage(): Promise<void> {
         try {
-            await mkdir(this.dataDir, { recursive: true });
+            // Ensure data directory exists
+            await mkdir(DATA_DIR, { recursive: true });
             await this.loadData();
             await this.checkMonthlyReset();
         } catch (error) {
@@ -45,7 +45,7 @@ class CostTracker {
             // Only reset if we haven't already reset this month
             if (lastResetDate.getMonth() !== now.getMonth() || 
                 lastResetDate.getFullYear() !== now.getFullYear()) {
-                logger.info('Performing monthly cost reset on the first of the month');
+                logger.info('Performing monthly cost reset');
                 this.data.apiCosts = 0;
                 this.data.serverCosts = MONTHLY_SERVER_COST;
                 this.data.lastReset = today;
@@ -56,10 +56,8 @@ class CostTracker {
 
     private async loadData(): Promise<void> {
         try {
-            const content = await readFile(this.dataPath, 'utf-8');
+            const content = await readFile(COST_FILE, 'utf-8');
             this.data = JSON.parse(content);
-            // Ensure server costs are set
-            this.data.serverCosts = MONTHLY_SERVER_COST;
             logger.info('Cost data loaded successfully');
         } catch (error) {
             if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
@@ -74,7 +72,7 @@ class CostTracker {
 
     private async saveData(): Promise<void> {
         try {
-            await writeFile(this.dataPath, JSON.stringify(this.data, null, 2));
+            await writeFile(COST_FILE, JSON.stringify(this.data, null, 2));
             logger.debug('Cost data saved successfully');
         } catch (error) {
             logger.error('Failed to save cost data:', error);
@@ -82,49 +80,46 @@ class CostTracker {
         }
     }
 
-    public async trackRequest(requestData: {
-        id: string;
-        model: string;
-        cost: number;
-        tokens: {
-            prompt: number;
-            completion: number;
-            total: number;
-        };
-    }): Promise<void> {
-        await this.checkMonthlyReset();
+    private async fetchGenerationCost(genId: string): Promise<number> {
+        try {
+            const response = await fetch(`https://openrouter.ai/api/v1/generation?id=${genId}`, {
+                headers: {
+                    'Authorization': `Bearer ${OPENROUTER_API_KEY}`
+                }
+            });
 
-        this.data.apiCosts += requestData.cost;
-        this.data.lastUpdated = new Date().toISOString();
+            if (!response.ok) {
+                throw new Error(`Failed to fetch generation cost: ${response.statusText}`);
+            }
 
-        await this.saveData();
-        logger.debug('Request cost tracked:', {
-            id: requestData.id,
-            model: requestData.model,
-            cost: requestData.cost.toFixed(4),
-            apiTotal: this.data.apiCosts.toFixed(4),
-            serverCost: this.data.serverCosts.toFixed(2)
-        });
+            const data = await response.json();
+            return data.data.total_cost || 0;
+        } catch (error) {
+            logger.error('Error fetching generation cost:', error);
+            return 0;
+        }
     }
 
-    public getMonthlyTotal(): number {
-        return this.data.apiCosts + this.data.serverCosts;
+    public async trackRequest(genId: string): Promise<void> {
+        // Wait 250ms before fetching cost
+        await new Promise(resolve => setTimeout(resolve, 250));
+
+        const cost = await this.fetchGenerationCost(genId);
+        if (cost > 0) {
+            this.data.apiCosts += cost;
+            this.data.lastUpdated = new Date().toISOString();
+            await this.saveData();
+            
+            logger.debug('Cost tracked:', {
+                generationId: genId,
+                cost: cost.toFixed(6),
+                totalApiCost: this.data.apiCosts.toFixed(6)
+            });
+        }
     }
 
-    public getMonthlyAPITotal(): number {
-        return this.data.apiCosts;
-    }
-
-    public getMonthlyServerCost(): number {
-        return this.data.serverCosts;
-    }
-
-    public getLastReset(): string {
-        return this.data.lastReset;
-    }
-
-    public getLastUpdated(): string {
-        return this.data.lastUpdated;
+    public getCostData(): CostData {
+        return { ...this.data };
     }
 }
 
