@@ -12,3 +12,7 @@ dist/
 # Environment variables
 .env
 data/
+
+# Development files
+.aider*
+.cursor/

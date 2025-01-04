@@ -4,9 +4,8 @@ import { logger } from '../../../utils/logger.js';
 import { MODELS } from '../../../utils/config.js';
 import { createDOADFinder } from './agents/doadFinder.js';
 import { createDOADChat } from './agents/doadChat.js';
-import { s3Client } from '../../../utils/s3Client.js';
+import { s3Utils } from '../../../utils/s3Client.js';
 import { IncomingMessage } from 'http';
-import { GetObjectCommand } from '@aws-sdk/client-s3';
 import { DOADFinder, DOADChat, ChatResponse, DOADImplementation } from './types.js';
 
 // Base implementation for DOAD handlers
@@ -50,27 +49,9 @@ export const baseDOADImplementation: DOADImplementation = {
     },
 
     async getDOADContent(doadNumber: string): Promise<string> {
-        try {
-            const path = this.getDOADPath(doadNumber);
-            logger.debug(`Fetching DOAD content from path: ${path}`);
-            
-            const response = await s3Client.send(new GetObjectCommand({
-                Bucket: process.env.S3_BUCKET || 'policies',
-                Key: path
-            }));
-
-            const content = await response.Body?.transformToString() || '';
-            logger.debug(`Fetched DOAD ${doadNumber} content length: ${content.length}`);
-            
-            if (!content) {
-                logger.warn(`Empty content received for DOAD ${doadNumber}`);
-            }
-
-            return content;
-        } catch (error) {
-            logger.error(`Failed to get DOAD ${doadNumber}:`, error);
-            return '';
-        }
+        const path = this.getDOADPath(doadNumber);
+        logger.debug(`Fetching DOAD content from path: ${path}`);
+        return await s3Utils.fetchRawContent(path);
     }
 };
 

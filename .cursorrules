@@ -18,5 +18,15 @@ The .appLogic/ folder has Markdown notes of may plans for this app.
   - prioritize using the built in libraries and frameworks.
   - ask user to use `npm install ...` to install dependencies. avoid adding dependencies directly to the package.json file.
 
+### Debugging
+  - Do not jump to changing the code.
+  - Make a  task specific file in the .cursor/ folder and in this file 
+    * write down your thoughts and ideas.
+    * give a few option to the user to choose from.
+    * explain the pros and cons of each option.
+  - Always wait for the user to explicitly tell you to change the code.
+  - Always first perpose changes in a  file in the notePad/ folder.
+  - The user will clean up this dir when tasks are complete.
+
 This is a very simple project lets keep the code simple and to the point.
 Use simple and basic libraries and frameworks.
