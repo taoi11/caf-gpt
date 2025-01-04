@@ -1,4 +1,4 @@
-import { Message } from '../../../utils/types.js';
+import { Message, LLMInteractionData } from '../../../utils/types.js';
 import { IncomingMessage } from 'http';
 
 // Core DOAD Types
@@ -21,11 +21,20 @@ export interface ChatResponse {
     followUp?: string;      // Optional follow-up suggestions
 }
 
+// Logging Helpers
+export interface DOADLogger {
+    logAgentInteraction(type: 'finder' | 'chat', data: LLMInteractionData): void;
+    logAgentError(type: 'finder' | 'chat', error: Error, metadata?: Record<string, any>): void;
+}
+
 // Base DOAD Handler Interface
-export interface DOADHandler {
+export interface DOADHandler extends DOADLogger {
     getDOADPath(doadNumber: string): string;
     isValidDOADNumber(doadNumber: string): boolean;
     extractDOADNumbers(text: string): string[];
+    validateRequest(message: string): boolean;
+    formatResponse(response: ChatResponse): ChatResponse;
+    getDOADContent(doadNumber: string): Promise<string>;
 }
 
 // Agent-Specific Interfaces
@@ -43,8 +52,4 @@ export interface DOADChat extends DOADHandler {
 }
 
 // Implementation Helpers
-export interface DOADImplementation extends DOADHandler {
-    validateRequest(message: string): boolean;
-    formatResponse(response: ChatResponse): ChatResponse;
-    getDOADContent(doadNumber: string): Promise<string>;
-} 
+export interface DOADImplementation extends DOADHandler {} 

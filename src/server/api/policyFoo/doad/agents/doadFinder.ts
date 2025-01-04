@@ -41,29 +41,9 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
                     messages: [...(history || []).slice(0, -1), newMessage],
                     systemPrompt,
                     model: MODELS.doad.finder,
-                    temperature: 0.1
                 };
 
-                // Replace user request logging
-                logger.logLLMInteraction({
-                    role: 'user',
-                    content: message,
-                    metadata: {
-                        timestamp: new Date().toISOString()
-                    }
-                });
-
                 const response = await llm.query(request);
-                
-                // Replace LLM response logging
-                logger.logLLMInteraction({
-                    role: 'assistant',
-                    content: response.content,
-                    metadata: {
-                        model: MODELS.doad.finder,
-                        usage: response.usage
-                    }
-                });
                 
                 const content = response.content.trim();
                 
@@ -84,7 +64,10 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
                 logger.info(`Found policies: ${policies.join(', ')}`);
                 return policies;
             } catch (error) {
-                logger.error('Error in DOADFinder:', error);
+                this.logAgentError('finder', error instanceof Error ? error : new Error(String(error)), {
+                    messageLength: message.length,
+                    hasHistory: !!history
+                });
                 throw error;
             }
         }

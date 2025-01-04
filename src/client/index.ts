@@ -4,8 +4,8 @@ const USD_TO_CAD = 1.7;
 // Format currency in CAD with ceiling to next cent
 function formatCAD(usdAmount: number): string {
     const cadAmount = usdAmount * USD_TO_CAD;
-    // Multiply by 100, ceil, then divide by 100 to round up to next cent
-    const roundedAmount = Math.ceil(cadAmount * 100) / 100;
+    // Handle rounding to next cent properly for both positive and negative values
+    const roundedAmount = Math.sign(cadAmount) * Math.ceil(Math.abs(cadAmount) * 100) / 100;
     return `$${roundedAmount.toFixed(2)} CAD`;
 }
 

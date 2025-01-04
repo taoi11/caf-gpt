@@ -49,7 +49,8 @@ const server = createServer(async (req, res) => {
                 res.end(JSON.stringify(response));
                 logger.logRequest(method, url, 200);
             } catch (error) {
-                logger.error('Policy request error:', error);
+                const err = error instanceof Error ? error : new Error('Unknown error');
+                logger.error(err, 'Policy request error');
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
                     success: false, 
@@ -96,7 +97,8 @@ const server = createServer(async (req, res) => {
             logger.logRequest(method, url, 200);
             return;
         } catch (error) {
-            logger.error('Error fetching costs:', error);
+            const err = error instanceof Error ? error : new Error('Unknown error');
+            logger.error(err, 'Error fetching costs');
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Failed to fetch costs' }));
             logger.logRequest(method, url, 500);
@@ -107,7 +109,7 @@ const server = createServer(async (req, res) => {
     // Serve static files
     try {
         // Default to index.html for root path
-        const filePath = url === '/' ? '/index.html' : url;
+        const filePath = (url === '/' ? '/index.html' : url) as string;
         const fullPath = join(process.cwd(), 'public', filePath);
         
         const content = await readFile(fullPath);
@@ -126,7 +128,12 @@ const server = createServer(async (req, res) => {
         res.end(content);
         logger.logRequest(method, url, 200);
     } catch (error) {
-        logger.error(`Error serving ${url}:`, error);
+        const err = error instanceof Error ? error : new Error('Unknown error');
+        logger.error(err, `Error serving ${url}`, {
+            path: url,
+            method,
+            errorName: err.name
+        });
         res.writeHead(404, { 'Content-Type': 'text/plain' });
         res.end('Not Found');
         logger.logRequest(method, url, 404);

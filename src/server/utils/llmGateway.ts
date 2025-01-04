@@ -1,10 +1,12 @@
 import { logger } from './logger';
 import { costTracker } from './costTracker.js';
 import type { LLMRequest, LLMResponse, LLMError, Message, SystemMessage } from './types.js';
+import { randomUUID } from 'crypto';
 
 // Connection pool configuration
 const MAX_CONCURRENT_REQUESTS = 50;
 const DEFAULT_MAX_CONTEXT = 10; // Default number of messages to keep in context
+const DEFAULT_TEMPERATURE = 0.1; // Default to low temperature for more consistent responses
 
 // OpenRouter configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
@@ -22,12 +24,31 @@ class LLMGateway {
             }
             this.activeRequests++;
 
+            // Generate request ID
+            const requestId = randomUUID();
+
             // Prepare messages with system prompt if provided
             const messages = this.prepareMessages(request);
 
-            logger.debug('Sending request to OpenRouter', {
+            // Prepare complete request body
+            const requestBody = {
                 model: request.model || LLM_MODEL,
-                messageCount: messages.length
+                messages,
+                temperature: request.temperature || DEFAULT_TEMPERATURE
+            };
+
+            // Log request
+            logger.logLLMInteraction({
+                role: 'system',
+                content: request.systemPrompt || '',
+                metadata: {
+                    requestId,
+                    type: 'request',
+                    model: requestBody.model,
+                    temperature: requestBody.temperature,
+                    messages: requestBody.messages,
+                    timestamp: new Date().toISOString()
+                }
             });
 
             const response = await fetch(OPENROUTER_API_URL, {
@@ -36,11 +57,7 @@ class LLMGateway {
                     'Content-Type': 'application/json',
                     'Authorization': `Bearer ${OPENROUTER_API_KEY}`
                 },
-                body: JSON.stringify({
-                    model: request.model || LLM_MODEL,
-                    messages,
-                    temperature: request.temperature || 0.7
-                })
+                body: JSON.stringify(requestBody)
             });
 
             if (!response.ok) {
@@ -60,19 +77,29 @@ class LLMGateway {
                 await costTracker.trackUsage(result.usage);
             }
 
+            // Log response with same request ID
             logger.logLLMInteraction({
                 role: 'assistant',
                 content: llmResponse.content,
                 metadata: {
+                    requestId,
+                    type: 'response',
                     model: llmResponse.model,
-                    usage: llmResponse.usage
+                    usage: llmResponse.usage,
+                    timestamp: new Date().toISOString(),
+                    rawResponse: result // Include full response for debugging
                 }
             });
 
             return llmResponse;
 
         } catch (error) {
-            logger.error('LLM request failed:', error);
+            const err = error instanceof Error ? error : new Error('Unknown error');
+            logger.error(err, 'LLM request failed', {
+                model: request.model || LLM_MODEL,
+                messageCount: request.messages.length,
+                temperature: request.temperature || DEFAULT_TEMPERATURE
+            });
             throw error;
         } finally {
             this.activeRequests--;
@@ -88,7 +115,8 @@ class LLMGateway {
             messages = messages.slice(-maxContext);
             logger.debug('Trimmed conversation history', {
                 originalLength: request.messages.length,
-                trimmedLength: messages.length
+                trimmedLength: messages.length,
+                maxContext
             });
         }
 

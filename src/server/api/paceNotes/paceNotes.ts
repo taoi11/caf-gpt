@@ -47,7 +47,9 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
             return;
         }
 
-        logger.debug('Generating pace note for input:', request.input.substring(0, 50) + '...');
+        logger.debug('Generating pace note for input', { 
+            input: request.input.substring(0, 50) + '...' 
+        });
         const response = await paceNoteAgent.generateNote(request);
         
         // Track the request only ONCE after successful completion
@@ -60,7 +62,8 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         }));
         logger.logRequest(method, url, 200);
     } catch (error) {
-        logger.error('Pace Note generation error:', error);
+        const err = error instanceof Error ? error : new Error('Unknown error');
+        logger.error(err, 'Pace Note generation error');
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: false,

@@ -1,7 +1,6 @@
 import { IS_DEV } from './config.js';
-import { writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
-import { LLMInteractionData } from './types.js';
+import type { LLMInteractionData, Message, SystemMessage } from './types.js';
+import { randomUUID } from 'crypto';
 
 // Log levels in order of verbosity
 enum LogLevel {
@@ -11,21 +10,22 @@ enum LogLevel {
     ERROR = 3
 }
 
+interface LogEntry {
+    timestamp: string;
+    level: LogLevel;
+    message: string;
+    metadata?: {
+        requestId?: string;
+        [key: string]: any;
+    };
+}
+
 class Logger {
     private readonly currentLevel: LogLevel;
-    private readonly logsDir: string;
-    private currentCallId: string | null = null;
-    private lastLoggedHash: string | null = null;
+    private llmRequests: Map<string, number> = new Map(); // Track request start times
 
     constructor() {
         this.currentLevel = IS_DEV ? LogLevel.DEBUG : LogLevel.INFO;
-        this.logsDir = join(process.cwd(), 'data', 'logs');
-        
-        // Create logs directory if in dev mode
-        if (IS_DEV) {
-            mkdir(this.logsDir, { recursive: true })
-                .catch(err => console.error('Failed to create logs directory:', err));
-        }
     }
 
     // Helper to trim system messages
@@ -35,121 +35,152 @@ class Logger {
         return `${content.substring(0, maxLength)}...${content.substring(content.length - maxLength)}`;
     }
 
-    // LLM logging method
+    // Format LLM request for logging
+    private formatLLMRequest(data: LLMInteractionData, requestId: string): string {
+        // Trim system messages in the messages array
+        const messages = data.metadata?.messages?.map((msg: Message | SystemMessage) => 
+            msg.role === 'system' ? 
+                { ...msg, content: this.trimSystemMessage(msg.content) } : 
+                msg
+        );
+
+        // Create request object with trimmed content
+        const request = {
+            requestId,
+            timestamp: new Date().toISOString(),
+            type: 'request',
+            model: data.metadata?.model,
+            temperature: data.metadata?.temperature,
+            messages
+        };
+
+        // Add any additional metadata, excluding what we've already used
+        const { model, temperature, messages: _, rawResponse, ...restMetadata } = data.metadata || {};
+        
+        return JSON.stringify({
+            ...request,
+            ...restMetadata
+        }, null, 2);
+    }
+
+    // Format LLM response for logging
+    private formatLLMResponse(data: LLMInteractionData, requestId: string, durationMs: number): string {
+        const response = {
+            requestId,
+            timestamp: new Date().toISOString(),
+            type: 'response',
+            durationMs,
+            content: data.content,
+            model: data.metadata?.model,
+            usage: data.metadata?.usage
+        };
+
+        // Add any additional metadata, excluding what we've already used
+        const { model, usage, rawResponse, ...restMetadata } = data.metadata || {};
+        
+        return JSON.stringify({
+            ...response,
+            ...restMetadata
+        }, null, 2);
+    }
+
+    // LLM logging method - console only, dev mode only
     async logLLMInteraction(data: LLMInteractionData): Promise<void> {
         if (!IS_DEV) return;
 
-        try {
-            // Create a hash of the content to prevent duplicate logs
-            const contentHash = JSON.stringify({
-                role: data.role,
-                content: data.content,
-                metadata: data.metadata
-            });
+        let requestId = data.metadata?.requestId;
+        const isRequest = data.metadata?.type === 'request';
+
+        if (isRequest) {
+            // Generate new request ID and store start time
+            requestId = requestId || randomUUID();
+            this.llmRequests.set(requestId, Date.now());
+            console.debug(`\n[LLM Request] ${requestId}\n${this.formatLLMRequest(data, requestId)}`);
+        } else {
+            // Calculate duration for response
+            const startTime = requestId ? this.llmRequests.get(requestId) : undefined;
+            const durationMs = startTime ? Date.now() - startTime : 0;
             
-            if (contentHash === this.lastLoggedHash) {
-                return; // Skip duplicate logs
+            if (requestId) {
+                this.llmRequests.delete(requestId); // Cleanup
             }
-            this.lastLoggedHash = contentHash;
-
-            // Only create new conversation ID if there isn't one and it's a user message
-            if (!this.currentCallId && data.role === 'user') {
-                this.currentCallId = new Date().toISOString().replace(/[:.]/g, '-');
-            }
-
-            // Ensure we have a call ID (fallback)
-            if (!this.currentCallId) {
-                this.currentCallId = new Date().toISOString().replace(/[:.]/g, '-');
-            }
-
-            const filename = `llm-${this.currentCallId}.log`;
-            const filepath = join(this.logsDir, filename);
-
-            // Ensure logs directory exists
-            await mkdir(this.logsDir, { recursive: true });
-
-            // Format the log entry
-            const logEntry = {
-                timestamp: new Date().toISOString(),
-                content: {
-                    ...data,
-                    content: data.role === 'system' ? this.trimSystemMessage(data.content) : data.content
-                }
-            };
-
-            const entry = JSON.stringify(logEntry, null, 2) + '\n';
-            await writeFile(filepath, entry, { flag: 'a' });
-
-            // Only reset conversation at the end of a chat response
-            if (data.role === 'assistant' && data.content.includes('</citations>')) {
-                this.currentCallId = null;
-                this.lastLoggedHash = null;
-            }
-        } catch (error) {
-            console.error('Failed to log LLM interaction:', error);
+            
+            console.debug(`\n[LLM Response] ${requestId || 'unknown'}\n${this.formatLLMResponse(data, requestId || 'unknown', durationMs)}`);
         }
     }
 
-    debug(message: string, ...args: any[]): void {
-        if (this.shouldLog(LogLevel.DEBUG)) {
-            // Console logging for all debug messages
-            console.debug(this.formatMessage('DEBUG', message), ...args);
-        }
+    debug(message: string, metadata?: Record<string, any>): void {
+        if (!this.shouldLog(LogLevel.DEBUG)) return;
+        const entry = this.createLogEntry(LogLevel.DEBUG, message, metadata);
+        console.debug(this.formatMessage(entry));
     }
 
-    info(message: string, ...args: any[]): void {
-        if (this.shouldLog(LogLevel.INFO)) {
-            console.info(this.formatMessage('INFO', message), ...args);
-        }
+    info(message: string, metadata?: Record<string, any>): void {
+        if (!this.shouldLog(LogLevel.INFO)) return;
+        const entry = this.createLogEntry(LogLevel.INFO, message, metadata);
+        console.info(this.formatMessage(entry));
     }
 
-    warn(message: string, ...args: any[]): void {
-        if (this.shouldLog(LogLevel.WARN)) {
-            console.warn(this.formatMessage('WARN', message), ...args);
-        }
+    warn(message: string, metadata?: Record<string, any>): void {
+        if (!this.shouldLog(LogLevel.WARN)) return;
+        const entry = this.createLogEntry(LogLevel.WARN, message, metadata);
+        console.warn(this.formatMessage(entry));
     }
 
-    error(message: string | Error, ...args: any[]): void {
-        if (this.shouldLog(LogLevel.ERROR)) {
-            const errorMessage = message instanceof Error ? message.stack || message.message : message;
-            console.error(this.formatMessage('ERROR', errorMessage), ...args);
-        }
+    error(error: Error | string, message?: string, metadata?: Record<string, any>): void {
+        if (!this.shouldLog(LogLevel.ERROR)) return;
+        const errorMessage = error instanceof Error ? error.message : error;
+        const finalMessage = message ? `${errorMessage}: ${message}` : errorMessage;
+        const entry = this.createLogEntry(LogLevel.ERROR, finalMessage, {
+            ...metadata,
+            stack: error instanceof Error ? error.stack : undefined
+        });
+        console.error(this.formatMessage(entry));
     }
 
     // Utility method for logging request information
-    logRequest(method: string, url: string, statusCode: number): void {
+    logRequest(method: string, url: string, statusCode: number, metadata?: Record<string, any>): void {
+        if (!IS_DEV) return;
+        
         const level = statusCode >= 500 ? LogLevel.ERROR :
                      statusCode >= 400 ? LogLevel.WARN :
                      LogLevel.INFO;
         
-        // Only log path portion of URL
         const path = url.split('?')[0];
         const message = `${method} ${path} - ${statusCode}`;
         
         switch (level) {
             case LogLevel.ERROR:
-                this.error(message);
+                this.error(message, undefined, metadata);
                 break;
             case LogLevel.WARN:
-                this.warn(message);
+                this.warn(message, metadata);
                 break;
             default:
-                // Only log non-200 responses at INFO level
                 if (statusCode !== 200) {
-                    this.info(message);
+                    this.info(message, metadata);
                 } else {
-                    this.debug(message);
+                    this.debug(message, metadata);
                 }
         }
     }
 
-    private formatMessage(level: string, message: string): string {
-        const timestamp = new Date().toISOString();
-        return `[${timestamp.split('.')[0]}Z] ${level}: ${message}`;
+    private createLogEntry(level: LogLevel, message: string, metadata?: Record<string, any>): LogEntry {
+        return {
+            timestamp: new Date().toISOString(),
+            level,
+            message,
+            metadata
+        };
+    }
+
+    private formatMessage(entry: LogEntry): string {
+        const base = `[${entry.timestamp.split('.')[0]}Z] ${LogLevel[entry.level]}: ${entry.message}`;
+        return entry.metadata ? `${base} ${JSON.stringify(entry.metadata)}` : base;
     }
 
     private shouldLog(level: LogLevel): boolean {
-        return level >= this.currentLevel;
+        return IS_DEV || level >= this.currentLevel;
     }
 }
 

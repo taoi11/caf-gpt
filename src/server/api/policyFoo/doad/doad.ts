@@ -1,5 +1,5 @@
 import { PolicyHandler } from '../policyFoo.js';
-import { Message } from '../../../utils/types.js';
+import { Message, LLMInteractionData } from '../../../utils/types.js';
 import { logger } from '../../../utils/logger.js';
 import { MODELS } from '../../../utils/config.js';
 import { createDOADFinder } from './agents/doadFinder.js';
@@ -52,15 +52,34 @@ export const baseDOADImplementation: DOADImplementation = {
         const path = this.getDOADPath(doadNumber);
         logger.debug(`Fetching DOAD content from path: ${path}`);
         return await s3Utils.fetchRawContent(path);
+    },
+
+    // Shared logging methods
+    logAgentInteraction(type: 'finder' | 'chat', data: LLMInteractionData) {
+        logger.logLLMInteraction({
+            ...data,
+            metadata: {
+                ...data.metadata,
+                agent: type,
+                timestamp: new Date().toISOString()
+            }
+        });
+    },
+
+    logAgentError(type: 'finder' | 'chat', error: Error, metadata?: Record<string, any>) {
+        logger.error(error, `Error in DOAD ${type}`, {
+            ...metadata,
+            agent: type,
+            timestamp: new Date().toISOString()
+        });
     }
 };
 
 // DOAD Manager interface
-interface DOADManager extends PolicyHandler {
+interface DOADManager extends PolicyHandler, DOADImplementation {
     finder: DOADFinder;
     chat: DOADChat;
     models: typeof MODELS.doad;
-    getDOADContent(doadNumber: string): Promise<string>;
     handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse>;
 }
 
@@ -79,7 +98,11 @@ function createDOADManagerImpl(): DOADManager {
             try {
                 // 1. Find relevant policies with history
                 const policies = await this.finder.handleMessage(message, history);
-                logger.debug(`Found ${policies.length} relevant policies`);
+                logger.debug(`Found ${policies.length} relevant policies`, {
+                    policies,
+                    messageLength: message.length,
+                    hasHistory: !!history
+                });
                 
                 // 2. Get policy contents from S3
                 const policyContents = await Promise.all(
@@ -108,7 +131,10 @@ function createDOADManagerImpl(): DOADManager {
                     req
                 );
             } catch (error) {
-                logger.error('Error in DOAD chain:', error);
+                this.logAgentError('chat', error instanceof Error ? error : new Error(String(error)), {
+                    messageLength: message.length,
+                    hasHistory: !!history
+                });
                 throw error;
             }
         }

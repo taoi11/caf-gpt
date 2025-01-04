@@ -1,5 +1,5 @@
 // Message Types (shared between client and server)
-export type MessageRole = 'user' | 'assistant';
+export type MessageRole = 'user' | 'assistant' | 'system';
 
 export interface Message {
     role: MessageRole;
@@ -13,11 +13,34 @@ export interface SystemMessage {
     content: string;
 }
 
-export interface LLMMessage extends Message {
+// Logging Types
+export interface LogEntry {
+    timestamp: string;
+    level: 'DEBUG' | 'INFO' | 'WARN' | 'ERROR';
+    message: string;
+    metadata?: {
+        requestId?: string;
+        [key: string]: any;
+    };
+}
+
+export interface LLMInteractionData {
+    role: MessageRole;
+    content: string;
     metadata?: {
         model?: string;
-        tokens?: number;
-    }
+        usage?: {
+            prompt_tokens?: number;
+            completion_tokens?: number;
+            total_tokens?: number;
+        };
+        timestamp?: string;
+        type?: 'request' | 'response';
+        agent?: 'finder' | 'chat';
+        temperature?: number;
+        conversationId?: string;
+        [key: string]: any;
+    };
 }
 
 // API Types
@@ -89,20 +112,4 @@ export interface PaceNoteResponse {
     content: string;
     timestamp: string;
     rank: string;
-}
-
-// Types for LLM logging
-export type LLMInteractionData = {
-    role: 'system' | 'user' | 'assistant'
-    content: string
-    metadata?: {
-        model?: string
-        usage?: {
-            prompt_tokens?: number
-            completion_tokens?: number
-            total_tokens?: number
-        }
-        timestamp?: string
-        conversationId?: string
-    }
 } 

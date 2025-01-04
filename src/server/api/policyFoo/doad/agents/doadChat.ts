@@ -42,30 +42,24 @@ export function createDOADChat(llm = llmGateway): DOADChat {
                 };
 
                 // Combine history with new message
-                const messages = [...userHistory, newMessage];
+                const messages = userHistory.length > 0 ? userHistory : [];
+                if (!messages.some(m => m.content === message)) {
+                    messages.push(newMessage);
+                }
 
                 const request: LLMRequest = {
                     messages,
                     systemPrompt: systemPrompt.replace('{policies_content}', policyContext),
-                    model: MODELS.doad.chat,
-                    temperature: 0.7
+                    model: MODELS.doad.chat
                 };
 
                 logger.debug('Chat agent request:', {
                     messageCount: messages.length,
-                    hasSystemPrompt: !!request.systemPrompt
+                    hasSystemPrompt: !!request.systemPrompt,
+                    policyContextLength: policyContext.length
                 });
 
                 const response = await llm.query(request);
-                
-                logger.logLLMInteraction({
-                    role: 'assistant',
-                    content: response.content,
-                    metadata: {
-                        model: response.model,
-                        usage: response.usage
-                    }
-                });
                 
                 if (req) {
                     rateLimiter.trackSuccessfulRequest(req);
@@ -78,7 +72,11 @@ export function createDOADChat(llm = llmGateway): DOADChat {
                 };
 
             } catch (error) {
-                logger.error('Error in DOADChat:', error);
+                this.logAgentError('chat', error instanceof Error ? error : new Error(String(error)), {
+                    messageLength: message.length,
+                    historyLength: userHistory.length,
+                    policyContextLength: policyContext.length
+                });
                 throw error;
             }
         }
