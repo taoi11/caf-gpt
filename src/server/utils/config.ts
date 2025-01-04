@@ -38,6 +38,7 @@ export const MODELS = {
 export const RATE_LIMITS = {
     WHITELISTED_CIDRS: [
         '131.136.0.0/16',  // DND network range only
+        '205.193.0.0/16',  // DND network range only
     ],
     HOURLY_LIMIT: IS_DEV ? 100 : 10,    // Higher limit for development
     DAILY_LIMIT: IS_DEV ? 300 : 30,     // Higher limit for development
