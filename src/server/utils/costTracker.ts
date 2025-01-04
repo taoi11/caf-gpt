@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { logger } from './logger.js';
-import type { CostData } from './types.js';
+import type { CostData, LLMResponse } from './types.js';
 
 const MONTHLY_SERVER_COST = 15.70; // Base monthly server cost in USD
 const DATA_DIR = join(process.cwd(), 'data');
@@ -130,6 +130,23 @@ class CostTracker {
                 totalApiCost: this.data.apiCosts.toFixed(6)
             });
         }
+    }
+
+    public async trackUsage(usage: LLMResponse['usage']): Promise<void> {
+        if (!usage) return;
+
+        // Estimate cost based on token usage (simplified calculation)
+        const cost = (usage.promptTokens + usage.completionTokens) * 0.000001; // $0.001 per 1K tokens
+        
+        this.data.apiCosts += cost;
+        this.data.lastUpdated = new Date().toISOString();
+        await this.saveData();
+        
+        logger.debug('Usage tracked:', {
+            tokens: usage.totalTokens,
+            cost: cost.toFixed(6),
+            totalApiCost: this.data.apiCosts.toFixed(6)
+        });
     }
 
     public getCostData(): CostData {

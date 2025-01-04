@@ -5,7 +5,7 @@ import { logger } from "../../utils/logger.js";
 import { readFile } from 'fs/promises';
 import { join } from 'path';
 import { MODELS } from '../../utils/config.js';
-import type { PaceNoteRequest, PaceNoteResponse } from "../../utils/types.js";
+import type { PaceNoteRequest, PaceNoteResponse, Message } from "../../utils/types.js";
 
 class PaceNoteAgent {
     private readonly promptPath: string;
@@ -83,12 +83,17 @@ class PaceNoteAgent {
             .replace('{competency_list}', competencies)
             .replace('{examples}', this.examples);
         
+        // Create message with timestamp
+        const userMessage: Message = {
+            role: 'user',
+            content: request.input,
+            timestamp: new Date().toISOString()
+        };
+
         logger.debug('Sending request to LLM');
         const response = await llmGateway.query({
-            messages: [
-                { role: 'system', content: filledPrompt },
-                { role: 'user', content: request.input }
-            ],
+            messages: [userMessage],
+            systemPrompt: filledPrompt,
             model: MODELS.paceNote,
             temperature: 0.7
         });

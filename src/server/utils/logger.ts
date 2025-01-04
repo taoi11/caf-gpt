@@ -145,14 +145,10 @@ class Logger {
                 if (message.includes('Finding relevant DOADs')) {
                     this.logLLMCall(args[0], 'USER_REQUEST');
                 } else if (message.includes('Request messages')) {
-                    const agentType = message.includes('Chat agent') ? 'CHAT_REQUEST' : 
-                                    message.includes('Reader') ? 'READER_REQUEST' : 
-                                    'FINDER_REQUEST';
+                    const agentType = message.includes('Chat agent') ? 'CHAT_REQUEST' : 'FINDER_REQUEST';
                     this.logLLMCall(args[0], agentType);
                 } else if (message.includes('LLM response received')) {
-                    const agentType = message.includes('Chat agent') ? 'CHAT_RESPONSE' : 
-                                    message.includes('Reader') ? 'READER_RESPONSE' : 
-                                    'FINDER_RESPONSE';
+                    const agentType = message.includes('Chat agent') ? 'CHAT_RESPONSE' : 'FINDER_RESPONSE';
                     this.logLLMCall(args[0], agentType);
                 }
                 return; // Skip console logging for LLM messages

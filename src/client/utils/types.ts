@@ -1,9 +1,15 @@
-import { Message, MessageRole, DisplayOptions } from '../../server/utils/types.js';
+import { Message, MessageRole } from '../../server/utils/types.js';
 
 // Re-export shared types
-export { Message, MessageRole, DisplayOptions };
+export { Message, MessageRole };
 
 // UI-specific Types
+export interface UIState {
+    inputText: string;          // Only this persists on refresh
+    messages: Message[];        // Cleared on refresh
+    isProcessing: boolean;
+}
+
 export interface UIElements {
     userInput: HTMLTextAreaElement;
     sendButton: HTMLButtonElement;
@@ -16,7 +22,6 @@ export interface UIElements {
 export interface PaceNoteRequest {
     input: string;
     rank: string;
-    options?: DisplayOptions;
 }
 
 export interface PaceNoteResponse {

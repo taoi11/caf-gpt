@@ -34,19 +34,27 @@ export function createDOADChat(llm = llmGateway): DOADChat {
             try {
                 logger.info('Processing chat response');
 
+                // Add timestamp to new message
+                const newMessage: Message = {
+                    role: 'user',
+                    content: message,
+                    timestamp: new Date().toISOString()
+                };
+
+                // Combine history with new message
+                const messages = [...userHistory, newMessage];
+
                 const request: LLMRequest = {
-                    messages: [
-                        {
-                            role: 'system',
-                            content: systemPrompt.replace('{policies_content}', policyContext)
-                        },
-                        ...userHistory
-                    ],
+                    messages,
+                    systemPrompt: systemPrompt.replace('{policies_content}', policyContext),
                     model: MODELS.doad.chat,
                     temperature: 0.7
                 };
 
-                logger.debug('Chat agent request messages:', request.messages);
+                logger.debug('Chat agent request:', {
+                    messageCount: messages.length,
+                    hasSystemPrompt: !!request.systemPrompt
+                });
 
                 const response = await llm.query(request);
                 

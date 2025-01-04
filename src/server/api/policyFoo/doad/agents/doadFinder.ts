@@ -29,19 +29,26 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
             try {
                 // Log initial request for file logging
                 logger.debug('Finding relevant DOADs', { message, history });
+
+                // Add timestamp to new message
+                const newMessage: Message = {
+                    role: 'user',
+                    content: message,
+                    timestamp: new Date().toISOString()
+                };
                 
                 const request: LLMRequest = {
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        ...(history || []).slice(0, -1),
-                        { role: 'user', content: message }
-                    ],
+                    messages: [...(history || []).slice(0, -1), newMessage],
+                    systemPrompt,
                     model: MODELS.doad.finder,
                     temperature: 0.1
                 };
 
                 // Log request messages for file logging
-                logger.debug('Finder agent request messages:', request.messages);
+                logger.debug('Finder agent request:', {
+                    messageCount: request.messages.length,
+                    hasSystemPrompt: !!systemPrompt
+                });
 
                 const response = await llm.query(request);
                 

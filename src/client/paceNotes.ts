@@ -1,4 +1,4 @@
-import { PaceNoteRequest, PaceNoteResponse, DisplayOptions } from './utils/types.js';
+import { PaceNoteRequest, PaceNoteResponse } from './utils/types.js';
 import { rateLimiter } from './utils/rateLimiter.js';
 
 // Types
@@ -12,6 +12,9 @@ interface ApiResponse<T> {
     data?: T;
     error?: string;
 }
+
+// Constants
+const SESSION_KEY = 'paceNotes_input';
 
 class PaceNotesUI {
     private readonly outputSection: HTMLElement;
@@ -27,17 +30,26 @@ class PaceNotesUI {
         this.generateButton = document.getElementById('generate-btn') as HTMLButtonElement;
         this.rankSelect = document.getElementById('rank-select') as HTMLSelectElement;
         
+        // Restore input from session storage
+        this.inputBox.value = sessionStorage.getItem(SESSION_KEY) || '';
+        
         this.setupEventListeners();
     }
 
     private setupEventListeners(): void {
         this.generateButton.addEventListener('click', () => this.handleGenerate());
+        
         this.inputBox.addEventListener('keydown', (e) => {
             if (e.key === 'Enter' && e.ctrlKey) {
                 e.preventDefault();
                 this.handleGenerate();
             }
         });
+
+        this.inputBox.addEventListener('input', () => {
+            sessionStorage.setItem(SESSION_KEY, this.inputBox.value);
+        });
+        
         this.rankSelect.addEventListener('change', () => {
             this.generateButton.disabled = !this.rankSelect.value;
         });
@@ -145,6 +157,10 @@ class PaceNotesUI {
 
             // Display the result
             this.addOutput(result.data.content, result.data.timestamp);
+            
+            // Clear input after successful generation
+            this.inputBox.value = '';
+            sessionStorage.setItem(SESSION_KEY, '');
             
             // Update rate limits after successful generation
             await rateLimiter.updateLimits();

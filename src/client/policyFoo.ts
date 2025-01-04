@@ -1,6 +1,6 @@
 import { parseDOADResponse } from './doadFoo.js';
 import { rateLimiter } from './utils/rateLimiter.js';
-import { Message, UIElements, DisplayOptions } from './utils/types.js';
+import { Message, UIState, UIElements } from './utils/types.js';
 import { ChatResponse } from '../server/api/policyFoo/doad/types.js';
 
 // Types
@@ -10,42 +10,55 @@ interface ApiResponse<T> {
     error?: string;
 }
 
+// Constants
+const SESSION_KEY = 'policyFoo_input';
+const MAX_MESSAGES = 50;
+
+// UI State
+const state: UIState = {
+    inputText: sessionStorage.getItem(SESSION_KEY) || '',
+    messages: [],
+    isProcessing: false
+};
+
 // DOM Elements
 const userInput = document.getElementById('user-input') as HTMLTextAreaElement;
 const sendButton = document.getElementById('send-button') as HTMLButtonElement;
 const chatHistory = document.getElementById('chat-history') as HTMLDivElement;
 const policySelector = document.getElementById('policy-selector') as HTMLSelectElement;
 
-// Chat state with proper typing
-let conversationHistory: Message[] = [];
-
 // Message handling
 async function sendMessage() {
-    const message = userInput.value.trim();
-    if (!message) return;
+    const message = state.inputText.trim();
+    if (!message || state.isProcessing) return;
 
     try {
-        userInput.disabled = true;
-        sendButton.disabled = true;
+        state.isProcessing = true;
+        updateUI();
 
-        // Add user message to UI and history
+        // Add user message to UI and state
         const userMessage: Message = {
             role: 'user',
-            content: message
+            content: message,
+            timestamp: new Date().toISOString()
         };
         
         appendMessage('user', message);
-        userInput.value = '';
-        conversationHistory.push(userMessage);
+        state.messages.push(userMessage);
+        
+        // Clear input
+        state.inputText = '';
+        sessionStorage.setItem(SESSION_KEY, '');
+        updateUI();
 
-        // Send to backend with full conversation history
+        // Send to backend with recent messages
         const response = await fetch('/api/policyfoo/doad/generate', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
                 tool: policySelector.value,
                 message,
-                conversationHistory: conversationHistory.slice(-10) // Keep last 10 messages
+                conversationHistory: state.messages.slice(-10) // Keep last 10 messages
             })
         });
 
@@ -55,14 +68,24 @@ async function sendMessage() {
             throw new Error(result.error || 'Failed to get response');
         }
 
-        // Add assistant response to UI and history
+        // Add assistant response to UI and state
         const assistantMessage: Message = {
             role: 'assistant',
-            content: result.data.answer
+            content: result.data.answer,
+            timestamp: new Date().toISOString()
         };
         
         appendMessage('assistant', result.data.answer, result.data.citations);
-        conversationHistory.push(assistantMessage);
+        state.messages.push(assistantMessage);
+
+        // Limit message history
+        if (state.messages.length > MAX_MESSAGES) {
+            state.messages = state.messages.slice(-MAX_MESSAGES);
+            chatHistory.innerHTML = '';
+            state.messages.forEach(msg => 
+                appendMessage(msg.role as 'user' | 'assistant', msg.content)
+            );
+        }
         
         // Update rate limits after each message
         await rateLimiter.updateLimits();
@@ -75,12 +98,18 @@ async function sendMessage() {
         console.error('Error:', error);
         appendErrorMessage(error instanceof Error ? error.message : 'An error occurred');
     } finally {
-        userInput.disabled = false;
-        sendButton.disabled = false;
+        state.isProcessing = false;
+        updateUI();
     }
 }
 
 // UI Helpers
+function updateUI() {
+    userInput.value = state.inputText;
+    userInput.disabled = state.isProcessing;
+    sendButton.disabled = state.isProcessing;
+}
+
 function appendMessage(role: 'user' | 'assistant', content: string, citations?: string[]) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}-message`;
@@ -117,7 +146,9 @@ function appendFollowUp(followUp: string) {
     followUpDiv.className = 'follow-up';
     followUpDiv.textContent = `Suggested follow-up: ${followUp}`;
     followUpDiv.onclick = () => {
-        userInput.value = followUp;
+        state.inputText = followUp;
+        sessionStorage.setItem(SESSION_KEY, followUp);
+        updateUI();
         userInput.focus();
     };
     chatHistory.appendChild(followUpDiv);
@@ -140,13 +171,13 @@ userInput.onkeydown = (e: KeyboardEvent) => {
     }
 };
 
+userInput.oninput = () => {
+    state.inputText = userInput.value;
+    sessionStorage.setItem(SESSION_KEY, state.inputText);
+};
+
 // Initial setup
 document.addEventListener('DOMContentLoaded', async () => {
+    updateUI();
     await rateLimiter.initializeDisplay();
-});
-
-// Add function to clear conversation
-function clearConversation() {
-    conversationHistory = [];
-    chatHistory.innerHTML = '';
-} 
+}); 
