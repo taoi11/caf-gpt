@@ -1,6 +1,7 @@
 import { IS_DEV } from './config.js';
 import { writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
+import { LLMInteractionData } from './types.js';
 
 // Log levels in order of verbosity
 enum LogLevel {
@@ -12,156 +13,87 @@ enum LogLevel {
 
 class Logger {
     private readonly currentLevel: LogLevel;
-    private readonly debugDir: string;
+    private readonly logsDir: string;
     private currentCallId: string | null = null;
+    private lastLoggedHash: string | null = null;
 
     constructor() {
         this.currentLevel = IS_DEV ? LogLevel.DEBUG : LogLevel.INFO;
-        this.debugDir = join(process.cwd(), 'data', 'debug');
+        this.logsDir = join(process.cwd(), 'data', 'logs');
         
-        // Create debug directory if in dev mode
+        // Create logs directory if in dev mode
         if (IS_DEV) {
-            mkdir(this.debugDir, { recursive: true })
-                .catch(err => console.error('Failed to create debug directory:', err));
+            mkdir(this.logsDir, { recursive: true })
+                .catch(err => console.error('Failed to create logs directory:', err));
         }
     }
 
-    private formatMessage(level: string, message: string): string {
-        const timestamp = new Date().toISOString();
-        return `[${timestamp.split('.')[0]}Z] ${level}: ${message}`;
+    // Helper to trim system messages
+    private trimSystemMessage(content: string): string {
+        const maxLength = 200;
+        if (content.length <= maxLength * 2) return content;
+        return `${content.substring(0, maxLength)}...${content.substring(content.length - maxLength)}`;
     }
 
-    private shouldLog(level: LogLevel): boolean {
-        return level >= this.currentLevel;
-    }
-
-    // Add helper method to truncate long objects
-    private truncateObject(obj: any, maxLength: number = 100): any {
-        if (typeof obj !== 'object' || obj === null) {
-            return obj;
-        }
-        
-        const truncated: any = {};
-        for (const [key, value] of Object.entries(obj)) {
-            if (typeof value === 'string') {
-                // Always truncate system messages
-                if (key === 'content' && obj.role === 'system') {
-                    truncated[key] = `${value.substring(0, maxLength)}...${value.substring(value.length - maxLength)}`;
-                } else {
-                    truncated[key] = value;
-                }
-            } else if (Array.isArray(value)) {
-                truncated[key] = value.slice(0, 3);
-                if (value.length > 3) {
-                    truncated[key].push(`... ${value.length - 3} more`);
-                }
-            } else if (typeof value === 'object') {
-                truncated[key] = this.truncateObject(value, maxLength);
-            } else {
-                truncated[key] = value;
-            }
-        }
-        return truncated;
-    }
-
-    private formatRateLimit(info: any): string {
-        if (!info?.current || !info?.calculated) return 'Invalid rate limit info';
-        
-        const { current, calculated } = info;
-        return `h:${calculated.hourly.remaining}/${current.hourly.count} d:${calculated.daily.remaining}/${current.daily.count}`;
-    }
-
-    private formatResetTime(ms: number): string {
-        const minutes = Math.floor(ms / 60000);
-        return minutes < 60 ? `${minutes}m` : `${Math.floor(minutes/60)}h`;
-    }
-
-    private formatRateLimitInfo(info: any): any {
-        if (!info?.current || !info?.calculated) return info;
-        
-        return {
-            limits: this.formatRateLimit(info),
-            reset: {
-                hourly: this.formatResetTime(info.calculated.hourly.resetIn),
-                daily: this.formatResetTime(info.calculated.daily.resetIn)
-            }
-        };
-    }
-
-    // Add method to log full LLM messages
-    private async logLLMCall(data: any, type: string): Promise<void> {
+    // LLM logging method
+    async logLLMInteraction(data: LLMInteractionData): Promise<void> {
         if (!IS_DEV) return;
 
         try {
-            // Generate call ID if this is a new user request
-            if (type === 'USER_REQUEST') {
+            // Create a hash of the content to prevent duplicate logs
+            const contentHash = JSON.stringify({
+                role: data.role,
+                content: data.content,
+                metadata: data.metadata
+            });
+            
+            if (contentHash === this.lastLoggedHash) {
+                return; // Skip duplicate logs
+            }
+            this.lastLoggedHash = contentHash;
+
+            // Only create new conversation ID if there isn't one and it's a user message
+            if (!this.currentCallId && data.role === 'user') {
                 this.currentCallId = new Date().toISOString().replace(/[:.]/g, '-');
             }
 
+            // Ensure we have a call ID (fallback)
             if (!this.currentCallId) {
                 this.currentCallId = new Date().toISOString().replace(/[:.]/g, '-');
             }
 
-            const filename = `llm-call-${this.currentCallId}.log`;
-            const filepath = join(this.debugDir, filename);
-            
-            // Truncate system messages before logging
-            const truncatedData = this.truncateObject(data);
-            
-            const entry = `\n=== ${type} ${new Date().toISOString()} ===\n` +
-                         JSON.stringify(truncatedData, null, 2) + '\n';
+            const filename = `llm-${this.currentCallId}.log`;
+            const filepath = join(this.logsDir, filename);
 
-            // Ensure directory exists
-            await mkdir(this.debugDir, { recursive: true });
+            // Ensure logs directory exists
+            await mkdir(this.logsDir, { recursive: true });
 
-            // Append to file
-            await writeFile(
-                filepath, 
-                entry,
-                { flag: 'a' }  // Append mode
-            );
+            // Format the log entry
+            const logEntry = {
+                timestamp: new Date().toISOString(),
+                content: {
+                    ...data,
+                    content: data.role === 'system' ? this.trimSystemMessage(data.content) : data.content
+                }
+            };
 
-            // Reset call ID after chat response (end of chain)
-            if (type === 'CHAT_RESPONSE') {
+            const entry = JSON.stringify(logEntry, null, 2) + '\n';
+            await writeFile(filepath, entry, { flag: 'a' });
+
+            // Only reset conversation at the end of a chat response
+            if (data.role === 'assistant' && data.content.includes('</citations>')) {
                 this.currentCallId = null;
+                this.lastLoggedHash = null;
             }
-
         } catch (error) {
-            console.error('Failed to log LLM call:', error);
+            console.error('Failed to log LLM interaction:', error);
         }
     }
 
     debug(message: string, ...args: any[]): void {
         if (this.shouldLog(LogLevel.DEBUG)) {
-            // Check if this is an LLM-related message
-            const isLLMMessage = 
-                message.includes('LLM') || 
-                message.includes('Request messages') || 
-                message.includes('Finding relevant DOADs') ||
-                message.includes('Chat agent');
-
-            if (isLLMMessage) {
-                // Log to file only
-                if (message.includes('Finding relevant DOADs')) {
-                    this.logLLMCall(args[0], 'USER_REQUEST');
-                } else if (message.includes('Request messages')) {
-                    const agentType = message.includes('Chat agent') ? 'CHAT_REQUEST' : 'FINDER_REQUEST';
-                    this.logLLMCall(args[0], agentType);
-                } else if (message.includes('LLM response received')) {
-                    const agentType = message.includes('Chat agent') ? 'CHAT_RESPONSE' : 'FINDER_RESPONSE';
-                    this.logLLMCall(args[0], agentType);
-                }
-                return; // Skip console logging for LLM messages
-            }
-
-            // Console logging for non-LLM messages
-            const formattedArgs = args.map(arg => {
-                if (message.includes('Rate limit info')) {
-                    return this.formatRateLimitInfo(arg);
-                }
-                return typeof arg === 'object' ? this.truncateObject(arg) : arg;
-            });
-            console.debug(this.formatMessage('DEBUG', message), ...formattedArgs);
+            // Console logging for all debug messages
+            console.debug(this.formatMessage('DEBUG', message), ...args);
         }
     }
 
@@ -209,6 +141,15 @@ class Logger {
                     this.debug(message);
                 }
         }
+    }
+
+    private formatMessage(level: string, message: string): string {
+        const timestamp = new Date().toISOString();
+        return `[${timestamp.split('.')[0]}Z] ${level}: ${message}`;
+    }
+
+    private shouldLog(level: LogLevel): boolean {
+        return level >= this.currentLevel;
     }
 }
 

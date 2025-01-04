@@ -58,10 +58,13 @@ export function createDOADChat(llm = llmGateway): DOADChat {
 
                 const response = await llm.query(request);
                 
-                logger.debug('LLM response received:', {
+                logger.logLLMInteraction({
+                    role: 'assistant',
                     content: response.content,
-                    model: response.model,
-                    usage: response.usage
+                    metadata: {
+                        model: response.model,
+                        usage: response.usage
+                    }
                 });
                 
                 if (req) {

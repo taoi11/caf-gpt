@@ -60,9 +60,13 @@ class LLMGateway {
                 await costTracker.trackUsage(result.usage);
             }
 
-            logger.debug('Received response from OpenRouter', {
-                model: llmResponse.model,
-                usage: llmResponse.usage
+            logger.logLLMInteraction({
+                role: 'assistant',
+                content: llmResponse.content,
+                metadata: {
+                    model: llmResponse.model,
+                    usage: llmResponse.usage
+                }
             });
 
             return llmResponse;

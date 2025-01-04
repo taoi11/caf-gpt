@@ -40,9 +40,9 @@ export interface LLMResponse {
     content: string;
     model: string;
     usage?: {
-        promptTokens: number;
-        completionTokens: number;
-        totalTokens: number;
+        prompt_tokens: number;
+        completion_tokens: number;
+        total_tokens: number;
     };
 }
 
@@ -89,4 +89,20 @@ export interface PaceNoteResponse {
     content: string;
     timestamp: string;
     rank: string;
+}
+
+// Types for LLM logging
+export type LLMInteractionData = {
+    role: 'system' | 'user' | 'assistant'
+    content: string
+    metadata?: {
+        model?: string
+        usage?: {
+            prompt_tokens?: number
+            completion_tokens?: number
+            total_tokens?: number
+        }
+        timestamp?: string
+        conversationId?: string
+    }
 } 

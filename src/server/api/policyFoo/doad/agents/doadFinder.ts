@@ -44,16 +44,26 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
                     temperature: 0.1
                 };
 
-                // Log request messages for file logging
-                logger.debug('Finder agent request:', {
-                    messageCount: request.messages.length,
-                    hasSystemPrompt: !!systemPrompt
+                // Replace user request logging
+                logger.logLLMInteraction({
+                    role: 'user',
+                    content: message,
+                    metadata: {
+                        timestamp: new Date().toISOString()
+                    }
                 });
 
                 const response = await llm.query(request);
                 
-                // Log LLM response for file logging
-                logger.debug('Finder agent LLM response received:', response);
+                // Replace LLM response logging
+                logger.logLLMInteraction({
+                    role: 'assistant',
+                    content: response.content,
+                    metadata: {
+                        model: MODELS.doad.finder,
+                        usage: response.usage
+                    }
+                });
                 
                 const content = response.content.trim();
                 

@@ -136,14 +136,14 @@ class CostTracker {
         if (!usage) return;
 
         // Estimate cost based on token usage (simplified calculation)
-        const cost = (usage.promptTokens + usage.completionTokens) * 0.000001; // $0.001 per 1K tokens
+        const cost = (usage.prompt_tokens + usage.completion_tokens) * 0.000001; // $0.001 per 1K tokens
         
         this.data.apiCosts += cost;
         this.data.lastUpdated = new Date().toISOString();
         await this.saveData();
         
         logger.debug('Usage tracked:', {
-            tokens: usage.totalTokens,
+            tokens: usage.total_tokens,
             cost: cost.toFixed(6),
             totalApiCost: this.data.apiCosts.toFixed(6)
         });

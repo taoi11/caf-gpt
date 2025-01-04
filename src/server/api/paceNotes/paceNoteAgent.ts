@@ -37,6 +37,14 @@ class PaceNoteAgent {
             this.systemPrompt = promptContent;
             this.examples = examplesContent;
 
+            logger.logLLMInteraction({
+                role: 'system',
+                content: this.systemPrompt,
+                metadata: {
+                    timestamp: new Date().toISOString()
+                }
+            });
+
             logger.info('System prompt and examples loaded successfully');
         } catch (error) {
             logger.error('Failed to load prompt files:', error);
@@ -96,6 +104,15 @@ class PaceNoteAgent {
             systemPrompt: filledPrompt,
             model: MODELS.paceNote,
             temperature: 0.7
+        });
+
+        logger.logLLMInteraction({
+            role: 'assistant',
+            content: response.content,
+            metadata: {
+                model: MODELS.paceNote,
+                usage: response.usage
+            }
         });
 
         logger.debug('LLM response received, preparing response');
