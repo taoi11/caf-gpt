@@ -82,27 +82,41 @@ class CostTracker {
 
     private async fetchGenerationCost(genId: string): Promise<number> {
         try {
+            // Add required OpenRouter headers
             const response = await fetch(`https://openrouter.ai/api/v1/generation?id=${genId}`, {
                 headers: {
-                    'Authorization': `Bearer ${OPENROUTER_API_KEY}`
+                    'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+                    'HTTP-Referer': 'https://caf-gpt.com',
+                    'X-Title': 'CAF-GPT'
                 }
             });
 
             if (!response.ok) {
-                throw new Error(`Failed to fetch generation cost: ${response.statusText}`);
+                // Enhanced error logging
+                const errorBody = await response.text();
+                logger.error('Cost API Error:', {
+                    status: response.status,
+                    statusText: response.statusText,
+                    genId,
+                    error: errorBody
+                });
+                throw new Error(`Failed to fetch generation cost: ${response.status} ${response.statusText}`);
             }
 
             const data = await response.json();
             return data.data.total_cost || 0;
         } catch (error) {
-            logger.error('Error fetching generation cost:', error);
+            logger.error('Error fetching generation cost:', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+                genId
+            });
             return 0;
         }
     }
 
     public async trackRequest(genId: string): Promise<void> {
-        // Wait 250ms before fetching cost
-        await new Promise(resolve => setTimeout(resolve, 250));
+        // Wait 1 second before fetching cost to ensure generation is complete
+        await new Promise(resolve => setTimeout(resolve, 1000));
 
         const cost = await this.fetchGenerationCost(genId);
         if (cost > 0) {
