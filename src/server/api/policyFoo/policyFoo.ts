@@ -106,7 +106,9 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
                 };
 
             } catch (error) {
-                logger.error('PolicyRouter error:', error);
+                logger.error('PolicyRouter error', {
+                    error: error instanceof Error ? error.message : String(error)
+                });
                 return {
                     success: false,
                     error: 'Internal server error'

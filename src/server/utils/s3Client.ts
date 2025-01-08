@@ -46,7 +46,11 @@ export const s3Utils = {
                 policyGroup: group
             };
         } catch (error) {
-            logger.error(`Failed to fetch document ${docId} from group ${group}:`, error);
+            logger.error('Failed to fetch document', {
+                docId,
+                group,
+                error: error instanceof Error ? error.message : String(error)
+            });
             throw error;
         }
     },
@@ -68,7 +72,10 @@ export const s3Utils = {
 
             return content;
         } catch (error) {
-            logger.error(`Failed to get content from ${path}:`, error);
+            logger.error('Failed to get content', {
+                path,
+                error: error instanceof Error ? error.message : String(error)
+            });
             throw error;
         }
     }

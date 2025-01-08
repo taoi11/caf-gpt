@@ -20,6 +20,10 @@ interface LogEntry {
     };
 }
 
+interface LogMetadata {
+    [key: string]: any;
+}
+
 class Logger {
     private readonly currentLevel: LogLevel;
     private llmRequests: Map<string, number> = new Map(); // Track request start times
@@ -109,32 +113,27 @@ class Logger {
         }
     }
 
-    debug(message: string, metadata?: Record<string, any>): void {
+    debug(message: string, metadata?: LogMetadata): void {
         if (!this.shouldLog(LogLevel.DEBUG)) return;
         const entry = this.createLogEntry(LogLevel.DEBUG, message, metadata);
         console.debug(this.formatMessage(entry));
     }
 
-    info(message: string, metadata?: Record<string, any>): void {
+    info(message: string, metadata?: LogMetadata): void {
         if (!this.shouldLog(LogLevel.INFO)) return;
         const entry = this.createLogEntry(LogLevel.INFO, message, metadata);
         console.info(this.formatMessage(entry));
     }
 
-    warn(message: string, metadata?: Record<string, any>): void {
+    warn(message: string, metadata?: LogMetadata): void {
         if (!this.shouldLog(LogLevel.WARN)) return;
         const entry = this.createLogEntry(LogLevel.WARN, message, metadata);
         console.warn(this.formatMessage(entry));
     }
 
-    error(error: Error | string, message?: string, metadata?: Record<string, any>): void {
+    error(message: string, metadata?: LogMetadata): void {
         if (!this.shouldLog(LogLevel.ERROR)) return;
-        const errorMessage = error instanceof Error ? error.message : error;
-        const finalMessage = message ? `${errorMessage}: ${message}` : errorMessage;
-        const entry = this.createLogEntry(LogLevel.ERROR, finalMessage, {
-            ...metadata,
-            stack: error instanceof Error ? error.stack : undefined
-        });
+        const entry = this.createLogEntry(LogLevel.ERROR, message, metadata);
         console.error(this.formatMessage(entry));
     }
 
@@ -151,7 +150,7 @@ class Logger {
         
         switch (level) {
             case LogLevel.ERROR:
-                this.error(message, undefined, metadata);
+                this.error(message, metadata);
                 break;
             case LogLevel.WARN:
                 this.warn(message, metadata);

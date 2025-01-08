@@ -25,8 +25,8 @@ class PaceNoteAgent {
     // Initialize by loading the prompt files (read-only)
     private async initializePrompts(): Promise<void> {
         try {
-            logger.debug('Loading system prompt from:', this.promptPath);
-            logger.debug('Loading examples from:', this.examplesPath);
+            logger.debug('Loading system prompt', { path: this.promptPath });
+            logger.debug('Loading examples', { path: this.examplesPath });
 
             // Read both files concurrently
             const [promptContent, examplesContent] = await Promise.all([
@@ -47,7 +47,9 @@ class PaceNoteAgent {
 
             logger.info('System prompt and examples loaded successfully');
         } catch (error) {
-            logger.error('Failed to load prompt files:', error);
+            logger.error('Failed to initialize prompts', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             throw new Error('Failed to load prompt files');
         }
     }
@@ -55,7 +57,7 @@ class PaceNoteAgent {
     // Read competencies from S3 (read-only)
     private async readCompetencies(path: string = 'paceNote/cpl_mcpl.md'): Promise<string> {
         try {
-            logger.debug('Reading competencies from S3:', path);
+            logger.debug('Reading competencies', { path, source: 'S3' });
             const response = await s3Client.send(new GetObjectCommand({
                 Bucket: process.env.S3_BUCKET_NAME,
                 Key: path,
@@ -69,7 +71,10 @@ class PaceNoteAgent {
             logger.debug('Competencies loaded successfully');
             return competencies;
         } catch (error) {
-            logger.error('Failed to read competencies:', error);
+            logger.error('Failed to read competencies', {
+                path,
+                error: error instanceof Error ? error.message : String(error)
+            });
             throw new Error('Failed to read competencies list');
         }
     }

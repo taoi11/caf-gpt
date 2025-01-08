@@ -29,7 +29,9 @@ class CostTracker {
             await this.loadData();
             await this.checkMonthlyReset();
         } catch (error) {
-            logger.error('Failed to initialize storage:', error);
+            logger.error('Failed to initialize storage', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             throw error;
         }
     }
@@ -64,7 +66,9 @@ class CostTracker {
                 logger.info('No existing cost data found, starting fresh');
                 await this.saveData();
             } else {
-                logger.error('Error loading cost data:', error);
+                logger.error('Error loading cost data', {
+                    error: error instanceof Error ? error.message : String(error)
+                });
                 throw error;
             }
         }
@@ -75,7 +79,9 @@ class CostTracker {
             await writeFile(COST_FILE, JSON.stringify(this.data, null, 2));
             logger.debug('Cost data saved successfully');
         } catch (error) {
-            logger.error('Failed to save cost data:', error);
+            logger.error('Failed to save cost data', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             throw error;
         }
     }
@@ -94,7 +100,7 @@ class CostTracker {
             if (!response.ok) {
                 // Enhanced error logging
                 const errorBody = await response.text();
-                logger.error('Cost API Error:', {
+                logger.error('Cost API Error', {
                     status: response.status,
                     statusText: response.statusText,
                     genId,
@@ -106,8 +112,8 @@ class CostTracker {
             const data = await response.json();
             return data.data.total_cost || 0;
         } catch (error) {
-            logger.error('Error fetching generation cost:', {
-                error: error instanceof Error ? error.message : 'Unknown error',
+            logger.error('Error fetching generation cost', {
+                error: error instanceof Error ? error.message : String(error),
                 genId
             });
             return 0;

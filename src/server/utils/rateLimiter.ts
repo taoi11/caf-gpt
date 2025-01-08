@@ -75,7 +75,9 @@ class RateLimiter {
                 
             return `${normalizedIP}/${prefix}`;
         } catch (error) {
-            logger.error('CIDR normalization failed:', error instanceof Error ? error.message : String(error));
+            logger.error('CIDR normalization failed', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             return cidr;
         }
     }
@@ -90,7 +92,9 @@ class RateLimiter {
             
             return (ipNum & mask) === (rangeNum & mask);
         } catch (error) {
-            logger.error('CIDR check failed:', error instanceof Error ? error.message : String(error));
+            logger.error('CIDR check failed', {
+                error: error instanceof Error ? error.message : String(error)
+            });
             return false;
         }
     }

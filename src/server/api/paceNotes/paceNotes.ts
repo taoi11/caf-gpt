@@ -63,7 +63,10 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         logger.logRequest(method, url, 200);
     } catch (error) {
         const err = error instanceof Error ? error : new Error('Unknown error');
-        logger.error(err, 'Pace Note generation error');
+        logger.error('Pace Note generation error', {
+            error: err.message,
+            stack: err.stack
+        });
         res.writeHead(500, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: false,

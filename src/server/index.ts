@@ -50,7 +50,10 @@ const server = createServer(async (req, res) => {
                 logger.logRequest(method, url, 200);
             } catch (error) {
                 const err = error instanceof Error ? error : new Error('Unknown error');
-                logger.error(err, 'Policy request error');
+                logger.error('Policy request error', {
+                    error: err.message,
+                    stack: err.stack
+                });
                 res.writeHead(500, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify({ 
                     success: false, 
@@ -98,7 +101,10 @@ const server = createServer(async (req, res) => {
             return;
         } catch (error) {
             const err = error instanceof Error ? error : new Error('Unknown error');
-            logger.error(err, 'Error fetching costs');
+            logger.error('Error fetching costs', {
+                error: err.message,
+                stack: err.stack
+            });
             res.writeHead(500, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({ error: 'Failed to fetch costs' }));
             logger.logRequest(method, url, 500);
@@ -129,7 +135,9 @@ const server = createServer(async (req, res) => {
         logger.logRequest(method, url, 200);
     } catch (error) {
         const err = error instanceof Error ? error : new Error('Unknown error');
-        logger.error(err, `Error serving ${url}`, {
+        logger.error('Error serving file', {
+            error: err.message,
+            stack: err.stack,
             path: url,
             method,
             errorName: err.name

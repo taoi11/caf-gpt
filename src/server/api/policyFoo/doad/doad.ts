@@ -67,9 +67,11 @@ export const baseDOADImplementation: DOADImplementation = {
     },
 
     logAgentError(type: 'finder' | 'chat', error: Error, metadata?: Record<string, any>) {
-        logger.error(error, `Error in DOAD ${type}`, {
-            ...metadata,
+        logger.error(`Error in DOAD ${type}`, {
+            error: error.message,
+            stack: error.stack,
             agent: type,
+            ...metadata,
             timestamp: new Date().toISOString()
         });
     }

@@ -95,7 +95,9 @@ class LLMGateway {
 
         } catch (error) {
             const err = error instanceof Error ? error : new Error('Unknown error');
-            logger.error(err, 'LLM request failed', {
+            logger.error('LLM request failed', {
+                error: err.message,
+                stack: err.stack,
                 model: request.model || LLM_MODEL,
                 messageCount: request.messages.length,
                 temperature: request.temperature || DEFAULT_TEMPERATURE
