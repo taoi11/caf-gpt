@@ -1,4 +1,4 @@
-import { IS_DEV } from './config';
+import { IS_DEV } from './config.js';
 import type { LLMInteractionData, Message, SystemMessage } from './types';
 import { randomUUID } from 'crypto';
 

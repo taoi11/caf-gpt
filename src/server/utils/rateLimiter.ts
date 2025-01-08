@@ -1,6 +1,6 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { logger } from './logger';
-import { IS_DEV, RATE_LIMITS } from './config';
+import { logger } from './logger.js';
+import { IS_DEV, RATE_LIMITS } from './config.js';
 import type { RateLimit, RateWindow } from './types';
 
 // Constants
