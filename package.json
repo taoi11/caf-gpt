@@ -12,14 +12,21 @@
     "build:server:prod": "tsc -p tsconfig.server.json --removeComments",
     "build:client": "esbuild src/client/*.ts --bundle --outdir=public/js --sourcemap --format=esm",
     "build:client:prod": "esbuild src/client/*.ts --bundle --outdir=public/js --minify --format=esm",
-    "clean": "rm -rf dist public/js && mkdir -p dist public/js"
+    "clean": "rm -rf dist public/js && mkdir -p dist public/js",
+    "test": "jest --config jest.config.ts",
+    "test:watch": "jest --config jest.config.ts --watch"
   },
   "author": "",
   "license": "AGPL-3.0",
   "devDependencies": {
+    "@types/http-server": "^0.12.4",
+    "@types/jest": "^29.5.14",
     "@types/node": "^20.4.5",
     "concurrently": "^8.2.2",
     "esbuild": "^0.19.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.5",
+    "ts-node": "^10.9.2",
     "tsx": "^4.7.0",
     "typescript": "^5.1.6"
   },

@@ -1,7 +1,7 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { logger } from './logger.js';
-import { IS_DEV, RATE_LIMITS } from './config.js';
-import type { RateLimit, RateWindow } from './types.js';
+import { logger } from './logger';
+import { IS_DEV, RATE_LIMITS } from './config';
+import type { RateLimit, RateWindow } from './types';
 
 // Constants
 const HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -11,9 +11,10 @@ const MAX_IPS = 10000; // Maximum number of IPs to track
 class RateLimiter {
     private readonly limits: Map<string, RateLimit> = new Map();
     private readonly ipv6Limits: Map<string, RateLimit> = new Map(); // Separate IPv6 tracking
+    private cleanupInterval?: NodeJS.Timeout;
 
     constructor() {
-        setInterval(() => this.cleanupOldEntries(), RATE_LIMITS.CLEANUP_INTERVAL);
+        this.cleanupInterval = setInterval(() => this.cleanupOldEntries(), RATE_LIMITS.CLEANUP_INTERVAL);
     }
 
     private cleanupOldEntries(): void {
@@ -40,17 +41,63 @@ class RateLimiter {
         cleanupMap(this.ipv6Limits);
     }
 
+    // CIDR validation methods
+    private validateCIDR(cidr: string): boolean {
+        try {
+            const [ip, prefix] = cidr.split('/');
+            const prefixNum = parseInt(prefix, 10);
+            
+            if (prefixNum < 0 || prefixNum > 32) return false;
+            
+            const octets = ip.split('.');
+            if (octets.length !== 4) return false;
+            
+            return octets.every(octet => {
+                const num = parseInt(octet, 10);
+                return !isNaN(num) && num >= 0 && num <= 255;
+            });
+        } catch {
+            return false;
+        }
+    }
+
+    private normalizeCIDR(cidr: string): string {
+        if (!this.validateCIDR(cidr)) {
+            logger.error(`Invalid CIDR notation: ${cidr}`);
+            return cidr; // Return original to avoid breaking functionality
+        }
+        
+        try {
+            const [ip, prefix] = cidr.split('/');
+            const normalizedIP = ip.split('.')
+                .map(octet => parseInt(octet, 10))
+                .join('.');
+                
+            return `${normalizedIP}/${prefix}`;
+        } catch (error) {
+            logger.error('CIDR normalization failed:', error instanceof Error ? error.message : String(error));
+            return cidr;
+        }
+    }
+
     private isIPInCIDR(ip: string, cidr: string): boolean {
-        const [range, bits] = cidr.split('/');
-        const mask = ~(2 ** (32 - parseInt(bits)) - 1);
-        
-        const ipParts = ip.split('.').map(Number);
-        const rangeParts = range.split('.').map(Number);
-        
-        const ipNum = (ipParts[0] << 24) + (ipParts[1] << 16) + (ipParts[2] << 8) + ipParts[3];
-        const rangeNum = (rangeParts[0] << 24) + (rangeParts[1] << 16) + (rangeParts[2] << 8) + rangeParts[3];
-        
-        return (ipNum & mask) === (rangeNum & mask);
+        try {
+            const [range, bits] = cidr.split('/');
+            const mask = ~(2 ** (32 - parseInt(bits)) - 1);
+            
+            const ipNum = this.ipToInt(ip);
+            const rangeNum = this.ipToInt(range);
+            
+            return (ipNum & mask) === (rangeNum & mask);
+        } catch (error) {
+            logger.error('CIDR check failed:', error instanceof Error ? error.message : String(error));
+            return false;
+        }
+    }
+
+    private ipToInt(ip: string): number {
+        const parts = ip.split('.').map(part => parseInt(part, 10));
+        return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
     }
 
     // Normalize IPv4 address to standard format
@@ -85,16 +132,16 @@ class RateLimiter {
         return normalized;
     }
 
-    // Improved whitelist check
+    // Update isWhitelisted to use new CIDR methods
     private isWhitelisted(ip: string): boolean {
-        // Only process IPv4 addresses for whitelist
         if (ip.includes(':')) {
             return false;
         }
 
-        return RATE_LIMITS.WHITELISTED_CIDRS.some(cidr => 
-            this.isIPInCIDR(ip, cidr)
-        );
+        return RATE_LIMITS.WHITELISTED_CIDRS.some(cidr => {
+            const normalizedCIDR = this.normalizeCIDR(cidr);
+            return this.isIPInCIDR(ip, normalizedCIDR);
+        });
     }
 
     private checkWindow(window: RateWindow, now: number, limit: number, size: number): boolean {
@@ -152,13 +199,10 @@ class RateLimiter {
         const rawIP = req.socket.remoteAddress || '0.0.0.0';
         const ip = this.normalizeIP(rawIP);
         
-        if (this.isWhitelisted(ip)) {
-            logger.debug(`IP ${ip} is whitelisted, skipping rate limit tracking`);
-            return;
-        }
+        if (this.isWhitelisted(ip)) return;
 
         const now = Date.now();
-        const limitsMap = this.limits; // Always use IPv4 map after normalization
+        const limitsMap = ip.includes(':') ? this.ipv6Limits : this.limits;
         let limit = limitsMap.get(ip);
 
         if (!limit) {
@@ -168,24 +212,15 @@ class RateLimiter {
                 daily: { count: 1, timestamp: now }
             };
             limitsMap.set(ip, limit);
-            logger.debug(`New rate limit created for IP ${ip}:`, limit);
             return;
         }
 
         this.incrementWindow(limit.hourly, now, HOUR);
         this.incrementWindow(limit.daily, now, DAY);
-        limitsMap.set(ip, limit);
-        
-        logger.debug(`Updated rate limit for IP ${ip}:`, {
-            hourly: { count: limit.hourly.count, timestamp: limit.hourly.timestamp },
-            daily: { count: limit.daily.count, timestamp: limit.daily.timestamp }
-        });
     }
 
-    // Helper to increment window counts
     private incrementWindow(window: RateWindow, now: number, size: number): void {
         const timeDiff = now - window.timestamp;
-        
         if (timeDiff >= size) {
             window.count = 1;
             window.timestamp = now;
@@ -208,18 +243,11 @@ class RateLimiter {
         daily: { remaining: number; resetIn: number };
     } {
         const normalizedIP = this.normalizeIP(ip);
-        const limitsMap = this.limits; // Always use IPv4 map after normalization
+        const limitsMap = normalizedIP.includes(':') ? this.ipv6Limits : this.limits;
         const limit = limitsMap.get(normalizedIP);
         const now = Date.now();
 
         if (!limit) {
-            logger.debug(`No existing rate limit for IP ${normalizedIP}, creating new one`);
-            const newLimit = {
-                ip: normalizedIP,
-                hourly: { count: 0, timestamp: now },
-                daily: { count: 0, timestamp: now }
-            };
-            limitsMap.set(normalizedIP, newLimit);
             return {
                 hourly: { remaining: RATE_LIMITS.HOURLY_LIMIT, resetIn: HOUR },
                 daily: { remaining: RATE_LIMITS.DAILY_LIMIT, resetIn: DAY }
@@ -228,43 +256,29 @@ class RateLimiter {
 
         const getWindowInfo = (window: RateWindow, limit: number, size: number) => {
             const timeDiff = now - window.timestamp;
-            const remainingRatio = (size - timeDiff) / size;
-            const adjustedCount = Math.ceil(window.count * remainingRatio);
-            
             return {
-                remaining: Math.max(0, limit - adjustedCount),
+                remaining: Math.max(0, limit - window.count),
                 resetIn: Math.max(0, size - timeDiff)
             };
         };
 
-        const info = {
+        return {
             hourly: getWindowInfo(limit.hourly, RATE_LIMITS.HOURLY_LIMIT, HOUR),
             daily: getWindowInfo(limit.daily, RATE_LIMITS.DAILY_LIMIT, DAY)
         };
-
-        logger.debug(`Rate limit info for IP ${normalizedIP}:`, {
-            current: {
-                hourly: { count: limit.hourly.count, timestamp: limit.hourly.timestamp },
-                daily: { count: limit.daily.count, timestamp: limit.daily.timestamp }
-            },
-            calculated: info
-        });
-
-        return info;
     }
 
     public checkLimit(ip: string): boolean {
         const normalizedIP = this.normalizeIP(ip);
-        const limitsMap = this.limits; // Always use IPv4 map after normalization
+        const limitsMap = normalizedIP.includes(':') ? this.ipv6Limits : this.limits;
         const limit = limitsMap.get(normalizedIP);
         const now = Date.now();
 
         if (!limit) {
-            logger.debug(`No existing rate limit for IP ${normalizedIP}, creating new one`);
             const newLimit = {
                 ip: normalizedIP,
-                hourly: { count: 0, timestamp: now }, // Start at 0 instead of 1
-                daily: { count: 0, timestamp: now }   // Start at 0 instead of 1
+                hourly: { count: 0, timestamp: now },
+                daily: { count: 0, timestamp: now }
             };
             limitsMap.set(normalizedIP, newLimit);
             return true;
@@ -275,6 +289,13 @@ class RateLimiter {
         const dailyOk = this.checkWindow(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
 
         return hourlyOk && dailyOk;
+    }
+
+    public stopCleanup(): void {
+        if (this.cleanupInterval) {
+            clearInterval(this.cleanupInterval);
+            this.cleanupInterval = undefined;
+        }
     }
 }
 

@@ -12,6 +12,7 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
 - Use read-only data access patterns
 - Direct environment variable usage
 - Simplified configurations
+- Robust testing with clean async handling
 
 ## Technology Stack
 - Node.js for server-side logic
@@ -19,6 +20,10 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
   - Separate client and server builds
   - ES modules for modern import/export
   - Strict type checking enabled
+- Jest for testing
+  - ESM-compatible configuration
+  - Proper async cleanup
+  - High test coverage targets
 - Custom CSS for styling
   - Slim navigation design
   - Modern UI components
@@ -40,6 +45,9 @@ cap-gpt/
 │   ├── policyFoo.md            # Policy tool base documentation
 │   └── doadFoo.md             # DOAD policy tool documentation
 src/
+├── tests/                      # Test files
+│   └── utils/                  # Utility tests
+│       └── rateLimiter.test.ts # Rate limiter tests
 ├── prompts/
 │   ├── paceNote/
 │   │   └── paceNote.md    # Pace Notes prompt
@@ -81,8 +89,11 @@ src/
 │   │   └── policyFoo.css      # Policy tool styles
 │   └── js/                    # Compiled client JavaScript
 ├── dist/                      # Compiled server code
+├── coverage/                  # Test coverage reports (gitignored)
 ├── .env.example               # Environment variables template
 ├── Dockerfile                # Docker configuration
+├── .gitignore                # Git ignore patterns
+├── .dockerignore             # Docker ignore patterns
 ├── package.json              # Project configuration
 ├── tsconfig.client.json      # Client TypeScript config
 └── tsconfig.server.json      # Server TypeScript config
@@ -124,6 +135,7 @@ Available scripts:
 - `npm run dev`: Development mode
 - `npm run build`: Production build
 - `npm run clean`: Reset build
+- `npm test`: Run tests with coverage
 
 ## Recent Changes
 - **Type Restructuring**: 

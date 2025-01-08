@@ -1,5 +1,5 @@
-import { IS_DEV } from './config.js';
-import type { LLMInteractionData, Message, SystemMessage } from './types.js';
+import { IS_DEV } from './config';
+import type { LLMInteractionData, Message, SystemMessage } from './types';
 import { randomUUID } from 'crypto';
 
 // Log levels in order of verbosity

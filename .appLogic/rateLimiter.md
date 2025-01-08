@@ -17,6 +17,13 @@ Located in: `src/server/api/utils/rateLimiter.ts`
   - Hourly: 10 requests/hour
   - Daily: 30 requests/day
 
+### Recent Changes
+- Added proper cleanup interval management
+- Improved IPv6 handling with separate tracking
+- Enhanced test coverage for all core features
+- Added memory management tests
+- Fixed async cleanup issues in tests
+
 ### Key Components
 - IP Validation
   - IPv4 normalization

@@ -42,5 +42,6 @@ export const RATE_LIMITS = {
     ],
     HOURLY_LIMIT: IS_DEV ? 100 : 10,    // Higher limit for development
     DAILY_LIMIT: IS_DEV ? 300 : 30,     // Higher limit for development
-    CLEANUP_INTERVAL: 15 * 60 * 1000  // 15 minutes in milliseconds
+    CLEANUP_INTERVAL: 15 * 60 * 1000,    // 15 minutes in milliseconds
+    MAX_IPS: 10000                       // Maximum number of IPs to track
 } as const; 

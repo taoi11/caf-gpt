@@ -16,3 +16,6 @@ data/
 # Development files
 .aider*
 .cursor/
+
+# Coverage reports
+coverage/

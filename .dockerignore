@@ -1,17 +1,17 @@
 # Node
 node_modules/
 dist/
-
+public/js/
+coverage/
 
 # TypeScript
 *.tsbuildinfo
-public/js/
 
 # Docker
 docker-compose.yml
 
 # Project files
-.appLogic
+.git/
 .env
-data/
-fly.toml
+*.log
+.appLogic/
