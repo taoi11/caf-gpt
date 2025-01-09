@@ -170,7 +170,16 @@ class RateLimiter {
 
     public canMakeRequest(req: IncomingMessage): boolean {
         const rawIP = req.socket.remoteAddress || '0.0.0.0';
+        logger.debug(`Raw IP from socket: ${rawIP}`);
+        
+        // Try alternative IP sources
+        const forwardedFor = req.headers['x-forwarded-for'];
+        const realIP = req.headers['x-real-ip'];
+        logger.debug(`X-Forwarded-For: ${forwardedFor}`);
+        logger.debug(`X-Real-IP: ${realIP}`);
+        
         const ip = this.normalizeIP(rawIP);
+        logger.debug(`Normalized IP: ${ip}`);
         
         if (this.isWhitelisted(ip)) return true;
 
