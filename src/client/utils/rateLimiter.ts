@@ -13,42 +13,10 @@ interface RateLimitInfo {
 export class RateLimitDisplay {
     private readonly hourlyElement: HTMLElement;
     private readonly dailyElement: HTMLElement;
-    private isIPv6: boolean = false;
 
     constructor() {
         this.hourlyElement = document.querySelector('.hourly-remaining')!;
         this.dailyElement = document.querySelector('.daily-remaining')!;
-    }
-
-    private async checkIPVersion(): Promise<void> {
-        try {
-            const response = await fetch('/api/ratelimit/ip-info');
-            const data = await response.json();
-            this.isIPv6 = data.isIPv6;
-            this.updateIPVersionDisplay();
-        } catch (error) {
-            console.error('Failed to check IP version:', error);
-        }
-    }
-
-    private updateIPVersionDisplay(): void {
-        const container = this.hourlyElement.closest('.info-box');
-        if (container) {
-            container.classList.toggle('ipv6', this.isIPv6);
-            container.setAttribute('title', `Using ${this.isIPv6 ? 'IPv6' : 'IPv4'} rate limits`);
-        }
-    }
-
-    private formatTime(ms: number): string {
-        if (ms < 60000) { // Less than a minute
-            return 'soon';
-        }
-        const minutes = Math.floor(ms / 60000);
-        const hours = Math.floor(minutes / 60);
-        if (hours > 0) {
-            return `${hours}h ${minutes % 60}m`;
-        }
-        return `${minutes}m`;
     }
 
     private formatLimit(info: { remaining: number; resetIn: number }): string {
@@ -62,7 +30,7 @@ export class RateLimitDisplay {
             
             console.info('Rate limit update:', data);
             
-            // Update displays with just the remaining counts
+            // Update displays with remaining counts
             this.hourlyElement.textContent = this.formatLimit({
                 remaining: Math.max(0, data.hourly.remaining),
                 resetIn: data.hourly.resetIn
@@ -85,15 +53,9 @@ export class RateLimitDisplay {
         }
     }
 
-    // Update initializeDisplay to remove the interval
     public async initializeDisplay(): Promise<void> {
         try {
-            // Check IP version and update limits only once at startup
-            await this.checkIPVersion();
             await this.updateLimits();
-            
-            // Remove the interval setup
-            // setInterval(() => this.updateLimits(), this.updateInterval);
         } catch (error) {
             console.error('Failed to initialize rate limit display:', error);
         }

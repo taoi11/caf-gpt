@@ -18,27 +18,21 @@ class RateLimiter {
     }
 
     private cleanupOldEntries(): void {
-        const now = Date.now(); // Use milliseconds directly
+        const now = Date.now();
+        const entries = Array.from(this.limits.entries());
         
-        // Helper to cleanup a map
-        const cleanupMap = (map: Map<string, RateLimit>) => {
-            const entries = Array.from(map.entries());
-            // Sort by timestamp (newest first) and keep only MAX_IPS entries
-            entries.sort((a, b) => b[1].hourly.timestamp - a[1].hourly.timestamp);
+        // Sort by timestamp (newest first) and keep only MAX_IPS entries
+        entries.sort((a, b) => b[1].hourly.timestamp - a[1].hourly.timestamp);
+        
+        this.limits.clear();
+        entries.slice(0, MAX_IPS).forEach(([ip, limit]) => {
+            const hourlyExpired = now - limit.hourly.timestamp >= HOUR;
+            const dailyExpired = now - limit.daily.timestamp >= DAY;
             
-            map.clear();
-            entries.slice(0, MAX_IPS).forEach(([ip, limit]) => {
-                const hourlyExpired = now - limit.hourly.timestamp >= HOUR;
-                const dailyExpired = now - limit.daily.timestamp >= DAY;
-                
-                if (!hourlyExpired || !dailyExpired) {
-                    map.set(ip, limit);
-                }
-            });
-        };
-
-        cleanupMap(this.limits);
-        cleanupMap(this.ipv6Limits);
+            if (!hourlyExpired || !dailyExpired) {
+                this.limits.set(ip, limit);
+            }
+        });
     }
 
     // CIDR validation methods
@@ -197,24 +191,26 @@ class RateLimiter {
     } {
         const warnings: string[] = [];
         
-        // Check if request came through Cloudflare
-        if (!this.isCloudflareRequest(req)) {
-            warnings.push('Request missing Cloudflare headers');
-        }
-
-        // Get IP from Cloudflare header
+        // Get Cloudflare IP first
         const cfIP = this.getCloudflareIP(req);
         if (!cfIP) {
             warnings.push('Missing CF-Connecting-IP header');
-            // Log all headers in development for debugging
+            // Only log headers in development
             if (IS_DEV) {
                 logger.debug('Headers debug:', { headers: req.headers });
             }
         }
 
-        // Use Cloudflare IP or fallback
+        // In production, only trust Cloudflare headers
+        if (!IS_DEV) {
+            return { 
+                ip: cfIP || '0.0.0.0',
+                warnings 
+            };
+        }
+
+        // In development, fallback to socket address
         const ip = cfIP || req.socket.remoteAddress || '0.0.0.0';
-        
         return { ip, warnings };
     }
 
@@ -250,40 +246,35 @@ class RateLimiter {
     }
 
     public canMakeRequest(req: IncomingMessage): boolean {
-        const rawIp = this.getClientIP(req);
-        const ip = this.normalizeIP(rawIp);
-        logger.debug(`Client IP: ${ip}`);
+        const ip = this.normalizeIP(this.getClientIP(req));
+        logger.debug(`Checking rate limit for IP: ${ip}`);
         
         if (this.isWhitelisted(ip)) return true;
 
         const now = Date.now();
-        const limitsMap = this.getLimitsMap(rawIp);
-        let limit = limitsMap.get(ip);
+        let limit = this.limits.get(ip);
 
-        // Initialize limits if they don't exist
         if (!limit) {
             limit = {
                 ip,
                 hourly: { count: 0, timestamp: now },
                 daily: { count: 0, timestamp: now }
             };
-            limitsMap.set(ip, limit);
+            this.limits.set(ip, limit);
         }
 
         return this.checkWindowLimit(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR) &&
                this.checkWindowLimit(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
     }
 
-    // Track only successful API calls
     public trackSuccessfulRequest(req: IncomingMessage): void {
-        const rawIp = this.getClientIP(req);
-        const ip = this.normalizeIP(rawIp);
+        const ip = this.normalizeIP(this.getClientIP(req));
+        logger.debug(`Tracking successful request for IP: ${ip}`);
         
         if (this.isWhitelisted(ip)) return;
 
         const now = Date.now();
-        const limitsMap = this.getLimitsMap(rawIp);
-        let limit = limitsMap.get(ip);
+        let limit = this.limits.get(ip);
 
         if (!limit) {
             limit = {
@@ -291,7 +282,7 @@ class RateLimiter {
                 hourly: { count: 1, timestamp: now },
                 daily: { count: 1, timestamp: now }
             };
-            limitsMap.set(ip, limit);
+            this.limits.set(ip, limit);
             return;
         }
 

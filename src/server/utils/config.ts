@@ -34,6 +34,10 @@ export const MODELS = {
     paceNote: env.PACE_NOTE_MODEL
 } as const;
 
+// Time constants in milliseconds
+export const HOUR = 60 * 60 * 1000;
+export const DAY = 24 * HOUR;
+
 // Rate limiting configuration
 export const RATE_LIMITS = {
     WHITELISTED_CIDRS: [
@@ -41,6 +45,9 @@ export const RATE_LIMITS = {
     ],
     HOURLY_LIMIT: 10,    // 10 requests per hour
     DAILY_LIMIT: 30,     // 30 requests per day
-    CLEANUP_INTERVAL: 15 * 60 * 1000,    // 15 minutes in milliseconds
-    MAX_IPS: 10000                       // Maximum number of IPs to track
+    CLEANUP_INTERVAL: HOUR,
+    MAX_IPS: 10000,                       // Maximum number of IPs to track
+    // Time windows
+    HOUR,
+    DAY
 } as const; 
