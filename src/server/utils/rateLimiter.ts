@@ -168,18 +168,65 @@ class RateLimiter {
         return true;
     }
 
+    private isCloudflareRequest(req: IncomingMessage): boolean {
+        return !!(req.headers['cf-ray'] || req.headers['cf-worker']);
+    }
+
+    private getCloudflareIP(req: IncomingMessage): string | null {
+        const ip = req.headers['cf-connecting-ip'];
+        return typeof ip === 'string' ? ip.trim() : null;
+    }
+
+    private validateRequest(req: IncomingMessage): {
+        ip: string;
+        warnings: string[];
+    } {
+        const warnings: string[] = [];
+        
+        // Check if request came through Cloudflare
+        if (!this.isCloudflareRequest(req)) {
+            warnings.push('Request missing Cloudflare headers');
+        }
+
+        // Get IP from Cloudflare header
+        const cfIP = this.getCloudflareIP(req);
+        if (!cfIP) {
+            warnings.push('Missing CF-Connecting-IP header');
+            // Log all headers in development for debugging
+            if (IS_DEV) {
+                logger.debug('Headers debug:', { headers: req.headers });
+            }
+        }
+
+        // Use Cloudflare IP or fallback
+        const ip = cfIP || req.socket.remoteAddress || '0.0.0.0';
+        
+        return { ip, warnings };
+    }
+
+    private getClientIP(req: IncomingMessage): string {
+        const { ip, warnings } = this.validateRequest(req);
+        
+        // Log any validation warnings
+        warnings.forEach(warning => {
+            logger.warn('Cloudflare header warning', { 
+                warning,
+                ip,
+                headers: IS_DEV ? req.headers : undefined
+            });
+        });
+
+        return ip;
+    }
+
+    // Public method to get client IP
+    public getIP(req: IncomingMessage): string {
+        return this.getClientIP(req);
+    }
+
     public canMakeRequest(req: IncomingMessage): boolean {
-        const rawIP = req.socket.remoteAddress || '0.0.0.0';
-        logger.debug(`Raw IP from socket: ${rawIP}`);
-        
-        // Try alternative IP sources
-        const forwardedFor = req.headers['x-forwarded-for'];
-        const realIP = req.headers['x-real-ip'];
-        logger.debug(`X-Forwarded-For: ${forwardedFor}`);
-        logger.debug(`X-Real-IP: ${realIP}`);
-        
-        const ip = this.normalizeIP(rawIP);
-        logger.debug(`Normalized IP: ${ip}`);
+        const ip = this.getClientIP(req);
+        logger.debug(`Client IP: ${ip}`);
         
         if (this.isWhitelisted(ip)) return true;
 
@@ -209,8 +256,7 @@ class RateLimiter {
 
     // Track only successful API calls
     public trackSuccessfulRequest(req: IncomingMessage): void {
-        const rawIP = req.socket.remoteAddress || '0.0.0.0';
-        const ip = this.normalizeIP(rawIP);
+        const ip = this.getClientIP(req);
         
         if (this.isWhitelisted(ip)) return;
 
