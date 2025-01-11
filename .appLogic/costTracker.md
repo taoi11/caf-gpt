@@ -1,7 +1,7 @@
 # Cost Tracker Design
 
 ## Overview
-Simple cost tracker for the LLM API calls, storing all costs in USD.
+Simple cost tracker for the LLM API calls, storing costs in USD with file-based persistence.
 
 ## Implementation
 Located in: `src/server/api/utils/costTracker.ts`
@@ -9,11 +9,23 @@ Located in: `src/server/api/utils/costTracker.ts`
 ### Core Features
 - Tracks total cost in USD
 - Includes base monthly server cost of $15.70 USD
-- Simple accumulation of API call costs
-- No request history storage
-- No currency conversion (handled in frontend when needed)
+- File-based persistence in data/costs.json
 - Separate tracking of server and API costs
 - Monthly reset on the first day of each month
+
+### Storage Implementation
+- JSON file storage in data/costs.json
+- Structure:
+```json
+{
+    "apiCosts": number,    // USD
+    "serverCosts": number, // USD
+    "lastReset": string,   // ISO date
+    "lastUpdated": string  // ISO timestamp
+}
+```
+- Auto-creates storage file if missing
+- Maintains cost history between server restarts
 
 ### Provider Cost Logic
 - OpenRouter API costs tracked per token

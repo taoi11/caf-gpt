@@ -117,13 +117,34 @@ Direct usage of environment variables for:
   - `S3_SECRET_ACCESS_KEY`
 
 ## Frontend Architecture
-- Simple, clean interfaces
-- Slim navigation design
-- Responsive components
-- Real-time validation
-- Error handling with user feedback
+### UI State Management
+- Centralized state management per tool
+- TypeScript interfaces for type safety
+- Shared types between client/server
+- State structure:
+  ```typescript
+  interface UIState {
+    inputText: string;      // Form inputs
+    messages: Message[];    // Chat/output history
+    isProcessing: boolean;  // Loading states
+  }
+  ```
+
+### UI Components
+- Tool-specific UI classes
+- Shared rate limiter display
+- Common navigation elements
+- State persistence:
+  - Session storage for form inputs
+  - In-memory for chat history
+  - Real-time rate limit updates
+
+### Event Handling
+- Keyboard shortcuts (Ctrl+Enter)
 - Copy-to-clipboard functionality
-- Keyboard shortcuts
+- Error message display
+- Loading states
+- Rate limit warnings
 
 ## Development Setup
 - TypeScript configurations split for client/server
