@@ -106,18 +106,26 @@ class RateLimiter {
 
     // Normalize IPv4 address to standard format
     private normalizeIP(ip: string): string {
+        logger.debug(`Normalizing IP: ${ip}`);
+        
         // Always normalize IPv4-mapped IPv6 addresses to IPv4
         if (ip.startsWith('::ffff:')) {
-            ip = ip.substring(7);
+            const normalized = ip.substring(7);
+            logger.debug(`Normalized IPv4-mapped address ${ip} to ${normalized}`);
+            return normalized;
         }
         
         if (ip === '::1') {
+            logger.debug('Normalized localhost IPv6 to IPv4');
             return '127.0.0.1';
         }
 
         // Handle IPv6 addresses
         if (ip.includes(':')) {
-            return ip; // Keep original IPv6 address
+            // Convert to lowercase and compress
+            const normalized = ip.toLowerCase().replace(/\b:?(?:0+:?){2,}/, '::');
+            logger.debug(`Keeping IPv6 address as is: ${normalized}`);
+            return normalized;
         }
 
         // Basic IPv4 validation and normalization
@@ -132,7 +140,7 @@ class RateLimiter {
             return (num >= 0 && num <= 255) ? num : 0;
         }).join('.');
 
-        logger.debug(`Normalized IP ${ip} to ${normalized}`);
+        logger.debug(`Normalized IPv4 ${ip} to ${normalized}`);
         return normalized;
     }
 
@@ -230,6 +238,17 @@ class RateLimiter {
         return this.getClientIP(req);
     }
 
+    private getLimitsMap(ip: string): Map<string, RateLimit> {
+        // If it's an IPv4 address or IPv4-mapped IPv6, use IPv4 map
+        if (!ip.includes(':') || ip.startsWith('::ffff:')) {
+            logger.debug(`Using IPv4 limits map for ${ip}`);
+            return this.limits;
+        }
+        // Otherwise use IPv6 map
+        logger.debug(`Using IPv6 limits map for ${ip}`);
+        return this.ipv6Limits;
+    }
+
     public canMakeRequest(req: IncomingMessage): boolean {
         const rawIp = this.getClientIP(req);
         const ip = this.normalizeIP(rawIp);
@@ -238,7 +257,7 @@ class RateLimiter {
         if (this.isWhitelisted(ip)) return true;
 
         const now = Date.now();
-        const limitsMap = ip.includes(':') ? this.ipv6Limits : this.limits;
+        const limitsMap = this.getLimitsMap(rawIp);
         let limit = limitsMap.get(ip);
 
         // Initialize limits if they don't exist
@@ -263,7 +282,7 @@ class RateLimiter {
         if (this.isWhitelisted(ip)) return;
 
         const now = Date.now();
-        const limitsMap = ip.includes(':') ? this.ipv6Limits : this.limits;
+        const limitsMap = this.getLimitsMap(rawIp);
         let limit = limitsMap.get(ip);
 
         if (!limit) {
