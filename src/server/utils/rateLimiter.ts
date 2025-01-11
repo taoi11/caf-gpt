@@ -10,7 +10,6 @@ const MAX_IPS = 10000; // Maximum number of IPs to track
 
 class RateLimiter {
     private readonly limits: Map<string, RateLimit> = new Map();
-    private readonly ipv6Limits: Map<string, RateLimit> = new Map(); // Separate IPv6 tracking
     private cleanupInterval?: NodeJS.Timeout;
 
     constructor() {
@@ -215,17 +214,6 @@ class RateLimiter {
     // Public method to get client IP
     public getIP(req: IncomingMessage): string {
         return this.getClientIP(req);
-    }
-
-    private getLimitsMap(ip: string): Map<string, RateLimit> {
-        // If it's an IPv4 address or IPv4-mapped IPv6, use IPv4 map
-        if (!ip.includes(':') || ip.startsWith('::ffff:')) {
-            logger.debug(`Using IPv4 limits map for ${ip}`);
-            return this.limits;
-        }
-        // Otherwise use IPv6 map
-        logger.debug(`Using IPv6 limits map for ${ip}`);
-        return this.ipv6Limits;
     }
 
     public canMakeRequest(req: IncomingMessage): boolean {
