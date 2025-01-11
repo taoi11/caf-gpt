@@ -297,8 +297,7 @@ class RateLimiter {
         daily: { remaining: number; resetIn: number };
     } {
         const normalizedIP = this.normalizeIP(ip);
-        const limitsMap = normalizedIP.includes(':') ? this.ipv6Limits : this.limits;
-        const limit = limitsMap.get(normalizedIP);
+        const limit = this.limits.get(normalizedIP);
         const now = Date.now();
 
         if (!limit) {
@@ -310,6 +309,13 @@ class RateLimiter {
 
         const getWindowInfo = (window: RateWindow, limit: number, size: number) => {
             const timeDiff = now - window.timestamp;
+            if (timeDiff >= size) {
+                // Window has expired, full limits available
+                return {
+                    remaining: limit,
+                    resetIn: size
+                };
+            }
             return {
                 remaining: Math.max(0, limit - window.count),
                 resetIn: Math.max(0, size - timeDiff)
@@ -324,8 +330,7 @@ class RateLimiter {
 
     public checkLimit(ip: string): boolean {
         const normalizedIP = this.normalizeIP(ip);
-        const limitsMap = normalizedIP.includes(':') ? this.ipv6Limits : this.limits;
-        const limit = limitsMap.get(normalizedIP);
+        const limit = this.limits.get(normalizedIP);
         const now = Date.now();
 
         if (!limit) {
@@ -334,15 +339,12 @@ class RateLimiter {
                 hourly: { count: 0, timestamp: now },
                 daily: { count: 0, timestamp: now }
             };
-            limitsMap.set(normalizedIP, newLimit);
+            this.limits.set(normalizedIP, newLimit);
             return true;
         }
 
-        // Check both windows without incrementing
-        const hourlyOk = this.checkWindow(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR);
-        const dailyOk = this.checkWindow(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
-
-        return hourlyOk && dailyOk;
+        return this.checkWindowLimit(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR) &&
+               this.checkWindowLimit(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
     }
 
     public stopCleanup(): void {
