@@ -102,39 +102,22 @@ class RateLimiter {
     private normalizeIP(ip: string): string {
         logger.debug(`Normalizing IP: ${ip}`);
         
-        // Always normalize IPv4-mapped IPv6 addresses to IPv4
+        // Handle IPv4-mapped IPv6 addresses
         if (ip.startsWith('::ffff:')) {
             const normalized = ip.substring(7);
-            logger.debug(`Normalized IPv4-mapped address ${ip} to ${normalized}`);
+            logger.debug(`Normalized IPv4-mapped address to ${normalized}`);
             return normalized;
         }
         
+        // Handle localhost IPv6
         if (ip === '::1') {
             logger.debug('Normalized localhost IPv6 to IPv4');
             return '127.0.0.1';
         }
 
-        // Handle IPv6 addresses
-        if (ip.includes(':')) {
-            // Convert to lowercase and compress
-            const normalized = ip.toLowerCase().replace(/\b:?(?:0+:?){2,}/, '::');
-            logger.debug(`Keeping IPv6 address as is: ${normalized}`);
-            return normalized;
-        }
-
-        // Basic IPv4 validation and normalization
-        const parts = ip.split('.');
-        if (parts.length !== 4) {
-            logger.warn(`Invalid IP address format: ${ip}`);
-            return '0.0.0.0';
-        }
-
-        const normalized = parts.map(part => {
-            const num = parseInt(part, 10);
-            return (num >= 0 && num <= 255) ? num : 0;
-        }).join('.');
-
-        logger.debug(`Normalized IPv4 ${ip} to ${normalized}`);
+        // For all other IPs, just normalize format
+        const normalized = ip.toLowerCase();
+        logger.debug(`Normalized IP format: ${normalized}`);
         return normalized;
     }
 
@@ -226,7 +209,7 @@ class RateLimiter {
             });
         });
 
-        return ip;
+        return this.normalizeIP(ip);
     }
 
     // Public method to get client IP
@@ -246,7 +229,7 @@ class RateLimiter {
     }
 
     public canMakeRequest(req: IncomingMessage): boolean {
-        const ip = this.normalizeIP(this.getClientIP(req));
+        const ip = this.getClientIP(req);
         logger.debug(`Checking rate limit for IP: ${ip}`);
         
         if (this.isWhitelisted(ip)) return true;
@@ -268,7 +251,7 @@ class RateLimiter {
     }
 
     public trackSuccessfulRequest(req: IncomingMessage): void {
-        const ip = this.normalizeIP(this.getClientIP(req));
+        const ip = this.getClientIP(req);
         logger.debug(`Tracking successful request for IP: ${ip}`);
         
         if (this.isWhitelisted(ip)) return;
