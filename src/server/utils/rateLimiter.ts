@@ -168,6 +168,12 @@ class RateLimiter {
         return true;
     }
 
+    // New method to only check limits without incrementing
+    private checkWindowLimit(window: RateWindow, now: number, limit: number, size: number): boolean {
+        const timeDiff = now - window.timestamp;
+        return timeDiff >= size || window.count < limit;
+    }
+
     private isCloudflareRequest(req: IncomingMessage): boolean {
         return !!(req.headers['cf-ray'] || req.headers['cf-worker']);
     }
@@ -225,7 +231,8 @@ class RateLimiter {
     }
 
     public canMakeRequest(req: IncomingMessage): boolean {
-        const ip = this.getClientIP(req);
+        const rawIp = this.getClientIP(req);
+        const ip = this.normalizeIP(rawIp);
         logger.debug(`Client IP: ${ip}`);
         
         if (this.isWhitelisted(ip)) return true;
@@ -248,15 +255,10 @@ class RateLimiter {
                this.checkWindowLimit(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
     }
 
-    // New method to only check limits without incrementing
-    private checkWindowLimit(window: RateWindow, now: number, limit: number, size: number): boolean {
-        const timeDiff = now - window.timestamp;
-        return timeDiff >= size || window.count < limit;
-    }
-
     // Track only successful API calls
     public trackSuccessfulRequest(req: IncomingMessage): void {
-        const ip = this.getClientIP(req);
+        const rawIp = this.getClientIP(req);
+        const ip = this.normalizeIP(rawIp);
         
         if (this.isWhitelisted(ip)) return;
 
@@ -274,8 +276,8 @@ class RateLimiter {
             return;
         }
 
-        this.incrementWindow(limit.hourly, now, HOUR);
-        this.incrementWindow(limit.daily, now, DAY);
+        this.checkWindow(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR);
+        this.checkWindow(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
     }
 
     private incrementWindow(window: RateWindow, now: number, size: number): void {
