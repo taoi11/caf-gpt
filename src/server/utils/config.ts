@@ -46,7 +46,8 @@ export const RATE_LIMITS = {
     HOURLY_LIMIT: 10,    // 10 requests per hour
     DAILY_LIMIT: 30,     // 30 requests per day
     CLEANUP_INTERVAL: HOUR,
-    MAX_IPS: 10000,                       // Maximum number of IPs to track
+    MAX_IPS: 10000,      // Maximum number of IPs to track
+    MAX_TIMESTAMPS_PER_WINDOW: 100,  // Maximum number of timestamps to store per window
     // Time windows
     HOUR,
     DAY

@@ -77,14 +77,19 @@ export interface LLMError {
 
 // Infrastructure Types
 export interface RateWindow {
-    count: number;
-    timestamp: number;
+    timestamps: number[];  // Array of request timestamps in milliseconds
 }
 
 export interface RateLimit {
     ip: string;
     hourly: RateWindow;
     daily: RateWindow;
+    lastCleanup: number;  // Track last cleanup time
+}
+
+export interface RateLimitInfo {
+    hourly: { remaining: number; resetIn: number };
+    daily: { remaining: number; resetIn: number };
 }
 
 export interface CostData {
