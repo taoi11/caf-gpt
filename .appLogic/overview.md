@@ -1,7 +1,7 @@
 # CAF-GPT Application Plan
 
 ## Overview
-A collection of AI tools and agents for army personnel, packaged as a Node.js Docker container.
+A collection of AI tools and agents for army personnel, packaged as a Node.js Docker container. Designed to run behind Cloudflare for security and rate limiting.
 
 ## Core Principles
 - Keep user messages browser-side only
@@ -13,6 +13,7 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
 - Direct environment variable usage
 - Simplified configurations
 - Robust testing with clean async handling
+- Cloudflare-based security and rate limiting
 
 ## Technology Stack
 - Node.js for server-side logic
@@ -29,6 +30,10 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
   - Modern UI components
 - HTML with vanilla JavaScript
 - Docker for containerization
+- Cloudflare for:
+  - IP-based rate limiting
+  - Security headers
+  - DDoS protection
 - Storj S3-compatible storage
   - Uses AWS S3 SDK
   - Gateway endpoint at gateway.storjshare.io
@@ -105,6 +110,7 @@ Direct usage of environment variables for:
 - LLM API settings
 - Server configuration
 - Rate limiting options
+- Cloudflare settings
 
 ## Storage Architecture
 ### S3-Compatible Storage (Storj)
@@ -146,21 +152,16 @@ Direct usage of environment variables for:
 - Loading states
 - Rate limit warnings
 
-## Development Setup
-- TypeScript configurations split for client/server
-- Development runs on port 3000
-- ES modules throughout
-- Environment-aware features
-
-Available scripts:
-- `npm run dev`: Development mode
-- `npm run build`: Production build
-- `npm run clean`: Reset build
-- `npm test`: Run tests with coverage
-
 ## Recent Changes
+- **Rate Limiter**: 
+  - Switched to Cloudflare IP-based tracking
+  - Simplified IP handling
+  - Consistent rate limiting across all endpoints
+- **Security**:
+  - Added Cloudflare integration
+  - Better error handling
+  - Improved logging
 - **Type Restructuring**: 
-  - Frontend-specific types have been moved to `src/client/utils/types.ts`.
-  - Consolidated UI-related types into structured interfaces for better management.
-  - Simplified tool-specific types to focus on core functionality.
-  - Maintained clear separation of concerns between frontend, backend, and shared types.
+  - Frontend-specific types moved to client
+  - Consolidated UI-related types
+  - Simplified tool-specific types

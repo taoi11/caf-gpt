@@ -20,6 +20,7 @@ An AI-powered tool for generating standardized performance notes for CAF Members
    - Submit button enabled only with valid rank
    - Copy-to-clipboard functionality
    - Keyboard shortcuts (Ctrl+Enter)
+   - Rate limit display with clear feedback
 
 ### Prompt System
 1. **Directory Structure**
