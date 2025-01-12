@@ -57,7 +57,7 @@ class RateLimiter {
     private normalizeCIDR(cidr: string): string {
         if (!this.validateCIDR(cidr)) {
             logger.error(`Invalid CIDR notation: ${cidr}`);
-            return cidr; // Return original to avoid breaking functionality
+            return cidr;
         }
         
         try {
@@ -97,35 +97,34 @@ class RateLimiter {
         return (parts[0] << 24) + (parts[1] << 16) + (parts[2] << 8) + parts[3];
     }
 
-    // Normalize IPv4 address to standard format
+    // Normalize IP to standard format
     private normalizeIP(ip: string): string {
-        logger.debug(`Normalizing IP: ${ip}`);
-        
-        // Handle IPv4-mapped IPv6 addresses
-        if (ip.startsWith('::ffff:')) {
-            const normalized = ip.substring(7);
-            logger.debug(`Normalized IPv4-mapped address to ${normalized}`);
-            return normalized;
-        }
-        
-        // Handle localhost IPv6
-        if (ip === '::1') {
-            logger.debug('Normalized localhost IPv6 to IPv4');
-            return '127.0.0.1';
-        }
-
-        // For all other IPs, just normalize format
-        const normalized = ip.toLowerCase();
-        logger.debug(`Normalized IP format: ${normalized}`);
-        return normalized;
+        return ip.toLowerCase();
     }
 
-    // Update isWhitelisted to use new CIDR methods
-    private isWhitelisted(ip: string): boolean {
-        if (ip.includes(':')) {
-            return false;
-        }
+    private getCloudflareIP(req: IncomingMessage): string {
+        const ip = req.headers['cf-connecting-ip'];
+        return typeof ip === 'string' ? ip.trim() : '0.0.0.0';
+    }
 
+    private validateRequest(req: IncomingMessage): {
+        ip: string;
+        warnings: string[];
+    } {
+        const warnings: string[] = [];
+        const ip = this.getCloudflareIP(req);
+        
+        if (ip === '0.0.0.0') {
+            warnings.push('Missing CF-Connecting-IP header');
+            logger.warn('Missing CF-Connecting-IP header', {
+                headers: IS_DEV ? req.headers : undefined
+            });
+        }
+        
+        return { ip, warnings };
+    }
+
+    private isWhitelisted(ip: string): boolean {
         return RATE_LIMITS.WHITELISTED_CIDRS.some(cidr => {
             const normalizedCIDR = this.normalizeCIDR(cidr);
             return this.isIPInCIDR(ip, normalizedCIDR);
@@ -137,7 +136,7 @@ class RateLimiter {
         
         // If the window has expired, reset it
         if (timeDiff >= size) {
-            window.count = 1; // Set to 1 instead of incrementing
+            window.count = 1;
             window.timestamp = now;
             return true;
         }
@@ -147,61 +146,20 @@ class RateLimiter {
             return false;
         }
 
-        // Only increment the count here, not in checkLimit
         window.count++;
         return true;
     }
 
-    // New method to only check limits without incrementing
     private checkWindowLimit(window: RateWindow, now: number, limit: number, size: number): boolean {
         const timeDiff = now - window.timestamp;
         return timeDiff >= size || window.count < limit;
     }
 
-    private isCloudflareRequest(req: IncomingMessage): boolean {
-        return !!(req.headers['cf-ray'] || req.headers['cf-worker']);
-    }
-
-    private getCloudflareIP(req: IncomingMessage): string | null {
-        const ip = req.headers['cf-connecting-ip'];
-        return typeof ip === 'string' ? ip.trim() : null;
-    }
-
-    private validateRequest(req: IncomingMessage): {
-        ip: string;
-        warnings: string[];
-    } {
-        const warnings: string[] = [];
-        
-        // Get Cloudflare IP first
-        const cfIP = this.getCloudflareIP(req);
-        if (!cfIP) {
-            warnings.push('Missing CF-Connecting-IP header');
-            // Only log headers in development
-            if (IS_DEV) {
-                logger.debug('Headers debug:', { headers: req.headers });
-            }
-        }
-
-        // In production, only trust Cloudflare headers
-        if (!IS_DEV) {
-            return { 
-                ip: cfIP || '0.0.0.0',
-                warnings 
-            };
-        }
-
-        // In development, fallback to socket address
-        const ip = cfIP || req.socket.remoteAddress || '0.0.0.0';
-        return { ip, warnings };
-    }
-
     private getClientIP(req: IncomingMessage): string {
         const { ip, warnings } = this.validateRequest(req);
         
-        // Log any validation warnings
         warnings.forEach(warning => {
-            logger.warn('Cloudflare header warning', { 
+            logger.warn('Rate limit warning', { 
                 warning,
                 ip,
                 headers: IS_DEV ? req.headers : undefined
@@ -211,14 +169,18 @@ class RateLimiter {
         return this.normalizeIP(ip);
     }
 
-    // Public method to get client IP
     public getIP(req: IncomingMessage): string {
         return this.getClientIP(req);
     }
 
     public canMakeRequest(req: IncomingMessage): boolean {
         const ip = this.getClientIP(req);
-        logger.debug(`Checking rate limit for IP: ${ip}`);
+        logger.debug('Rate limit check', {
+            ip,
+            cfIP: req.headers['cf-connecting-ip'],
+            isWhitelisted: this.isWhitelisted(ip),
+            currentLimits: this.limits.get(ip)
+        });
         
         if (this.isWhitelisted(ip)) return true;
 
@@ -240,7 +202,10 @@ class RateLimiter {
 
     public trackSuccessfulRequest(req: IncomingMessage): void {
         const ip = this.getClientIP(req);
-        logger.debug(`Tracking successful request for IP: ${ip}`);
+        logger.debug('Tracking request', {
+            ip,
+            isWhitelisted: this.isWhitelisted(ip)
+        });
         
         if (this.isWhitelisted(ip)) return;
 
@@ -261,16 +226,6 @@ class RateLimiter {
         this.checkWindow(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
     }
 
-    private incrementWindow(window: RateWindow, now: number, size: number): void {
-        const timeDiff = now - window.timestamp;
-        if (timeDiff >= size) {
-            window.count = 1;
-            window.timestamp = now;
-        } else {
-            window.count++;
-        }
-    }
-
     public sendLimitResponse(req: IncomingMessage, res: ServerResponse, window: 'hourly' | 'daily'): void {
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
@@ -279,13 +234,12 @@ class RateLimiter {
         }));
     }
 
-    // Get current limit info for an IP
-    public getLimitInfo(ip: string): { 
+    public getLimitInfo(req: IncomingMessage): { 
         hourly: { remaining: number; resetIn: number };
         daily: { remaining: number; resetIn: number };
     } {
-        const normalizedIP = this.normalizeIP(ip);
-        const limit = this.limits.get(normalizedIP);
+        const ip = this.getClientIP(req);
+        const limit = this.limits.get(ip);
         const now = Date.now();
 
         if (!limit) {
@@ -298,7 +252,6 @@ class RateLimiter {
         const getWindowInfo = (window: RateWindow, limit: number, size: number) => {
             const timeDiff = now - window.timestamp;
             if (timeDiff >= size) {
-                // Window has expired, full limits available
                 return {
                     remaining: limit,
                     resetIn: size
@@ -314,25 +267,6 @@ class RateLimiter {
             hourly: getWindowInfo(limit.hourly, RATE_LIMITS.HOURLY_LIMIT, HOUR),
             daily: getWindowInfo(limit.daily, RATE_LIMITS.DAILY_LIMIT, DAY)
         };
-    }
-
-    public checkLimit(ip: string): boolean {
-        const normalizedIP = this.normalizeIP(ip);
-        const limit = this.limits.get(normalizedIP);
-        const now = Date.now();
-
-        if (!limit) {
-            const newLimit = {
-                ip: normalizedIP,
-                hourly: { count: 0, timestamp: now },
-                daily: { count: 0, timestamp: now }
-            };
-            this.limits.set(normalizedIP, newLimit);
-            return true;
-        }
-
-        return this.checkWindowLimit(limit.hourly, now, RATE_LIMITS.HOURLY_LIMIT, HOUR) &&
-               this.checkWindowLimit(limit.daily, now, RATE_LIMITS.DAILY_LIMIT, DAY);
     }
 
     public stopCleanup(): void {

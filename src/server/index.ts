@@ -67,20 +67,10 @@ const server = createServer(async (req, res) => {
 
     // Rate limit info endpoint
     if (url === '/api/ratelimit') {
-        const ip = req.socket.remoteAddress || '0.0.0.0';
-        const limits = rateLimiter.getLimitInfo(ip);
+        const limits = rateLimiter.getLimitInfo(req);
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(limits));
-        return;
-    }
-
-    // IP info endpoint
-    if (url === '/api/ratelimit/ip-info') {
-        const ip = req.socket.remoteAddress || '0.0.0.0';
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            isIPv6: ip.includes(':') && !ip.startsWith('::ffff:')
-        }));
+        logger.debug('Rate limit info request', { limits });
         return;
     }
 

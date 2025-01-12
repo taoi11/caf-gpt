@@ -17,29 +17,6 @@ Located in: `src/server/api/utils/rateLimiter.ts`
   - Hourly: 10 requests/hour
   - Daily: 30 requests/day
 
-### API Integration
-- Rate limit info endpoint: `/api/ratelimit`
-  ```typescript
-  interface RateLimitInfo {
-    hourly: {
-      remaining: number;
-      resetIn: number;
-    };
-    daily: {
-      remaining: number;
-      resetIn: number;
-    };
-  }
-  ```
-- IP version check endpoint: `/api/ratelimit/ip-info`
-  ```typescript
-  interface IPInfo {
-    isIPv6: boolean;
-  }
-  ```
-- Frontend display component for real-time limit tracking
-- Auto-updates on each API call
-- Visual warnings for low remaining limits
 
 ### Rate Limit Flow
 1. Check request eligibility

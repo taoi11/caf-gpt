@@ -18,8 +18,8 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
 
     // Check if request can be made
     if (!(await rateLimiter.canMakeRequest(req))) {
-        const hourlyInfo = rateLimiter.getLimitInfo(rateLimiter.getIP(req));
-        if (hourlyInfo?.hourly.remaining === 0) {
+        const limits = rateLimiter.getLimitInfo(req);
+        if (limits.hourly.remaining === 0) {
             rateLimiter.sendLimitResponse(req, res, 'hourly');
         } else {
             rateLimiter.sendLimitResponse(req, res, 'daily');
