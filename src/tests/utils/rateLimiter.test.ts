@@ -12,23 +12,23 @@ const DAY = 24 * HOUR;        // 1 day in milliseconds
 
 describe('RateLimiter', () => {
     beforeEach(() => {
-        // Reset rateLimiter maps before each test
+        // Reset rateLimiter maps before each test to ensure a clean state
         rateLimiter['limits'].clear();
     });
 
     afterEach(() => {
-        // Stop the cleanup interval
+        // Stop the cleanup interval to prevent interference between tests
         rateLimiter.stopCleanup();
-        jest.restoreAllMocks();
+        jest.restoreAllMocks(); // Restore all mocked functions
     });
 
-    // Helper to create mock request with Cloudflare headers
+    // Helper to create mock request with Cloudflare headers for testing
     const createMockRequest = (cfIP: string, headers: Record<string, string> = {}): IncomingMessage => {
         const socket = new Socket();
         const req = Object.create(IncomingMessage.prototype);
         return Object.assign(req, {
             headers: {
-                'cf-connecting-ip': cfIP,
+                'cf-connecting-ip': cfIP, // Simulate Cloudflare IP header
                 ...headers
             },
             socket,
@@ -44,7 +44,7 @@ describe('RateLimiter', () => {
         test('uses CF-Connecting-IP header', () => {
             const cfIP = '1.2.3.4';
             const req = createMockRequest(cfIP);
-            expect(rateLimiter['getClientIP'](req)).toBe(cfIP);
+            expect(rateLimiter['getClientIP'](req)).toBe(cfIP); // Verify IP is correctly extracted
         });
 
         test('returns 0.0.0.0 when CF-Connecting-IP is missing', () => {
@@ -59,7 +59,7 @@ describe('RateLimiter', () => {
                 httpVersionMinor: 1,
                 complete: true
             });
-            expect(rateLimiter['getClientIP'](req)).toBe('0.0.0.0');
+            expect(rateLimiter['getClientIP'](req)).toBe('0.0.0.0'); // Verify default IP when header is missing
         });
 
         test('logs warning when CF-Connecting-IP is missing', () => {
@@ -81,7 +81,7 @@ describe('RateLimiter', () => {
                 expect.objectContaining({
                     warning: 'Missing CF-Connecting-IP header'
                 })
-            );
+            ); // Verify warning is logged when header is missing
         });
     });
 
@@ -94,8 +94,8 @@ describe('RateLimiter', () => {
             rateLimiter.trackSuccessfulRequest(req);
 
             const limits = rateLimiter.getLimitInfo(req);
-            expect(limits.hourly.remaining).toBeLessThan(RATE_LIMITS.HOURLY_LIMIT);
-            expect(limits.daily.remaining).toBeLessThan(RATE_LIMITS.DAILY_LIMIT);
+            expect(limits.hourly.remaining).toBeLessThan(RATE_LIMITS.HOURLY_LIMIT); // Verify hourly limit is decremented
+            expect(limits.daily.remaining).toBeLessThan(RATE_LIMITS.DAILY_LIMIT);  // Verify daily limit is decremented
         });
 
         test('enforces hourly limits', () => {
@@ -108,20 +108,42 @@ describe('RateLimiter', () => {
             }
 
             // Next request should be denied
-            expect(rateLimiter.canMakeRequest(req)).toBe(false);
+            expect(rateLimiter.canMakeRequest(req)).toBe(false); // Verify hourly limit is enforced
         });
 
         test('enforces daily limits', () => {
             const req = createMockRequest('1.2.3.4');
+            const now = Date.now();
+            let currentTime = now;
             
-            // Make maximum allowed requests
-            for (let i = 0; i < RATE_LIMITS.DAILY_LIMIT; i++) {
-                expect(rateLimiter.canMakeRequest(req)).toBe(true);
-                rateLimiter.trackSuccessfulRequest(req);
+            // Mock Date.now to control time
+            jest.spyOn(Date, 'now').mockImplementation(() => currentTime);
+            
+            // Make requests in batches to avoid hourly limit
+            for (let batch = 0; batch < 3; batch++) {
+                // Each batch is 1.5 hours apart to reset hourly limits
+                currentTime = now + (batch * HOUR * 1.5);
+                
+                // Make 10 requests in each batch
+                for (let i = 0; i < 10; i++) {
+                    const canMake = rateLimiter.canMakeRequest(req);
+                    if (!canMake) {
+                        // Get limit info for debugging
+                        const limitInfo = rateLimiter.getLimitInfo(req);
+                        console.log(`Failed at batch ${batch}, request ${i}. Limit info:`, {
+                            hourlyRemaining: limitInfo.hourly.remaining,
+                            dailyRemaining: limitInfo.daily.remaining
+                        });
+                    }
+                    expect(canMake).toBe(batch < 3); // Should allow first 30 requests (3 batches of 10)
+                    if (canMake) {
+                        rateLimiter.trackSuccessfulRequest(req);
+                    }
+                }
             }
 
-            // Next request should be denied
-            expect(rateLimiter.canMakeRequest(req)).toBe(false);
+            // Verify we hit the daily limit
+            expect(rateLimiter.canMakeRequest(req)).toBe(false); // Verify daily limit is enforced
         });
 
         test('resets limits after window expiry', async () => {
@@ -136,7 +158,7 @@ describe('RateLimiter', () => {
             jest.spyOn(Date, 'now').mockImplementation(() => now + HOUR + 1000);
 
             // Should be allowed again
-            expect(rateLimiter.canMakeRequest(req)).toBe(true);
+            expect(rateLimiter.canMakeRequest(req)).toBe(true); // Verify limits reset after expiry
         });
 
         test('handles multiple IPs independently', () => {
@@ -151,8 +173,8 @@ describe('RateLimiter', () => {
             const limits1 = rateLimiter.getLimitInfo(req1);
             const limits2 = rateLimiter.getLimitInfo(req2);
             
-            expect(limits1.hourly.remaining).toBe(RATE_LIMITS.HOURLY_LIMIT - 1);
-            expect(limits2.hourly.remaining).toBe(RATE_LIMITS.HOURLY_LIMIT - 1);
+            expect(limits1.hourly.remaining).toBe(RATE_LIMITS.HOURLY_LIMIT - 1); // Verify limits are tracked per IP
+            expect(limits2.hourly.remaining).toBe(RATE_LIMITS.HOURLY_LIMIT - 1); // Verify limits are tracked per IP
         });
     });
 
@@ -167,7 +189,7 @@ describe('RateLimiter', () => {
 
             validIPs.forEach(ip => {
                 const req = createMockRequest(ip);
-                expect(rateLimiter.canMakeRequest(req)).toBe(true);
+                expect(rateLimiter.canMakeRequest(req)).toBe(true); // Verify whitelisted IPs are allowed
             });
         });
 
@@ -184,7 +206,7 @@ describe('RateLimiter', () => {
                 // First request should be allowed but rate limited
                 expect(rateLimiter.canMakeRequest(req)).toBe(true);
                 rateLimiter.trackSuccessfulRequest(req);
-            });
+            }); // Verify non-whitelisted IPs are rate limited
         });
 
         test('handles invalid IP formats', () => {
@@ -198,7 +220,7 @@ describe('RateLimiter', () => {
             invalidIPs.forEach(ip => {
                 const req = createMockRequest(ip);
                 // Should be treated as non-whitelisted
-                expect(rateLimiter.canMakeRequest(req)).toBe(true);
+                expect(rateLimiter.canMakeRequest(req)).toBe(true); // Verify invalid IPs are treated as non-whitelisted
             });
         });
     });
@@ -218,7 +240,7 @@ describe('RateLimiter', () => {
             rateLimiter['cleanupOldEntries']();
             
             // Verify entry was cleaned up
-            expect(rateLimiter['limits'].has('1.2.3.4')).toBe(false);
+            expect(rateLimiter['limits'].has('1.2.3.4')).toBe(false); // Verify old entries are cleaned up
         });
 
         test('keeps recent entries during cleanup', () => {
@@ -235,7 +257,7 @@ describe('RateLimiter', () => {
             rateLimiter['cleanupOldEntries']();
             
             // Verify entry was kept
-            expect(rateLimiter['limits'].has('1.2.3.4')).toBe(true);
+            expect(rateLimiter['limits'].has('1.2.3.4')).toBe(true); // Verify recent entries are kept
         });
     });
 }); 
