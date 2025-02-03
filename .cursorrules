@@ -1,32 +1,90 @@
-This is a NodeJS docker container. This is a simple and small user base app. Simplecity will be the core of everything
+# AI Code Assistant Rules
 
-The .appLogic/ folder has Markdown notes of may plans for this app.
-  - Keep the .appLogic/ fresh in your mind as you write the code.
-  - Read this as needed only edit the .appLogic/ files when users request changes.
-  - use these as supplementary instruction for you to follow. 
+## Core Principles
+- **Primary Goal**: Simplify and streamline app development while maintaining functionality.
+- **Core Philosophy**: Simplicity is key. Prioritize built-in libraries and frameworks first.
+- **User-Centric**: Always wait for user confirmation before making changes. Be very careful with when to use which format of the code block.
 
-## Coding style
-  - write one line comments to make it easy for me to read your code.
-  - keep the code clean and readable.
-  - keep the code minimal and simple.
-  - setup good logging levels along the way.
-  - use easy to understand function names.
+## Folder Structure
+- `.appLogic/`: Contains markdown notes for app planning and logic.
+  - Use as reference for implementation guidance.
+  - Only edit when requested by the user.
 
-## Guide lines for your actions. 
+- `notePad/`: Repository for documentation, ideas, and debugging thoughts.
+  - Use to track plans, tools, libraries, and debugging processes.
+  - Only edit when requested by the user.
 
-### Adding new features
-  - prioritize using the built in libraries and frameworks.
+
+## Feature Implementation
+### Process
+1. **Planning**:
+  - Review `.appLogic/` files for guidance.
+  - Propose implementation strategies to the user.
+
+2. **Options**:
+  - Present multiple approaches with pros and cons.
+  - Include trade-offs (e.g., complexity, performance).
+
+3. **Approval**:
+  - Wait for explicit user confirmation before coding.
   - ask user to use `npm install ...` to install dependencies. avoid adding dependencies directly to the package.json file.
+  - Be sure to not use auto-applied code blocks when the user has not explicitly asked for code changes.
 
-### Debugging
-  - Do not jump to changing the code.
-  - Make a  task specific file in the .cursor/ folder and in this file 
-    * write down your thoughts and ideas.
-    * give a few option to the user to choose from.
-    * explain the pros and cons of each option.
-  - Always wait for the user to explicitly tell you to change the code.
-  - Always first perpose changes in a  file in the .cursor/ folder.
-  - The user will clean up this dir when tasks are complete.
+4. **Documentation**:
+  - Create new files in `notePad/` to track ideas and decisions.
 
-This is a very simple project lets keep the code simple and to the point.
-Use simple and basic libraries and frameworks.
+## Debugging Process
+1. **Analysis**:
+   - Avoid immediate code changes.
+   - Create a task-specific file in `notePad/`.
+
+2. **Options**:
+   - List potential solutions with pros and cons.
+   - Focus on root cause analysis.
+
+3. **Approval**:
+   - Present options to the user for feedback.
+   - Be sure to not use auto-applied code blocks when the user has not explicitly asked for code changes.
+
+4. **Cleanup**:
+   - User responsible for clearing completed task files from `notePad/`.
+
+## Code Block Behavior
+### Critical Rules for Code Blocks
+1. **Auto-Applied Code Blocks (RESTRICTED)**
+   - Format: `language:dir/file.ext` or `diff:dir/file.ext`
+   - Behavior: These will AUTOMATICALLY modify files in the codebase
+   - Usage: ONLY when user EXPLICITLY requests code changes
+   - Example: ❌ Don't use `python:src/main.py` unless specifically asked
+
+2. **Display-Only Code Blocks (SAFE)**
+   - Format: `file.ext` or just the language (e.g., `python`)
+   - Behavior: Only shows code to user, NO automatic changes
+   - Usage: For code examples, proposals, and discussions
+   - Example: ✅ Use `python` or `main.py` for showing code
+
+3. **When to Use Each**
+  - Default: ALWAYS use display-only blocks
+  - Auto-apply: ONLY when user explicitly says:
+    * "Please make these changes"
+    * "Please implement this"
+    * "Go ahead and apply this"
+
+4. **Safety Checklist**
+  - ✓ Is this just showing code? → Use display-only
+  - ✓ Did user explicitly request changes? → May use auto-apply
+  - ✓ Unsure? → Default to display-only
+
+
+## Best Practices
+1. **Clarity Over Complexity**:
+  - Always explain reasoning behind decisions.
+  - Use simple language and examples when possible.
+
+2. **Transparency**:
+  - Document all changes and thought processes in `notePad/`.
+  - Maintain a clear audit trail of decisions.
+
+3. **User Control**:
+  - Never assume authority over codebase.
+  - Always seek confirmation before making changes.
