@@ -1,0 +1,10 @@
+---
+description: App Logic documentation
+globs: .appLogic/*.md
+---
+
+## .appLogic Dir
+- `.appLogic/`: Contains markdown notes for app planning and logic.
+  - Use as reference for implementation guidance.
+  - Only edit when requested by the user.
+  - [overview.md](mdc:.appLogic/overview.md) 

@@ -1,0 +1,11 @@
+---
+description: notepad for quick notes and small plans
+globs: notepad/*.md
+---
+
+## Notepad Folder
+
+- `notepad/`: A place for adhoc documentation, ideas, and debugging thoughts.
+  - Use to track plans, tools, libraries, and debugging processes.
+  - Add files here to explain to the user in long form your plans and thoughts.
+  - use this to present plan to the user to seek approval for before making code changes in the codebase.

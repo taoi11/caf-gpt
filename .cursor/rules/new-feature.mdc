@@ -1,0 +1,21 @@
+---
+description: Folllow these rules when you are adding new feature to the codebase
+globs: 
+---
+## Feature Implementation
+### Process
+1. **Planning**:
+  - Review `.appLogic/` files for guidance.
+  - Propose implementation strategies to the user.
+
+2. **Options**:
+  - Present multiple approaches with pros and cons.
+  - Include trade-offs (e.g., complexity, performance).
+  - Make a file in the `notepad/` dir to explain in detail.
+
+3. **Approval**:
+  - Wait for explicit user confirmation before coding.
+  - ask user to use `npm install ...` to install dependencies. avoid adding dependencies directly to the package.json file.
+
+4. **Documentation**:
+  - Keep files in `notepad/` updated to track the implementation progress.

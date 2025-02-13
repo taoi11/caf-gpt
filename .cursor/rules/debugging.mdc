@@ -1,0 +1,19 @@
+---
+description: Follow these rules when debugging
+globs: 
+---
+## Debugging Process
+1. **Analysis**:
+   - Avoid immediate code changes.
+   - Create a task-specific file in `notepad/`.
+
+2. **Options**:
+   - List potential solutions with pros and cons.
+   - Focus on root cause analysis.
+
+3. **Approval**:
+   - Present options to the user for feedback.
+   - Be sure to not use auto-applied code blocks when the user has not explicitly asked for code changes.
+
+4. **Cleanup**:
+   - User responsible for clearing completed task files from `notepad/`.
