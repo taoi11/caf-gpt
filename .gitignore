@@ -1,14 +1,3 @@
-# Node
-node_modules/
-
-# TypeScript
-*.tsbuildinfo
-public/js/
-
-
-# Build output
-dist/
-
 # Environment variables
 .env
 data/
@@ -18,5 +7,5 @@ data/
 .aider*
 !.aider.conf.yml
 
-# Coverage reports
-coverage/
+# Python
+__pycache__/

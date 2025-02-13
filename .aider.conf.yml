@@ -12,9 +12,9 @@ read:
 
 auto-commits: false
 attribute-commit-message-author: true
-# auto-lint: true
-# lint-cmd: 
-#   - "npm run lint"
+auto-lint: true
+lint-cmd: 
+  - "pylint --rcfile=.pylintrc src/"
 # auto-test: true  
 # test-cmd: "npm run test"
 

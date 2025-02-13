@@ -33,7 +33,7 @@ app.add_middleware(
 static_dir = Path(__file__).parent.parent / "static"
 if static_dir.exists():
     app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    logger.info(f"Static files mounted from {static_dir}")
+    logger.info("Static files mounted from %s", static_dir)
 
 # Health check endpoint
 @app.get("/health")
@@ -53,5 +53,7 @@ if __name__ == "__main__":
         "main:app",
         host="0.0.0.0",
         port=8000,
-        reload=os.getenv('DEVELOPMENT', 'false').lower() == 'true'
+        reload=os.getenv('DEVELOPMENT', 'false').lower() == 'true',
+        reload_excludes=[".*", "__pycache__"],  # Exclude dot files/dirs and cache
+        reload_includes=["*.py", "*.html", "*.css", "*.js"]  # Only watch relevant files
     ) 

@@ -2,17 +2,21 @@
 
 pkgs.mkShell {
   buildInputs = [
-    # Node.js and npm
-    pkgs.nodejs_23
+    # Python
+    pkgs.python312
+
+    # Python packages
+    pkgs.python312Packages.fastapi
+    pkgs.python312Packages.uvicorn
+    pkgs.python312Packages.python-dotenv
+    pkgs.python312Packages.httpx
 
     # Development tools
-    pkgs.nodePackages.typescript
-    pkgs.nodePackages.typescript-language-server
-    pkgs.nodePackages.eslint
+    pkgs.python312Packages.pylint
   ];
 
   shellHook = ''
-    echo "Node.js version: $(node --version)"
-    echo "npm version: $(npm --version)"
+    echo "Python version: $(python --version)"
+    echo "Pip version: $(pip --version)"
   '';
 }
