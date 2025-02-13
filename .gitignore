@@ -16,9 +16,7 @@ data/
 
 # Development files
 .aider*
-!aider.config.yml
-!aider.model.settings.yml
-!aider.model.metadata.json
+!.aider.conf.yml
 
 # Coverage reports
 coverage/

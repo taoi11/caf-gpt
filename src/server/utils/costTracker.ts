@@ -1,7 +1,7 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { logger } from './logger.js';
-import type { CostData, LLMResponse } from './types.js';
+import type { CostData, LLMResponse } from '../types.js';
 
 const MONTHLY_SERVER_COST = 15.70; // Base monthly server cost in USD
 const DATA_DIR = join(process.cwd(), 'data');

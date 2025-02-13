@@ -1,4 +1,4 @@
-import { ApiResponse, Message } from '../../utils/types.js';
+import { ApiResponse, Message } from '../../types.js';
 import { logger } from '../../utils/logger.js';
 import { rateLimiter } from '../../utils/rateLimiter.js';
 import { IncomingMessage } from 'http';

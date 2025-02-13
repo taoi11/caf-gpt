@@ -1,4 +1,4 @@
-import { Message, LLMInteractionData } from '../../../utils/types.js';
+import { Message, LLMInteractionData } from '../../../types.js';
 import { IncomingMessage } from 'http';
 
 // Core DOAD Types

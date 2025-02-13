@@ -1,4 +1,4 @@
-import { PaceNoteRequest, PaceNoteResponse } from './utils/types.js';
+import { PaceNoteRequest, PaceNoteResponse } from './types.js';
 import { rateLimiter } from './utils/rateLimiter.js';
 
 // Types

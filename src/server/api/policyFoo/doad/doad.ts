@@ -1,5 +1,5 @@
 import { PolicyHandler } from '../policyFoo.js';
-import { Message, LLMInteractionData } from '../../../utils/types.js';
+import { Message, LLMInteractionData } from '../../../types.js';
 import { logger } from '../../../utils/logger.js';
 import { MODELS } from '../../../utils/config.js';
 import { createDOADFinder } from './agents/doadFinder.js';
