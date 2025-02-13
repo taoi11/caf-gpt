@@ -5,7 +5,6 @@ kill_timeout = 5
 swap_size_mb = 512
 
 [build]
-  builder = "dockerfile"
   dockerfile = "Dockerfile"
 
 [deploy]
