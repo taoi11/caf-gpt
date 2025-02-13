@@ -4,7 +4,7 @@
 Simple cost tracker for the LLM API calls, storing costs in USD with file-based persistence.
 
 ## Implementation
-Located in: `src/server/api/utils/costTracker.ts`
+Located in: `src/app/api/utils/cost_tracker.py`
 
 ### Core Features
 - Tracks total cost in USD
@@ -15,14 +15,18 @@ Located in: `src/server/api/utils/costTracker.ts`
 
 ### Storage Implementation
 - JSON file storage in data/costs.json
-- Structure:
-```json
-{
-    "apiCosts": number,    // USD
-    "serverCosts": number, // USD
-    "lastReset": string,   // ISO date
-    "lastUpdated": string  // ISO timestamp
-}
+- Pydantic model for type safety:
+```python
+class CostData(BaseModel):
+    api_costs: float
+    server_costs: float
+    last_reset: datetime
+    last_updated: datetime
+
+    class Config:
+        json_encoders = {
+            datetime: lambda v: v.isoformat()
+        }
 ```
 - Auto-creates storage file if missing
 - Maintains cost history between server restarts
@@ -41,14 +45,24 @@ Located in: `src/server/api/utils/costTracker.ts`
 - USD to CAD conversion (1.70) handled in frontend
 
 ### API Endpoint
-`GET /api/costs`
-Response:
-```json
-{
-    "apiCosts": number,    // USD
-    "serverCosts": number, // USD
-    "lastUpdated": string  // ISO timestamp
-}
+```python
+@router.get("/costs", response_model=CostResponse)
+async def get_costs(
+    tracker: CostTracker = Depends(get_cost_tracker)
+) -> CostResponse:
+    return CostResponse(
+        api_costs=tracker.costs.api_costs,
+        server_costs=tracker.costs.server_costs,
+        last_updated=tracker.costs.last_updated
+    )
+```
+
+Response Model:
+```python
+class CostResponse(BaseModel):
+    api_costs: float      # USD
+    server_costs: float   # USD
+    last_updated: datetime
 ```
 
 ### Recent Changes

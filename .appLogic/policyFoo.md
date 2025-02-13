@@ -1,8 +1,16 @@
 # PolicyFoo Base Handler
 
 ## Core Structure
+### Base Architecture
+- Modular policy tool router system
+- Common response formatting
+- Shared rate limiting
+- Unified error handling
+- Request validation
+- Conversation history management
+
 ### Frontend
-- One frontend for all subFoo backends
+- One frontend for all policy tools
 - Top navigation bar
 - Common UI elements
   - Rate limit display
@@ -10,18 +18,26 @@
   - Input controls
 - Dropdown menu for policy group selection
 
-### Base Agent Architecture
-#### PolicyFooBase
-- Core orchestration logic
-- Rate limit handling
-- Sends user messages and conversation history to the correct subFoo
-- Consistent error handling across all endpoints
+### Request Flow
+1. User selects policy tool type
+2. Enters message with optional conversation history
+3. Request validated and rate limited
+4. Routed to appropriate policy handler
+5. Response formatted and returned
+6. UI updated with response
 
 ### Rate Limiting
 - Uses Cloudflare CF-Connecting-IP header
 - Consistent rate limit tracking
 - Real-time limit updates in UI
 - Clear error messages for rate limits
+
+### Error Handling
+- Request validation errors
+- Rate limit notifications
+- Internal processing errors
+- Network timeout handling
+- Clear user feedback
 
 ---
 

@@ -1,7 +1,7 @@
 # CAF-GPT Application Plan
 
 ## Overview
-A collection of AI tools and agents for army personnel, packaged as a Node.js Docker container. Designed to run behind Cloudflare for security and rate limiting.
+A collection of AI tools and agents for army personnel, packaged as a Python FastAPI Docker container. Designed to run behind Cloudflare for security and rate limiting.
 
 ## Core Principles
 - Keep user messages browser-side only
@@ -16,14 +16,13 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
 - Cloudflare-based security and rate limiting
 
 ## Technology Stack
-- Node.js for server-side logic
-- TypeScript for type-safe JavaScript
-  - Separate client and server builds
-  - ES modules for modern import/export
-  - Strict type checking enabled
-- Jest for testing
-  - ESM-compatible configuration
-  - Proper async cleanup
+- Python 3.11+ for server-side logic
+  - FastAPI for API endpoints
+  - Pydantic for data validation
+  - HTTPX for async HTTP calls
+- Jest replaced with Pytest
+  - Async test support
+  - Proper fixture cleanup
   - High test coverage targets
 - Custom CSS for styling
   - Slim navigation design
@@ -35,7 +34,7 @@ A collection of AI tools and agents for army personnel, packaged as a Node.js Do
   - Security headers
   - DDoS protection
 - Storj S3-compatible storage
-  - Uses AWS S3 SDK
+  - Uses boto3 SDK
   - Gateway endpoint at gateway.storjshare.io
   - Read-only access configuration
 
@@ -52,7 +51,7 @@ cap-gpt/
 src/
 ├── tests/                      # Test files
 │   └── utils/                  # Utility tests
-│       └── rateLimiter.test.ts # Rate limiter tests
+│       └── test_rate_limiter.py # Rate limiter tests
 ├── prompts/
 │   ├── paceNote/
 │   │   └── paceNote.md    # Pace Notes prompt
@@ -62,46 +61,43 @@ src/
 │           ├── policyReader.md    # DOAD reader prompt
 │           └── chatAgent.md       # DOAD chat agent prompt
 │           └── DOAD-list-table.md # Available DOADs list
-│   ├── client/                 # Client-side TypeScript
-│   │   ├── paceNotes.ts       # Pace Notes client code
-│   │   └── policyFoo.ts       # Policy tool client code
-│   └── server/                 # Server-side TypeScript
-│       ├── api/               # API endpoints
-│       │   ├── utils/         # Server utilities
-│       │   │   ├── llmGateway.ts  # LLM Gateway
-│       │   │   ├── s3Client.ts    # S3/Storj client
-│       │   │   ├── costTracker.ts # Cost tracking
-│       │   │   └── rateLimiter.ts # Rate limiting
-│       │   ├── paceNotes/     # Pace Notes API
-│       │   │   ├── paceNoteAgent.ts # Core logic
-│       │   │   └── paceNotes.ts     # Route handler
-│       │   └── policyFoo/     # Policy tool API
-│       │       ├── policyFoo.ts     # Base handler
-│       │       └── doad/            # DOAD implementation
-│       │           ├── doadFoo.ts   # DOAD base class
-│       │           └── agents/      # DOAD agents
-│       │               ├── finderAgent.ts  # Policy finder
-│       │               ├── readerAgent.ts  # Policy reader
-│       │               └── chatAgent.ts    # User interaction
-│       └── index.ts           # Main server entry point
-├── public/                     # Static assets
-│   ├── index.html             # Landing page
-│   ├── paceNotes.html         # Pace Notes tool page
-│   ├── policyFoo.html         # Policy tool page
-│   ├── css/                   # CSS files
-│   │   ├── common.css         # Shared styles
-│   │   ├── paceNotes.css      # Pace Notes styles
-│   │   └── policyFoo.css      # Policy tool styles
-│   └── js/                    # Compiled client JavaScript
+│   ├── app/                        # Main Python package
+│   │   ├── api/                   # API endpoints
+│   │   │   ├── utils/            # Server utilities
+│   │   │   │   ├── llm_gateway.py   # LLM Gateway
+│   │   │   │   ├── s3_client.py     # S3/Storj client
+│   │   │   │   ├── cost_tracker.py  # Cost tracking
+│   │   │   │   └── rate_limiter.py  # Rate limiting
+│   │   │   ├── pace_notes/       # Pace Notes API
+│   │   │   │   ├── agent.py      # Core logic
+│   │   │   │   └── routes.py     # Route handler
+│   │   │   └── policy_foo/       # Policy tool API
+│   │   │       ├── routes.py     # Base handler
+│   │   │       └── doad/         # DOAD implementation
+│   │   │           ├── base.py   # DOAD base class
+│   │   │           └── agents/   # DOAD agents
+│   │   ├── models/               # Pydantic models
+│   │   ├── core/                # Core functionality
+│   │   │   ├── config.py        # App configuration
+│   │   │   └── logging.py       # Logging setup
+│   │   └── main.py             # FastAPI application
+│   └── public/                     # Static assets
+│       ├── index.html             # Landing page
+│       ├── paceNotes.html         # Pace Notes tool page
+│       ├── policyFoo.html         # Policy tool page
+│       ├── css/                   # CSS files
+│       │   ├── common.css         # Shared styles
+│       │   ├── paceNotes.css      # Pace Notes styles
+│       │   └── policyFoo.css      # Policy tool styles
+│       └── js/                    # Compiled client JavaScript
 ├── dist/                      # Compiled server code
 ├── coverage/                  # Test coverage reports (gitignored)
 ├── .env.example               # Environment variables template
 ├── Dockerfile                # Docker configuration
 ├── .gitignore                # Git ignore patterns
 ├── .dockerignore             # Docker ignore patterns
-├── package.json              # Project configuration
-├── tsconfig.client.json      # Client TypeScript config
-└── tsconfig.server.json      # Server TypeScript config
+├── requirements.txt          # Python package dependencies
+└── pytest.ini               # Pytest configuration
 ```
 
 ## Environment Variables
@@ -114,7 +110,7 @@ Direct usage of environment variables for:
 
 ## Storage Architecture
 ### S3-Compatible Storage (Storj)
-- Uses AWS S3 SDK for compatibility
+- Now uses boto3 SDK instead of AWS SDK
 - Fixed endpoint at gateway.storjshare.io
 - Read-only access configuration
 - Direct environment variable usage:
@@ -124,16 +120,12 @@ Direct usage of environment variables for:
 
 ## Frontend Architecture
 ### UI State Management
-- Centralized state management per tool
-- TypeScript interfaces for type safety
-- Shared types between client/server
-- State structure:
-  ```typescript
-  interface UIState {
-    inputText: string;      // Form inputs
-    messages: Message[];    // Chat/output history
-    isProcessing: boolean;  // Loading states
-  }
+- Python backend types using Pydantic:
+  ```python
+  class UIState(BaseModel):
+      input_text: str      # Form inputs
+      messages: List[Message]  # Chat/output history
+      is_processing: bool  # Loading states
   ```
 
 ### UI Components
@@ -153,6 +145,10 @@ Direct usage of environment variables for:
 - Rate limit warnings
 
 ## Recent Changes
+- **Framework Migration**: 
+  - Moved from Node.js to Python/FastAPI
+  - Updated project structure for Python conventions
+  - Switched to Pydantic models
 - **Rate Limiter**: 
   - Switched to Cloudflare IP-based tracking
   - Simplified IP handling
@@ -161,7 +157,3 @@ Direct usage of environment variables for:
   - Added Cloudflare integration
   - Better error handling
   - Improved logging
-- **Type Restructuring**: 
-  - Frontend-specific types moved to client
-  - Consolidated UI-related types
-  - Simplified tool-specific types

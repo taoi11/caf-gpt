@@ -4,9 +4,21 @@
 Simple sliding window rate limiter with hourly and daily limits per IP address, using Cloudflare's CF-Connecting-IP header for reliable IP tracking.
 
 ## Implementation
-Located in: `src/server/utils/rateLimiter.ts`
+Located in: `src/app/api/utils/rate_limiter.py`
 
 ### Core Features
+```python
+class RateLimiter:
+    def __init__(self):
+        self.hourly_limits: Dict[str, List[float]] = {}
+        self.daily_limits: Dict[str, List[float]] = {}
+        self._cleanup_task = asyncio.create_task(self._periodic_cleanup())
+
+    async def check_rate_limit(self, request: Request) -> bool:
+        ip = request.headers.get('CF-Connecting-IP', '0.0.0.0')
+        return await self._check_limits(ip)
+```
+
 - Sliding window implementation
 - In-memory storage (for simplicity)
 - Cloudflare IP-based tracking
@@ -31,7 +43,14 @@ Located in: `src/server/utils/rateLimiter.ts`
 5. Frontend displays current limits
 
 ### Configuration
-- All limits defined in config.ts
+```python
+class RateLimitConfig(BaseSettings):
+    HOURLY_LIMIT: int = 10
+    DAILY_LIMIT: int = 30
+    CLEANUP_INTERVAL: int = 900  # 15 minutes
+    WHITELISTED_CIDRS: List[str] = []
+```
+- All limits defined in config.py
 - Development mode uses same IP resolution
 - Configurable cleanup interval
 - Whitelisted CIDR ranges
@@ -43,6 +62,12 @@ Located in: `src/server/utils/rateLimiter.ts`
   - Consistent IP format across all endpoints
 
 - Window Management
+  ```python
+  async def _cleanup_windows(self):
+      now = time.time()
+      self._cleanup_window(self.hourly_limits, now - 3600)
+      self._cleanup_window(self.daily_limits, now - 86400)
+  ```
   - UTC-based timestamps
   - Floor timestamps to nearest second
   - Simple count-based tracking
