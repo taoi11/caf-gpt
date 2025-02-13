@@ -1,22 +1,16 @@
 {
   "name": "caf-gpt",
   "version": "1.0.0",
-  "description": "A collection of AI tools and agents for CAF personnel",
   "type": "module",
   "scripts": {
-    "start": "node dist/server/index.js",
-    "dev": "npm run clean && concurrently \"tsx watch src/server/index.ts\" \"npm run build:client -- --watch\"",
+    "start": "node dist/index.js",
+    "dev": "npm run clean && concurrently \"tsx watch src/index.ts\" \"npm run build:client -- --watch\"",
     "build": "npm run clean && npm run build:server && npm run build:client",
-    "build:prod": "NODE_ENV=production npm run clean && npm run build:server:prod && npm run build:client:prod",
-    "build:server": "tsc -p tsconfig.server.json",
-    "build:server:prod": "tsc -p tsconfig.server.json --removeComments",
-    "build:client": "esbuild src/client/*.ts --bundle --outdir=public/js --sourcemap --format=esm",
-    "build:client:prod": "esbuild src/client/*.ts --bundle --outdir=public/js --minify --format=esm",
+    "build:server": "tsc -p tsconfig.server.json $NODE_ENV=production && --removeComments",
+    "build:client": "esbuild src/client/*.ts --bundle --outdir=public/js --sourcemap --format=esm $NODE_ENV=production && --minify",
     "clean": "rm -rf dist public/js && mkdir -p dist public/js",
     "test": "jest --config jest.config.ts",
-    "test:watch": "jest --config jest.config.ts --watch",
-    "lint": "eslint . --ext .ts,.tsx",
-    "lint:fix": "eslint . --ext .ts,.tsx --fix"
+    "lint": "eslint . --ext .ts,.tsx"
   },
   "author": "",
   "license": "AGPL-3.0",
@@ -37,17 +31,7 @@
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.717.0",
-    "dotenv": "^16.4.7",
-    "rimraf": "^6.0.1"
+    "dotenv": "^16.4.7"
   },
-  "main": "index.js",
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/taoi11/caf-gpt.git"
-  },
-  "keywords": [],
-  "bugs": {
-    "url": "https://github.com/taoi11/caf-gpt/issues"
-  },
-  "homepage": "https://github.com/taoi11/caf-gpt#readme"
+  "main": "index.js"
 }

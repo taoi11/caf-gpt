@@ -31,5 +31,8 @@ HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
 # Expose port
 EXPOSE 3000
 
+# Install 'cookie' package
+RUN npm install cookie
+
 # Start the server
 CMD ["node", "dist/server/index.js"]
