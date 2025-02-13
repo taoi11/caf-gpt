@@ -19,7 +19,6 @@ data/
 !aider.config.yml
 !aider.model.settings.yml
 !aider.model.metadata.json
-.cursor/
 
 # Coverage reports
 coverage/
