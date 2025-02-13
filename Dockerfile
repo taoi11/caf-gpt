@@ -1,38 +1,41 @@
-FROM node:lts as builder
+# Build stage
+FROM python:3.12-slim as builder
+
 # Set working directory
 WORKDIR /app
-# Copy package files
-COPY package*.json ./
-# Install dependencies
-RUN npm install
-# Copy source files
-COPY . .
-# Build the application
-RUN npm run build:prod
+
+# Install build dependencies
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements first to leverage Docker cache
+COPY requirements.txt .
+RUN pip wheel --no-cache-dir --no-deps --wheel-dir /app/wheels -r requirements.txt
 
 # Runtime stage
-FROM node:lts
-# Install curl for health check
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+FROM python:3.12-slim
+
 WORKDIR /app
-# Copy only the necessary files from builder
-COPY --from=builder /app/package*.json ./
-COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/public ./public
-COPY --from=builder /app/src/prompts ./src/prompts
-# Install only production dependencies
-RUN npm install --production
-# Health check
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:3000/health || exit 1
-# Expose port
-EXPOSE 3000
 
-# Install 'cookie' package
-RUN npm install cookie
+# Copy wheels from builder
+COPY --from=builder /app/wheels /wheels
+COPY --from=builder /app/requirements.txt .
 
-# Start the server
-CMD ["node", "dist/server/index.js"]
+# Install dependencies
+RUN pip install --no-cache /wheels/*
+
+# Copy application code
+COPY src/ ./src/
+COPY static/ ./static/
+COPY prompts/ ./prompts/
+
+# Fly.io specific: Use PORT environment variable
+ENV PORT=8080
+
+# Expose port (Fly.io uses PORT env var)
+EXPOSE 8080
+
+# Start command optimized for Fly.io
+CMD ["python", "-m", "uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8080", "--proxy-headers"]
