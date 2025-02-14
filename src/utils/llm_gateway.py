@@ -1,10 +1,10 @@
-from openai import OpenAI
+from ollama import Client, ResponseError
 import os
 from ..types import Message, LLMResponse, LLMErrorDetails
 from .logger import logger
 
-# Configuration
-OPENROUTER_API_KEY = os.getenv('LLM_API_KEY', '')
+# Configuration - now using Ollama
+OLLAMA_HOST = os.getenv('OLLAMA_HOST', 'http://localhost:11434')
 DEFAULT_TEMPERATURE = 0.1
 
 class LLMError(Exception):
@@ -13,39 +13,60 @@ class LLMError(Exception):
 
 class LLMGateway:
     def __init__(self):
-        self.client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=OPENROUTER_API_KEY
+        self.client = Client(
+            host=OLLAMA_HOST,
+            timeout=60  # Increased timeout for local models
         )
 
-    async def query(self, messages: List[Message], model: str, temperature: Optional[float] = None) -> LLMResponse:
+    def query(self, messages: List[Message], model: str, temperature: Optional[float] = None, stream: bool = False) -> LLMResponse:
         try:
-            # Use DEFAULT_TEMPERATURE if temperature is not provided
             final_temperature = temperature if temperature is not None else DEFAULT_TEMPERATURE
             
-            # Make the API call
-            response = self.client.chat.completions.create(
+            # Convert message format for Ollama
+            ollama_messages = [{
+                'role': msg.role,
+                'content': msg.content
+            } for msg in messages]
+
+            # Make the API call using sync client
+            response = self.client.chat(
                 model=model,
-                messages=messages,
-                temperature=final_temperature,
-                extra_headers={
-                    "X-Title": "caf-gpt"
-                }
+                messages=ollama_messages,
+                options={'temperature': final_temperature},
+                stream=stream  # Add stream parameter
             )
 
-            # Format response
-            llm_response: LLMResponse = {
-                'content': response.choices[0].message.content,
-                'model': response.model,
-                'usage': {
-                    'prompt_tokens': response.usage.prompt_tokens,
-                    'completion_tokens': response.usage.completion_tokens,
-                    'total_tokens': response.usage.total_tokens
+            # Handle streaming response differently if needed
+            if stream:
+                # For streaming, we'll concatenate all chunks
+                full_response = ""
+                for chunk in response:
+                    full_response += chunk['message']['content']
+                
+                # Format response with concatenated content
+                llm_response: LLMResponse = {
+                    'content': full_response,
+                    'model': model,
+                    'usage': {
+                        'prompt_tokens': 0,
+                        'completion_tokens': 0,
+                        'total_tokens': 0
+                    }
                 }
-            }
+            else:
+                # Normal response handling
+                llm_response: LLMResponse = {
+                    'content': response.message['content'],
+                    'model': response.model,
+                    'usage': {
+                        'prompt_tokens': 0,
+                        'completion_tokens': 0,
+                        'total_tokens': 0
+                    }
+                }
 
-            # Log response
-            await logger.log_llm_interaction({
+            # Log response (kept original logging format)
+            logger.log_llm_interaction({
                 'role': 'assistant',
                 'content': llm_response['content'],
                 'metadata': {
@@ -56,8 +77,7 @@ class LLMGateway:
 
             return llm_response
 
-        except Exception as error:
-            error_data = getattr(error, 'response', {}).json() if hasattr(error, 'response') else {}
+        except ResponseError as error:
             logger.error('LLM request failed', {
                 'error': str(error),
                 'model': model,
@@ -65,9 +85,21 @@ class LLMGateway:
                 'temperature': final_temperature
             })
             raise LLMError(LLMErrorDetails(
-                code=error_data.get('error', {}).get('code', 'unknown'),
-                message=error_data.get('error', {}).get('message', str(error)),
-                error_type=error_data.get('error', {}).get('type', 'api_error')
+                code=error.status_code,
+                message=error.error,
+                error_type='ollama_error'
+            ))
+            
+        except Exception as error:
+            logger.error('Unexpected LLM error', {
+                'error': str(error),
+                'model': model,
+                'messageCount': len(messages)
+            })
+            raise LLMError(LLMErrorDetails(
+                code=500,
+                message=str(error),
+                error_type='unknown_error'
             ))
 
 # Export singleton instance
