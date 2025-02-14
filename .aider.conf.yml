@@ -5,10 +5,9 @@ watch-files: true
 # restore-chat-history: true
 read:
   - ".appLogic/"
-# file:
-#   - "src/index.ts"
-#   - "src/server/types.ts"
-#   - "src/client/types.ts"
+file:
+  - "src/main.py"
+  - "src/types.py"
 
 auto-commits: false
 attribute-commit-message-author: true
