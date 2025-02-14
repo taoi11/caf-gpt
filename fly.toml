@@ -7,9 +7,14 @@ app = 'caf-gpt'
 primary_region = 'yul'
 
 [build]
+dockerfile = "Dockerfile"
 
 [deploy]
   strategy = "immediate"
+
+[env]
+  DEVELOPMENT = "true"
+  PORT = "8080"
 
 [http_service]
   internal_port = 8080
