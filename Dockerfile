@@ -28,8 +28,6 @@ RUN pip install --no-cache /wheels/*
 
 # Copy application code
 COPY src/ ./src/
-COPY static/ ./static/
-COPY prompts/ ./prompts/
 
 # Fly.io specific: Use PORT environment variable
 ENV PORT=8080
