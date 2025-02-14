@@ -7,10 +7,6 @@ load_dotenv()
 # Validate required environment variables
 REQUIRED_VARS = [
     'PORT',
-    'LLM_API_KEY',
-    'PACE_NOTE_MODEL',
-    'DOAD_FINDER_MODEL',
-    'DOAD_CHAT_MODEL',
     'S3_BUCKET_NAME',
     'S3_ACCESS_KEY',
     'S3_SECRET_KEY'

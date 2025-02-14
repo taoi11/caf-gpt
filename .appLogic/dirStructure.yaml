@@ -3,11 +3,15 @@ cap-gpt:
     - overview.md: Main project 
     - paceNote.md: Pace Notes tool 
     - policyFoo.md: Policy tool base 
-    - doadFoo.md: DOAD policy tool 
+    - doadFoo.md: DOAD policy tool
+    - emailModule.md: Email processing module
   src:
     tests:  # Test files
       utils:  # Utility tests
         - test_rate_limiter.py: Rate limiter tests
+      emails:  # Email module tests
+        - test_email_processor.py: Email processor tests
+        - test_imap_connection.py: IMAP connection tests
     prompts:
       paceNote:
         - paceNote.md: Pace Notes prompt
@@ -17,21 +21,25 @@ cap-gpt:
           - policyReader.md: DOAD reader prompt
           - chatAgent.md: DOAD chat agent prompt
           - DOAD-list-table.md: Available DOADs list
-    srv:  # Main Python package
+    src:  # Main Python package
       utils:  # Server utilities
         - llm_gateway.py: LLM Gateway
         - s3_client.py: S3/Storj client
         - cost_tracker.py: Cost tracking
         - rate_limiter.py: Rate limiting
-      src:
-        pace_notes:  # Pace Notes API
-          -  agent.py: Core logic
-          - routes.py: Route handler
-        policy_foo:  # Policy tool API
-          - routes.py: Base handler
-        doad:  # DOAD implementation
-          - base.py: DOAD base class
-          - agents: DOAD agents
+      emails:  # Email processing module
+        - processor.py: Main email processor
+        - connection.py: IMAP connection manager
+        - models.py: Email data models
+        - queue.py: Email queue implementation
+      pace_notes:  # Pace Notes API
+        -  agent.py: Core logic
+        - routes.py: Route handler
+      policy_foo:  # Policy tool API
+        - routes.py: Base handler
+      doad:  # DOAD implementation
+        - base.py: DOAD base class
+        - agents: DOAD agents
       main.py: FastAPI application
   .env.example: Environment variables template
   Dockerfile: Docker configuration
