@@ -1,5 +1,7 @@
+import os
 import logging
 from pathlib import Path
+
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
@@ -7,7 +9,6 @@ from fastapi.middleware.cors import CORSMiddleware
 
 # Load environment variables
 load_dotenv()
-import os
 
 # Configure logging
 log_level = logging.DEBUG if os.getenv('DEVELOPMENT', 'false').lower() == 'true' else logging.INFO
@@ -41,19 +42,28 @@ async def health_check():
     return {"status": "healthy"}
 
 # Import and include routers
-# We'll add these as we build them
-# from app.api.pace_notes import router as pace_notes_router
-# from app.api.policy_foo import router as policy_foo_router
-# app.include_router(pace_notes_router, prefix="/api/pace-notes", tags=["pace-notes"])
-# app.include_router(policy_foo_router, prefix="/api/policy-foo", tags=["policy-foo"])
+from llm.pace_note.router import router as pace_notes_router
+# from llm.policy_foo.router import router as policy_foo_router  # To be implemented
+
+# Include routers with prefixes and tags
+app.include_router(
+    pace_notes_router,
+    prefix="/api/pace-notes",
+    tags=["pace-notes"]
+)
+# app.include_router(
+#     policy_foo_router,
+#     prefix="/api/policy-foo",
+#     tags=["policy-foo"]
+# )
 
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
         "main:app",
         host="0.0.0.0",
-        port=8000,
+        port=8080,
         reload=os.getenv('DEVELOPMENT', 'false').lower() == 'true',
         reload_excludes=[".*", "__pycache__"],  # Exclude dot files/dirs and cache
         reload_includes=["*.py", "*.html", "*.css", "*.js"]  # Only watch relevant files
-    ) 
+    )
