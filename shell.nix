@@ -1,22 +1,17 @@
 { pkgs ? (import <nixpkgs> {}) }:
 
 pkgs.mkShell {
-  buildInputs = [
+  buildInputs = with pkgs; [
     # Python
-    pkgs.python312
+    python312
 
-    # Python packages
-    pkgs.python312Packages.fastapi
-    pkgs.python312Packages.uvicorn
-    pkgs.python312Packages.python-dotenv
-    pkgs.python312Packages.httpx
+    # Dependencies
+    python312Packages.fastapi
+    python312Packages.uvicorn
+    python312Packages.python-dotenv
+    python312Packages.httpx
 
     # Development tools
-    pkgs.python312Packages.pylint
+    python312Packages.pylint
   ];
-
-  shellHook = ''
-    echo "Python version: $(python --version)"
-    echo "Pip version: $(pip --version)"
-  '';
 }
