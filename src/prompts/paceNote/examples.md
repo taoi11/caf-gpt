@@ -31,11 +31,11 @@ Title :
 - COMMUNICATION - OPEN COMMUNICATION/CLARIFICATION
 
 ## Actions:
-Cpl. Dhaliwal consistently seeks clarification to improve their understanding when
+The Member consistently seeks clarification to improve their understanding when
 communicating which is often witnessed in their interactions with the higher level DRMIS support team. They in turn utilize this skill when communicating to the
 platoon any required changes to DRMIS applications/corrections against respective work centers.
 
 ## Outcome :
-Cpl. Dhaliwal's consistent effort to seek clarification and improve understanding enhances communication, improves efficiency and showcases their
+The Member's consistent effort to seek clarification and improve understanding enhances communication, improves efficiency and showcases their
 adaptability in learning. This mindset is crucial in the CAF as it allows its soldiers to remain agile and responsive to emerging challenges and opportunities.
 </Example three>
