@@ -33,21 +33,3 @@ MODELS = {
     'paceNote': os.getenv('PACE_NOTE_MODEL')
 }
 
-# Time constants in milliseconds
-HOUR = 60 * 60 * 1000
-DAY = 24 * HOUR
-
-# Rate limiting configuration
-RATE_LIMITS = {
-    'WHITELISTED_CIDRS': [
-        '205.193.0.0/16',  # DND network range only
-    ],
-    'HOURLY_LIMIT': 10,    # 10 requests per hour
-    'DAILY_LIMIT': 30,     # 30 requests per day
-    'CLEANUP_INTERVAL': HOUR,
-    'MAX_IPS': 10000,      # Maximum number of IPs to track
-    'MAX_TIMESTAMPS_PER_WINDOW': 100,  # Maximum number of timestamps to store per window
-    # Time windows
-    'HOUR': HOUR,
-    'DAY': DAY
-}

@@ -1,15 +1,28 @@
-from typing import TypedDict
+from typing import TypedDict, Dict, List, Optional
 
+# Base message type used across the app
 class Message(TypedDict):
     role: str
     content: str
-    timestamp: str | None
+    timestamp: Optional[str]
 
+# LLM-specific types
+class LLMResponse(TypedDict):
+    content: str
+    model: str
+    usage: Dict[str, int]
+
+class LLMErrorDetails(TypedDict):
+    code: str
+    message: str
+    error_type: str
+
+# Domain-specific types
 class PaceNoteRequest(TypedDict):
     input: str
-    rank: str | None
+    rank: Optional[str]
 
 class PaceNoteResponse(TypedDict):
     content: str
-    timestamp: str | None
-    rank: str | None
+    timestamp: Optional[str]
+    rank: Optional[str]

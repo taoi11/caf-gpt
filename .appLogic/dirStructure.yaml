@@ -1,0 +1,41 @@
+cap-gpt:
+  .appLogic:  # Application documentation
+    - overview.md: Main project 
+    - paceNote.md: Pace Notes tool 
+    - policyFoo.md: Policy tool base 
+    - doadFoo.md: DOAD policy tool 
+  src:
+    tests:  # Test files
+      utils:  # Utility tests
+        - test_rate_limiter.py: Rate limiter tests
+    prompts:
+      paceNote:
+        - paceNote.md: Pace Notes prompt
+      policyFoo:
+        doad:
+          - policyFinder.md: DOAD finder prompt
+          - policyReader.md: DOAD reader prompt
+          - chatAgent.md: DOAD chat agent prompt
+          - DOAD-list-table.md: Available DOADs list
+    srv:  # Main Python package
+      utils:  # Server utilities
+        - llm_gateway.py: LLM Gateway
+        - s3_client.py: S3/Storj client
+        - cost_tracker.py: Cost tracking
+        - rate_limiter.py: Rate limiting
+      src:
+        pace_notes:  # Pace Notes API
+          -  agent.py: Core logic
+          - routes.py: Route handler
+        policy_foo:  # Policy tool API
+          - routes.py: Base handler
+        doad:  # DOAD implementation
+          - base.py: DOAD base class
+          - agents: DOAD agents
+      main.py: FastAPI application
+  .env.example: Environment variables template
+  Dockerfile: Docker configuration
+  .gitignore: Git ignore patterns
+  .dockerignore: Docker ignore patterns
+  requirements.txt: Python package dependencies
+  .pylintrc: Pylint configuration
