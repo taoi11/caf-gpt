@@ -42,7 +42,7 @@ async def health_check():
     return {"status": "healthy"}
 
 # Import and include routers
-from llm.pace_note.router import router as pace_notes_router
+from src.llm.pace_note.router import router as pace_notes_router
 # from llm.policy_foo.router import router as policy_foo_router  # To be implemented
 
 # Include routers with prefixes and tags
@@ -60,7 +60,7 @@ app.include_router(
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(
-        "main:app",
+        "src.main:app",
         host="0.0.0.0",
         port=8080,
         reload=os.getenv('DEVELOPMENT', 'false').lower() == 'true',

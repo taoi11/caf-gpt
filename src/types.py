@@ -1,15 +1,15 @@
-from typing import Dict, List, Optional, TypedDict
+from typing import TypedDict
 
 class Message(TypedDict):
     role: str
     content: str
-    timestamp: Optional[str]
+    timestamp: str | None
 
 class PaceNoteRequest(TypedDict):
     input: str
-    rank: Optional[str]
+    rank: str | None
 
 class PaceNoteResponse(TypedDict):
     content: str
-    timestamp: Optional[str]
-    rank: Optional[str] 
+    timestamp: str | None
+    rank: str | None

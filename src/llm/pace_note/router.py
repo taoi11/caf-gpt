@@ -1,8 +1,8 @@
 from typing import Dict
 from fastapi import APIRouter, Request, HTTPException
 
-from ...utils.logger import logger
-from .agent import pace_note_agent
+from src.utils.logger import logger
+from src.llm.pace_note.agent import pace_note_agent
 # from ...utils.rate_limiter import rate_limiter  # We'll implement this later
 
 router = APIRouter()
@@ -16,7 +16,7 @@ async def handle_pace_note_request(request: Request) -> Dict:
         data = await request.json()
     except Exception as e:
         logger.warn('Invalid JSON received')
-        raise HTTPException(status_code=400, detail="Invalid JSON")
+        raise HTTPException(status_code=400, detail="Invalid JSON") from e
 
     # Validate input
     if not data.get('input', '').strip():
@@ -53,4 +53,4 @@ async def handle_pace_note_request(request: Request) -> Dict:
         raise HTTPException(
             status_code=500,
             detail="Failed to generate pace note"
-        ) 
+        ) from error

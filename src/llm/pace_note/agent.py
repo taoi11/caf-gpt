@@ -5,9 +5,9 @@ from typing import Dict, Optional
 import boto3
 from botocore.client import BaseClient
 
-from ...utils.logger import logger
-from ...utils.llm_gateway import llm_gateway, Message
-from ...utils.config import MODELS
+from src.utils.logger import logger
+from src.utils.llm_gateway import llm_gateway, Message
+from src.utils.config import MODELS
 
 class PaceNoteAgent:
     def __init__(self):
@@ -43,7 +43,7 @@ class PaceNoteAgent:
             logger.error('Failed to initialize prompts', {
                 'error': str(error)
             })
-            raise ValueError('Failed to load prompt files')
+            raise ValueError('Failed to load prompt files') from error
 
     async def _read_competencies(self, path: str = 'paceNote/cpl_mcpl.md') -> str:
         """Read competencies from S3 (read-only)"""
@@ -75,7 +75,7 @@ class PaceNoteAgent:
                 'path': path,
                 'error': str(error)
             })
-            raise ValueError('Failed to read competencies list')
+            raise ValueError('Failed to read competencies list') from error
 
     async def generate_note(self, request: Dict) -> Dict:
         """Generate pace note"""
@@ -96,7 +96,8 @@ class PaceNoteAgent:
         # Create message
         user_message: Message = {
             'role': 'user',
-            'content': request['input']
+            'content': request['input'],
+            'timestamp': None
         }
 
         logger.debug('Sending request to LLM')
@@ -124,4 +125,4 @@ class PaceNoteAgent:
         }
 
 # Export singleton instance
-pace_note_agent = PaceNoteAgent() 
+pace_note_agent = PaceNoteAgent()
