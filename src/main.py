@@ -1,14 +1,14 @@
 import os
+import sys
 import logging
 from pathlib import Path
+import asyncio
 
-from dotenv import load_dotenv
-from fastapi import FastAPI
-from fastapi.staticfiles import StaticFiles
-from fastapi.middleware.cors import CORSMiddleware
+# Add src to Python path
+src_path = Path(__file__).parent.parent
+sys.path.append(str(src_path))
 
-# Load environment variables
-load_dotenv()
+from src.emails.processor import EmailProcessor
 
 # Configure logging
 log_level = logging.DEBUG if os.getenv('DEVELOPMENT', 'false').lower() == 'true' else logging.INFO
@@ -18,52 +18,23 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize FastAPI
-app = FastAPI(title="CAF-GPT")
+# Initialize email processor
+email_processor = EmailProcessor()
 
-# Basic CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],  # In production, replace with specific origins
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+async def main():
+    """Main application entry point."""
+    try:
+        # Start email processor
+        logger.info("Starting email processor")
+        await email_processor.start()
 
-# Mount static files
-static_dir = Path(__file__).parent.parent / "static"
-if static_dir.exists():
-    app.mount("/static", StaticFiles(directory=static_dir), name="static")
-    logger.info("Static files mounted from %s", static_dir)
+        # Keep the application running
+        while True:
+            await asyncio.sleep(1)
 
-# Health check endpoint
-@app.get("/health")
-async def health_check():
-    return {"status": "healthy"}
-
-# Import and include routers
-from src.llm.pace_note.router import router as pace_notes_router
-# from llm.policy_foo.router import router as policy_foo_router  # To be implemented
-
-# Include routers with prefixes and tags
-app.include_router(
-    pace_notes_router,
-    prefix="/api/pace-notes",
-    tags=["pace-notes"]
-)
-# app.include_router(
-#     policy_foo_router,
-#     prefix="/api/policy-foo",
-#     tags=["policy-foo"]
-# )
+    except KeyboardInterrupt:
+        logger.info("Shutting down...")
+        await email_processor.stop()
 
 if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(
-        "src.main:app",
-        host="0.0.0.0",
-        port=8080,
-        reload=os.getenv('DEVELOPMENT', 'false').lower() == 'true',
-        reload_excludes=[".*", "__pycache__"],  # Exclude dot files/dirs and cache
-        reload_includes=["*.py", "*.html", "*.css", "*.js"]  # Only watch relevant files
-    )
+    asyncio.run(main())
