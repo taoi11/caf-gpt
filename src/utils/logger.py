@@ -1,10 +1,51 @@
 import json
 import logging
+import os
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 from uuid import uuid4
 from .config import SERVER_CONFIG
+
+# Configure root logger
+def setup_logging():
+    """Setup basic logging configuration"""
+    log_level = logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO
+    
+    # Clear any existing handlers
+    root = logging.getLogger()
+    if root.handlers:
+        for handler in root.handlers:
+            root.removeHandler(handler)
+            
+    # Configure logging
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+# Initialize logging
+setup_logging()
+
+# Create module logger
+logger = logging.getLogger('email_processor')
+
+# Helper functions for consistent logging
+def log_error(message: str, **kwargs: Any) -> None:
+    """Log error with additional context"""
+    logger.error(message, extra=kwargs)
+
+def log_warning(message: str, **kwargs: Any) -> None:
+    """Log warning with additional context"""
+    logger.warning(message, extra=kwargs)
+
+def log_info(message: str, **kwargs: Any) -> None:
+    """Log info with additional context"""
+    logger.info(message, extra=kwargs)
+
+def log_debug(message: str, **kwargs: Any) -> None:
+    """Log debug with additional context"""
+    logger.debug(message, extra=kwargs)
 
 class LogLevel(Enum):
     DEBUG = 0
@@ -175,3 +216,20 @@ def log_info(message: str, **kwargs: Any) -> None:
 def log_debug(message: str, **kwargs: Any) -> None:
     """Log debug with additional context"""
     logger.debug(message, extra=kwargs)
+
+def setup_logger(name: str) -> logging.Logger:
+    """Setup module level logger."""
+    logger = logging.getLogger(name)
+    
+    # Only add handler if not already configured
+    if not logger.handlers:
+        # Set level based on environment
+        logger.setLevel(
+            logging.DEBUG if os.getenv('DEVELOPMENT', 'false').lower() == 'true' 
+            else logging.INFO
+        )
+    
+    return logger
+
+# Module level logger
+logger = setup_logger('email_processor')

@@ -16,6 +16,7 @@ class EmailProcessor:
         self.queue = EmailQueue()
         self.running = False
         self._process_lock = asyncio.Lock()
+        self._processed_uids = set()  # Track processed message UIDs
         
     async def start(self) -> None:
         # Start the email processor.
@@ -35,47 +36,64 @@ class EmailProcessor:
         asyncio.create_task(self._processing_loop())
 
     async def stop(self) -> None:
-        # Stop the email processor.
+        """Stop the email processor and cleanup resources."""
+        logger.info("Shutting down email processor...")
+        
+        # Set running to false to stop processing loop
         self.running = False
-        logger.info("Stopping email processor")
+        
+        try:
+            # Wait for current processing to complete
+            if self.queue.is_processing():
+                logger.info("Waiting for current processing to complete...")
+                await asyncio.sleep(1)
+            
+            # Close IMAP connection if it exists
+            if self.connection.is_connected():
+                logger.debug("Closing IMAP connection...")
+                self.connection.close()
+            
+            logger.info("Email processor shutdown complete")
+            
+        except Exception as e:
+            logger.error(f"Error during shutdown: {str(e)}")
 
     async def _processing_loop(self) -> None:
         # Main processing loop.
-        retry_delay = 5  # seconds
         while self.running:
-            if not self.connection.is_connected():
-                logger.debug(f"Waiting {retry_delay}s before connection retry")
-                time.sleep(retry_delay)
-                retry_delay = min(retry_delay * 2, 300)  # Cap at 5 minutes
-                continue
-
             try:
-                # Check connection health
-                if not self.connection.is_healthy:
-                    await self._handle_unhealthy_connection()
-                    continue
-
                 # Get new messages
                 messages = self.connection.get_unread_messages()
                 if messages:
-                    added = self.queue.add_emails(messages)
-                    logger.info(f"Added {added} new messages to queue")
+                    # Filter out already processed messages
+                    new_messages = [
+                        msg for msg in messages 
+                        if msg.get_uid() not in self._processed_uids
+                    ]
+                    
+                    if new_messages:
+                        added = self.queue.add_emails(new_messages)
+                        logger.info(f"Added {added} new messages to queue")
+                        
+                        # Track the new messages
+                        for msg in new_messages:
+                            self._processed_uids.add(msg.get_uid())
 
                 # Process queue
                 if not self.queue.is_empty():
                     await self._process_queue()
 
                 # Wait before next check
-                await asyncio.sleep(5)  # Adjust as needed
+                await asyncio.sleep(5)
 
             except Exception as e:
                 logger.error(f"Error in processing loop: {str(e)}")
-                await asyncio.sleep(5)  # Back off on error
+                await asyncio.sleep(5)
 
     async def _process_queue(self) -> None:
         # Process emails in the queue.
         if not self.queue.start_processing():
-            return  # Already processing
+            return
 
         try:
             while not self.queue.is_empty() and self.running:
@@ -84,32 +102,32 @@ class EmailProcessor:
                     continue
 
                 try:
-                    # Process based on system type
                     system = email.get_system()
+                    folder = email.metadata.get("folder")
+                    
+                    if not folder:
+                        logger.error("Email missing folder information")
+                        continue
+
+                    # Process based on system type
                     if system == "pace_notes":
                         # TODO: Implement pace notes processing
+                        logger.info(f"Processing pace notes email {email.get_uid()}")
                         pass
                     elif system == "policy_foo":
                         # TODO: Implement policy foo processing
+                        logger.info(f"Processing policy foo email {email.get_uid()}")
                         pass
                     else:
                         logger.warn(f"Unknown system type: {system}")
                         continue
 
-                    # Mark as read after successful processing
-                    if self.connection.mark_as_read(email.get_uid()):
-                        logger.info(f"Successfully processed email", {
-                            "uid": email.get_uid(),
-                            "system": system
-                        })
-                    else:
-                        email.mark_for_retry("Failed to mark as read")
-                        self.queue.add_email(email)  # Re-queue for retry
+                    # Note: Removed mark-as-read - will be done after full processing
 
                 except Exception as e:
                     logger.error(f"Error processing email: {str(e)}")
                     email.mark_for_retry(str(e))
-                    self.queue.add_email(email)  # Re-queue for retry
+                    self.queue.add_email(email)
 
         finally:
             self.queue.stop_processing()

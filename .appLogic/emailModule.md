@@ -1,29 +1,27 @@
 # Email Processing Module
 
 ## Overview
-Handles IMAP email retrieval and routing for two specific folders in ProtonMail:
-1. `CAF-GPT/PaceNoteFoo` - Routes to Pace Notes system
-2. `CAF-GPT/PolicyFoo` - Routes to Policy Foo system
+Handles IMAP email retrieval and routing from ProtonMail folders:
+1. `Folders/CAF-GPT/PaceNote` - Routes to Pace Notes system
+2. `Folders/CAF-GPT/PolicyFoo` - Routes to Policy Foo system
 
 ## Architecture
 
 ### Data Flow
 1. Initialization
    - On startup: Connect to IMAP
-   - Select specific mailboxes for processing
    - Load configuration from environment
    - Setup logging based on development mode
 
 2. Connection Management
    - Single IMAP connection with health monitoring
-   - Automatic reconnection with exponential backoff
-   - Connection status tracking
+   - Folder-based message retrieval
    - Clean error handling
 
 3. Email Processing
    - Continuous processing loop
-   - Mailbox-specific routing (pace_notes/policy_foo)
-   - Mark-as-read confirmation
+   - Message deduplication using UID tracking
+   - Delayed read marking (after processing)
    - Error handling with logging
 
 ### Implementation Details
@@ -36,18 +34,21 @@ EMAIL_PASSWORD=****
 IMAP_PORT=1143
 SMTP_PORT=1025
 
-# Hardcoded Mailboxes
-MAILBOXES = {
-    "pace_notes": "CAF-GPT/PaceNoteFoo",
-    "policy_foo": "CAF-GPT/PolicyFoo"
+# Hardcoded values
+username="pacenotefoo@caf-gpt.com"
+
+# Hardcoded mailbox paths
+mailboxes = {
+    "pace_notes": "Folders/CAF-GPT/PaceNote",
+    "policy_foo": "Folders/CAF-GPT/PolicyFoo"
 }
 ```
 
-### Mailbox Handling
-- **Folder Selection**: Explicitly select each mailbox before processing
-- **Folder Switching**: Switch between mailboxes during processing loop
-- **Folder Monitoring**: Track last processed message for each folder
-- **Error Handling**: Handle folder access errors gracefully
+### Message Handling
+- **IMAP Fetch**: Uses `BODY.PEEK[]` to prevent auto-marking as read
+- **UID Tracking**: Maintains set of processed message UIDs
+- **Read Status**: Messages only marked as read after full processing workflow
+- **Folder Selection**: Explicit folder selection for each operation
 
 ### Error Handling
 - Connection failures with backoff
@@ -86,3 +87,7 @@ MAILBOXES = {
   - UID-based message identification
   - Processing state tracking
   - Error history for failed messages
+- **Deduplication**:
+  - Tracks processed UIDs
+  - Prevents re-processing of same message
+  - Maintains processing history

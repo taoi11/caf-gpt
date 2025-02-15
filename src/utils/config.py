@@ -40,12 +40,12 @@ EMAIL_CONFIG: Dict[str, Any] = {
     "smtp_port": int(_get_env("SMTP_PORT")),
     
     # Hardcoded values
-    "username": "pacenotefoo@caf-gpt.com",  # Default inbox
+    "username": "pacenotefoo@caf-gpt.com",
     
-    # System inboxes mapping
-    "inboxes": {
-        "pace_notes": "pacenotefoo@caf-gpt.com",
-        "policy_foo": "policyfoo@caf-gpt.com"
+    # Hardcoded mailbox paths - updated to match actual IMAP paths
+    "mailboxes": {
+        "pace_notes": "Folders/CAF-GPT/PaceNote",
+        "policy_foo": "Folders/CAF-GPT/PolicyFoo"
     }
 }
 

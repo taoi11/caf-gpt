@@ -86,4 +86,9 @@ class EmailQueue:
     def stop_processing(self) -> None:
         # Mark queue as not processing.
         with self.lock:
-            self._processing = False 
+            self._processing = False
+
+    def is_processing(self) -> bool:
+        """Check if queue is currently being processed."""
+        with self.lock:
+            return self._processing 
