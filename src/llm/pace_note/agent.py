@@ -1,128 +1,72 @@
-import os
 from pathlib import Path
-from typing import Dict, Optional
-
-import boto3
-from botocore.client import BaseClient
+from typing import Dict
 
 from src.utils.logger import logger
-from src.utils.llm_gateway import llm_gateway, Message
 from src.utils.config import MODELS
 
 class PaceNoteAgent:
     def __init__(self):
         self.prompt_path = Path(__file__).parent.parent.parent / "prompts" / "paceNote" / "paceNote.md"
-        self.examples_path = Path(__file__).parent.parent.parent / "prompts" / "paceNote" / "examples.md"
         self.system_prompt = ""
-        self.examples = ""
-        self.s3_client: Optional[BaseClient] = None
+        
+        # Initialize prompt
+        self._initialize_prompt()
 
-        # Initialize prompts
-        self._initialize_prompts()
-
-    def _initialize_prompts(self) -> None:
-        """Initialize by loading the prompt files (read-only)"""
+    def _initialize_prompt(self) -> None:
+        """Initialize by loading the prompt file (read-only)"""
         try:
             logger.debug('Loading system prompt', {'path': str(self.prompt_path)})
-            logger.debug('Loading examples', {'path': str(self.examples_path)})
-
-            # Read both files
             self.system_prompt = self.prompt_path.read_text()
-            self.examples = self.examples_path.read_text()
-
-            logger.log_llm_interaction({
-                'role': 'system',
-                'content': self.system_prompt,
-                'metadata': {
-                    'timestamp': None  # Logger will add timestamp
-                }
-            })
-
-            logger.info('System prompt and examples loaded successfully')
-        except Exception as error:
-            logger.error('Failed to initialize prompts', {
-                'error': str(error)
-            })
-            raise ValueError('Failed to load prompt files') from error
-
-    async def _read_competencies(self, path: str = 'paceNote/cpl_mcpl.md') -> str:
-        """Read competencies from S3 (read-only)"""
-        try:
-            logger.debug('Reading competencies', {'path': path, 'source': 'S3'})
             
-            if not self.s3_client:
-                self.s3_client = boto3.client(
-                    's3',
-                    aws_access_key_id=os.getenv('S3_ACCESS_KEY'),
-                    aws_secret_access_key=os.getenv('S3_SECRET_KEY')
-                )
-
-            response = self.s3_client.get_object(
-                Bucket=os.getenv('S3_BUCKET_NAME'),
-                Key=path
+            # For now, leave competency_list as placeholder
+            self.system_prompt = self.system_prompt.replace(
+                '{competency_list}', 
+                '(competency list placeholder)'
+            ).replace(
+                '{examples}',
+                'Example 1: ...\nExample 2: ...'  # Add actual examples later
             )
 
-            competencies = response['Body'].read().decode('utf-8')
-            if not competencies:
-                logger.error('Empty competencies list received from S3')
-                raise ValueError('Empty competencies list')
-
-            logger.debug('Competencies loaded successfully')
-            return competencies
-
+            logger.info('System prompt loaded successfully')
+            
         except Exception as error:
-            logger.error('Failed to read competencies', {
-                'path': path,
+            logger.error('Failed to initialize prompt', {
                 'error': str(error)
             })
-            raise ValueError('Failed to read competencies list') from error
+            raise ValueError('Failed to load prompt file') from error
 
-    async def generate_note(self, request: Dict) -> Dict:
-        """Generate pace note"""
-        # Ensure prompts are loaded
-        if not self.system_prompt or not self.examples:
-            logger.info('Prompts not loaded, loading now...')
-            self._initialize_prompts()
-
-        # Read competencies
-        competencies = await self._read_competencies()
-
-        # Fill the prompt template
-        logger.debug('Preparing prompt with competencies and examples')
-        filled_prompt = self.system_prompt\
-            .replace('{competency_list}', competencies)\
-            .replace('{examples}', self.examples)
-
-        # Create message
-        user_message: Message = {
-            'role': 'user',
-            'content': request['input'],
-            'timestamp': None
-        }
-
-        logger.debug('Sending request to LLM')
-        response = await llm_gateway.query({
-            'messages': [user_message],
-            'systemPrompt': filled_prompt,
-            'model': MODELS['paceNote'],
-            'temperature': 0.7
-        })
-
-        logger.log_llm_interaction({
-            'role': 'assistant',
-            'content': response['content'],
-            'metadata': {
-                'model': MODELS['paceNote'],
-                'usage': response['usage']
+    def process(self, email_content: str) -> None:
+        """Process email content and log would-be LLM request"""
+        try:
+            # Format the would-be LLM request
+            request = {
+                "model": MODELS['paceNote'],
+                "messages": [
+                    {
+                        "role": "system",
+                        "content": self.system_prompt
+                    },
+                    {
+                        "role": "user",
+                        "content": email_content
+                    }
+                ],
+                "temperature": 0.1
             }
-        })
-
-        logger.debug('LLM response received, preparing response')
-        return {
-            'content': response['content'],
-            'timestamp': None,  # FastAPI will serialize this
-            'rank': request.get('rank')
-        }
+            
+            # Log full request details
+            logger.debug("Would send LLM request", {
+                "model": request["model"],
+                "system_prompt_preview": request["messages"][0]["content"][:200],
+                "user_message_preview": request["messages"][1]["content"][:200],
+                "full_request": request  # Log entire request for debugging
+            })
+            
+        except Exception as error:
+            logger.error('Error preparing LLM request', {
+                'error': str(error)
+            })
+            raise
 
 # Export singleton instance
 pace_note_agent = PaceNoteAgent()

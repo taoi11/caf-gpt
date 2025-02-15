@@ -7,28 +7,49 @@ from typing import Any, Dict, Optional
 from uuid import uuid4
 from .config import SERVER_CONFIG
 
-# Configure root logger
-def setup_logging():
-    """Setup basic logging configuration"""
-    log_level = logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO
+def setup_logger(name: str) -> logging.Logger:
+    """Setup module level logger."""
+    logger = logging.getLogger(name)
     
-    # Clear any existing handlers
-    root = logging.getLogger()
-    if root.handlers:
-        for handler in root.handlers:
-            root.removeHandler(handler)
-            
-    # Configure logging
-    logging.basicConfig(
-        level=log_level,
-        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    # Clear existing handlers
+    if logger.handlers:
+        for handler in logger.handlers:
+            logger.removeHandler(handler)
+    
+    # Set level based on environment
+    logger.setLevel(
+        logging.DEBUG if SERVER_CONFIG['development']
+        else logging.INFO
     )
+    
+    # Create console handler with formatter
+    handler = logging.StreamHandler()
+    formatter = logging.Formatter(
+        '%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(metadata)s'
+    )
+    handler.setFormatter(formatter)
+    logger.addHandler(handler)
+    
+    return logger
 
-# Initialize logging
-setup_logging()
+class Logger:
+    def __init__(self, name: str = 'caf-gpt'):
+        self._logger = setup_logger(name)
 
-# Create module logger
-logger = logging.getLogger('email_processor')
+    def debug(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        extra = {'metadata': json.dumps(metadata) if metadata else 'no metadata'}
+        self._logger.debug(message, extra=extra)
+
+    def info(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        extra = {'metadata': json.dumps(metadata) if metadata else 'no metadata'}
+        self._logger.info(message, extra=extra)
+
+    def error(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        extra = {'metadata': json.dumps(metadata) if metadata else 'no metadata'}
+        self._logger.error(message, extra=extra)
+
+# Export singleton instance
+logger = Logger('email_processor')
 
 # Helper functions for consistent logging
 def log_error(message: str, **kwargs: Any) -> None:
@@ -154,26 +175,6 @@ class Logger:
                 self._format_llm_response(data, request_id or 'unknown', duration_ms)
             )
 
-    def debug(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        if not self._should_log(LogLevel.DEBUG):
-            return
-        self.logger.debug(self._format_message(message, metadata))
-
-    def info(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        if not self._should_log(LogLevel.INFO):
-            return
-        self.logger.info(self._format_message(message, metadata))
-
-    def warn(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        if not self._should_log(LogLevel.WARN):
-            return
-        self.logger.warning(self._format_message(message, metadata))
-
-    def error(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        if not self._should_log(LogLevel.ERROR):
-            return
-        self.logger.error(self._format_message(message, metadata))
-
     def log_request(self, method: str, url: str, status_code: int, metadata: Optional[Dict[str, Any]] = None) -> None:
         if not SERVER_CONFIG['development']:
             return
@@ -190,46 +191,5 @@ class Logger:
         else:
             self.debug(message, metadata)
 
-    def _format_message(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> str:
-        if not metadata:
-            return message
-        return f"{message} {json.dumps(metadata)}"
-
     def _should_log(self, level: LogLevel) -> bool:
         return SERVER_CONFIG['development'] or level.value >= self.current_level.value
-
-# Export singleton instance
-logger = Logger()
-
-def log_error(message: str, **kwargs: Any) -> None:
-    """Log error with additional context"""
-    logger.error(message, extra=kwargs)
-
-def log_warning(message: str, **kwargs: Any) -> None:
-    """Log warning with additional context"""
-    logger.warning(message, extra=kwargs)
-
-def log_info(message: str, **kwargs: Any) -> None:
-    """Log info with additional context"""
-    logger.info(message, extra=kwargs)
-
-def log_debug(message: str, **kwargs: Any) -> None:
-    """Log debug with additional context"""
-    logger.debug(message, extra=kwargs)
-
-def setup_logger(name: str) -> logging.Logger:
-    """Setup module level logger."""
-    logger = logging.getLogger(name)
-    
-    # Only add handler if not already configured
-    if not logger.handlers:
-        # Set level based on environment
-        logger.setLevel(
-            logging.DEBUG if os.getenv('DEVELOPMENT', 'false').lower() == 'true' 
-            else logging.INFO
-        )
-    
-    return logger
-
-# Module level logger
-logger = setup_logger('email_processor')

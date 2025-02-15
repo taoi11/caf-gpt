@@ -91,44 +91,35 @@ class EmailProcessor:
                 await asyncio.sleep(5)
 
     async def _process_queue(self) -> None:
-        # Process emails in the queue.
+        """Add new emails to queue."""
         if not self.queue.start_processing():
             return
 
         try:
-            while not self.queue.is_empty() and self.running:
-                email = self.queue.get_next_email()
-                if not email:
-                    continue
-
-                try:
-                    system = email.get_system()
-                    folder = email.metadata.get("folder")
+            # Get new messages
+            messages = self.connection.get_unread_messages()
+            if messages:
+                # Filter out already processed messages
+                new_messages = [
+                    msg for msg in messages 
+                    if msg.get_uid() not in self._processed_uids
+                ]
+                
+                if new_messages:
+                    added = self.queue.add_emails(new_messages)
+                    logger.info(f"Added {added} new messages to queue")
                     
-                    if not folder:
-                        logger.error("Email missing folder information")
-                        continue
+                    # Track the new messages
+                    for msg in new_messages:
+                        self._processed_uids.add(msg.get_uid())
+                        logger.debug(f"Added email to queue", {
+                            "uid": msg.get_uid(),
+                            "system": msg.get_system()
+                        })
 
-                    # Process based on system type
-                    if system == "pace_notes":
-                        # TODO: Implement pace notes processing
-                        logger.info(f"Processing pace notes email {email.get_uid()}")
-                        pass
-                    elif system == "policy_foo":
-                        # TODO: Implement policy foo processing
-                        logger.info(f"Processing policy foo email {email.get_uid()}")
-                        pass
-                    else:
-                        logger.warn(f"Unknown system type: {system}")
-                        continue
-
-                    # Note: Removed mark-as-read - will be done after full processing
-
-                except Exception as e:
-                    logger.error(f"Error processing email: {str(e)}")
-                    email.mark_for_retry(str(e))
-                    self.queue.add_email(email)
-
+        except Exception as e:
+            logger.error(f"Error adding emails to queue: {str(e)}")
+            
         finally:
             self.queue.stop_processing()
 

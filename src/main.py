@@ -9,13 +9,21 @@ sys.path.append(str(src_path))
 
 from src.utils.logger import logger
 from src.emails.processor import EmailProcessor
+from src.llm import LLMRouter
 
 async def main():
     """Main application entry point."""
+    email_processor = None
     try:
-        # Start email processor
+        # Start email processor (no LLM dependency)
         logger.info("Starting email processor")
+        email_processor = EmailProcessor()  # No router needed
         await email_processor.start()
+
+        # Start LLM router to watch queue
+        logger.info("Starting LLM router")
+        llm_router = LLMRouter()
+        llm_router.start_watching(email_processor.queue)  # Pass queue reference
 
         # Keep the application running
         while True:
@@ -26,11 +34,10 @@ async def main():
     except Exception as e:
         logger.error(f"Unexpected error: {str(e)}")
     finally:
-        # Always ensure clean shutdown
-        await email_processor.stop()
+        if email_processor:
+            await email_processor.stop()
 
 if __name__ == "__main__":
-    email_processor = EmailProcessor()
     try:
         asyncio.run(main())
     except KeyboardInterrupt:
