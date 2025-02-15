@@ -6,11 +6,9 @@ pkgs.mkShell {
     python312
 
     # Dependencies
-    python312Packages.fastapi
-    python312Packages.uvicorn
     python312Packages.python-dotenv
-    python312Packages.httpx
     python312Packages.ollama
+    python312Packages.mail-parser
 
     # Development tools
     python312Packages.pylint

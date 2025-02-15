@@ -36,7 +36,7 @@ A collection of AI tools and agents for army personnel, packaged as a Python app
 - **Version**: 3.12
 - **Purpose**: server-side logic
 - **Packages**:
-  - imap_tools
+  - imaplib
   - boto3
 
 ### Testing
