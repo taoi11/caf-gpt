@@ -6,6 +6,7 @@ globs: src/*
 - **Primary Goal**: Simplify and streamline app development while maintaining functionality.
 - **Core Philosophy**: Simplicity is key. Prioritize built-in libraries and frameworks first.
 - **User-Centric**: Always wait for user confirmation before making changes to the code base.
+- **Code-Docs**: Use single line comment for code level documentation.
 
 ## Best Practices
 1. **Clarity Over Complexity**:
@@ -13,7 +14,7 @@ globs: src/*
   - Use simple language and examples when possible.
 
 2. **Transparency**:
-  - Document all changes and thought processes in `notePad/`.
+  - Document all changes and thought processes in `notepad/`.
   - Maintain a clear audit trail of decisions.
 
 3. **User Control**:

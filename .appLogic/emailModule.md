@@ -1,91 +1,88 @@
 # Email Processing Module
 
 ## Overview
-Handles IMAP email retrieval and routing for two inboxes:
-1. `pacenotefoo@caf-gpt.com` - Routes to Pace Notes system
-2. `policyfoo@caf-gpt.com` - Routes to Policy Foo system
+Handles IMAP email retrieval and routing for two specific folders in ProtonMail:
+1. `CAF-GPT/PaceNoteFoo` - Routes to Pace Notes system
+2. `CAF-GPT/PolicyFoo` - Routes to Policy Foo system
 
 ## Architecture
 
 ### Data Flow
-0. Initialization
+1. Initialization
    - On startup: Connect to IMAP
-   - Reload all unread messages into queue
-   - Maintain original received order
+   - Select specific mailboxes for processing
+   - Load configuration from environment
+   - Setup logging based on development mode
 
-1. Queue Management
-   - Thread-safe in-memory storage using Python's deque
-   - Cold start protection via IMAP reload
-   - No persistent storage of queue state
-   - Lock-based concurrency control
+2. Connection Management
+   - Single IMAP connection with health monitoring
+   - Automatic reconnection with exponential backoff
+   - Connection status tracking
+   - Clean error handling
 
-2. Processing Flow
-   - Emails added to queue as received
-   - **Routing Logic**:
-     - Add `system` metadata key based on `To:` field:
-       - `pacenotefoo@caf-gpt.com` → `pace_notes`
-       - `policyfoo@caf-gpt.com` → `policy_foo`
-     - Unknown recipients are logged and skipped
-   - Async processing loop with health checks
-   - Success confirmation required before next item
-   - Mark email as read after processing
-   - Failed emails are retried with exponential backoff
+3. Email Processing
+   - Continuous processing loop
+   - Mailbox-specific routing (pace_notes/policy_foo)
+   - Mark-as-read confirmation
+   - Error handling with logging
 
-## Technical Implementation
+### Implementation Details
 
-### Environment Variables
-```
-EMAIL_HOST=127.0.0.1
+#### Configuration
+```python
+# Environment Variables
+EMAIL_HOST=100.99.136.75
 EMAIL_PASSWORD=****
 IMAP_PORT=1143
 SMTP_PORT=1025
+
+# Hardcoded Mailboxes
+MAILBOXES = {
+    "pace_notes": "CAF-GPT/PaceNoteFoo",
+    "policy_foo": "CAF-GPT/PolicyFoo"
+}
 ```
 
-### System Design
-- **Queue Characteristics**:
-  - Pure Python deque with maxlen=100
-  - Thread-safe operations
-  - Messages stored as EmailMessage objects
-  - Order preserved from IMAP UID sequence
-
-- **Connection Management**:
-  - Single IMAP connection with health monitoring
-  - Automatic reconnection with exponential backoff
-  - Connection status exposed via health check
-
-- **Health Monitoring**:
-  - Queue statistics (size, processing state)
-  - Connection health (status, retry count)
-  - Integrated with FastAPI health check endpoint
-
-### Message Parsing
-- **Headers Extracted**:
-  - `From`: Sender's email address
-  - `To`: Recipient address(es)
-  - `Subject`: Email subject line
-  - `Date`: Received timestamp
-- **Body Handling**:
-  - Only process `text/plain` content
-  - Ignore HTML and attachments
+### Mailbox Handling
+- **Folder Selection**: Explicitly select each mailbox before processing
+- **Folder Switching**: Switch between mailboxes during processing loop
+- **Folder Monitoring**: Track last processed message for each folder
+- **Error Handling**: Handle folder access errors gracefully
 
 ### Error Handling
-- **IMAP Connection Failures**:
-  - Exponential backoff (1s to 1 hour)
-  - Health status monitoring
-  - Automatic reconnection attempts
+- Connection failures with backoff
+- Folder access errors with logging
+- Graceful shutdown on interrupts
+- Development mode detailed logging
 
-- **Processing Errors**:
-  - Failed messages marked for retry
-  - Retry count tracking
-  - Error reason logging
+### Health Monitoring
+- **Connection status**:
+  - Last successful connection time
+  - Connection error count
+  - Current connection state
+- **Queue statistics**:
+  - Current queue size
+  - Messages processed
+  - Messages failed
+  - Average processing time
+- **System metrics**:
+  - CPU/memory usage
+  - Thread count
+  - Active connections
+- **Alerting**:
+  - Email processing failures
+  - Queue capacity warnings
+  - Connection errors
 
-- **Queue Management**:
-  - Full queue handling (drop new messages)
-  - Thread-safe operations
+### Queue Implementation
+- **Thread-safe in-memory storage** using Python's deque
+- **Max capacity**: 100 messages
+- **Message ordering**: Preserved from IMAP UID sequence
+- **Retry mechanism**:
+  - Failed messages are requeued
+  - Exponential backoff between retries
+  - Max retry attempts: 5
+- **Message tracking**:
+  - UID-based message identification
   - Processing state tracking
-
-### Integration
-- Async startup/shutdown methods
-- Health check status reporting
-- Background processing loop
-- Clean process lifecycle management
+  - Error history for failed messages

@@ -1,6 +1,7 @@
 import asyncio
 from typing import Optional, Callable
 from datetime import datetime
+import time
 
 from src.utils.logger import logger
 from src.types import EmailMessage, EmailHealthCheck
@@ -40,7 +41,14 @@ class EmailProcessor:
 
     async def _processing_loop(self) -> None:
         # Main processing loop.
+        retry_delay = 5  # seconds
         while self.running:
+            if not self.connection.is_connected():
+                logger.debug(f"Waiting {retry_delay}s before connection retry")
+                time.sleep(retry_delay)
+                retry_delay = min(retry_delay * 2, 300)  # Cap at 5 minutes
+                continue
+
             try:
                 # Check connection health
                 if not self.connection.is_healthy:

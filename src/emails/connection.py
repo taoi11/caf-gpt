@@ -15,6 +15,7 @@ class IMAPConnection:
     def __init__(self):
         self.host = EMAIL_CONFIG['host']
         self.port = EMAIL_CONFIG['imap_port']
+        self.username = EMAIL_CONFIG['username']
         self.password = EMAIL_CONFIG['password']
         self.connection: Optional[imaplib.IMAP4] = None
         self.is_healthy = False
@@ -31,8 +32,11 @@ class IMAPConnection:
                 except:
                     self.connection = None
 
+            logger.debug(f"Attempting IMAP connection to {self.host}:{self.port}")
             self.connection = imaplib.IMAP4(self.host, self.port)
-            self.connection.login('user', self.password)
+            
+            logger.debug(f"Attempting login with username: {self.username}")
+            self.connection.login(self.username, self.password)
             
             self.is_healthy = True
             self.retry_count = 0
@@ -41,11 +45,11 @@ class IMAPConnection:
             logger.info("IMAP connection established")
             return True
 
+        except imaplib.IMAP4.error as e:
+            logger.error(f"IMAP login failed: {str(e)}")
+            logger.debug(f"Login details - Host: {self.host}:{self.port}, User: {self.username}")
+            return False
         except Exception as e:
-            self.is_healthy = False
-            self.retry_count += 1
-            self.last_error = str(e)
-            
             logger.error(f"IMAP connection failed: {str(e)}")
             return False
 
@@ -125,4 +129,10 @@ class IMAPConnection:
             "is_healthy": self.is_healthy,
             "retry_count": self.retry_count,
             "last_error": self.last_error
-        } 
+        }
+
+    def is_connected(self) -> bool:
+        """Check if the IMAP connection is active and healthy."""
+        return self.connection is not None and self.is_healthy
+
+    # Add this method to the IMAPConnection class 

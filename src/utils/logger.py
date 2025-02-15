@@ -4,8 +4,7 @@ from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, Optional
 from uuid import uuid4
-
-from .config import IS_DEV
+from .config import SERVER_CONFIG
 
 class LogLevel(Enum):
     DEBUG = 0
@@ -15,15 +14,27 @@ class LogLevel(Enum):
 
 class Logger:
     def __init__(self):
-        self.current_level = LogLevel.DEBUG if IS_DEV else LogLevel.INFO
+        self.current_level = LogLevel.DEBUG if SERVER_CONFIG['development'] else LogLevel.INFO
         self.llm_requests: Dict[str, float] = {}  # Track request start times
         
         # Configure logging
-        logging.basicConfig(
-            level=logging.DEBUG if IS_DEV else logging.INFO,
-            format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        self.logger = logging.getLogger('caf-gpt')
+        self.logger.setLevel(logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO)
+
+        # Create console handler
+        ch = logging.StreamHandler()
+        ch.setLevel(logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO)
+
+        # Create formatter
+        formatter = logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
         )
-        self.logger = logging.getLogger(__name__)
+
+        # Add formatter to ch
+        ch.setFormatter(formatter)
+
+        # Add ch to logger
+        self.logger.addHandler(ch)
 
     def _trim_system_message(self, content: str) -> str:
         max_length = 200
@@ -80,7 +91,7 @@ class Logger:
         return json.dumps({**response, **extra_metadata}, indent=2)
 
     async def log_llm_interaction(self, data: Dict[str, Any]) -> None:
-        if not IS_DEV:
+        if not SERVER_CONFIG['development']:
             return
 
         request_id = data.get('metadata', {}).get('requestId')
@@ -123,7 +134,7 @@ class Logger:
         self.logger.error(self._format_message(message, metadata))
 
     def log_request(self, method: str, url: str, status_code: int, metadata: Optional[Dict[str, Any]] = None) -> None:
-        if not IS_DEV:
+        if not SERVER_CONFIG['development']:
             return
         
         path = url.split('?')[0]
@@ -144,7 +155,23 @@ class Logger:
         return f"{message} {json.dumps(metadata)}"
 
     def _should_log(self, level: LogLevel) -> bool:
-        return IS_DEV or level.value >= self.current_level.value
+        return SERVER_CONFIG['development'] or level.value >= self.current_level.value
 
 # Export singleton instance
 logger = Logger()
+
+def log_error(message: str, **kwargs: Any) -> None:
+    """Log error with additional context"""
+    logger.error(message, extra=kwargs)
+
+def log_warning(message: str, **kwargs: Any) -> None:
+    """Log warning with additional context"""
+    logger.warning(message, extra=kwargs)
+
+def log_info(message: str, **kwargs: Any) -> None:
+    """Log info with additional context"""
+    logger.info(message, extra=kwargs)
+
+def log_debug(message: str, **kwargs: Any) -> None:
+    """Log debug with additional context"""
+    logger.debug(message, extra=kwargs)

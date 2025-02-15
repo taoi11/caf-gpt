@@ -18,9 +18,6 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Initialize email processor
-email_processor = EmailProcessor()
-
 async def main():
     """Main application entry point."""
     try:
@@ -35,6 +32,11 @@ async def main():
     except KeyboardInterrupt:
         logger.info("Shutting down...")
         await email_processor.stop()
+    except Exception as e:
+        logger.error(f"Unexpected error: {str(e)}")
+        await email_processor.stop()
+        raise
 
 if __name__ == "__main__":
+    email_processor = EmailProcessor()
     asyncio.run(main())

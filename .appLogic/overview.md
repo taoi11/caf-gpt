@@ -1,7 +1,22 @@
 # CAF-GPT Application Plan
 
 ## Overview
-A collection of AI tools and agents for army personnel, packaged as a Python Docker container. Triggers on news emails via IMAP. Uses LLMs to formulate a response to the email.
+A collection of AI tools and agents for army personnel, packaged as a Python application. Processes emails via IMAP and routes them to appropriate systems.
+
+## Core Components
+
+### Email Processing
+1. **IMAPConnection**
+   - Manages IMAP server connection
+   - Handles authentication
+   - Retrieves unread messages
+   - Tracks connection health
+
+2. **EmailProcessor**
+   - Manages processing workflow
+   - Routes messages to appropriate systems
+   - Handles errors and retries
+   - Maintains processing queue
 
 ## Core Principles
 - Keep user messages browser-side only
@@ -42,3 +57,23 @@ A collection of AI tools and agents for army personnel, packaged as a Python Doc
 
 ## Project Structure
 See [dirStructure.yaml](dirStructure.yaml) for details.
+
+## Development vs Production Mode
+
+### Development Mode
+- **Enabled by**: DEVELOPMENT=true
+- **Features**:
+  - Detailed debug logging
+  - Automatic application restart on changes
+  - Reduced rate limiting
+  - Mock services for testing
+  - Verbose error messages
+
+### Production Mode
+- **Enabled by**: DEVELOPMENT=false
+- **Features**:
+  - Info-level logging only
+  - Strict rate limiting
+  - Real service connections
+  - Generic error messages
+  - Performance optimizations

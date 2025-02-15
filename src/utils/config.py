@@ -1,5 +1,6 @@
 import os
 from dotenv import load_dotenv
+from typing import Dict, Any
 
 # Load environment variables
 load_dotenv()
@@ -15,8 +16,11 @@ for key in REQUIRED_VARS:
         raise ValueError(f"Missing required environment variable: {key}")
 
 # Export environment helpers
-IS_DEV = os.getenv('DEVELOPMENT', 'false').lower() == 'true'
-PORT = int(os.getenv('PORT', '8080'))
+def _get_env(key: str, default: Any = None) -> str:
+    value = os.getenv(key, default)
+    if value is None:
+        raise ValueError(f"Missing required environment variable: {key}")
+    return value
 
 # Export model configurations
 MODELS = {
@@ -27,18 +31,34 @@ MODELS = {
     'paceNote': os.getenv('PACE_NOTE_MODEL')
 }
 
-# Email configuration
-EMAIL_INBOXES = {
-    'pace_notes': 'pacenotefoo@caf-gpt.com',
-    'policy_foo': 'policyfoo@caf-gpt.com'
+# Email Configuration
+EMAIL_CONFIG: Dict[str, Any] = {
+    # From environment
+    "host": _get_env("EMAIL_HOST"),
+    "password": _get_env("EMAIL_PASSWORD"),
+    "imap_port": int(_get_env("IMAP_PORT")),
+    "smtp_port": int(_get_env("SMTP_PORT")),
+    
+    # Hardcoded values
+    "username": "pacenotefoo@caf-gpt.com",  # Default inbox
+    
+    # System inboxes mapping
+    "inboxes": {
+        "pace_notes": "pacenotefoo@caf-gpt.com",
+        "policy_foo": "policyfoo@caf-gpt.com"
+    }
 }
 
-# Add email configuration section
-EMAIL_CONFIG = {
-    'host': os.getenv('EMAIL_HOST', '127.0.0.1'),
-    'password': os.getenv('EMAIL_PASSWORD'),
-    'imap_port': int(os.getenv('IMAP_PORT', '1143')),
-    'smtp_port': int(os.getenv('SMTP_PORT', '1025')),
-    'inboxes': EMAIL_INBOXES
+# Server Configuration
+SERVER_CONFIG = {
+    "port": int(_get_env("PORT", "8080")),
+    "development": _get_env("DEVELOPMENT", "false").lower() == "true"
+}
+
+# S3 Configuration
+S3_CONFIG = {
+    "bucket_name": _get_env("S3_BUCKET_NAME"),
+    "access_key": _get_env("S3_ACCESS_KEY"),
+    "secret_key": _get_env("S3_SECRET_KEY")
 }
 
