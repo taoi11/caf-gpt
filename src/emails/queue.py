@@ -18,11 +18,13 @@ class EmailQueue:
         # Add an email to the queue. Returns False if queue is full.
         with self.lock:
             if len(self.queue) >= self.queue.maxlen:
-                logger.warn("Queue is full, dropping email", {"uid": email.get_uid()})
+                logger.warn("Queue is full, dropping email", metadata={
+                    "uid": email.get_uid()
+                })
                 return False
                 
             self.queue.append(email)
-            logger.debug(f"Added email to queue", {
+            logger.debug(f"Added email to queue", metadata={
                 "uid": email.get_uid(),
                 "system": email.get_system(),
                 "queue_size": len(self.queue)
@@ -65,14 +67,21 @@ class EmailQueue:
         with self.lock:
             self.queue.clear()
 
-    def get_stats(self) -> dict:
-        # Get queue statistics.
+    def get_stats(self) -> EmailQueueStats:
+        """Get queue statistics including parsed message tracking."""
         with self.lock:
+            total_messages = len(self.queue)
+            parsed_messages = sum(1 for msg in self.queue if msg.parsed_content)
+            valid_parsed = sum(1 for msg in self.queue if msg.has_valid_parsed_content())
+            
             return {
-                "size": len(self.queue),
+                "size": total_messages,
                 "max_size": self.queue.maxlen,
-                "is_empty": len(self.queue) == 0,
-                "is_processing": self._processing
+                "is_empty": total_messages == 0,
+                "is_processing": self._processing,
+                "parsed_messages": parsed_messages,
+                "valid_parsed": valid_parsed,
+                "parse_ratio": parsed_messages / total_messages if total_messages > 0 else 0
             }
 
     def start_processing(self) -> bool:

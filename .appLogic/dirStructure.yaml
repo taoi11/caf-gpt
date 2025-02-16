@@ -1,10 +1,10 @@
 cap-gpt:
   .appLogic:  # Application documentation
-    - overview.md: Main project 
-    - paceNote.md: Pace Notes tool 
-    - policyFoo.md: Policy tool base 
-    - doadFoo.md: DOAD policy tool
-    - emailModule.md: Email processing module
+    - overview.md: Main project documentation
+    - paceNote.md: Pace Notes tool documentation
+    - policyFoo.md: Policy tool base documentation
+    - doadFoo.md: DOAD policy tool documentation
+    - emailModule.md: Email processing module documentation
   src:
     tests:  # Test files
       utils:  # Utility tests
@@ -12,6 +12,8 @@ cap-gpt:
       emails:  # Email module tests
         - test_email_processor.py: Email processor tests
         - test_imap_connection.py: IMAP connection tests
+        - test_email_parser.py: Email parser tests
+        - test_email_queue.py: Queue implementation tests
     prompts:
       paceNote:
         - paceNote.md: Pace Notes prompt
@@ -27,13 +29,15 @@ cap-gpt:
         - s3_client.py: S3/Storj client
         - cost_tracker.py: Cost tracking
         - rate_limiter.py: Rate limiting
+        - logger.py: Centralized logging system
       emails:  # Email processing module
-        - processor.py: Main email processor
-        - connection.py: IMAP connection manager
-        - models.py: Email data models
-        - queue.py: Email queue implementation
+        - __init__.py: Module exports and documentation
+        - processor.py: Main email processing orchestration
+        - connection.py: IMAP connection management
+        - parser.py: Email content parsing
+        - queue.py: Thread-safe message queue
       pace_notes:  # Pace Notes API
-        -  agent.py: Core logic
+        - agent.py: Core logic
         - routes.py: Route handler
       policy_foo:  # Policy tool API
         - routes.py: Base handler
@@ -46,4 +50,5 @@ cap-gpt:
   .gitignore: Git ignore patterns
   .dockerignore: Docker ignore patterns
   requirements.txt: Python package dependencies
+  shell.nix: Nix development environment
   .pylintrc: Pylint configuration

@@ -17,17 +17,29 @@ async def main():
     try:
         # Start email processor (no LLM dependency)
         logger.info("Starting email processor")
-        email_processor = EmailProcessor()  # No router needed
+        email_processor = EmailProcessor()
         await email_processor.start()
+
+        # Log initial health status
+        health = email_processor.get_health_check()
+        logger.info("Email processor health", metadata={
+            "connection": health["connection"],
+            "queue_stats": health["queue"]
+        })
 
         # Start LLM router to watch queue
         logger.info("Starting LLM router")
         llm_router = LLMRouter()
-        llm_router.start_watching(email_processor.queue)  # Pass queue reference
+        llm_router.start_watching(email_processor.queue)
 
-        # Keep the application running
+        # Keep the application running with health checks
         while True:
-            await asyncio.sleep(1)
+            health = email_processor.get_health_check()
+            logger.debug("System health", metadata={
+                "queue_stats": health["queue"],
+                "connection": health["connection"]
+            })
+            await asyncio.sleep(60)  # Health check every minute
 
     except KeyboardInterrupt:
         logger.info("Received shutdown signal")

@@ -7,6 +7,7 @@ from datetime import datetime
 class EmailMessage:
     """Represents an email in the processing queue."""
     raw_content: str  # Raw email string from IMAP
+    parsed_content: Optional[Dict[str, Any]] = None  # Parsed email data
     metadata: Dict[str, Any] = field(default_factory=dict)  # Routing and processing metadata
 
     def get_system(self) -> Optional[str]:
@@ -20,6 +21,15 @@ class EmailMessage:
     def get_received_at(self) -> Optional[datetime]:
         """Get the timestamp when the email was received."""
         return self.metadata.get("received_at")
+
+    def has_valid_parsed_content(self) -> bool:
+        """Check if parsed content has required fields."""
+        if not self.parsed_content:
+            return False
+        return all(
+            key in self.parsed_content
+            for key in ["subject", "body", "from", "to"]
+        )
 
     def is_valid(self) -> bool:
         """Validate that the email has required metadata."""
@@ -37,6 +47,7 @@ class EmailMessage:
         """Convert the email to a dictionary for serialization."""
         return {
             "raw_content": self.raw_content,
+            "parsed_content": self.parsed_content,
             "metadata": self.metadata
         }
 
@@ -45,6 +56,7 @@ class EmailMessage:
         """Create an EmailMessage from a dictionary."""
         return cls(
             raw_content=data["raw_content"],
+            parsed_content=data.get("parsed_content"),
             metadata=data["metadata"]
         )
 
@@ -53,6 +65,9 @@ class EmailQueueStats(TypedDict):
     max_size: int
     is_empty: bool
     is_processing: bool
+    parsed_messages: int  # Number of messages with any parsed content
+    valid_parsed: int    # Number of messages with valid parsed content
+    parse_ratio: float   # Ratio of parsed to total messages
 
 class EmailHealthCheck(TypedDict):
     running: bool

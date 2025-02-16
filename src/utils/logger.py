@@ -7,67 +7,7 @@ from typing import Any, Dict, Optional
 from uuid import uuid4
 from .config import SERVER_CONFIG
 
-def setup_logger(name: str) -> logging.Logger:
-    """Setup module level logger."""
-    logger = logging.getLogger(name)
-    
-    # Clear existing handlers
-    if logger.handlers:
-        for handler in logger.handlers:
-            logger.removeHandler(handler)
-    
-    # Set level based on environment
-    logger.setLevel(
-        logging.DEBUG if SERVER_CONFIG['development']
-        else logging.INFO
-    )
-    
-    # Create console handler with formatter
-    handler = logging.StreamHandler()
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s - %(metadata)s'
-    )
-    handler.setFormatter(formatter)
-    logger.addHandler(handler)
-    
-    return logger
-
-class Logger:
-    def __init__(self, name: str = 'caf-gpt'):
-        self._logger = setup_logger(name)
-
-    def debug(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        extra = {'metadata': json.dumps(metadata) if metadata else 'no metadata'}
-        self._logger.debug(message, extra=extra)
-
-    def info(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        extra = {'metadata': json.dumps(metadata) if metadata else 'no metadata'}
-        self._logger.info(message, extra=extra)
-
-    def error(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        extra = {'metadata': json.dumps(metadata) if metadata else 'no metadata'}
-        self._logger.error(message, extra=extra)
-
-# Export singleton instance
-logger = Logger('email_processor')
-
-# Helper functions for consistent logging
-def log_error(message: str, **kwargs: Any) -> None:
-    """Log error with additional context"""
-    logger.error(message, extra=kwargs)
-
-def log_warning(message: str, **kwargs: Any) -> None:
-    """Log warning with additional context"""
-    logger.warning(message, extra=kwargs)
-
-def log_info(message: str, **kwargs: Any) -> None:
-    """Log info with additional context"""
-    logger.info(message, extra=kwargs)
-
-def log_debug(message: str, **kwargs: Any) -> None:
-    """Log debug with additional context"""
-    logger.debug(message, extra=kwargs)
-
+# Define LogLevel enum first
 class LogLevel(Enum):
     DEBUG = 0
     INFO = 1
@@ -75,28 +15,37 @@ class LogLevel(Enum):
     ERROR = 3
 
 class Logger:
-    def __init__(self):
+    def __init__(self, name: str = 'caf-gpt'):
         self.current_level = LogLevel.DEBUG if SERVER_CONFIG['development'] else LogLevel.INFO
         self.llm_requests: Dict[str, float] = {}  # Track request start times
         
         # Configure logging
-        self.logger = logging.getLogger('caf-gpt')
-        self.logger.setLevel(logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO)
+        self._logger = logging.getLogger(name)
+        self._logger.setLevel(logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO)
 
-        # Create console handler
-        ch = logging.StreamHandler()
-        ch.setLevel(logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO)
+        # Create console handler if none exists
+        if not self._logger.handlers:
+            ch = logging.StreamHandler()
+            ch.setLevel(logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO)
 
-        # Create formatter
-        formatter = logging.Formatter(
-            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-        )
+            # Create formatter
+            formatter = logging.Formatter(
+                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+            )
+            ch.setFormatter(formatter)
+            self._logger.addHandler(ch)
 
-        # Add formatter to ch
-        ch.setFormatter(formatter)
+    def debug(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        self._logger.debug(message, extra={'metadata': json.dumps(metadata) if metadata else 'no metadata'})
 
-        # Add ch to logger
-        self.logger.addHandler(ch)
+    def info(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        self._logger.info(message, extra={'metadata': json.dumps(metadata) if metadata else 'no metadata'})
+
+    def warn(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        self._logger.warning(message, extra={'metadata': json.dumps(metadata) if metadata else 'no metadata'})
+
+    def error(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        self._logger.error(message, extra={'metadata': json.dumps(metadata) if metadata else 'no metadata'})
 
     def _trim_system_message(self, content: str) -> str:
         max_length = 200
@@ -162,7 +111,7 @@ class Logger:
         if is_request:
             request_id = request_id or str(uuid4())
             self.llm_requests[request_id] = datetime.utcnow().timestamp()
-            self.logger.debug("\n[LLM Request] %s\n%s", request_id, self._format_llm_request(data, request_id))
+            self._logger.debug("\n[LLM Request] %s\n%s", request_id, self._format_llm_request(data, request_id))
         else:
             start_time = self.llm_requests.get(request_id, 0) if request_id else 0
             duration_ms = int((datetime.utcnow().timestamp() - start_time) * 1000) if start_time else 0
@@ -170,7 +119,7 @@ class Logger:
             if request_id:
                 self.llm_requests.pop(request_id, None)  # Cleanup
             
-            self.logger.debug(
+            self._logger.debug(
                 "\n[LLM Response] %s\n%s", request_id or 'unknown',
                 self._format_llm_response(data, request_id or 'unknown', duration_ms)
             )
@@ -193,3 +142,23 @@ class Logger:
 
     def _should_log(self, level: LogLevel) -> bool:
         return SERVER_CONFIG['development'] or level.value >= self.current_level.value
+
+# Export singleton instance
+logger = Logger('email_processor')
+
+# Helper functions for consistent logging
+def log_error(message: str, **kwargs: Any) -> None:
+    """Log error with additional context"""
+    logger.error(message, metadata=kwargs)
+
+def log_warning(message: str, **kwargs: Any) -> None:
+    """Log warning with additional context"""
+    logger.warn(message, metadata=kwargs)
+
+def log_info(message: str, **kwargs: Any) -> None:
+    """Log info with additional context"""
+    logger.info(message, metadata=kwargs)
+
+def log_debug(message: str, **kwargs: Any) -> None:
+    """Log debug with additional context"""
+    logger.debug(message, metadata=kwargs)

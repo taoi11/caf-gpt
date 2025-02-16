@@ -8,6 +8,7 @@ from datetime import datetime
 from src.utils.config import EMAIL_CONFIG
 from src.utils.logger import logger
 from src.types import EmailMessage
+from src.emails.parser import EmailParser
 
 class IMAPConnection:
     # Manages IMAP connection and email retrieval.
@@ -21,6 +22,7 @@ class IMAPConnection:
         self.is_healthy = False
         self.retry_count = 0
         self.last_error: Optional[str] = None
+        self.parser = EmailParser()
 
     def connect(self) -> bool:
         # Establish IMAP connection with retry logic.
@@ -63,12 +65,13 @@ class IMAPConnection:
                     _, msg_data = self.connection.fetch(num, '(BODY.PEEK[])')
                     email_body = msg_data[0][1]
                     
-                    # Parse the email message
-                    msg = email.message_from_bytes(email_body, policy=policy.default)
+                    # Parse the email using our new parser
+                    parsed_content = self.parser.parse_email(email_body)
                     
                     # Create EmailMessage instance without marking as read
                     email_msg = EmailMessage(
                         raw_content=email_body.decode('utf-8'),
+                        parsed_content=parsed_content,
                         metadata={
                             "uid": int(num),
                             "received_at": datetime.now().isoformat(),
@@ -78,12 +81,20 @@ class IMAPConnection:
                     )
                     
                     if email_msg.is_valid():
+                        if not email_msg.has_valid_parsed_content():
+                            logger.warn("Invalid parsed content", metadata={
+                                "uid": email_msg.get_uid(),
+                                "folder": folder
+                            })
                         messages.append(email_msg)
                     else:
                         logger.warn(f"Invalid email message: {email_msg.metadata}")
 
             except Exception as e:
-                logger.error(f"Error fetching messages from {folder}: {str(e)}")
+                logger.error(f"Error fetching messages from {folder}: {str(e)}", metadata={
+                    "folder": folder,
+                    "error": str(e)
+                })
                 continue
 
         return messages
@@ -156,3 +167,15 @@ class IMAPConnection:
                 self.is_healthy = False
 
     # Add this method to the IMAPConnection class 
+    def debug_add_email_to_queue(self, email: EmailMessage) -> None:
+        logger.debug(f"Added email to queue", metadata={
+            "uid": email.get_uid(),
+            "system": email.get_system(),
+            "queue_size": len(self.queue)
+        })
+
+    def warn_invalid_parsed_content(self, email: EmailMessage, folder: str) -> None:
+        logger.warn("Invalid parsed content", metadata={
+            "uid": email.get_uid(),
+            "folder": folder
+        }) 

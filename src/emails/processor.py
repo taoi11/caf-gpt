@@ -7,6 +7,7 @@ from src.utils.logger import logger
 from src.types import EmailMessage, EmailHealthCheck
 from .connection import IMAPConnection
 from .queue import EmailQueue
+from src.emails.parser import EmailParser
 
 class EmailProcessor:
     # Manages email processing workflow.
@@ -17,6 +18,7 @@ class EmailProcessor:
         self.running = False
         self._process_lock = asyncio.Lock()
         self._processed_uids = set()  # Track processed message UIDs
+        self.parser = EmailParser()
         
     async def start(self) -> None:
         # Start the email processor.
@@ -59,10 +61,10 @@ class EmailProcessor:
             logger.error(f"Error during shutdown: {str(e)}")
 
     async def _processing_loop(self) -> None:
-        # Main processing loop.
+        """Main processing loop for adding parsed emails to queue."""
         while self.running:
             try:
-                # Get new messages
+                # Get new messages (already parsed by IMAPConnection)
                 messages = self.connection.get_unread_messages()
                 if messages:
                     # Filter out already processed messages
@@ -72,56 +74,53 @@ class EmailProcessor:
                     ]
                     
                     if new_messages:
-                        added = self.queue.add_emails(new_messages)
-                        logger.info(f"Added {added} new messages to queue")
-                        
-                        # Track the new messages
+                        # Ensure all messages have valid parsed content
+                        valid_messages = []
                         for msg in new_messages:
-                            self._processed_uids.add(msg.get_uid())
+                            if not msg.parsed_content:
+                                try:
+                                    msg.parsed_content = self.parser.parse_email(
+                                        msg.raw_content.encode('utf-8')
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Error parsing email: {str(e)}")
+                                    continue
 
-                # Process queue
-                if not self.queue.is_empty():
-                    await self._process_queue()
+                            if msg.has_valid_parsed_content():
+                                valid_messages.append(msg)
+                                logger.debug(f"Added email to queue", metadata={
+                                    "uid": msg.get_uid(),
+                                    "system": msg.get_system()
+                                })
+                            else:
+                                logger.warn("Invalid parsed content", extra={
+                                    "uid": msg.get_uid()
+                                })
+
+                        # Add valid parsed messages to queue
+                        if valid_messages:
+                            added = self.queue.add_emails(valid_messages)
+                            logger.info(f"Added {added} parsed messages to queue")
+                            
+                            # Track the new messages
+                            for msg in valid_messages:
+                                self._processed_uids.add(msg.get_uid())
 
                 # Wait before next check
                 await asyncio.sleep(5)
 
             except Exception as e:
-                logger.error(f"Error in processing loop: {str(e)}")
+                logger.error(f"Error in processing loop: {str(e)}", metadata={
+                    "retry_count": self.connection.retry_count
+                })
                 await asyncio.sleep(5)
 
     async def _process_queue(self) -> None:
-        """Add new emails to queue."""
-        if not self.queue.start_processing():
-            return
-
-        try:
-            # Get new messages
-            messages = self.connection.get_unread_messages()
-            if messages:
-                # Filter out already processed messages
-                new_messages = [
-                    msg for msg in messages 
-                    if msg.get_uid() not in self._processed_uids
-                ]
-                
-                if new_messages:
-                    added = self.queue.add_emails(new_messages)
-                    logger.info(f"Added {added} new messages to queue")
-                    
-                    # Track the new messages
-                    for msg in new_messages:
-                        self._processed_uids.add(msg.get_uid())
-                        logger.debug(f"Added email to queue", {
-                            "uid": msg.get_uid(),
-                            "system": msg.get_system()
-                        })
-
-        except Exception as e:
-            logger.error(f"Error adding emails to queue: {str(e)}")
-            
-        finally:
-            self.queue.stop_processing()
+        """
+        Queue processing is handled by the LLM module.
+        This is just a placeholder to document the design.
+        """
+        pass
 
     async def _handle_unhealthy_connection(self) -> None:
         # Handle unhealthy connection state.

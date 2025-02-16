@@ -6,8 +6,8 @@ Implementation plan for email parsing system using mailparser library to process
 ## File Changes Checklist
 
 ### 1. `src/types.py`
-- [ ] Add `parsed_content` field to `EmailMessage` class
-- [ ] Add validation method for parsed content
+- [x] Add `parsed_content` field to `EmailMessage` class
+- [x] Add validation method for parsed content
 ```python
 @dataclass
 class EmailMessage:
@@ -27,8 +27,8 @@ class EmailMessage:
 ```
 
 ### 2. `src/emails/parser.py` (New)
-- [ ] Create `EmailParser` class with error tracking
-- [ ] Add logging for parse operations
+- [x] Create `EmailParser` class with error tracking
+- [x] Add logging for parse operations
 ```python
 class EmailParser:
     def __init__(self):
@@ -69,8 +69,8 @@ class EmailParser:
 ```
 
 ### 3. `src/emails/connection.py`
-- [ ] Add `EmailParser` instance
-- [ ] Update `get_unread_messages` to include parsing and logging
+- [x] Add `EmailParser` instance
+- [x] Update `get_unread_messages` to include parsing and logging
 ```python
 def get_unread_messages(self):
     # Add parsing with logging
@@ -82,18 +82,14 @@ def get_unread_messages(self):
 ```
 
 ### 4. `src/emails/processor.py`
-- [ ] Add `EmailParser` instance
-- [ ] Update `_process_queue` to handle parsed content
-```python
-async def _process_queue(self):
-    if not email.parsed_content:
-        email.parsed_content = self.parser.parse_email(email.raw_content)
-        if not email.has_valid_parsed_content():
-            email.mark_for_retry("Invalid parsed content")
-```
+- [x] Add `EmailParser` instance
+- [x] Update email parsing in `_processing_loop`
+- [x] Remove `_process_queue` (will be implemented in LLM module)
 
 ### 5. `src/emails/queue.py`
-- [ ] Update queue stats to track parsed messages
+- [x] Update queue stats to track parsed messages
+- [x] Add parse ratio tracking
+- [x] Add valid parse count
 ```python
 def get_stats(self):
     return {
@@ -102,15 +98,14 @@ def get_stats(self):
 ```
 
 ### 6. `requirements.txt`
-- [X] Add mailparser dependency
+- [x] Add mailparser dependency
 ```
 mail-parser>=4.0.0
 ```
 
 ### 7. `src/main.py`
-- [ ] Update main application flow
-```python
-async def main():
-    # Ensure parsed content flows through queue
-    llm_router.start_watching(email_processor.queue)
-```
+- [x] Update main application flow
+- [x] Add health check logging
+
+### 8. `src/emails/__init__.py`
+- [x] Export EmailParser in __init__.py
