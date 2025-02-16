@@ -1,10 +1,27 @@
 ---
 description: App Logic documentation
-globs: .appLogic/*.md
+globs: *
 ---
+<rule>
 
-## .appLogic Dir
-- `.appLogic/`: Contains markdown notes for app planning and logic.
-  - Use as reference for implementation guidance.
-  - Only edit when requested by the user.
-  - [overview.md](mdc:.appLogic/overview.md) 
+## App Logic documentation
+- `.appLogic/`: Core application specification directory
+  - Contains markdown files defining:
+    - Application architecture
+    - Business logic flows
+    - Component interactions
+    - Data models and relationships
+    - API specifications
+    - Business rules and requirements
+  
+  Purpose:
+  - Serves as the source of truth for implementation
+  - Provides reference documentation for the AI agent
+  - Maintains consistency across development
+  
+  Usage Rules:
+  - Read-only reference during normal operation
+  - Modifications only upon explicit user request
+  - Changes here impact overall application behavior
+
+</rule>

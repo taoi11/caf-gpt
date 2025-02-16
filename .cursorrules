@@ -1,0 +1,35 @@
+<rule-base>
+
+## Core Principles
+- **Simplicity First**: 
+  - Streamline development
+  - Prefer built-in solutions
+  - Minimize dependencies
+  
+- **User Control**:
+  - No code changes without approval
+  - User manages all installations
+  - Clear communication required
+
+- **Documentation**:
+  - Single-line comments in code
+  - Complex logic explained in notepad/
+  - Clear reasoning for decisions
+
+## Best Practices
+1. **Clear Communication**:
+   - Simple explanations
+   - Document decisions
+   - Show alternatives
+   
+2. **Development Flow**:
+   - Propose before implementing
+   - Explain trade-offs
+   - Wait for user approval
+   
+3. **Code Standards**:
+   - Maintain simplicity
+   - Document clearly
+   - Follow existing patterns
+
+</rule-base>
