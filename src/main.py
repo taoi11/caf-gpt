@@ -1,11 +1,11 @@
 """Main application entry point and orchestration."""
 
 import asyncio
-import signal
+import signal as signal_module  # Renamed to avoid conflict
 from typing import Optional
 
 from src.utils.logger import logger
-from src.emails.processor import EmailProcessor
+from src.emails.queue_add import QueueManager
 from src.llm import LLMRouter
 
 
@@ -13,7 +13,7 @@ class Application:
     """Main application class for managing lifecycle."""
     
     def __init__(self):
-        self.email_processor: Optional[EmailProcessor] = None
+        self.email_processor: Optional[QueueManager] = None
         self.llm_router: Optional[LLMRouter] = None
         self.running = False
         self._shutdown_event = asyncio.Event()
@@ -24,7 +24,7 @@ class Application:
         
         # Start email processor
         logger.info("Starting email processor")
-        self.email_processor = EmailProcessor()
+        self.email_processor = QueueManager()
         await self.email_processor.start()
         
         # Log initial health status
@@ -69,18 +69,22 @@ class Application:
 def handle_signals() -> None:
     """Setup signal handlers for graceful shutdown."""
     loop = asyncio.get_running_loop()
-    for sig in (signal.SIGTERM, signal.SIGINT):
-        loop.add_signal_handler(sig, lambda s=sig: asyncio.create_task(_shutdown(loop, sig)))
+    for sig in (signal_module.SIGTERM, signal_module.SIGINT):
+        # Create a new function to avoid cell-var-from-loop
+        def create_signal_handler(signal_to_handle):
+            return lambda: asyncio.create_task(_shutdown(loop, signal_to_handle))
+        loop.add_signal_handler(sig, create_signal_handler(sig))
 
 
-async def _shutdown(loop: asyncio.AbstractEventLoop, signal: int) -> None:
+async def _shutdown(loop: asyncio.AbstractEventLoop, sig: int) -> None:
     """Handle shutdown signal."""
-    logger.info(f"Received exit signal {signal.name}")
+    logger.info(f"Received exit signal {signal_module.Signals(sig).name}")
     
     tasks = [t for t in asyncio.all_tasks() if t is not asyncio.current_task()]
     
-    # Give tasks chance to complete
-    [task.cancel() for task in tasks]
+    # Fix expression-not-assigned by using a for loop
+    for task in tasks:
+        task.cancel()
     
     logger.info(f"Cancelling {len(tasks)} outstanding tasks")
     await asyncio.gather(*tasks, return_exceptions=True)

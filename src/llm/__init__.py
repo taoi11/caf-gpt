@@ -68,8 +68,10 @@ class LLMRouter:
             except asyncio.CancelledError:
                 logger.debug("LLM Router queue processing cancelled")
                 raise  # Re-raise to properly handle task cancellation
-            except Exception as e:
-                logger.exception(f"Error processing queue: {str(e)}")
+            except (ValueError, RuntimeError, AttributeError) as e:
+                logger.error(f"Error processing queue: {str(e)}", metadata={
+                    "error_type": e.__class__.__name__
+                })
                 await asyncio.sleep(1)
         
     def route_email(self, email: EmailMessage) -> None:

@@ -1,8 +1,8 @@
 """Centralized logging system with structured logging support."""
 
 import logging
-import time
 from typing import Dict, Any, Optional
+from datetime import datetime
 
 from src.utils.config import SERVER_CONFIG
 
@@ -15,12 +15,70 @@ class LogLevel:
     ERROR = logging.ERROR
     CRITICAL = logging.CRITICAL
 
+class RetryLogger:
+    """Helper class for retry-specific logging."""
+    def __init__(self, base_logger: 'Logger'):
+        self._logger = base_logger
+        self._retry_stats: Dict[str, Dict[str, Any]] = {}
+
+    def log_retry_attempt(self, uid: str, attempt: int, reason: str, next_attempt: Optional[datetime] = None) -> None:
+        """Log a retry attempt with details."""
+        metadata = {
+            "uid": uid,
+            "attempt": attempt,
+            "reason": reason,
+            "next_attempt": next_attempt.isoformat() if next_attempt else None
+        }
+        self._logger.info(f"Retry attempt {attempt} for email {uid}", metadata=metadata)
+        self._update_stats(uid, metadata)
+
+    def log_retry_success(self, uid: str, total_attempts: int) -> None:
+        """Log a successful retry."""
+        metadata = {
+            "uid": uid,
+            "total_attempts": total_attempts,
+            "outcome": "success"
+        }
+        self._logger.info(f"Email {uid} processed successfully after {total_attempts} attempts", metadata=metadata)
+        self._update_stats(uid, metadata)
+
+    def log_retry_failure(self, uid: str, total_attempts: int, final_error: str) -> None:
+        """Log a final retry failure."""
+        metadata = {
+            "uid": uid,
+            "total_attempts": total_attempts,
+            "final_error": final_error,
+            "outcome": "failure"
+        }
+        self._logger.error(f"Email {uid} failed after {total_attempts} attempts", metadata=metadata)
+        self._update_stats(uid, metadata)
+
+    def _update_stats(self, uid: str, metadata: Dict[str, Any]) -> None:
+        """Update retry statistics."""
+        if uid not in self._retry_stats:
+            self._retry_stats[uid] = {
+                "first_attempt": datetime.now().isoformat(),
+                "attempts": []
+            }
+        
+        self._retry_stats[uid]["attempts"].append({
+            "timestamp": datetime.now().isoformat(),
+            **metadata
+        })
+        
+        if "outcome" in metadata:
+            self._retry_stats[uid]["final_outcome"] = metadata["outcome"]
+            self._retry_stats[uid]["total_attempts"] = len(self._retry_stats[uid]["attempts"])
+
+    def get_retry_stats(self) -> Dict[str, Dict[str, Any]]:
+        """Get retry statistics."""
+        return self._retry_stats
 
 class Logger:
-    """Centralized logging system with structured logging and LLM request tracking support."""
+    """Centralized logging system with structured logging and retry tracking support."""
     def __init__(self, name: str = 'caf-gpt'):
         self.current_level = LogLevel.DEBUG if SERVER_CONFIG['development'] else LogLevel.INFO
-        self.llm_requests: Dict[str, float] = {}  # Track request start times
+        self.retry = RetryLogger(self)
 
         # Configure logging
         self._logger = logging.getLogger(name)
@@ -58,32 +116,27 @@ class Logger:
         extra = {'metadata': metadata} if metadata else {}
         self._logger.exception(message, extra=extra)
 
-    def _trim_system_message(self, content: str) -> str:
-        """Trim system messages to prevent log flooding."""
-        max_length = 500  # Maximum characters to log
-        if len(content) > max_length:
-            return content[:max_length] + " [TRUNCATED]"
-        return content
+    def get_retry_stats(self) -> Dict[str, Dict[str, Any]]:
+        """Get retry statistics from the retry logger."""
+        return self.retry.get_retry_stats()
 
-    def _format_llm_request(self, data: Dict[str, Any], request_id: str) -> str:
-        """Format LLM request data for logging."""
-        content = self._trim_system_message(data['messages'][0]['content'])
-        return f"LLM Request - ID: {request_id}, Model: {data['model']}, Content: {content}"
+    def log_llm_interaction(self, data: Dict[str, Any]) -> None:
+        """Log LLM interaction details.
+        
+        Args:
+            data: Dictionary containing interaction details including:
+                - role: The role (system/user/assistant)
+                - content: The message content
+                - metadata: Additional metadata like model, usage stats
+        """
+        self.info("LLM Interaction", metadata={
+            'role': data.get('role'),
+            'content_preview': data.get('content', '')[:100] + '...' if data.get('content') else '',
+            **data.get('metadata', {})
+        })
 
-    def _format_llm_response(self, data: Dict[str, Any], request_id: str, duration_ms: int) -> str:
-        """Format LLM response data for logging."""
-        content = self._trim_system_message(data['choices'][0]['message']['content'])
-        return f"LLM Response - ID: {request_id}, Duration: {duration_ms}ms, Content: {content}"
+# Create a single logger instance
+_logger_instance = Logger()
 
-    async def log_llm_interaction(self, data: Dict[str, Any]) -> None:
-        """Log LLM interaction details."""
-        request_id = data.get('request_id', 'N/A')
-        start_time = self.llm_requests.pop(request_id, None)
-        duration_ms = int((time.time() - start_time) * 1000) if start_time else 'N/A'
-
-        log_message = self._format_llm_response(data, request_id, duration_ms)
-        self.info(log_message, metadata={'duration_ms': duration_ms})
-
-
-# Export logger instance
-logger = Logger()
+# Export the logger instance
+logger = _logger_instance

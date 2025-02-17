@@ -1,69 +1,124 @@
-# Required Code Changes
+# Code Changes Checklist
 
-## src/emails/queue.py
+## Phase 1: Core Infrastructure Updates
 
-1. Add retry mechanism:
-   - Add `_delayed_add` async method
-   - Modify `add_email` to handle retries
-   - Add retry tracking in metadata
-   - Add exponential backoff calculation
+### 1. src/emails/queue.py
+- [x] Implement Retry Mechanism
+  - [x] Add `_delayed_add` async method
+    - [x] Implement exponential backoff calculation (5s, 10s, 20s, etc.)
+    - [x] Add timeout handling for delayed adds
+    - [x] Include cancellation support
+  - [x] Modify `add_email` method
+    - [x] Add retry count parameter
+    - [x] Add last attempt timestamp
+    - [x] Implement max retry limit (default: 3)
+  - [x] Add retry state tracking
+    - [x] Track retry attempts per message
+    - [x] Store retry history
+    - [x] Add failure reason tracking
+  - [x] Add retry metrics
+    - [x] Track success/failure rates
+    - [x] Monitor retry patterns
+    - [x] Log retry statistics
 
-## src/utils/logger.py
+### 2. src/utils/logger.py
+- [x] Enhance Logging System
+  - [x] Add retry-specific logging
+    - [x] Log retry attempts
+    - [x] Log backoff times
+    - [x] Log failure reasons
+  - [x] Add metric collection
+    - [x] Track retry patterns
+    - [x] Monitor success rates
+    - [x] Log performance metrics
 
-1. Update PII handling:
-   - Add production mode metadata filtering
-   - Modify debug/info level handling
-   - Update metadata sanitization
-   - Add environment-based metadata handling
+## Phase 2: Type System and Processing Updates
 
-Example changes needed:
-```python
-class Logger:
-    def _should_include_metadata(self, level: int) -> bool:
-        """Determine if metadata should be included based on environment and level."""
-        if SERVER_CONFIG['development']:
-            return True
-        return level >= LogLevel.INFO
+### 3. src/types.py
+- [x] Expand Type Definitions
+  - [x] Add EmailRetryState type
+    ```python
+    class EmailRetryState:
+        attempt_count: int
+        last_attempt: datetime
+        next_attempt: datetime
+        failure_reason: Optional[str]
+    ```
+  - [x] Update EmailMessage type
+    - [x] Add retry_state field
+    - [x] Add processing_metadata field
+    - [x] Add validation_state field
+  - [x] Add MetricsMetadata type
+    - [x] Add retry tracking fields
+    - [x] Add health check data
 
-    def _process_metadata(self, metadata: Optional[Dict[str, Any]], level: int) -> Optional[Dict[str, Any]]:
-        """Process metadata based on environment and log level."""
-        if not metadata or not self._should_include_metadata(level):
-            return None
-        
-        if not SERVER_CONFIG['development']:
-            # In production, completely omit sensitive fields
-            return {
-                k: v for k, v in metadata.items() 
-                if k not in {'from', 'to', 'subject', 'content_preview', 'raw_content'}
-            }
-        
-        return metadata
-```
+### 4. src/emails/queue_add.py (renamed from processor.py)
+- [x] Implement Queue Management
+  - [x] Add retry orchestration
+    - [x] Implement retry decision logic
+    - [x] Add failure categorization
+    - [x] Add recovery strategies
+  - [x] Update queue interaction
+    - [x] Add retry queue handling
+    - [x] Implement priority processing
+    - [x] Add dead letter handling
+  - [x] Add monitoring
+    - [x] Track retry success rates
+    - [x] Track failure patterns
 
-## src/emails/processor.py
+## Phase 3: Documentation
 
-1. Update to support retry mechanism:
-   - Add retry tracking
-   - Handle failed email processing
-   - Update queue interaction
-
-## src/types.py
-
-1. Add/update type definitions:
-   - Add retry-related fields to EmailMessage
-   - Update health check types
-   - Add metadata filtering types
+### 5. Documentation Updates
+- [x] Update API documentation
+  - [x] Document retry mechanism
+  - [x] Document metrics system
+  - [x] Document type system changes
+- [ ] Add monitoring documentation
+  - [ ] Document retry metrics
+  - [ ] Document logging patterns
+  - [ ] Document health checks
 
 ## Implementation Order
 
-1. First Phase:
-   - Email queue retry mechanism
-   - Logger PII handling
+1. First Phase (Core Infrastructure): ✅
+   - [x] Email queue retry mechanism
+   - [x] Basic logging enhancements
+   - [x] Basic type system updates
 
-2. Second Phase:
-   - Type system updates
-   - Processor retry handling
+2. Second Phase (Processing Logic): ✅
+   - [x] Complete type system updates
+   - [x] Processor retry handling
+   - [x] System integration
 
-3. Final Phase:
-   - Testing updates
-   - Documentation updates 
+3. Final Phase (Refinement): 🔄
+   - [x] Core documentation updates
+   - [ ] Monitoring documentation
+   - [x] System monitoring setup
+
+## Notes
+- [x] All retry mechanisms use exponential backoff (implemented with 5s base)
+- [x] Retry limits are configurable but default to 3
+- [x] Type system updates are backward compatible
+- [ ] Documentation should include examples
+
+## Additional Implementation Details
+1. Retry State Management:
+   - Exponential backoff: 5s → 10s → 20s → 40s
+   - State tracking in EmailRetryState class
+   - Async retry scheduling with cancellation support
+
+2. Queue Improvements:
+   - Separate retry queue implementation
+   - Priority processing for retry items
+   - Comprehensive retry statistics
+
+3. Logging Enhancements:
+   - Dedicated RetryLogger class
+   - Detailed retry attempt tracking
+   - Success/failure statistics
+
+4. Processor Enhancements:
+   - Custom ProcessingError with retry control
+   - Basic metrics tracking
+   - Detailed health checks
+   - Backoff statistics calculation 

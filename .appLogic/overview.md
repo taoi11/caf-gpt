@@ -11,11 +11,19 @@ Email-based AI tools for army personnel. IMAP processing with system routing.
    - Message retrieval
    - Health tracking
 
-2. **EmailProcessor**
+2. **EmailQueue**
    - Processing workflow
    - System routing
    - Error handling
    - Queue management
+   - Retry mechanism with backoff
+   - Separate retry queue
+
+3. **QueueManager** (formerly EmailProcessor)
+   - Email parsing and validation
+   - Queue management
+   - Retry orchestration
+   - Health monitoring
 
 ## Core Principles
 - Browser-side user messages
@@ -28,6 +36,14 @@ Email-based AI tools for army personnel. IMAP processing with system routing.
 - Type-safe code
 - Async handling
 - Rate limiting
+
+## Retry Mechanism
+- Exponential backoff (5s base)
+- Maximum 3 retries
+- Separate retry queue
+- Comprehensive tracking
+- Health monitoring
+- Failure categorization
 
 ## Stack
 
