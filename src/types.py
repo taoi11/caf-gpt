@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field, asdict
 from datetime import datetime, timedelta
-from typing import TypedDict, Dict, Optional, Any, List
+from typing import TypedDict, Dict, Optional, Any
 
 # LLM types
 @dataclass
