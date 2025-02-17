@@ -5,50 +5,48 @@ cap-gpt:
     - policyFoo.md: Policy tool base documentation
     - doadFoo.md: DOAD policy tool documentation
     - emailModule.md: Email processing module documentation
+    - dirStructure.yaml: Project structure documentation
+  notepad:  # Development notes and analysis
   src:
     tests:  # Test files
       utils:  # Utility tests
         - test_rate_limiter.py: Rate limiter tests
+        - test_logger.py: Logging system tests
       emails:  # Email module tests
         - test_email_processor.py: Email processor tests
         - test_imap_connection.py: IMAP connection tests
         - test_email_parser.py: Email parser tests
         - test_email_queue.py: Queue implementation tests
-    prompts:
-      paceNote:
-        - paceNote.md: Pace Notes prompt
-      policyFoo:
-        doad:
-          - policyFinder.md: DOAD finder prompt
-          - policyReader.md: DOAD reader prompt
-          - chatAgent.md: DOAD chat agent prompt
-          - DOAD-list-table.md: Available DOADs list
-    src:  # Main Python package
-      utils:  # Server utilities
-        - llm_gateway.py: LLM Gateway
-        - s3_client.py: S3/Storj client
-        - cost_tracker.py: Cost tracking
-        - rate_limiter.py: Rate limiting
-        - logger.py: Centralized logging system
-      emails:  # Email processing module
-        - __init__.py: Module exports and documentation
-        - processor.py: Main email processing orchestration
-        - connection.py: IMAP connection management
-        - parser.py: Email content parsing
-        - queue.py: Thread-safe message queue
-      pace_notes:  # Pace Notes API
-        - agent.py: Core logic
-        - routes.py: Route handler
-      policy_foo:  # Policy tool API
-        - routes.py: Base handler
-      doad:  # DOAD implementation
-        - base.py: DOAD base class
-        - agents: DOAD agents
-      main.py: FastAPI application
+    utils:  # Server utilities
+      - __init__.py: Module exports
+      - config.py: Configuration management
+      - logger.py: Centralized logging system
+      - types.py: Type definitions and validation
+    emails:  # Email processing module
+      - __init__.py: Module exports
+      - processor.py: Main email processing orchestration
+      - connection.py: IMAP connection management
+      - parser.py: Email content parsing
+      - queue.py: Thread-safe message queue
+    llm:  # LLM integration
+      - __init__.py: LLM Router implementation
+    pace_note:
+      - __init__.py: PaceNote handler
+      - agent.py: Processing logic
+    types.py: Global type definitions
+    main.py: Application entry point
+  .cursor:  # IDE configuration
+    rules:
+      - applogic.mdc: App Logic rules
+      - debugging.mdc: Debugging rules
+      - new-feature.mdc: Feature implementation rules
+      - notepad.mdc: Development notes guidelines
+  # Configuration files
   .env.example: Environment variables template
-  Dockerfile: Docker configuration
-  .gitignore: Git ignore patterns
-  .dockerignore: Docker ignore patterns
-  requirements.txt: Python package dependencies
+  .envrc: Direnv configuration
   shell.nix: Nix development environment
   .pylintrc: Pylint configuration
+  requirements.txt: Python dependencies
+  Dockerfile: Container definition
+  .dockerignore: Docker ignore patterns
+  .gitignore: Git ignore patterns

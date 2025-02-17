@@ -1,79 +1,73 @@
 # CAF-GPT Application Plan
 
 ## Overview
-A collection of AI tools and agents for army personnel, packaged as a Python application. Processes emails via IMAP and routes them to appropriate systems.
+Email-based AI tools for army personnel. IMAP processing with system routing.
 
 ## Core Components
 
 ### Email Processing
 1. **IMAPConnection**
-   - Manages IMAP server connection
-   - Handles authentication
-   - Retrieves unread messages
-   - Tracks connection health
+   - IMAP connection/auth
+   - Message retrieval
+   - Health tracking
 
 2. **EmailProcessor**
-   - Manages processing workflow
-   - Routes messages to appropriate systems
-   - Handles errors and retries
-   - Maintains processing queue
+   - Processing workflow
+   - System routing
+   - Error handling
+   - Queue management
 
 ## Core Principles
-- Keep user messages browser-side only
-- Prevent user identifiable data from entering logs
-- Provide simple and minimal tool interfaces
-- Use minimal dependencies and frameworks
-- Maintain clear separation of client and server code
-- Use read-only data access patterns
-- Direct environment variable usage
-- Simplified configurations
-- Robust testing with clean async handling
-- Cloudflare-based security and rate limiting
+- Browser-side user messages
+- PII-safe logging
+- Minimal interfaces
+- Minimal dependencies
+- Clean separation
+- Read-only data
+- Direct env vars
+- Type-safe code
+- Async handling
+- Rate limiting
 
-## Technology Stack
+## Stack
 
 ### Python
-- **Version**: 3.12
-- **Purpose**: server-side logic
-- **Packages**:
-  - imaplib
-  - boto3
+- 3.12
+- imaplib, boto3
 
 ### Testing
-- **Framework**: Pytest (replaced Jest)
-- **Features**:
-  - Async test support
-  - Proper fixture cleanup
-  - High test coverage targets
-
-### Containerization
-- **Technology**: Docker
+- Pytest
+- Async support
+- High coverage
 
 ### Storage
-- **Technology**: 'Storj' S3-compatible storage
-- **Details**:
-  - Gateway endpoint at gateway.storjshare.io
-  - Read-only access configuration
+- Storj (S3-compatible)
+- Read-only access
 
-## Project Structure
-See [dirStructure.yaml](dirStructure.yaml) for details.
+### Type Safety
+- TypedDict/Optional
+- Runtime validation
+- CI type checks
 
-## Development vs Production Mode
+## Development vs Production
 
-### Development Mode
-- **Enabled by**: DEVELOPMENT=true
-- **Features**:
-  - Detailed debug logging
-  - Automatic application restart on changes
-  - Reduced rate limiting
-  - Mock services for testing
-  - Verbose error messages
+### Development (DEVELOPMENT=true)
+- Debug logging
+- Hot reload
+- Mock services
+- Verbose errors
 
-### Production Mode
-- **Enabled by**: DEVELOPMENT=false
-- **Features**:
-  - Info-level logging only
-  - Strict rate limiting
-  - Real service connections
-  - Generic error messages
-  - Performance optimizations
+### Production (DEVELOPMENT=false)
+- Info logging
+- Rate limits
+- Real services
+- PII filtering
+- Performance focused
+
+## Future Plans
+- System metrics
+- Health monitoring
+- Alerting
+- Performance suite
+
+See component docs for details.

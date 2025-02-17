@@ -1,10 +1,16 @@
+"""Pace Notes agent for processing performance feedback requests."""
+
 from pathlib import Path
-from typing import Dict
 
 from src.utils.logger import logger
 from src.utils.config import MODELS
 
 class PaceNoteAgent:
+    """Agent responsible for processing pace notes using LLM capabilities.
+    
+    Handles the loading of prompts and interaction with the language model
+    for processing performance feedback data.
+    """
     def __init__(self):
         self.prompt_path = Path(__file__).parent.parent.parent / "prompts" / "paceNote" / "paceNote.md"
         self.system_prompt = ""

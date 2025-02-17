@@ -3,18 +3,23 @@
 init-hook='import sys; sys.path.append(".")'
 
 # Python code to execute
-extension-pkg-whitelist=pydantic
+# Pylint version setting
+py-version=3.12
+extension-pkg-whitelist=pydantic,boto3,fastapi
 
 [MESSAGES CONTROL]
 # Disable specific warnings
 disable=
-    C0111, # missing-docstring
     C0103, # invalid-name
     C0301, # line-too-long
     C0303, # trailing whitespace
     C0304, # missing final newline
     W0511, # fixme
     R0903, # too-few-public-methods (common with Pydantic models)
+enable=
+    W0611, # unused-import
+    W0612, # unused-variable
+    E1101, # no-member
 
 [FORMAT]
 # Maximum number of characters on a single line
@@ -22,8 +27,11 @@ max-line-length=250
 
 [BASIC]
 # Good variable names
-good-names=i,j,k,ex,Run,_,id,db
+good-names=i,j,k,ex,Run,_,id,db,fp,e,s3,ip
 
 [SIMILARITIES]
 # Minimum lines number of a similarity
-min-similarity-lines=6 
+min-similarity-lines=8
+ignore-comments=yes
+ignore-docstrings=yes
+ignore-imports=yes

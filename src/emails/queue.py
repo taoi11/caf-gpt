@@ -1,13 +1,14 @@
+"""Thread-safe queue implementation for email processing."""
+
 from collections import deque
 from typing import Optional, List
-from datetime import datetime
 import threading
 
 from src.utils.logger import logger
 from src.types import EmailMessage, EmailQueueStats
 
 class EmailQueue:
-    # Thread-safe queue for email processing.
+    """Thread-safe queue for email processing."""
     
     def __init__(self, maxlen: int = 100):
         self.queue = deque(maxlen=maxlen)
@@ -15,7 +16,7 @@ class EmailQueue:
         self._processing = False
 
     def add_email(self, email: EmailMessage) -> bool:
-        # Add an email to the queue. Returns False if queue is full.
+        """Add an email to the queue. Returns False if queue is full."""
         with self.lock:
             if len(self.queue) >= self.queue.maxlen:
                 logger.warn("Queue is full, dropping email", metadata={
@@ -24,7 +25,7 @@ class EmailQueue:
                 return False
                 
             self.queue.append(email)
-            logger.debug(f"Added email to queue", metadata={
+            logger.debug("Added email to queue", metadata={
                 "uid": email.get_uid(),
                 "system": email.get_system(),
                 "queue_size": len(self.queue)
@@ -32,7 +33,7 @@ class EmailQueue:
             return True
 
     def add_emails(self, emails: List[EmailMessage]) -> int:
-        # Add multiple emails to queue. Returns number of emails added.
+        """Add multiple emails to queue. Returns number of emails added."""
         added = 0
         for email in emails:
             if self.add_email(email):
@@ -40,7 +41,7 @@ class EmailQueue:
         return added
 
     def get_next_email(self) -> Optional[EmailMessage]:
-        # Get the next email from the queue.
+        """Get the next email from the queue."""
         with self.lock:
             try:
                 return self.queue.popleft() if self.queue else None
@@ -48,22 +49,22 @@ class EmailQueue:
                 return None
 
     def peek_next_email(self) -> Optional[EmailMessage]:
-        # Peek at the next email without removing it.
+        """Peek at the next email without removing it."""
         with self.lock:
             return self.queue[0] if self.queue else None
 
     def is_empty(self) -> bool:
-        # Check if the queue is empty.
+        """Check if the queue is empty."""
         with self.lock:
             return len(self.queue) == 0
 
     def get_size(self) -> int:
-        # Get current queue size.
+        """Get current queue size."""
         with self.lock:
             return len(self.queue)
 
     def clear(self) -> None:
-        # Clear all emails from the queue.
+        """Clear all emails from the queue."""
         with self.lock:
             self.queue.clear()
 
@@ -85,7 +86,7 @@ class EmailQueue:
             }
 
     def start_processing(self) -> bool:
-        # Mark queue as processing. Returns False if already processing.
+        """Mark queue as processing. Returns False if already processing."""
         with self.lock:
             if self._processing:
                 return False
@@ -93,11 +94,11 @@ class EmailQueue:
             return True
 
     def stop_processing(self) -> None:
-        # Mark queue as not processing.
+        """Mark queue as not processing."""
         with self.lock:
             self._processing = False
 
     def is_processing(self) -> bool:
         """Check if queue is currently being processed."""
         with self.lock:
-            return self._processing 
+            return self._processing

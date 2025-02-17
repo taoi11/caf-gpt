@@ -1,92 +1,84 @@
 # Email Processing Module
 
 ## Overview
-The email module handles IMAP email fetching, parsing, and queuing for LLM processing. It maintains a clean separation between email handling and LLM processing through a thread-safe queue.
+IMAP email handling with queue-based LLM processing. Clean separation between fetch and process.
 
-## Architecture
+## Components
 
-### Components
+### EmailParser
+- mail-parser for robust parsing
+- Plain text preferred
+- Error tracking/stats
+- HTML fallback
 
-#### EmailParser
-- Uses `mail-parser` library for robust email parsing
-- Handles both plain text and HTML content
-- Tracks parsing errors and success rates
-- Prefers plain text over HTML when available
+### IMAPConnection
+- BODY.PEEK[] fetching
+- Immediate parsing
+- Health tracking
+- Read after process
 
-#### IMAPConnection
-- Manages IMAP server connection
-- Fetches unread messages using `BODY.PEEK[]`
-- Integrates with EmailParser for immediate parsing
-- Handles connection health and retries
-- Messages only marked as read after full processing
+### EmailQueue
+- Thread-safe deque
+- 100 message cap
+- IMAP UID ordering
+- Dedup tracking
+- Retry with backoff
+- Retry state in metadata
 
-#### EmailQueue
-- Thread-safe in-memory storage using Python's deque
-- Max capacity: 100 messages
-- Message ordering preserved from IMAP UID sequence
-- Deduplication via UID tracking
-- Retry mechanism with exponential backoff
-- Interface between email and LLM modules
+### EmailProcessor
+- Workflow orchestration
+- Queue management
+- No duplicates
+- Clean shutdown
 
-#### EmailProcessor
-- Orchestrates the email processing workflow
-- Manages connection and queue lifecycle
-- Ensures no duplicate processing
-- Handles graceful startup/shutdown
+## Data Flow
+1. Init: IMAP connect, env load, logging setup
+2. Process: Fetch → Parse → Queue → LLM
 
-### Data Flow
+## Health (MVP)
+1. Connection:
+   - Last success
+   - Error count
+   - State/retries
 
-1. **Initialization**
-   - Connect to IMAP server
-   - Load configuration from environment
-   - Setup logging based on development mode
+2. Queue:
+   - Size/capacity
+   - Parse stats
+   - Success rates
+   - Retry tracking
 
-2. **Message Processing**
-   - IMAPConnection fetches unread emails
-   - EmailParser extracts structured content
-   - EmailProcessor validates and queues messages
-   - LLM module watches queue for new messages
+## Future Health
+1. System (Planned):
+   - CPU/Memory
+   - Threads
+   - Connections
+   - Performance
 
-### Health Monitoring
+2. Alerts (Planned):
+   - Process fails
+   - Queue warnings
+   - Connection alerts
+   - Thresholds
 
-1. **Connection Health**
-   - Last successful connection time
-   - Connection error count
-   - Current connection state
-   - Retry status
+## Error Handling
+1. Parser:
+   - Type tracking
+   - Error stats
+   - Clean fails
 
-2. **Queue Statistics**
-   - Current size and capacity
-   - Parsed vs unparsed messages
-   - Processing success/failure rates
-   - Average processing time
+2. Retries:
+   - Max 3 attempts
+   - 2^n min delay (5 max)
+   - State in metadata
 
-3. **System Metrics**
-   - CPU/memory usage
-   - Thread count
-   - Active connections
-
-4. **Alerting**
-   - Processing failures
-   - Queue capacity warnings
-   - Connection errors
-
-## Configuration
-
+## Config
 ```python
-# Environment Variables
-EMAIL_HOST=100.99.136.75
-EMAIL_PASSWORD=****
-IMAP_PORT=1143
-SMTP_PORT=1025
-
-# Email Configuration
 EMAIL_CONFIG = {
-    "host": str,           # IMAP server host
-    "imap_port": int,      # IMAP port
+    "host": str,
+    "imap_port": int,
     "username": "pacenotefoo@caf-gpt.com",
-    "password": str,       # From environment
-    "mailboxes": {         # ProtonMail folder mapping
+    "password": str,
+    "mailboxes": {
         "pace_notes": "Folders/CAF-GPT/PaceNote",
         "policy_foo": "Folders/CAF-GPT/PolicyFoo"
     }

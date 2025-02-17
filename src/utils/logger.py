@@ -1,24 +1,27 @@
-import json
-import logging
-import os
-from datetime import datetime
-from enum import Enum
-from typing import Any, Dict, Optional
-from uuid import uuid4
-from .config import SERVER_CONFIG
+"""Centralized logging system with structured logging support."""
 
-# Define LogLevel enum first
-class LogLevel(Enum):
-    DEBUG = 0
-    INFO = 1
-    WARN = 2
-    ERROR = 3
+import logging
+import time
+from typing import Dict, Any, Optional
+
+from src.utils.config import SERVER_CONFIG
+
+# Define custom log levels
+class LogLevel:
+    """Standard logging levels used throughout the application."""
+    DEBUG = logging.DEBUG
+    INFO = logging.INFO
+    WARNING = logging.WARNING
+    ERROR = logging.ERROR
+    CRITICAL = logging.CRITICAL
+
 
 class Logger:
+    """Centralized logging system with structured logging and LLM request tracking support."""
     def __init__(self, name: str = 'caf-gpt'):
         self.current_level = LogLevel.DEBUG if SERVER_CONFIG['development'] else LogLevel.INFO
         self.llm_requests: Dict[str, float] = {}  # Track request start times
-        
+
         # Configure logging
         self._logger = logging.getLogger(name)
         self._logger.setLevel(logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO)
@@ -26,139 +29,61 @@ class Logger:
         # Create console handler if none exists
         if not self._logger.handlers:
             ch = logging.StreamHandler()
-            ch.setLevel(logging.DEBUG if SERVER_CONFIG['development'] else logging.INFO)
-
-            # Create formatter
-            formatter = logging.Formatter(
-                '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-            )
+            formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
             ch.setFormatter(formatter)
             self._logger.addHandler(ch)
 
     def debug(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        self._logger.debug(message, extra={'metadata': json.dumps(metadata) if metadata else 'no metadata'})
+        """Log a debug message."""
+        extra = {'metadata': metadata} if metadata else {}
+        self._logger.debug(message, extra=extra)
 
     def info(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        self._logger.info(message, extra={'metadata': json.dumps(metadata) if metadata else 'no metadata'})
+        """Log an info message."""
+        extra = {'metadata': metadata} if metadata else {}
+        self._logger.info(message, extra=extra)
 
     def warn(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        self._logger.warning(message, extra={'metadata': json.dumps(metadata) if metadata else 'no metadata'})
+        """Log a warning message."""
+        extra = {'metadata': metadata} if metadata else {}
+        self._logger.warning(message, extra=extra)
 
     def error(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
-        self._logger.error(message, extra={'metadata': json.dumps(metadata) if metadata else 'no metadata'})
+        """Log an error message."""
+        extra = {'metadata': metadata} if metadata else {}
+        self._logger.error(message, extra=extra)
+
+    def exception(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """Log an exception message."""
+        extra = {'metadata': metadata} if metadata else {}
+        self._logger.exception(message, extra=extra)
 
     def _trim_system_message(self, content: str) -> str:
-        max_length = 200
-        if len(content) <= max_length * 2:
-            return content
-        return f"{content[:max_length]}...{content[-max_length:]}"
+        """Trim system messages to prevent log flooding."""
+        max_length = 500  # Maximum characters to log
+        if len(content) > max_length:
+            return content[:max_length] + " [TRUNCATED]"
+        return content
 
     def _format_llm_request(self, data: Dict[str, Any], request_id: str) -> str:
-        # Trim system messages in the messages array
-        messages = data.get('metadata', {}).get('messages', [])
-        trimmed_messages = [
-            {**msg, 'content': self._trim_system_message(msg['content'])} 
-            if msg.get('role') == 'system' else msg
-            for msg in messages
-        ]
-
-        # Create request object with trimmed content
-        request = {
-            'requestId': request_id,
-            'timestamp': datetime.utcnow().isoformat(),
-            'type': 'request',
-            'model': data.get('metadata', {}).get('model'),
-            'temperature': data.get('metadata', {}).get('temperature'),
-            'messages': trimmed_messages
-        }
-
-        # Add additional metadata
-        metadata = data.get('metadata', {})
-        extra_metadata = {
-            k: v for k, v in metadata.items() 
-            if k not in ['model', 'temperature', 'messages', 'rawResponse']
-        }
-        
-        return json.dumps({**request, **extra_metadata}, indent=2)
+        """Format LLM request data for logging."""
+        content = self._trim_system_message(data['messages'][0]['content'])
+        return f"LLM Request - ID: {request_id}, Model: {data['model']}, Content: {content}"
 
     def _format_llm_response(self, data: Dict[str, Any], request_id: str, duration_ms: int) -> str:
-        response = {
-            'requestId': request_id,
-            'timestamp': datetime.utcnow().isoformat(),
-            'type': 'response',
-            'durationMs': duration_ms,
-            'content': data.get('content'),
-            'model': data.get('metadata', {}).get('model'),
-            'usage': data.get('metadata', {}).get('usage')
-        }
-
-        # Add additional metadata
-        metadata = data.get('metadata', {})
-        extra_metadata = {
-            k: v for k, v in metadata.items() 
-            if k not in ['model', 'usage', 'rawResponse']
-        }
-        
-        return json.dumps({**response, **extra_metadata}, indent=2)
+        """Format LLM response data for logging."""
+        content = self._trim_system_message(data['choices'][0]['message']['content'])
+        return f"LLM Response - ID: {request_id}, Duration: {duration_ms}ms, Content: {content}"
 
     async def log_llm_interaction(self, data: Dict[str, Any]) -> None:
-        if not SERVER_CONFIG['development']:
-            return
+        """Log LLM interaction details."""
+        request_id = data.get('request_id', 'N/A')
+        start_time = self.llm_requests.pop(request_id, None)
+        duration_ms = int((time.time() - start_time) * 1000) if start_time else 'N/A'
 
-        request_id = data.get('metadata', {}).get('requestId')
-        is_request = data.get('metadata', {}).get('type') == 'request'
+        log_message = self._format_llm_response(data, request_id, duration_ms)
+        self.info(log_message, metadata={'duration_ms': duration_ms})
 
-        if is_request:
-            request_id = request_id or str(uuid4())
-            self.llm_requests[request_id] = datetime.utcnow().timestamp()
-            self._logger.debug("\n[LLM Request] %s\n%s", request_id, self._format_llm_request(data, request_id))
-        else:
-            start_time = self.llm_requests.get(request_id, 0) if request_id else 0
-            duration_ms = int((datetime.utcnow().timestamp() - start_time) * 1000) if start_time else 0
-            
-            if request_id:
-                self.llm_requests.pop(request_id, None)  # Cleanup
-            
-            self._logger.debug(
-                "\n[LLM Response] %s\n%s", request_id or 'unknown',
-                self._format_llm_response(data, request_id or 'unknown', duration_ms)
-            )
 
-    def log_request(self, method: str, url: str, status_code: int, metadata: Optional[Dict[str, Any]] = None) -> None:
-        if not SERVER_CONFIG['development']:
-            return
-        
-        path = url.split('?')[0]
-        message = f"{method} {path} - {status_code}"
-        
-        if status_code >= 500:
-            self.error(message, metadata)
-        elif status_code >= 400:
-            self.warn(message, metadata)
-        elif status_code != 200:
-            self.info(message, metadata)
-        else:
-            self.debug(message, metadata)
-
-    def _should_log(self, level: LogLevel) -> bool:
-        return SERVER_CONFIG['development'] or level.value >= self.current_level.value
-
-# Export singleton instance
-logger = Logger('email_processor')
-
-# Helper functions for consistent logging
-def log_error(message: str, **kwargs: Any) -> None:
-    """Log error with additional context"""
-    logger.error(message, metadata=kwargs)
-
-def log_warning(message: str, **kwargs: Any) -> None:
-    """Log warning with additional context"""
-    logger.warn(message, metadata=kwargs)
-
-def log_info(message: str, **kwargs: Any) -> None:
-    """Log info with additional context"""
-    logger.info(message, metadata=kwargs)
-
-def log_debug(message: str, **kwargs: Any) -> None:
-    """Log debug with additional context"""
-    logger.debug(message, metadata=kwargs)
+# Export logger instance
+logger = Logger()

@@ -1,6 +1,9 @@
+"""Configuration management and environment variable handling."""
+
 import os
-from dotenv import load_dotenv
 from typing import Dict, Any
+
+from dotenv import load_dotenv
 
 # Load environment variables
 load_dotenv()
@@ -9,11 +12,17 @@ load_dotenv()
 REQUIRED_VARS = [
     'EMAIL_HOST',
     'EMAIL_PASSWORD',
-]  # Removed S3-related vars since they're not used yet
+    'IMAP_PORT',
+    'SMTP_PORT',
+    'S3_BUCKET_NAME',
+    'S3_ACCESS_KEY',
+    'S3_SECRET_KEY'
+]
 
-for key in REQUIRED_VARS:
-    if not os.getenv(key):
-        raise ValueError(f"Missing required environment variable: {key}")
+for env_var in REQUIRED_VARS:
+    if not os.getenv(env_var):
+        raise ValueError(f"Missing required environment variable: {env_var}")
+
 
 # Export environment helpers
 def _get_env(key: str, default: Any = None) -> str:
@@ -21,6 +30,7 @@ def _get_env(key: str, default: Any = None) -> str:
     if value is None:
         raise ValueError(f"Missing required environment variable: {key}")
     return value
+
 
 # Export model configurations
 MODELS = {
@@ -38,10 +48,10 @@ EMAIL_CONFIG: Dict[str, Any] = {
     "password": _get_env("EMAIL_PASSWORD"),
     "imap_port": int(_get_env("IMAP_PORT")),
     "smtp_port": int(_get_env("SMTP_PORT")),
-    
+
     # Hardcoded values
     "username": "pacenotefoo@caf-gpt.com",
-    
+
     # Hardcoded mailbox paths - updated to match actual IMAP paths
     "mailboxes": {
         "pace_notes": "Folders/CAF-GPT/PaceNote",
@@ -61,4 +71,3 @@ S3_CONFIG = {
     "access_key": _get_env("S3_ACCESS_KEY"),
     "secret_key": _get_env("S3_SECRET_KEY")
 }
-

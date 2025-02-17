@@ -1,6 +1,28 @@
-from typing import TypedDict, Dict, List, Optional, Any
+"""Type definitions for the application."""
+
+from typing import TypedDict, Dict, Optional, Any
 from dataclasses import dataclass, field
 from datetime import datetime
+
+# LLM types
+@dataclass
+class Message:
+    """Represents a message in a conversation with the LLM."""
+    role: str  # 'system', 'user', or 'assistant'
+    content: str
+
+class LLMResponse(TypedDict):
+    """Response from the LLM."""
+    content: str
+    model: str
+    usage: Dict[str, int]
+
+@dataclass
+class LLMErrorDetails:
+    """Details about an LLM error."""
+    code: int
+    message: str
+    error_type: str
 
 # Email types
 @dataclass
@@ -61,6 +83,7 @@ class EmailMessage:
         )
 
 class EmailQueueStats(TypedDict):
+    """Statistics about the email processing queue state and performance metrics."""
     size: int
     max_size: int
     is_empty: bool
@@ -70,7 +93,7 @@ class EmailQueueStats(TypedDict):
     parse_ratio: float   # Ratio of parsed to total messages
 
 class EmailHealthCheck(TypedDict):
+    """Health check information for the email processing system."""
     running: bool
     queue: EmailQueueStats
     connection: Dict[str, Any]  # Connection health details
-
