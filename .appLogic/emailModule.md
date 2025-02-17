@@ -24,16 +24,24 @@ IMAP email handling with queue-based LLM processing. Clean separation between fe
 - Dedup tracking
 - Retry with backoff
 - Retry state in metadata
+- Message state tracking (new, processing, processed, failed)
+- Queue removal only after successful processing confirmation
 
 ### EmailProcessor
 - Workflow orchestration
 - Queue management
 - No duplicates
 - Clean shutdown
+- Handles post-processing queue cleanup
+- Manages message lifecycle
 
 ## Data Flow
 1. Init: IMAP connect, env load, logging setup
-2. Process: Fetch → Parse → Queue → LLM
+2. Process Flow:
+   - Fetch → Parse → Add to Queue
+   - LLM Processing (marks messages as processed)
+   - Queue cleanup and post-processing tasks
+   - Final message removal from queue
 
 ## Health (MVP)
 1. Connection:

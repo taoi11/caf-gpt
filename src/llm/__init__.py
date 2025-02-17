@@ -51,8 +51,9 @@ class LLMRouter:
                     await asyncio.sleep(1)
                     continue
 
-                logger.debug("Queue not empty, getting next email")
-                email = self.queue.get_next_email()
+                logger.debug("Queue not empty, reading next email")
+                # Read email without removing from queue
+                email = self.queue.peek_next_email()
                 if email:
                     logger.debug("Got email from queue", metadata={
                         "system": email.get_system(),

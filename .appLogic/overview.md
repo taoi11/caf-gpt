@@ -12,18 +12,33 @@ Email-based AI tools for army personnel. IMAP processing with system routing.
    - Health tracking
 
 2. **EmailQueue**
+   - Message state tracking
    - Processing workflow
    - System routing
    - Error handling
    - Queue management
-   - Retry mechanism with backoff
-   - Separate retry queue
+   - Message lifecycle control
+   - State transitions (new → processing → processed)
 
 3. **QueueManager** (formerly EmailProcessor)
    - Email parsing and validation
    - Queue management
+   - Post-processing cleanup
+   - Final message removal
    - Retry orchestration
    - Health monitoring
+
+### LLM Processing
+1. **LLMRouter**
+   - Message routing
+   - Handler selection
+   - Processing coordination
+
+2. **Handlers**
+   - Message processing
+   - State updates
+   - No queue management
+   - Processing status reporting
 
 ## Core Principles
 - Browser-side user messages
