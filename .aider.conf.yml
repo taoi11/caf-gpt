@@ -5,6 +5,7 @@ watch-files: true
 # restore-chat-history: true
 read:
   - ".appLogic/"
+  - "prompt.md"
 file:
   - "src/main.py"
   - "src/types.py"

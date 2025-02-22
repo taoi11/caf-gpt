@@ -1,0 +1,118 @@
+python -m src.main
+2025-02-22 10:00:31,694 - caf-gpt - DEBUG - Loading system prompt
+2025-02-22 10:00:31,694 - caf-gpt - INFO - System prompt loaded successfully
+2025-02-22 10:00:31,696 - caf-gpt - INFO - Starting email processor
+2025-02-22 10:00:31,696 - caf-gpt - INFO - Starting email processor
+2025-02-22 10:00:31,696 - caf-gpt - DEBUG - Connecting to IMAP server 100.99.136.75
+2025-02-22 10:00:38,092 - caf-gpt - INFO - IMAP connection established
+2025-02-22 10:00:38,093 - caf-gpt - INFO - Email processor health
+2025-02-22 10:00:38,093 - caf-gpt - INFO - Starting LLM router
+2025-02-22 10:00:38,093 - caf-gpt - INFO - LLM Router now watching email queue
+2025-02-22 10:00:38,093 - caf-gpt - DEBUG - System health
+2025-02-22 10:00:42,112 - caf-gpt - DEBUG - Starting email parse
+2025-02-22 10:00:42,130 - caf-gpt - INFO - Email parsed successfully
+2025-02-22 10:00:43,636 - caf-gpt - DEBUG - Added email to queue
+2025-02-22 10:00:43,637 - caf-gpt - INFO - Added 1 messages to queue
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - Queue not empty, reading next email
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - Got email from queue
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - LLM Router received email
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - Routing to PaceNote handler
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - === Email Content for LLM Processing ===
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - Email UID: 1
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - System: pace_notes
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - Content that would be sent to LLM:
+2025-02-22 10:00:43,637 - caf-gpt - DEBUG - --------------------------------------------------
+2025-02-22 10:00:43,638 - caf-gpt - DEBUG - 
+From: None
+Subject: None
+
+X-Pm-Gluon-Id: ae00c99e-2e2e-42ae-83c4-ea8033fd46a8
+Content-Transfer-Encoding: quoted-printable
+Content-Type: text/html; charset=utf-8
+References: <2UZcT1_hE5TM8VsVabeDa30Wk347AYVfNyOBJZi783UGwpIrssHWNUqnlbiUaHBdUMH5TE3-Mn66s44zTQJYIw==@protonmail.internalid>
+X-Pm-Date: Mon, 17 Feb 2025 19:21:21 +0000
+X-Pm-External-Id: <CAFe_FvjFOPftzzva=OxRZVySHPe=Mg6CZK6sZihU2GoEXArT1Q@mail.gmail.com>
+X-Pm-Internal-Id: 2UZcT1_hE5TM8VsVabeDa30Wk347AYVfNyOBJZi783UGwpIrssHWNUqnlbiUaHBdUMH5TE3-Mn66s44zTQJYIw==
+To: <pacenotefoo@caf-gpt.com>
+Reply-To: "Luffy" <luffy1749@gmail.com>
+From: "Luffy" <luffy1749@gmail.com>
+Return-Path: <luffy1749@gmail.com>
+X-Original-To: pacenotefoo@caf-gpt.com
+Delivered-To: pacenotefoo@caf-gpt.com
+Authentication-Results: mail.protonmail.ch; dkim=pass (Good 2048 bit    rsa-sha256 signature) header.d=gmail.com header.a=rsa-sha256
+Authentication-Results: mail.protonmail.ch; dmarc=pass (p=none dis=none) header.from=gmail.com
+Authentication-Results: mail.protonmail.ch; spf=pass smtp.mailfrom=gmail.com
+Authentication-Results: mail.protonmail.ch; arc=none smtp.remote-ip=209.85.219.171
+Authentication-Results: mail.protonmail.ch; dkim=pass (2048-bit key) header.d=gmail.com header.i=@gmail.com header.b="COcthfPv"
+Received: from mail-yb1-f171.google.com (mail-yb1-f171.google.com [209.85.219.171]) (using TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)  key-exchange X25519 server-signature RSA-PSS (4096 bits) server-digest SHA256) (No client certificate requested) by mailin048.protonmail.ch (Postfix) with ESMTPS id 4YxXZl3XKkz3c for <pacenotefoo@caf-gpt.com>; Mon, 17 Feb 2025 19:21:35 +0000 (UTC)
+Received: by mail-yb1-f171.google.com with SMTP id 3f1490d57ef6-e5df8468d6eso586404276.0        for <pacenotefoo@caf-gpt.com>; Mon, 17 Feb 2025 11:21:35 -0800 (PST)
+Dkim-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;        d=gmail.com; s=20230601; t=1739820094; x=1740424894; darn=caf-gpt.com;        h=to:subject:message-id:date:from:mime-version:from:to:cc:subject         :date:message-id:reply-to;        bh=XEIZbbcT2zOO+CVyvLJZxF8UCuehGsGall3nPJ7Udxc=;        b=COcthfPv8KPC8n/5iwhsA/vUgDxjBZNqJS/C8pfnFbcpx08EFuVCGNPN6G9Ug2pyQW         wh6vxkoCjnAZtZLely9cMiBA8toAcNHPOG/1cmzPd4kcVV7aGN5Hi7hSwD3ySvjjo1RK         DFMAVWJZ6EOEGy6kuZzBzGXusqKmL8A6L/a2GP8DZLEOGFQltZKdYBAmMKe8BR05UP+y         ltoZiKI3qANNYzz+TkNa3HTQ8kNyxSoBqrCO4rK3cxJ+uvceilNQY4l1y4Rf+Jj7tfbl         MPKFPOsYzc6C+k8+oY+DaCAv/l3l1H7wOUngQtUcBapb3SSerNKArGyEG6cOTgMzmbw9         YPkw==
+X-Google-Dkim-Signature: v=1; a=rsa-sha256; c=relaxed/relaxed;        d=1e100.net; s=20230601; t=1739820094; x=1740424894;        h=to:subject:message-id:date:from:mime-version:x-gm-message-state         :from:to:cc:subject:date:message-id:reply-to;        bh=XEIZbbcT2zOO+CVyvLJZxF8UCuehGsGall3nPJ7Udxc=;        b=f3iZ/oIzUumcRiryGS2nMn74x1/O6zag0Ehc8X6uy8rGn8NWSKh4xY8V3PO2Wn8w5w         xpqk+XOiR/sY8Eft3FtmyDhzl5Moy069xcyEivUfxBQwOFtZwFOtYYSzgfUGBpTWS/hi         oSBePihOipj8cTOInDyUucLZFQsrEZ7HchTalyPnitZZeYMSVzebNsySAYpzPcsXT0C2         mMvo0g4bcvwb+nnbWZPtBbTEsmQyg1/djnPaHM1bYnFwkZ7VePnB34AmLfM9/vnxaK6q         QkN3tYo+KPhkZNxc7MZvbIHnBuJk69ZWfZ1PLDkMPf+GlcSoKotvHjP0Szlbg8VU0w7S         XFIA==
+X-Gm-Message-State: AOJu0YxNh1CpTs7eYk9U7lhvKHFaznTEBaIUv1N2GRY3GNAhYQU0PBpX 4TMOZjKEy4aKFgDAW4WmNTR9iPY3HLYzI1lmTtqvYX2kLYMHf/+jqDhqjFPTba549RD+YJNzQtv FvPkxV7WxxHdIdqexX+OfVxVFea9cBxhJr/w=
+X-Gm-Gg: ASbGncucmXj79qIk7fmTEVQhruTafdtuywDQrxgO3lbKm9pBW62VsddMJfVn4VV2QyW zxwmAJHALkgIG2F05GfaEhwpgXONM2EyZWkZF3/+cviGEy+Lfi5nmjzL2n55/bbbVXS+SAxc=
+X-Google-Smtp-Source: AGHT+IFobOPYLF5LdF9TAHQ12Cqse6UBAEjCbDPZyWDX51eRKghncXSA0eb3RFaAjo3vzi8wSiXFAI0lJwqU7vdpPZA=
+X-Received: by 2002:a05:6902:1b91:b0:e5d:b9a0:a14a with SMTP id 3f1490d57ef6-e5dc9067229mr7323682276.24.1739820093852; Mon, 17 Feb 2025 11:21:33 -0800 (PST)
+Mime-Version: 1.0
+Date: Mon, 17 Feb 2025 12:21:21 -0700
+X-Gm-Features: AWEUYZmcjr889aeGy2WtXbL4MmuE4LBTxxzHY7phhMrUmsPGfwWt6fAhMzkESHw
+Message-Id: <CAFe_FvjFOPftzzva=OxRZVySHPe=Mg6CZK6sZihU2GoEXArT1Q@mail.gmail.com>
+Subject: feed back note
+X-Pm-Spam: 0yezJI6YSpyJec91ztFGcjIwoJyLCvXBZcQniisnOkQZFNfRViDUMOslwsEjLnIjNJlb 3wiAOLAjxiQzNSXiwtJRETV9TSdUOiQURlOwsFdLjECJLSl0NBZ1XETElpbIjuTALM0VsLRkIUSf1F MVkfURSQUVitslOCMx4wiXSJEtRT9VWJxUQFRF9I6Riwy0WLFjdGJCLkUFVFJTUFF9TTZlGN9kU0XO V9ERFJUdSVIC6uAzWiMiwVmbHxnkZNQz50F2WWXtdlsYWvmNLbJSdGJCLkUFVFJTUGF9TU9kNbpjIC MiwVmbHxnkZNQz50F2WWXtdlsYWvmNLbJSdIJCLEVM11FX0B1NURU0iwslOSXiwNHTVfURSRJlPN9V TEVfFVBSESEVRIpjbs0FMlIDJRfVkfU5STNVQFtUS0XygpbIjiCwMMAj51gjLjLxI4xOSgzENblGzk VGdGIuldsIHhm1LaxWzrlGcSZu5QiZXiSwXUNkWJ9FRlTW9xJQUUElRW9VDUJVRUSJZRfRUPkxQQt0 F6ICRzWsAIwIj4S4ON4SyukTMTMxcxpIGl3RcZBCpzBibSYh1NyY2pWRZd5ColJWYXYuM9tY2sl0II JlDfRkVUSf5FMVkJURSVlFfCBlUFTC99DTEE0VSIpjbiwCMjM5Ag1LjxjILO4SxgEzNGbzlVkdGuGl IIJGsjNnL3blJNlLnlmRbcNnjlJ3bmLvNJdbSTCJLUZEfMVES1TO95FT0bjpIM0FsQNlIlRQ9NTQVb jpILBTdiwSf2cvNUicmsjAOINnjlJ3bCZ6I4yMCiSwfcI3iisnOWY0N9uaWijoIa5Wiig3bCLjJRlY Xy29ZeIS6FRkIkRVFQiTFtCJLb9Fzy92YSZ6IJQeyEk9UIojtsUjMlISBRfT0S1BMIojwwAjLDM5kA wOTzDAMOgT41kjMCOiwJPUFQF9RUVkEUNUSUSO9owIjSCJLUIy6uMTLjMsENBIlwjoILIjsk9lIWZ1 J9pZ1vmZbIpj7SBlI0TiQsiOnhW1aZV2ftFmbSZ6IhzImjGFda91ml5Wa3X1RVkbm13BXXIzwwQjMT NzEwiIifXNaa1Ww0J3bWY05owIjtCJLYlWswNzXlct9Rlb26CIbI1mh0xWaWYuc9tY2umlYZRWfulm ZXZ1RVkbmwjILMQjwxIjMmLrNQicHtCJLYlWswNzXlcw99icmwjoILAjw5kDMTOwAAzMD4TgOMkj1i wCOWbpF9jbFlXRYZ92yt9Ve2blRI6bChm1IaxWjuQXY2Yt9luYmfWRZZlmu1RXZmbkVIwLjwjQMMIj xrNmLHciQJtLCsWlYXN2hnVGd3b5J5hX2iWUbOJiEBZURUVUxwiIipWFbb9FjlRXY2Zy99weVim9cI ojxwJCL3XwN0iYWujAOMAD3yADNDO5QQ5ODzzEMNkD3iwSNncuV5hX2iWUbOJi3jRXYGapxQtc3u2V cZVGy91nISfiwJpc36CIZIYj34MjYzY1QMzNG3mYYZgD0wcTMDM3kJ9ZSfQ==
+X-Pm-Origin: external
+X-Pm-Transfer-Encryption: TLSv1.3 with cipher TLS_AES_256_GCM_SHA384 (256/256 bits)
+X-Pm-Content-Encryption: on-delivery
+X-Pm-Spamscore: 0
+X-Pm-Spam-Action: inbox
+
+<div dir=3D"ltr"><div dir=3D"ltr"><p class=3D"MsoNormal">For Strong contend=
+er this year I was a assistant cotch for the 1 svc bn hocky team.
+</p>
+<p class=3D"MsoNormal">=C2=A0</p>
+<p class=3D"MsoNormal">Context: Strong contender is the western CAF tournam=
+ent.=C2=A0 We played against team all the other army units in western Canad=
+a.
+</p>
+<p class=3D"MsoNormal">=C2=A0=C2=A0=C2=A0=C2=A0=C2=A0=C2=A0=C2=A0=C2=A0=C2=
+=A0=C2=A0=C2=A0=C2=A0=C2=A0=C2=A0 </p>
+<p class=3D"MsoNormal">=C2=A0</p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">MCpl Dhaliwal L</span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">=C2=A0</span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">1<sup>st</sup> Line Maintenance=
+ Planner , 1 Service Battalion, 1 CMBG
+</span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US">Canadian Army / Canadian Armed =
+Forces</span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><a href=3D"mailto:luffy.dhaliwa=
+l@forces.gc.ca" rel=3D"noreferrer nofollow noopener" target=3D"_blank"><spa=
+n style=3D"color:rgb(5,99,193)">luffy.dhaliwal@forces.gc.ca</span></a> |
+<a href=3D"mailto:luffy.dhaliwal@forces.gc.ca" rel=3D"noreferrer nofollow n=
+oopener" target=3D"_blank"><span style=3D"color:rgb(5,99,193)">luffy.dhaliw=
+al@forces.gc.ca</span></a> Tel: 780-973-4011 Ext 2012</span></p>
+<p class=3D"MsoNormal"><span>=C2=A0</span></p>
+<p class=3D"MsoNormal"><span lang=3D"FR-CA">Planificateur de la 1<sup>ere</=
+sup> Ligne, Cie de Maintenance, 1<sup>er</sup> Bataillon des Services, 1 CM=
+BG</span></p>
+<p class=3D"MsoNormal"><span lang=3D"FR-CA">D=C3=A9fense Nationale / Forces=
+ Arm=C3=A9es Canadiennes
+</span></p>
+<p class=3D"MsoNormal"><span lang=3D"EN-US"><a href=3D"mailto:luffy.dhaliwa=
+l@forces.gc.ca" rel=3D"noreferrer nofollow noopener" target=3D"_blank"><spa=
+n style=3D"color:rgb(5,99,193)" lang=3D"FR-CA">luffy.dhaliwal@forces.gc.ca<=
+/span></a></span><span lang=3D"EN-US">
+</span><span lang=3D"FR-CA">| </span><span lang=3D"EN-US"><a href=3D"mailto=
+:luffy.dhaliwal@forces.gc.ca" rel=3D"noreferrer nofollow noopener" target=
+=3D"_blank"><span style=3D"color:rgb(5,99,193)" lang=3D"FR-CA">luffy.dhaliw=
+al@forces.gc.ca</span></a></span><span lang=3D"EN-US">
+</span><span lang=3D"FR-CA">Tel: 780-973-4011 Ext 2012</span></p></div><br>=
+</div>
+
+
+2025-02-22 10:00:43,639 - caf-gpt - DEBUG - --------------------------------------------------
+2025-02-22 10:00:43,640 - caf-gpt - DEBUG - Total content length: 8167 characters
+2025-02-22 10:00:44,641 - caf-gpt - DEBUG - Queue not empty, reading next email
+2025-02-22 10:00:44,642 - caf-gpt - DEBUG - Got email from queue
+2025-02-22 10:00:44,642 - caf-gpt - DEBUG - LLM Router received email
+2025-02-22 10:00:44,642 - caf-gpt - DEBUG - Routing to PaceNote handler
+2025-02-22 10:00:44,642 - caf-gpt - DEBUG - === Email Content for LLM Processing ===
+2025-02-22 10:00:44,642 - caf-gpt - DEBUG - Email UID: 1
+2025-02-22 10:00:44,643 - caf-gpt - DEBUG - System: pace_notes

@@ -6,6 +6,7 @@ data/
 # Development files
 .aider*
 !.aider.conf.yml
+prompt.md
 
 # Python
 __pycache__/
