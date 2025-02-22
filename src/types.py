@@ -57,11 +57,22 @@ class EmailRetryState:
 
 @dataclass
 class EmailMessage:
-    """Represents an email in the processing queue."""
+    """Represents an email in the processing queue.
+
+    Attributes:
+        raw_content: Raw email string from IMAP
+        parsed_content: Parsed email data
+        metadata: Routing and processing metadata
+        retry_state: Retry tracking
+        is_threaded: Indicates if the email is part of a thread
+        thread_id: The ID of the thread, if applicable
+    """
     raw_content: str  # Raw email string from IMAP
     parsed_content: Optional[Dict[str, Any]] = None  # Parsed email data
     metadata: Dict[str, Any] = field(default_factory=dict)  # Routing and processing metadata
     retry_state: EmailRetryState = field(default_factory=EmailRetryState)  # Retry tracking
+    is_threaded: bool = False
+    thread_id: Optional[str] = None
 
     def get_system(self) -> Optional[str]:
         """Get the target system for this email."""

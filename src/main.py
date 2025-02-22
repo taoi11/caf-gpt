@@ -22,16 +22,16 @@ class Application:
         """Start all application components."""
         self.running = True
         
-        # Start email processor
+        # Start email processor and log initial health
         logger.info("Starting email processor")
         self.email_processor = QueueManager()
         await self.email_processor.start()
-        
-        # Log initial health status
+
         health = self.email_processor.get_health_check()
-        logger.info("Email processor health", metadata={
+        logger.info("Email processor started and healthy", metadata={
             "connection": health["connection"],
-            "queue_stats": health["queue"]
+            "queue_stats": health["queue"],
+            "status": "initialized"
         })
         
         # Start LLM router

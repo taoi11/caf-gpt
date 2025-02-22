@@ -94,7 +94,9 @@ class IMAPConnection:
                             "received_at": datetime.now().isoformat(),
                             "system": system,
                             "folder": folder
-                        }
+                        },
+                        is_threaded=parsed_content.get("is_threaded", False) if parsed_content else False,
+                        thread_id=parsed_content.get("thread_id") if parsed_content else None
                     )
 
                     if email_msg.is_valid():
