@@ -2,11 +2,12 @@
 
 import re
 import html
-from typing import Dict, Optional, Any, Union, List
+from typing import Optional
 import mailparser
 from mailparser.exceptions import MailParserError
 
-from src.utils.logger import logger  # Use our logger instance
+from src.utils.logger import logger
+from src.types import EmailMessage
 
 try:
     import html2text
@@ -16,46 +17,104 @@ except ImportError:
 
 
 class EmailParser:
-    """Handles parsing of raw email data into structured format with error tracking.
+    """Handles parsing of raw email data into structured format.
     
     Uses mailparser library to extract email content and metadata while maintaining
-    a record of parsing errors for monitoring.
+    error tracking and logging.
     """
     def __init__(self):
         self.parser = mailparser
-        self.parse_errors: Dict[str, int] = {}  # Track error types
         self.html_converter = None
         if html2text:
             self.html_converter = html2text.HTML2Text()
             self.html_converter.ignore_links = True
             self.html_converter.ignore_images = True
 
-    def parse_email(self, raw_bytes: bytes) -> Optional[Dict[str, Any]]:
-        """Parse email with logging and error tracking."""
+    def parse_email(self, raw_bytes: bytes, uid: int) -> Optional[EmailMessage]:
+        """Parse raw email bytes into EmailMessage object.
+        
+        Args:
+            raw_bytes: Raw email content in bytes
+            uid: IMAP unique identifier for the email
+            
+        Returns:
+            EmailMessage if parsing succeeds, None if fails
+        """
         try:
             mail = self.parser.parse_from_bytes(raw_bytes)
             
-            parsed = {
-                "subject": mail.subject.strip(),
-                "from": self._normalize_address(mail.from_),
-                "to": [self._normalize_address(addr) for addr in mail.to],
-                "date": mail.date.isoformat() if mail.date else None,
-                "body": self._get_clean_body(mail),
-                "has_attachments": bool(mail.attachments_list),
-                "thread_id": mail.in_reply_to or (mail.references[0] if mail.references else None)
-            }
+            # Get primary recipient for system detection
+            to_addr = mail.to[0] if mail.to else ""
+            system = self._detect_system(to_addr)
             
-            logger.info("Email parsed successfully")
-            return parsed
-
-        except (MailParserError, UnicodeError, ValueError) as e:
-            error_type = type(e).__name__
-            self.parse_errors[error_type] = self.parse_errors.get(error_type, 0) + 1
-            logger.exception(f"Parse error: {str(e)}", metadata={
-                "error_type": error_type,
-                "error_count": self.parse_errors[error_type]
+            message = EmailMessage(
+                uid=uid,
+                from_addr=mail.from_[0][1] if mail.from_ else "",  # Take email part of tuple
+                to_addr=[addr[1] for addr in mail.to],  # Extract email parts
+                subject=mail.subject.strip() if mail.subject else "",
+                body=self._get_clean_body(mail),
+                system=system
+            )
+            
+            if message.is_valid():
+                logger.info("Email parsed successfully", metadata={
+                    "uid": uid,
+                    "from": message.from_addr,
+                    "system": system
+                })
+                return message
+                
+            logger.warn("Parsed email failed validation", metadata={
+                "uid": uid,
+                "missing_fields": [
+                    f for f in ["uid", "from_addr", "to_addr", "system"]
+                    if not getattr(message, f)
+                ]
             })
             return None
+
+        except (MailParserError, UnicodeError, ValueError) as e:
+            logger.exception("Parse error", metadata={
+                "uid": uid,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
+            return None
+
+    def _detect_system(self, address: str) -> str:
+        """Detect which system should handle this email based on address.
+        
+        Args:
+            address: Email address to analyze
+            
+        Returns:
+            System identifier based on email patterns
+        """
+        if not address:
+            return ""
+            
+        # Extract email part if in tuple format
+        if isinstance(address, tuple) and len(address) == 2:
+            address = address[1]
+            
+        # Convert to lowercase for matching
+        address = address.lower()
+        
+        # Define system mapping patterns
+        patterns = {
+            r"support@": "support",
+            r"help@": "support",
+            r"sales@": "sales",
+            r"info@": "info",
+            r"admin@": "admin"
+        }
+        
+        # Check each pattern
+        for pattern, system in patterns.items():
+            if pattern in address:
+                return system
+                
+        return "unknown"  # Default system
 
     def _get_clean_body(self, mail) -> str:
         """Extract and clean email body content."""
@@ -88,36 +147,3 @@ class EmailParser:
         text = html.unescape(text)
         text = re.sub(r'\s+', ' ', text)
         return text.strip()
-
-
-    def _normalize_address(self, address: Union[str, List[str], tuple]) -> str:
-        """Normalize email address format.
-        
-        Args:
-            address: Email address string, list, or tuple of addresses
-            
-        Returns:
-            str: Normalized email address (first address if multiple provided)
-        """
-        logger.debug(f"Normalizing address: {type(address)}, value: {address}")
-        
-        if not address:
-            return ""
-            
-        # Handle list/tuple input - take first address
-        if isinstance(address, (list, tuple)):
-            if not address:  # Empty sequence
-                return ""
-            # For tuples like ('Name', 'email@example.com'), take the email part
-            if isinstance(address[0], tuple) and len(address[0]) == 2:
-                address = address[0][1]  # Take email part of first tuple
-            else:
-                address = address[0]  # Take first address
-            logger.debug(f"After sequence handling: {type(address)}, value: {address}")
-            
-        # Extract email from "Name <email>" format
-        match = re.match(r'.*?([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})', str(address))
-        if match:
-            return match.group(1)
-            
-        return str(address)

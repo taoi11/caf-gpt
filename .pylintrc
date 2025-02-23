@@ -20,6 +20,7 @@ enable=
     W0611, # unused-import
     W0612, # unused-variable
     E1101, # no-member
+    R0902, # too many instance attributes
 
 [FORMAT]
 # Maximum number of characters on a single line

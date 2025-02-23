@@ -1,0 +1,34 @@
+---
+description: Base set of rules to alway follow
+globs: *
+---
+<ruel-base>
+
+## Core Principles
+  - Streamline development
+  - Prefer built-in solutions
+  - Minimize dependencies
+  - No code changes without approval
+  - User manages all installations
+  - Clear reasoning for decisions
+
+## Coding philosophy
+"Complexity is not the problem, ambiguity is. Simplicity does not solve ambiguity, clarity does."
+"Measure twice, cut once."
+
+## Coding docs
+  - Write one or two line doc strings for each function.
+  - Write a very short paragrah doc srting at the top of the file as a overview.
+
+## Best Practices
+1. **Clear Communication**:
+   - Simple explanations
+   - Document decisions
+   - Show alternatives
+   
+2. **Development Flow**:
+   - Propose before implementing
+   - Explain trade-offs
+   - Wait for user approval
+   
+</rule-base>

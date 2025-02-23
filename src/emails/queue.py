@@ -9,12 +9,15 @@ from datetime import datetime
 from src.utils.logger import logger
 from src.types import EmailMessage, EmailQueueStats
 
+class QueueError(Exception):
+    """Custom exception for queue-related errors."""
+
 class EmailQueue:
     """Thread-safe queue for email processing with retry support."""
     
-    def __init__(self, maxlen: int = 100):
-        self.queue = deque(maxlen=maxlen)
-        self.retry_queue = deque(maxlen=maxlen)  # Separate queue for retry items
+    def __init__(self, maxsize: int = 1000):
+        self._queue = asyncio.Queue(maxsize=maxsize)
+        self.retry_queue = deque(maxlen=maxsize)  # Separate queue for retry items
         self.lock = threading.Lock()
         self._processing = False
         self._retry_task: Optional[asyncio.Task] = None
@@ -73,9 +76,9 @@ class EmailQueue:
         with self.lock:
             # Check if this is a retry
             is_retry = email.get_retry_count() > 0
-            target_queue = self.retry_queue if is_retry else self.queue
+            target_queue = self.retry_queue if is_retry else self._queue
 
-            if len(target_queue) >= target_queue.maxlen:
+            if target_queue.full():
                 logger.warn(
                     "Queue is full, dropping email",
                     metadata={
@@ -86,13 +89,13 @@ class EmailQueue:
                 )
                 return False
             
-            target_queue.append(email)
+            target_queue.put(email)
             logger.debug(
                 "Added email to queue",
                 metadata={
                     "uid": email.get_uid(),
                     "system": email.get_system(),
-                    "queue_size": len(target_queue),
+                    "queue_size": target_queue.qsize(),
                     "is_retry": is_retry,
                     "retry_count": email.get_retry_count()
                 }
@@ -107,47 +110,41 @@ class EmailQueue:
                 added += 1
         return added
 
-    def get_next_email(self) -> Optional[EmailMessage]:
-        """Get the next email from the queue, prioritizing retries."""
-        with self.lock:
-            try:
-                # First check retry queue
-                if self.retry_queue:
-                    return self.retry_queue.popleft()
-                # Then check main queue
-                return self.queue.popleft() if self.queue else None
-            except IndexError:
-                return None
+    async def get(self) -> Optional[EmailMessage]:
+        """Get next email from queue."""
+        try:
+            return await self._queue.get()
+        except asyncio.QueueEmpty:
+            return None
 
     def peek_next_email(self) -> Optional[EmailMessage]:
         """Peek at the next email without removing it."""
         with self.lock:
-            return self.queue[0] if self.queue else None
+            return self._queue.queue[0] if not self._queue.empty() else None
 
-    def is_empty(self) -> bool:
-        """Check if the queue is empty."""
-        with self.lock:
-            return len(self.queue) == 0
+    def empty(self) -> bool:
+        """Check if queue is empty."""
+        return self._queue.empty()
 
     def get_size(self) -> int:
         """Get current queue size."""
         with self.lock:
-            return len(self.queue)
+            return self._queue.qsize()
 
     def clear(self) -> None:
         """Clear all emails from the queue."""
         with self.lock:
-            self.queue.clear()
+            self._queue.queue.clear()
 
     def get_stats(self) -> EmailQueueStats:
         """Get queue statistics including retry information."""
         with self.lock:
-            total_messages = len(self.queue) + len(self.retry_queue)
+            total_messages = self._queue.qsize() + len(self.retry_queue)
             retry_messages = len(self.retry_queue)
             
             return {
                 "size": total_messages,
-                "max_size": self.queue.maxlen,
+                "max_size": self._queue.maxsize,
                 "is_empty": total_messages == 0,
                 "is_processing": self._processing,
                 "retry_count": retry_messages,
@@ -202,3 +199,19 @@ class EmailQueue:
         self._stop_retry_processing = True
         if self._retry_task and not self._retry_task.done():
             self._retry_task.cancel()
+
+    async def put(self, email: EmailMessage) -> None:
+        """Add email to queue.
+        
+        Args:
+            email: Email message to add to queue
+            
+        Raises:
+            QueueError: If queue is full or other error occurs
+        """
+        try:
+            await self._queue.put(email)
+        except asyncio.QueueFull as exc:
+            raise QueueError("Queue is full") from exc
+        except Exception as e:
+            raise QueueError(f"Error adding to queue: {str(e)}") from e

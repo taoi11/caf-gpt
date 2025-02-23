@@ -1,44 +1,75 @@
-"""Pace Notes processing module for performance feedback."""
+"""PaceNote email processing module."""
 
-# Package initialization
+from typing import Optional, Dict, Union
+from datetime import datetime
 
 from src.utils.logger import logger
 from src.types import EmailMessage
-from src.utils.config import MODELS
-from src.llm.pace_note.agent import pace_note_agent
+from src.llm.pace_note.agent import PaceNoteAgent
+
 
 class PaceNoteHandler:
-    """Handles the processing of pace notes through LLM interactions."""
+    """Handles processing of PaceNote system emails."""
+    
     def __init__(self):
-        self.agent = pace_note_agent
+        """Initialize the handler with agent and metrics."""
+        self.agent = PaceNoteAgent()
+        self._start_time = datetime.now()
+        self._processed_count = 0
+        self._error_count = 0
         
-    def process(self, email: EmailMessage):
-        """Process a pace note email through the LLM agent.
+    async def process(self, email: EmailMessage) -> None:
+        """Process a PaceNote email message.
         
         Args:
-            email: The email message containing pace note data to process
+            email: The email message to process
         """
-        # Format email exactly as it would be sent to LLM
-        email_content = f'''
-From: {email.metadata.get('from')}
-Subject: {email.metadata.get('subject')}
-
-{email.raw_content}
-'''
-        
         try:
-            # Log the exact content that would be sent to LLM
-            logger.debug("=== Email Content for LLM Processing ===")
-            logger.debug(f"Email UID: {email.get_uid()}")
-            logger.debug(f"System: {email.get_system()}")
-            logger.debug("Content that would be sent to LLM:")
-            logger.debug("-" * 50)
-            logger.debug(email_content)
-            logger.debug("-" * 50)
-            logger.debug(f"Total content length: {len(email_content)} characters")
-            
-        except Exception as error:
-            logger.error('Pace Note processing error', {
-                'error': str(error)
+            logger.info("Processing PaceNote email", extra={
+                "uid": email.uid,
+                "from": email.from_addr,
+                "subject": email.subject
             })
-            raise 
+            
+            # Process with agent
+            response = await self.agent.handle_email(
+                subject=email.subject,
+                body=email.body,
+                sender=email.from_addr
+            )
+            
+            if response:
+                self._processed_count += 1
+                logger.info("Successfully processed PaceNote email", extra={
+                    "uid": email.uid,
+                    "from": email.from_addr,
+                    "response_length": len(response)
+                })
+            else:
+                raise ValueError("Agent returned empty response")
+                
+        except (ValueError, RuntimeError, AttributeError) as e:
+            self._error_count += 1
+            logger.error("Error processing PaceNote email", extra={
+                "uid": email.uid,
+                "from": email.from_addr,
+                "error": str(e),
+                "error_type": type(e).__name__
+            })
+            
+    def get_stats(self) -> Dict[str, Union[int, float]]:
+        """Get handler processing statistics.
+        
+        Returns:
+            Dict containing processed count, error count, success rate and uptime
+        """
+        uptime = (datetime.now() - self._start_time).total_seconds()
+        return {
+            "processed_count": self._processed_count,
+            "error_count": self._error_count,
+            "success_rate": (
+                (self._processed_count - self._error_count) / self._processed_count 
+                if self._processed_count > 0 else 0
+            ),
+            "uptime_seconds": uptime
+        } 

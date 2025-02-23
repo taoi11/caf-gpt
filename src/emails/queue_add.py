@@ -3,20 +3,21 @@
 import asyncio
 import imaplib
 import socket
-from typing import Dict, Any, List
 from datetime import datetime
 
 from src.utils.logger import logger
 from src.emails.parser import EmailParser
 from src.emails.connection import IMAPConnection
 from src.emails.queue import EmailQueue
-from src.types import EmailMessage, EmailHealthCheck, MetricsMetadata, RetryMetrics
+from src.types import EmailMessage, EmailHealthCheck
+
 
 class ProcessingError(Exception):
     """Custom exception for processing errors that may need retry."""
     def __init__(self, message: str, is_retryable: bool = True):
         super().__init__(message)
         self.is_retryable = is_retryable
+
 
 class QueueManager:
     """Manages email parsing and queueing with retry support."""
@@ -29,6 +30,8 @@ class QueueManager:
         self.parser = EmailParser()
         self._start_time = datetime.now()
         self._message_count = 0
+        self._retry_count = 0
+        self._error_count = 0
 
     async def start(self) -> None:
         """Start the email processor."""
@@ -51,7 +54,6 @@ class QueueManager:
         """Stop the email processor and cleanup resources."""
         logger.info("Shutting down email processor...")
         self.running = False
-        self.queue.stop_retry_processing()
 
         try:
             if self.connection.is_connected():
@@ -61,34 +63,50 @@ class QueueManager:
             logger.error(f"Error during shutdown: {str(e)}")
 
     async def _process_message(self, message: EmailMessage) -> None:
-        """Process a single email message with retry support."""
+        """Process a single email message with retry support.
+        
+        Args:
+            message: Email message to process
+        """
         try:
             # Simulate processing (replace with actual processing logic)
             await asyncio.sleep(1)  # Placeholder for actual processing
             
             # Record success metrics
-            if message.get_retry_count() > 0:
-                logger.retry.log_retry_success(
-                    str(message.get_uid()),
-                    message.get_retry_count()
-                )
+            if message.retry_count > 0:
+                self._retry_count += 1
+                logger.info("Successfully processed message after retry", metadata={
+                    "uid": message.uid,
+                    "retry_count": message.retry_count,
+                    "system": message.system
+                })
             
             self._message_count += 1
 
         except ProcessingError as e:
             if e.is_retryable and message.should_retry():
-                self.queue.schedule_retry(message, str(e))
+                message.mark_retry()
+                logger.warn("Scheduling message for retry", metadata={
+                    "uid": message.uid,
+                    "retry_count": message.retry_count,
+                    "error": str(e)
+                })
+                await self.queue.put(message)
             else:
-                logger.retry.log_retry_failure(
-                    str(message.get_uid()),
-                    message.get_retry_count(),
-                    str(e)
-                )
-        except (ValueError, RuntimeError) as e:  # More specific exceptions
-            logger.error(f"Error processing message: {str(e)}", metadata={
-                "uid": message.get_uid(),
-                "retry_count": message.get_retry_count(),
-                "error_type": e.__class__.__name__
+                self._error_count += 1
+                logger.error("Message processing failed", metadata={
+                    "uid": message.uid,
+                    "retry_count": message.retry_count,
+                    "error": str(e),
+                    "is_retryable": e.is_retryable
+                })
+        except (ValueError, RuntimeError) as e:
+            self._error_count += 1
+            logger.error("Unexpected error processing message", metadata={
+                "uid": message.uid,
+                "retry_count": message.retry_count,
+                "error": str(e),
+                "error_type": type(e).__name__
             })
 
     async def _processing_loop(self) -> None:
@@ -104,57 +122,52 @@ class QueueManager:
                 # Filter out already processed messages
                 new_messages = [
                     msg for msg in messages
-                    if msg.get_uid() not in self._processed_uids
+                    if msg.uid not in self._processed_uids
                 ]
 
                 if new_messages:
                     # Add valid messages to queue
                     valid_messages = [
                         msg for msg in new_messages
-                        if msg.has_valid_parsed_content()
+                        if msg.is_valid()
                     ]
 
                     if valid_messages:
-                        added = self.queue.add_emails(valid_messages)
-                        logger.info(f"Added {added} messages to queue")
+                        for msg in valid_messages:
+                            self.queue.put(msg)
+                            logger.debug("Added message to queue", metadata={
+                                "uid": msg.uid,
+                                "system": msg.system,
+                                "from": msg.from_addr
+                            })
 
                         # Process messages
                         for msg in valid_messages:
                             await self._process_message(msg)
-                            self._processed_uids.add(msg.get_uid())
+                            self._processed_uids.add(msg.uid)
 
                 await asyncio.sleep(5)
 
             except (imaplib.IMAP4.error, socket.error) as e:
-                logger.error(f"IMAP error in processing loop: {str(e)}", metadata={
+                logger.error("IMAP error in processing loop", metadata={
+                    "error": str(e),
                     "retry_count": self.connection.retry_count
                 })
                 await asyncio.sleep(5)
 
     def get_health_check(self) -> EmailHealthCheck:
-        """Get processor health status with detailed metrics."""
+        """Get processor health status with metrics."""
         queue_stats = self.queue.get_stats()
-        retry_stats = logger.retry.get_retry_stats()
         
-        # Calculate retry metrics
-        total_retries = sum(stats["total_attempts"] for stats in retry_stats.values() if "total_attempts" in stats)
-        successful_retries = sum(1 for stats in retry_stats.values() if stats.get("final_outcome") == "success")
-        
-        retry_metrics: RetryMetrics = {
-            "total_retries": total_retries,
-            "success_rate": successful_retries / total_retries if total_retries > 0 else 0,
-            "avg_attempts": total_retries / len(retry_stats) if retry_stats else 0,
-            "failure_reasons": self._count_failure_reasons(retry_stats),
-            "backoff_stats": self._calculate_backoff_stats(retry_stats)
-        }
-        
-        metrics: MetricsMetadata = {
-            "retry_stats": retry_metrics,
-            "health": {
-                "uptime_seconds": (datetime.now() - self._start_time).total_seconds(),
-                "message_count": self._message_count,
-                "error_count": len([s for s in retry_stats.values() if s.get("final_outcome") == "failure"])
-            }
+        metrics = {
+            "uptime_seconds": (datetime.now() - self._start_time).total_seconds(),
+            "message_count": self._message_count,
+            "retry_count": self._retry_count,
+            "error_count": self._error_count,
+            "success_rate": (
+                (self._message_count - self._error_count) / self._message_count 
+                if self._message_count > 0 else 0
+            )
         }
         
         return {
@@ -162,29 +175,4 @@ class QueueManager:
             "queue": queue_stats,
             "connection": self.connection.get_health_check(),
             "metrics": metrics
-        }
-
-    def _count_failure_reasons(self, retry_stats: Dict[str, Dict[str, Any]]) -> Dict[str, int]:
-        """Count occurrences of each failure reason."""
-        reasons: Dict[str, int] = {}
-        for stats in retry_stats.values():
-            if stats.get("final_outcome") == "failure":
-                reason = stats.get("final_error", "unknown")
-                reasons[reason] = reasons.get(reason, 0) + 1
-        return reasons
-
-    def _calculate_backoff_stats(self, retry_stats: Dict[str, Dict[str, Any]]) -> Dict[str, Any]:
-        """Calculate statistics about backoff times."""
-        backoff_times: List[float] = []
-        for stats in retry_stats.values():
-            attempts = stats.get("attempts", [])
-            for i in range(1, len(attempts)):
-                current = datetime.fromisoformat(attempts[i]["timestamp"])
-                previous = datetime.fromisoformat(attempts[i-1]["timestamp"])
-                backoff_times.append((current - previous).total_seconds())
-        
-        return {
-            "avg_backoff": sum(backoff_times) / len(backoff_times) if backoff_times else 0,
-            "min_backoff": min(backoff_times) if backoff_times else 0,
-            "max_backoff": max(backoff_times) if backoff_times else 0
         }

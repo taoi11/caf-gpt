@@ -1,9 +1,15 @@
-"""Main application entry point and orchestration."""
+"""Main application entry point and orchestration of email processing and LLM routing services.
+Handles:
+- Application lifecycle management
+- Email queue processing
+- LLM request routing
+- Graceful shutdown handling
+- System health monitoring
+"""
 
 import asyncio
 import signal as signal_module  # Renamed to avoid conflict
 from typing import Optional
-
 from src.utils.logger import logger
 from src.emails.queue_add import QueueManager
 from src.llm import LLMRouter
