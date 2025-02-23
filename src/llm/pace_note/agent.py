@@ -1,7 +1,7 @@
 """Pace Notes agent for processing performance feedback requests."""
 
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 from src.utils.logger import logger
 from src.utils.config import MODELS
 

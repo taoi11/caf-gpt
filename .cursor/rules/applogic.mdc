@@ -1,19 +1,17 @@
 ---
 description: App Logic documentation
-globs: *
+globs: .appLogic/*.md
 ---
 <rule>
 
 ## App Logic documentation
-- `.appLogic/`: Core application specification directory
-  - Contains markdown files defining:
-    - Application architecture
-    - Business logic flows
-    - Component interactions
-    - Data models and relationships
-    - API specifications
-    - Business rules and requirements
-  
+`.appLogic/`: Core application specification directory
+  Contains markdown files defining:
+  - Application architecture
+  - Logic flows
+  - Component interactions
+  - Data models and relationships
+
   Purpose:
   - Serves as the source of truth for implementation
   - Provides reference documentation for the AI agent

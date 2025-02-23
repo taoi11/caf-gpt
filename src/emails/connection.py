@@ -3,7 +3,6 @@
 import imaplib
 import socket
 from typing import Optional, List, NamedTuple, Dict, Any
-from datetime import datetime
 
 from src.utils.config import EMAIL_CONFIG
 from src.utils.logger import logger
@@ -86,19 +85,22 @@ class IMAPConnection:
                         # Parse the email
                         parsed = self.parser.parse_email(email_body, uid)
                         if parsed and parsed.is_valid():
-                            logger.debug(f"Successfully parsed message {uid}", metadata={
+                            logger.debug("Successfully parsed message", metadata={
+                                "uid": uid,
                                 "mailbox": mailbox,
                                 "from": parsed.from_addr,
                                 "system": parsed.system
                             })
                             messages.append(parsed)
                         else:
-                            logger.warning(f"Failed to parse message {uid}", metadata={
+                            logger.warn("Failed to parse message", metadata={
+                                "uid": uid,
                                 "mailbox": mailbox
                             })
 
-                    except Exception as e:
-                        logger.error(f"Error processing message {uid}", metadata={
+                    except (imaplib.IMAP4.error, socket.error, ValueError) as e:
+                        logger.error("Error processing message", metadata={
+                            "uid": uid,
                             "mailbox": mailbox,
                             "error": str(e),
                             "error_type": type(e).__name__
@@ -106,7 +108,7 @@ class IMAPConnection:
                         continue
 
             except (imaplib.IMAP4.error, socket.error) as e:
-                logger.error(f"Error fetching messages from {mailbox}", metadata={
+                logger.error("Error fetching messages", metadata={
                     "mailbox": mailbox,
                     "error": str(e),
                     "error_type": type(e).__name__

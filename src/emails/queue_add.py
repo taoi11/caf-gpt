@@ -134,7 +134,7 @@ class QueueManager:
 
                     if valid_messages:
                         for msg in valid_messages:
-                            self.queue.put(msg)
+                            await self.queue.put(msg)
                             logger.debug("Added message to queue", metadata={
                                 "uid": msg.uid,
                                 "system": msg.system,

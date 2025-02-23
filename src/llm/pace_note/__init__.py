@@ -25,7 +25,7 @@ class PaceNoteHandler:
             email: The email message to process
         """
         try:
-            logger.info("Processing PaceNote email", extra={
+            logger.info("Processing PaceNote email", metadata={
                 "uid": email.uid,
                 "from": email.from_addr,
                 "subject": email.subject
@@ -40,7 +40,7 @@ class PaceNoteHandler:
             
             if response:
                 self._processed_count += 1
-                logger.info("Successfully processed PaceNote email", extra={
+                logger.info("Successfully processed PaceNote email", metadata={
                     "uid": email.uid,
                     "from": email.from_addr,
                     "response_length": len(response)
@@ -50,7 +50,7 @@ class PaceNoteHandler:
                 
         except (ValueError, RuntimeError, AttributeError) as e:
             self._error_count += 1
-            logger.error("Error processing PaceNote email", extra={
+            logger.error("Error processing PaceNote email", metadata={
                 "uid": email.uid,
                 "from": email.from_addr,
                 "error": str(e),
