@@ -1,4 +1,9 @@
-"""Email parsing module for extracting content from raw emails."""
+"""Email content parsing and system detection module.
+Extracts and normalizes email content from raw IMAP data, including:
+- Header information (from/to/subject)
+- Body content (HTML/plain text conversion)
+- System detection based on recipient patterns
+Provides robust error handling and logging for parsing operations."""
 
 import re
 import html

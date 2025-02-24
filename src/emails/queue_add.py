@@ -1,4 +1,10 @@
-"""Module for parsing emails and adding them to the processing queue."""
+"""Email queue management and processing orchestration.
+Handles:
+- Email retrieval and queue population
+- Processing loop with retry support
+- Health monitoring and metrics collection
+- Shutdown and cleanup operations
+Provides end-to-end email processing workflow management."""
 
 import asyncio
 import imaplib

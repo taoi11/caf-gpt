@@ -1,4 +1,5 @@
-"""Utility modules for common functionality."""
+"""Utility modules providing core functionality including configuration management,
+logging services, and LLM gateway interactions."""
 
 # Utility modules
 from src.utils.config import *

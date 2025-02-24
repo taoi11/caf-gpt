@@ -1,4 +1,10 @@
-"""Thread-safe queue implementation for email processing."""
+"""Thread-safe email processing queue with retry and monitoring support.
+Implements:
+- Asynchronous queue operations
+- Exponential backoff retry logic
+- Queue statistics and health monitoring
+- Thread-safe operations with lock management
+Provides robust email processing with failure recovery."""
 
 from collections import deque
 from typing import Optional, List, Set

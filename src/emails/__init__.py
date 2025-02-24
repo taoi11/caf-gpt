@@ -1,15 +1,11 @@
 """
-Core email processing module for IMAP messages.
+Email processing core: IMAP, parsing, queueing, workflow.
 Handles:
-- IMAP connections & email retrieval
-- Content parsing & normalization
-- Thread-safe queueing with retries
-- Workflow orchestration
-Components:
-- IMAPConnection: Server connections
-- EmailParser: Content extraction
-- EmailQueue: Thread-safe processing
-- QueueManager: Workflow control
+- IMAP: Connections, retrieval, health checks
+- Parsing: Content extraction, normalization
+- Queueing: Thread-safe, retry logic
+- Workflow: Orchestration, monitoring
+Components: IMAPConnection, EmailParser, EmailQueue, QueueManager
 """
 
 from src.emails.queue_add import QueueManager

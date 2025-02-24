@@ -1,4 +1,6 @@
-"""LLM Gateway module for handling model interactions."""
+"""LLM Gateway module for handling model interactions through Ollama.
+Provides both streaming and non-streaming interfaces for language model queries,
+with built-in error handling, message formatting, and response processing."""
 
 import os
 from typing import List, Optional

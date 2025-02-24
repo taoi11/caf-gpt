@@ -1,4 +1,7 @@
-"""IMAP connection management and email retrieval."""
+"""IMAP connection management with health monitoring and retry support.
+Provides robust email retrieval with connection pooling, error handling,
+and automatic reconnection logic. Includes mailbox selection and message
+marking capabilities."""
 
 import imaplib
 import socket

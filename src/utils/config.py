@@ -1,4 +1,6 @@
-"""Configuration management and environment variable handling."""
+"""Centralized configuration management for environment variables and service settings.
+Handles validation of required variables and provides typed access to configuration values.
+Supports email, server, S3, and model configurations with environment variable fallbacks."""
 
 import os
 from typing import Dict, Any

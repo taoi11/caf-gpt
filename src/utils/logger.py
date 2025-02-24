@@ -1,4 +1,6 @@
-"""Centralized logging system with structured logging support."""
+"""Centralized logging system with structured logging and retry tracking support.
+Provides custom log levels, detailed metadata capture, and specialized retry logging
+for tracking email processing attempts and outcomes."""
 
 import logging
 from typing import Dict, Any, Optional
