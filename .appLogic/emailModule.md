@@ -1,7 +1,7 @@
 # Email Processing Module
 
 ## Overview
-IMAP email handling with queue-based LLM processing. Clean separation between fetch and process.
+IMAP email handling with queue-based LLM processing. Clean separation between fetch and process. Emails remain unread until processing is completed to ensure reliability.
 
 ## Components
 
@@ -24,8 +24,8 @@ IMAP email handling with queue-based LLM processing. Clean separation between fe
 - Message retrieval
 - Immediate parsing
 - Health tracking
-- Read after process
 - Connection state management
+- Marking messages as read (only after successful processing by LLMs)
 
 ### EmailQueue
 - Thread-safe deque implementation
@@ -41,6 +41,7 @@ IMAP email handling with queue-based LLM processing. Clean separation between fe
 - Retry state in metadata
 - State transitions (new → processing → processed)
 - Queue removal only after successful processing confirmation
+- Task completion tracking
 
 ### QueueManager (formerly EmailProcessor)
 - Email parsing and validation
@@ -53,15 +54,32 @@ IMAP email handling with queue-based LLM processing. Clean separation between fe
 - Retry orchestration
 - Health monitoring
 - Message lifecycle management
+- Preservation of unread status until processing is complete
+
+### SystemDetector
+- Email recipient-based system detection
+- Mapping email addresses to specific systems
+- Validation of system names
+- Support for unknown/invalid detection
+- Mailbox path mapping for systems
 
 ## Data Flow
 1. Init: IMAP connect, env load, logging setup
 2. Process Flow:
-   - Fetch → Parse → Add to Queue
+   - Fetch → Parse → Add to Queue (emails remain unread in mailbox)
    - System detection based on recipient email address
-   - LLM Processing (marks messages as processed)
+   - Queue provides emails to LLM module for processing
+   - Emails remain unread until processing completes
+   - LLM module responsible for marking as read after processing
    - Queue cleanup and post-processing tasks
-   - Final message removal from queue
+
+## Email Lifecycle
+1. Unread in mailbox
+2. Fetched but left unread in mailbox
+3. Added to processing queue
+4. Processed by LLM system
+5. Marked as read in mailbox (by LLM module)
+6. Marked as processed in queue (by LLM module)
 
 ## Health (MVP)
 1. Connection:

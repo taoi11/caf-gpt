@@ -1,10 +1,8 @@
 caf-gpt:
   .appLogic:  # Application documentation
     - overview.md: Main project documentation
-    - paceNote.md: Pace Notes tool documentation
-    - policyFoo.md: Policy tool base documentation
-    - doadFoo.md: DOAD policy tool documentation
     - emailModule.md: Email processing module documentation
+    - llmModule.md: LLM processing module documentation
     - dirStructure.yaml: Project structure documentation
   notepad:  # Development notes and analysis
   src:
@@ -26,12 +24,13 @@ caf-gpt:
       - types.py: Type definitions and validation
     emails:  # Email processing module
       - __init__.py: Module exports
-      - queue_add.py: Queue manager implementation
+      - manager.py: Queue management and processing orchestration
       - connection.py: IMAP connection management
       - parser.py: Email content parsing
+      - detector.py: System detection based on email addresses
       - queue.py: Thread-safe message queue
     llm:  # LLM integration
-      - __init__.py: LLM Router implementation
+      - __init__.py: LLM Router implementation and email marking
     llm/pace_note:  # Pace Notes handler
       - __init__.py: PaceNote handler implementation
       - agent.py: Processing logic

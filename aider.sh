@@ -1,7 +1,6 @@
 #!/bin/bash
 
 PROMPT=$(<"prompt.md")
-LOGS=$(<"notepad/logs.txt")
 
 # Aider first run
 aider \

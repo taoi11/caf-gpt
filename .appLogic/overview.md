@@ -1,7 +1,7 @@
 # CAF-GPT Application Plan
 
 ## Overview
-Email-based AI tools for army personnel. IMAP processing with system routing.
+Email-based AI tools for army personnel. IMAP processing with system routing. Processing reliability through mailbox persistence.
 
 ## Core Components
 
@@ -12,6 +12,7 @@ The email processing subsystem handles retrieving, parsing, and queuing emails f
 - **EmailQueue**: Thread-safe message handling with state tracking
 - **QueueManager**: Orchestrates the email processing workflow
 - **EmailParser**: Extracts content and determines appropriate processing system
+- **SystemDetector**: Identifies appropriate processing system based on email recipient
 
 See emailModule.md for detailed implementation.
 
@@ -20,12 +21,26 @@ See emailModule.md for detailed implementation.
    - Message routing
    - Handler selection
    - Processing coordination
+   - Mailbox management (marking as read after processing)
+   - Queue state updates
 
 2. **Handlers**
    - Message processing
    - State updates
    - No queue management
    - Processing status reporting
+
+See llmModule.md for detailed implementation.
+
+## Message Workflow
+1. Email arrives in mailbox (unread)
+2. QueueManager fetches unread emails but preserves unread status
+3. Emails are queued for processing by appropriate system
+4. LLMRouter picks up queued emails and routes to handlers
+5. After successful processing, LLMRouter:
+   - Marks email as read in mailbox
+   - Updates queue state
+6. This workflow ensures emails remain available for retry in case of application failure
 
 ## System Routing
 The application routes emails to different processing systems based on the recipient's email address. Currently supports:

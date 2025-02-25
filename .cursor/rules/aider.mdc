@@ -1,0 +1,39 @@
+---
+description: Use Aider to offload small and repetitive taskes. 
+globs: *
+---
+## Task Offloading to Aider CLI Assistant
+### What is Aider
+Aider is a CLI-based AI coding assistant that can directly edit code files based on provided instructions. In our setup:
+- It's configured to watch specified files and make changes
+- It's default reads context from `.appLogic/` and `prompt.md`
+- It performs tasks via a two-pass system (implementation + verification)
+- It leverages auto-linting with pylint
+
+### Process
+1. **Identify Suitable Tasks**:
+   - Target repetitive Python code modifications in the src/ directory
+   - Ideal for: formatting, common patterns, docstring updates, type annotation fixes
+   - Tasks should be self-contained and not require complex architectural decisions
+   
+2. **Prompt Creation**:
+   - Write clear, specific instructions in `prompt.md`
+   - Include context, expected changes, and acceptance criteria
+   - Structure prompts as step-by-step instructions rather than open-ended requests
+   - Example: "Update all functions in utils/date_helpers.py to include proper type hints and docstrings"
+
+3. **Execution**:
+   - Use existing `./aider.sh` script which performs a two-pass process:
+     * First run: Implements the changes based on prompt.md
+     * Second run: Reviews and refines its own work
+   - update `--read` to tell Aider additional files to read
+   - udpate `--file` to teil AIder which files it can read and write to. 
+
+4. **Verification**:
+   - The use will init the script and tell you once Aider on finished.
+   - Aider will make a commit for you to review.
+
+### Key Points
+- Preserve the existing aider.sh two-pass workflow
+- Focus on low-complexity tasks
+- No architectural or security-critical changes through Aider
