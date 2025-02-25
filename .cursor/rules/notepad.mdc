@@ -2,7 +2,7 @@
 description: notepad for quick notes and small plans
 globs: *
 ---
-<rule>
+<rule-extra>
 
 ## Notepad 
 - `notepad/`: Working scratch pad for active development thoughts
@@ -27,4 +27,4 @@ globs: *
   - Clear file naming for easy reference
   - Informal, working-notes style
   
-  </rule>
+</rule-extra>

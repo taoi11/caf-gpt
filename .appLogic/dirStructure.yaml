@@ -1,4 +1,4 @@
-cap-gpt:
+caf-gpt:
   .appLogic:  # Application documentation
     - overview.md: Main project documentation
     - paceNote.md: Pace Notes tool documentation
@@ -8,6 +8,8 @@ cap-gpt:
     - dirStructure.yaml: Project structure documentation
   notepad:  # Development notes and analysis
   src:
+    main.py: Application entry point
+    types.py: Global type definitions
     tests:  # Test files
       utils:  # Utility tests
         - test_rate_limiter.py: Rate limiter tests
@@ -24,17 +26,18 @@ cap-gpt:
       - types.py: Type definitions and validation
     emails:  # Email processing module
       - __init__.py: Module exports
-      - processor.py: Main email processing orchestration
+      - queue_add.py: Queue manager implementation
       - connection.py: IMAP connection management
       - parser.py: Email content parsing
       - queue.py: Thread-safe message queue
     llm:  # LLM integration
       - __init__.py: LLM Router implementation
-    pace_note:
-      - __init__.py: PaceNote handler
+    prompt/pace_note:  # Pace Notes handler
+      - __init__.py: PaceNote handler implementation
       - agent.py: Processing logic
-    types.py: Global type definitions
-    main.py: Application entry point
+    prompt/policy_foo:  # Policy handler (planned)
+      - __init__.py: Policy handler implementation
+      - agent.py: Processing logic
   .cursor:  # IDE configuration
     rules:
       - applogic.mdc: App Logic rules

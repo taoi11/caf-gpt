@@ -2,7 +2,7 @@
 description: Folllow these rules when you are adding new feature to the codebase
 globs: *
 ---
-<rule>
+<rule-extra>
 
 ## Feature Implementation
 ### Process
@@ -21,4 +21,4 @@ globs: *
 - No code changes without approval.
 - Document complex features in detail.
 - User manages dependency installation and package.json updates.
-</rule>
+</rule-extra>

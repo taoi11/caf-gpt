@@ -6,27 +6,14 @@ Email-based AI tools for army personnel. IMAP processing with system routing.
 ## Core Components
 
 ### Email Processing
-1. **IMAPConnection**
-   - IMAP connection/auth
-   - Message retrieval
-   - Health tracking
+The email processing subsystem handles retrieving, parsing, and queuing emails for further processing:
 
-2. **EmailQueue**
-   - Message state tracking
-   - Processing workflow
-   - System routing
-   - Error handling
-   - Queue management
-   - Message lifecycle control
-   - State transitions (new → processing → processed)
+- **IMAPConnection**: Secure email retrieval and connection management
+- **EmailQueue**: Thread-safe message handling with state tracking
+- **QueueManager**: Orchestrates the email processing workflow
+- **EmailParser**: Extracts content and determines appropriate processing system
 
-3. **QueueManager** (formerly EmailProcessor)
-   - Email parsing and validation
-   - Queue management
-   - Post-processing cleanup
-   - Final message removal
-   - Retry orchestration
-   - Health monitoring
+See emailModule.md for detailed implementation.
 
 ### LLM Processing
 1. **LLMRouter**
@@ -39,6 +26,14 @@ Email-based AI tools for army personnel. IMAP processing with system routing.
    - State updates
    - No queue management
    - Processing status reporting
+
+## System Routing
+The application routes emails to different processing systems based on the recipient's email address. Currently supports:
+
+- **pace_notes**: For pace notes processing
+- **policy_foo**: For policy-related processing
+
+See emailModule.md for implementation details.
 
 ## Core Principles
 - Browser-side user messages

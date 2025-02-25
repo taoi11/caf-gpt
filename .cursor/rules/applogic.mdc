@@ -2,7 +2,7 @@
 description: App Logic documentation
 globs: .appLogic/*.md
 ---
-<rule>
+<rule-extra>
 
 ## App Logic documentation
 `.appLogic/`: Core application specification directory
@@ -22,4 +22,4 @@ globs: .appLogic/*.md
   - Modifications only upon explicit user request
   - Changes here impact overall application behavior
 
-</rule>
+</rule-extra>

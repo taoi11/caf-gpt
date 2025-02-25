@@ -93,7 +93,7 @@ class EmailParser:
             address: Email address to analyze
             
         Returns:
-            System identifier based on email patterns
+            System identifier based on email address
         """
         if not address:
             return ""
@@ -102,22 +102,14 @@ class EmailParser:
         if isinstance(address, tuple) and len(address) == 2:
             address = address[1]
             
-        # Convert to lowercase for matching
-        address = address.lower()
+        # Convert to lowercase for matching and strip whitespace
+        address = address.lower().strip()
         
-        # Define system mapping patterns
-        patterns = {
-            r"support@": "support",
-            r"help@": "support",
-            r"sales@": "sales",
-            r"info@": "info",
-            r"admin@": "admin"
-        }
-        
-        # Check each pattern
-        for pattern, system in patterns.items():
-            if pattern in address:
-                return system
+        # Direct matching with specific email addresses
+        if address == "pacenotefoo@caf-gpt.com":
+            return "pace_notes"
+        if address == "policyfoo@caf-gpt.com":
+            return "policy_foo"
                 
         return "unknown"  # Default system
 

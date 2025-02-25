@@ -2,7 +2,7 @@
 description: Follow these rules when debugging
 globs: *
 ---
-<rule>
+<rule-extra>
 
 ## Debugging Process
 ### Core:
@@ -31,4 +31,4 @@ globs: *
 - Multiple files/systems affected
 - High-risk changes
 - Multiple solution paths
-</rule>
+</rule-extra>
