@@ -11,7 +11,7 @@ import asyncio
 import signal as signal_module  # Renamed to avoid conflict
 from typing import Optional
 from src.utils.logger import logger
-from src.emails.queue_add import QueueManager
+from src.emails.manager import QueueManager
 from src.llm import LLMRouter
 
 

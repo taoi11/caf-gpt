@@ -1,8 +1,7 @@
-"""Email content parsing and system detection module.
+"""Email content parsing module.
 Extracts and normalizes email content from raw IMAP data, including:
 - Header information (from/to/subject)
 - Body content (HTML/plain text conversion)
-- System detection based on recipient patterns
 Provides robust error handling and logging for parsing operations."""
 
 import re
@@ -13,6 +12,7 @@ from mailparser.exceptions import MailParserError
 
 from src.utils.logger import logger
 from src.types import EmailMessage, EmailMetadata
+from src.emails.detector import detect_system
 
 try:
     import html2text
@@ -50,7 +50,7 @@ class EmailParser:
             
             # Get primary recipient for system detection
             to_addr = mail.to[0] if mail.to else ""
-            system = self._detect_system(to_addr)
+            system = detect_system(to_addr)
             
             # Create EmailMetadata with system info
             metadata = EmailMetadata(system=system)
@@ -76,7 +76,7 @@ class EmailParser:
                 "uid": uid,
                 "missing_fields": [
                     f for f in ["uid", "from_addr", "to_addr", "system"]
-                    if not getattr(message, f)
+                    if not getattr(message, f, None)
                 ]
             })
             return None
@@ -88,33 +88,6 @@ class EmailParser:
                 "error_type": type(e).__name__
             })
             return None
-
-    def _detect_system(self, address: str) -> str:
-        """Detect which system should handle this email based on address.
-        
-        Args:
-            address: Email address to analyze
-            
-        Returns:
-            System identifier based on email address
-        """
-        if not address:
-            return ""
-            
-        # Extract email part if in tuple format
-        if isinstance(address, tuple) and len(address) == 2:
-            address = address[1]
-            
-        # Convert to lowercase for matching and strip whitespace
-        address = address.lower().strip()
-        
-        # Direct matching with specific email addresses
-        if address == "pacenotefoo@caf-gpt.com":
-            return "pace_notes"
-        if address == "policyfoo@caf-gpt.com":
-            return "policy_foo"
-                
-        return "unknown"  # Default system
 
     def _get_clean_body(self, mail) -> str:
         """Extract and clean email body content."""
@@ -133,7 +106,7 @@ class EmailParser:
         if self.html_converter:
             try:
                 return self.html_converter.handle(html_content)
-            except html2text.HTML2TextError as e:
+            except Exception as e:
                 logger.warn(f"HTML conversion failed: {e}")
                 
         # Fallback to basic cleaning

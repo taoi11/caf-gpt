@@ -59,7 +59,7 @@ class LLMRouter:
         """Continuously process emails from queue."""
         while self.running:
             try:
-                if not self.queue or self.queue.empty():
+                if not self.queue or await self.queue.empty():
                     # Check more frequently to allow for faster shutdown
                     await asyncio.sleep(0.5)
                     continue
@@ -104,22 +104,88 @@ class LLMRouter:
         
         This is the main entry point for the LLM router.
         """
-        logger.info("Routing email to appropriate system", metadata={
-            "system": email.get_system(),
-            "subject": email.subject,
-            "from": email.from_addr
-        })
-        
-        if email.get_system() == "pace_notes":
-            await self._forward_email(email)
-        else:
-            logger.warn("Unknown system for email", metadata={
+        try:
+            logger.info("Routing email to appropriate system", metadata={
                 "system": email.get_system(),
-                "subject": email.subject
+                "subject": email.subject,
+                "from": email.from_addr
             })
             
-            # Log warning for unknown system
-            logger.error("No handler available for system", metadata={
-                "system": email.get_system(),
-                "available_handlers": list(self._active_handlers.keys())
+            if email.get_system() == "pace_notes":
+                await self._forward_email(email)
+            else:
+                logger.warn("Unknown system for email", metadata={
+                    "system": email.get_system(),
+                    "subject": email.subject
+                })
+                
+                # Log warning for unknown system
+                logger.error("No handler available for system", metadata={
+                    "system": email.get_system(),
+                    "available_handlers": list(self._active_handlers.keys())
+                })
+                
+            # Now mark the email as read only after processing is complete
+            await self._mark_as_read(email)
+            
+            # Mark task as done in the queue to allow for proper tracking
+            if self.queue:
+                self.queue.task_done(email)
+                logger.debug("Marked email as completed in queue", metadata={
+                    "uid": email.get_uid(),
+                    "system": email.get_system()
+                })
+                
+        except Exception as e:
+            logger.error("Error processing email", metadata={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "email_uid": email.get_uid(),
+                "system": email.get_system()
+            })
+            
+    async def _mark_as_read(self, email: EmailMessage) -> None:
+        """Mark an email as read after it has been processed.
+        
+        Args:
+            email: The email message to mark as read
+        """
+        from src.emails.connection import IMAPConnection
+        
+        try:
+            # Create a connection to mark as read
+            connection = IMAPConnection()
+            await connection.connect()
+            
+            system = email.get_system()
+            uid = email.get_uid()
+            
+            # Find the right mailbox for this system
+            if system in connection.config.mailboxes:
+                mailbox = connection.config.mailboxes[system]
+                if await connection.mark_as_read(uid, mailbox):
+                    logger.info("Marked email as read after processing", metadata={
+                        "uid": uid,
+                        "system": system,
+                        "mailbox": mailbox
+                    })
+                else:
+                    logger.error("Failed to mark email as read", metadata={
+                        "uid": uid,
+                        "system": system,
+                        "mailbox": mailbox
+                    })
+            else:
+                logger.error("No mailbox configured for system", metadata={
+                    "system": system,
+                    "available_mailboxes": list(connection.config.mailboxes.keys())
+                })
+                
+            # Close connection when done
+            await connection.close()
+        except Exception as e:
+            logger.error("Error marking email as read", metadata={
+                "error": str(e),
+                "error_type": type(e).__name__,
+                "email_uid": email.get_uid()
             })

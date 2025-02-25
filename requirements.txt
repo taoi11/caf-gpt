@@ -4,3 +4,4 @@ boto3>=1.35.30
 python-json-logger>=2.0.7
 imap_tools>=1.7.4
 mail-parser>=4.0.0
+html2text>=2024.04.26

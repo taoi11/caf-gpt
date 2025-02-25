@@ -7,6 +7,7 @@ let
     python-dotenv
     ollama
     mail-parser
+    html2text
 
     # Development tools
     pylint
