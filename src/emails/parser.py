@@ -12,7 +12,7 @@ import mailparser
 from mailparser.exceptions import MailParserError
 
 from src.utils.logger import logger
-from src.types import EmailMessage
+from src.types import EmailMessage, EmailMetadata
 
 try:
     import html2text
@@ -52,13 +52,16 @@ class EmailParser:
             to_addr = mail.to[0] if mail.to else ""
             system = self._detect_system(to_addr)
             
+            # Create EmailMetadata with system info
+            metadata = EmailMetadata(system=system)
+            
             message = EmailMessage(
                 uid=uid,
                 from_addr=mail.from_[0][1] if mail.from_ else "",  # Take email part of tuple
                 to_addr=[addr[1] for addr in mail.to],  # Extract email parts
                 subject=mail.subject.strip() if mail.subject else "",
                 body=self._get_clean_body(mail),
-                system=system
+                metadata=metadata
             )
             
             if message.is_valid():

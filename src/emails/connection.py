@@ -92,7 +92,7 @@ class IMAPConnection:
                                 "uid": uid,
                                 "mailbox": mailbox,
                                 "from": parsed.from_addr,
-                                "system": parsed.system
+                                "system": parsed.metadata.system
                             })
                             messages.append(parsed)
                         else:
@@ -150,7 +150,8 @@ class IMAPConnection:
             "is_healthy": self.is_healthy,
             "retry_count": self.retry_count,
             "last_error": self.last_error,
-            "mailboxes": list(self.config.mailboxes.values())
+            "mailboxes": list(self.config.mailboxes.values()),
+            "errors": self.retry_count  # Add errors key for compatibility with main.py
         }
 
     def is_connected(self) -> bool:
@@ -182,10 +183,19 @@ class IMAPConnection:
         """Close IMAP connection cleanly."""
         if self.connection:
             try:
-                self.connection.close()
-                self.connection.logout()
-                logger.info("IMAP connection closed")
-            except (imaplib.IMAP4.error, socket.error) as error:
+                # Set socket timeout to prevent hanging
+                if hasattr(self.connection, 'sock') and self.connection.sock:
+                    self.connection.sock.settimeout(2.0)
+                
+                # Try to close and logout with a reasonable timeout
+                try:
+                    self.connection.close()
+                    self.connection.logout()
+                    logger.info("IMAP connection closed")
+                except (socket.timeout, TimeoutError):
+                    logger.warning("IMAP close/logout timed out")
+                
+            except (imaplib.IMAP4.error, socket.error, Exception) as error:
                 logger.error("Error closing IMAP connection", metadata={
                     "error": str(error)
                 })

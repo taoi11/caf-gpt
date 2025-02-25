@@ -1,16 +1,13 @@
-"""Thread-safe email processing queue with retry and monitoring support.
+"""Thread-safe email processing queue with monitoring support.
 Implements:
-- Asynchronous queue operations
-- Exponential backoff retry logic
+- Asynchronous queue operations 
 - Queue statistics and health monitoring
 - Thread-safe operations with lock management
-Provides robust email processing with failure recovery."""
+Provides robust email processing."""
 
-from collections import deque
 from typing import Optional, List, Set
 import threading
 import asyncio
-from datetime import datetime
 
 from src.utils.logger import logger
 from src.types import EmailMessage, EmailQueueStats
@@ -19,100 +16,44 @@ class QueueError(Exception):
     """Custom exception for queue-related errors."""
 
 class EmailQueue:
-    """Thread-safe queue for email processing with retry support."""
+    """Thread-safe queue for email processing."""
     
     def __init__(self, maxsize: int = 1000):
         self._queue = asyncio.Queue(maxsize=maxsize)
-        self.retry_queue = deque(maxlen=maxsize)  # Separate queue for retry items
         self.lock = threading.Lock()
         self._processing = False
-        self._retry_task: Optional[asyncio.Task] = None
         self._processed_uids: Set[int] = set()  # Track processed UIDs
-        self._stop_retry_processing = False
 
-    async def _delayed_add(self, email: EmailMessage) -> None:
-        """Async method to handle delayed retry of emails."""
-        next_attempt = email.get_next_retry_time()
-        if not next_attempt:
-            logger.warn("No retry time set for email", metadata={
-                "uid": email.get_uid(),
-                "retry_count": email.get_retry_count()
-            })
-            return
-
-        # Calculate sleep duration
-        now = datetime.now().replace(microsecond=0)
-        sleep_duration = (next_attempt - now).total_seconds()
-        
-        if sleep_duration > 0:
-            try:
-                logger.info("Scheduling retry", metadata={
-                    "uid": email.get_uid(),
-                    "retry_count": email.get_retry_count(),
-                    "delay_seconds": sleep_duration
-                })
-                await asyncio.sleep(sleep_duration)
-                
-                # Check if we should still process this retry
-                if self._stop_retry_processing:
-                    logger.info("Retry processing stopped, cancelling retry", metadata={
-                        "uid": email.get_uid()
-                    })
-                    return
-
-                # Add to main queue for processing
-                if self.add_email(email):
-                    logger.info("Retry email added to queue", metadata={
-                        "uid": email.get_uid(),
-                        "retry_count": email.get_retry_count()
-                    })
-                else:
-                    logger.error("Failed to add retry email to queue", metadata={
-                        "uid": email.get_uid(),
-                        "retry_count": email.get_retry_count()
-                    })
-            except asyncio.CancelledError:
-                logger.info("Retry task cancelled", metadata={
-                    "uid": email.get_uid()
-                })
-                raise
-
-    def add_email(self, email: EmailMessage) -> bool:
+    async def add_email(self, email: EmailMessage) -> bool:
         """Add an email to the queue. Returns False if queue is full."""
         with self.lock:
-            # Check if this is a retry
-            is_retry = email.get_retry_count() > 0
-            target_queue = self.retry_queue if is_retry else self._queue
-
-            if target_queue.full():
+            if self._queue.full():
                 logger.warn(
                     "Queue is full, dropping email",
                     metadata={
                         "uid": email.get_uid(),
-                        "is_retry": is_retry,
-                        "retry_count": email.get_retry_count()
+                        "system": email.get_system()
                     }
                 )
                 return False
             
-            target_queue.put(email)
+            # Make sure to await the put coroutine
+            await self._queue.put(email)
             logger.debug(
                 "Added email to queue",
                 metadata={
                     "uid": email.get_uid(),
                     "system": email.get_system(),
-                    "queue_size": target_queue.qsize(),
-                    "is_retry": is_retry,
-                    "retry_count": email.get_retry_count()
+                    "queue_size": self._queue.qsize()
                 }
             )
             return True
 
-    def add_emails(self, emails: List[EmailMessage]) -> int:
+    async def add_emails(self, emails: List[EmailMessage]) -> int:
         """Add multiple emails to queue. Returns number of emails added."""
         added = 0
         for email in emails:
-            if self.add_email(email):
+            if await self.add_email(email):
                 added += 1
         return added
 
@@ -130,7 +71,8 @@ class EmailQueue:
 
     def empty(self) -> bool:
         """Check if queue is empty."""
-        return self._queue.empty()
+        with self.lock:
+            return self._queue.empty()
 
     def get_size(self) -> int:
         """Get current queue size."""
@@ -143,18 +85,21 @@ class EmailQueue:
             self._queue.queue.clear()
 
     def get_stats(self) -> EmailQueueStats:
-        """Get queue statistics including retry information."""
+        """Get queue statistics."""
         with self.lock:
-            total_messages = self._queue.qsize() + len(self.retry_queue)
-            retry_messages = len(self.retry_queue)
+            total_messages = self._queue.qsize()
             
             return {
                 "size": total_messages,
                 "max_size": self._queue.maxsize,
+                "capacity": self._queue.maxsize,  # Alias for max_size for backward compatibility
                 "is_empty": total_messages == 0,
                 "is_processing": self._processing,
-                "retry_count": retry_messages,
-                "retry_ratio": retry_messages / total_messages if total_messages > 0 else 0
+                "retry_count": 0,  # No more retry functionality
+                "retry_ratio": 0,  # No more retry functionality
+                "processing": self._processing,  # Alias for is_processing
+                "processed": len(self._processed_uids),
+                "failed": 0  # No tracking of failed messages
             }
 
     def start_processing(self) -> bool:
@@ -175,37 +120,6 @@ class EmailQueue:
         with self.lock:
             return self._processing
 
-    def schedule_retry(self, email: EmailMessage, reason: str) -> None:
-        """Schedule an email for retry with exponential backoff."""
-        email.mark_for_retry(reason)
-        
-        if email.should_retry():
-            # Create task for delayed add
-            loop = asyncio.get_event_loop()
-            retry_task = loop.create_task(self._delayed_add(email))
-            
-            # Store task reference to allow cancellation
-            self._retry_task = retry_task
-            
-            logger.info("Scheduled email for retry", metadata={
-                "uid": email.get_uid(),
-                "retry_count": email.get_retry_count(),
-                "reason": reason,
-                "next_attempt": email.get_next_retry_time()
-            })
-        else:
-            logger.warn("Email exceeded retry limit", metadata={
-                "uid": email.get_uid(),
-                "retry_count": email.get_retry_count(),
-                "reason": reason
-            })
-
-    def stop_retry_processing(self) -> None:
-        """Stop processing retries and cancel any pending retry tasks."""
-        self._stop_retry_processing = True
-        if self._retry_task and not self._retry_task.done():
-            self._retry_task.cancel()
-
     async def put(self, email: EmailMessage) -> None:
         """Add email to queue.
         
@@ -221,3 +135,13 @@ class EmailQueue:
             raise QueueError("Queue is full") from exc
         except Exception as e:
             raise QueueError(f"Error adding to queue: {str(e)}") from e
+
+    def get_processed_uids(self) -> Set[int]:
+        """Get the set of processed UIDs."""
+        with self.lock:
+            return set(self._processed_uids)  # Return a copy
+            
+    def clear_processed_uids(self) -> None:
+        """Clear the set of processed UIDs."""
+        with self.lock:
+            self._processed_uids.clear()

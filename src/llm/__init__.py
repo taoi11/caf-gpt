@@ -16,6 +16,9 @@ class LLMRouter:
         self.queue: Optional[EmailQueue] = None
         self.running = False
         self._process_task: Optional[asyncio.Task] = None
+        self._active_handlers = {
+            "pace_notes": self.pace_note
+        }
         
     def start_watching(self, queue: EmailQueue) -> None:
         """Start watching the email queue for messages to process.
@@ -37,11 +40,17 @@ class LLMRouter:
         
         if self._process_task:
             try:
-                # Cancel the task and wait for it to complete
+                # Cancel the task and wait for it to complete with a timeout
                 self._process_task.cancel()
-                await self._process_task
-            except asyncio.CancelledError:
-                pass  # Expected during shutdown
+                try:
+                    # Wait for cancellation to complete with a timeout
+                    await asyncio.wait_for(asyncio.shield(self._process_task), timeout=2.0)
+                except asyncio.TimeoutError:
+                    logger.warning("Timed out waiting for LLM Router task to cancel")
+                except asyncio.CancelledError:
+                    logger.debug("LLM Router task cancellation handled")
+            except Exception as e:
+                logger.error(f"Error during LLM Router shutdown: {e}")
             self._process_task = None
         
         logger.info("LLM Router shutdown complete")
@@ -51,21 +60,22 @@ class LLMRouter:
         while self.running:
             try:
                 if not self.queue or self.queue.empty():
-                    await asyncio.sleep(1)
+                    # Check more frequently to allow for faster shutdown
+                    await asyncio.sleep(0.5)
                     continue
 
                 # Get next email from queue
                 email = await self.queue.get()
                 if email:
                     logger.debug("Processing email from queue", metadata={
-                        "system": email.system,
-                        "uid": email.uid,
+                        "system": email.get_system(),
+                        "uid": email.get_uid(),
                         "from": email.from_addr
                     })
                     await self.route_email(email)
                 
-                # Wait before next check
-                await asyncio.sleep(1)
+                # Wait before next check - shorter interval for responsiveness
+                await asyncio.sleep(0.5)
                 
             except asyncio.CancelledError:
                 logger.debug("LLM Router queue processing cancelled")
@@ -75,33 +85,41 @@ class LLMRouter:
                     "error": str(e),
                     "error_type": type(e).__name__
                 })
-                await asyncio.sleep(1)
+                await asyncio.sleep(0.5)  # Reduced from 1 second
         
+    async def _forward_email(self, email: EmailMessage) -> None:
+        """Forward an email to the appropriate handler."""
+        logger.info("Forwarding email to handler", metadata={
+            "handler": self._active_handlers.get(email.get_system()),
+            "system": email.get_system(),
+            "subject": email.subject,
+            "from": email.from_addr
+        })
+        
+        # Call the handler for the system
+        await self._active_handlers[email.get_system()].process(email)
+
     async def route_email(self, email: EmailMessage) -> None:
         """Route email to appropriate handler based on system.
         
-        Args:
-            email: The email message to route
+        This is the main entry point for the LLM router.
         """
-        try:
-            logger.debug("Routing email", metadata={
-                "system": email.system,
-                "uid": email.uid,
-                "from": email.from_addr
+        logger.info("Routing email to appropriate system", metadata={
+            "system": email.get_system(),
+            "subject": email.subject,
+            "from": email.from_addr
+        })
+        
+        if email.get_system() == "pace_notes":
+            await self._forward_email(email)
+        else:
+            logger.warn("Unknown system for email", metadata={
+                "system": email.get_system(),
+                "subject": email.subject
             })
             
-            if email.system == "pace_notes":
-                await self.pace_note.process(email)
-            else:
-                logger.warn("Unknown system for email", metadata={
-                    "system": email.system,
-                    "uid": email.uid
-                })
-                
-        except (ValueError, RuntimeError) as e:
-            logger.error("Error routing email", metadata={
-                "system": email.system,
-                "uid": email.uid,
-                "error": str(e),
-                "error_type": type(e).__name__
+            # Log warning for unknown system
+            logger.error("No handler available for system", metadata={
+                "system": email.get_system(),
+                "available_handlers": list(self._active_handlers.keys())
             })

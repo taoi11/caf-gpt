@@ -1,8 +1,8 @@
 """Type definitions for the application. All types are defined here."""
 
 from dataclasses import dataclass, field
-from datetime import datetime
-from typing import TypedDict, Dict, Any, List
+from datetime import datetime, timedelta
+from typing import TypedDict, Dict, Any, List, Optional
 
 # LLM types
 @dataclass
@@ -26,6 +26,12 @@ class LLMErrorDetails:
 
 # Email types
 @dataclass
+class EmailMetadata:
+    """Metadata for email processing."""
+    received_at: datetime = field(default_factory=datetime.now)
+    system: str = ""
+
+@dataclass
 class EmailMessage:
     """Represents a parsed email message."""
     uid: int
@@ -33,9 +39,7 @@ class EmailMessage:
     to_addr: List[str]
     subject: str
     body: str
-    system: str
-    received_at: datetime = field(default_factory=datetime.now)
-    retry_count: int = 0
+    metadata: EmailMetadata = field(default_factory=EmailMetadata)
 
     def is_valid(self) -> bool:
         """Check if email has all required fields."""
@@ -43,16 +47,17 @@ class EmailMessage:
             self.uid and
             self.from_addr and
             self.to_addr and
-            self.system
+            self.metadata.system
         )
-
-    def should_retry(self) -> bool:
-        """Check if email should be retried based on attempt count."""
-        return self.retry_count < 3  # Max 3 attempts
-
-    def mark_retry(self) -> None:
-        """Increment retry counter."""
-        self.retry_count += 1
+        
+    # Accessor methods for compatibility with existing code
+    def get_system(self) -> str:
+        """Get the system identifier."""
+        return self.metadata.system
+        
+    def get_uid(self) -> int:
+        """Get the email UID."""
+        return self.uid
 
 # Queue and health check types (keep these as they're used in main.py)
 class EmailQueueStats(TypedDict):
@@ -61,8 +66,9 @@ class EmailQueueStats(TypedDict):
     max_size: int             # Maximum queue capacity
     is_empty: bool            # Whether queue is empty
     is_processing: bool       # Whether queue is being processed
-    retry_count: int          # Number of messages in retry state
-    retry_ratio: float        # Ratio of retry messages to total
+    # Fields below are maintained for backward compatibility but no longer track retries
+    retry_count: int          # Always 0 (retry functionality removed)
+    retry_ratio: float        # Always 0.0 (retry functionality removed)
 
 class EmailHealthCheck(TypedDict):
     """Health check information for the email processing system."""

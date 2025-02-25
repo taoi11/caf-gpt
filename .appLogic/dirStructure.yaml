@@ -32,10 +32,10 @@ caf-gpt:
       - queue.py: Thread-safe message queue
     llm:  # LLM integration
       - __init__.py: LLM Router implementation
-    prompt/pace_note:  # Pace Notes handler
+    llm/pace_note:  # Pace Notes handler
       - __init__.py: PaceNote handler implementation
       - agent.py: Processing logic
-    prompt/policy_foo:  # Policy handler (planned)
+    llm/policy_foo:  # Policy handler (planned)
       - __init__.py: Policy handler implementation
       - agent.py: Processing logic
   .cursor:  # IDE configuration

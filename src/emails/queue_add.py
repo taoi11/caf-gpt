@@ -1,7 +1,7 @@
 """Email queue management and processing orchestration.
 Handles:
 - Email retrieval and queue population
-- Processing loop with retry support
+- Processing loop
 - Health monitoring and metrics collection
 - Shutdown and cleanup operations
 Provides end-to-end email processing workflow management."""
@@ -14,38 +14,36 @@ from datetime import datetime
 from src.utils.logger import logger
 from src.emails.parser import EmailParser
 from src.emails.connection import IMAPConnection
-from src.emails.queue import EmailQueue
-from src.types import EmailMessage, EmailHealthCheck
+from src.emails.queue import EmailQueue, QueueError
+from src.types import EmailHealthCheck
 
 
 class ProcessingError(Exception):
-    """Custom exception for processing errors that may need retry."""
-    def __init__(self, message: str, is_retryable: bool = True):
+    """Custom exception for processing errors."""
+    def __init__(self, message: str):
         super().__init__(message)
-        self.is_retryable = is_retryable
 
 
 class QueueManager:
-    """Manages email parsing and queueing with retry support."""
+    """Manages email parsing and queueing."""
 
     def __init__(self):
-        self.connection = IMAPConnection()
-        self.queue = EmailQueue()
-        self.running = False
-        self._processed_uids = set()  # Track processed message UIDs
         self.parser = EmailParser()
+        self.connection = IMAPConnection()
+        self.queue = EmailQueue(maxsize=100)
+        self.running = False
         self._start_time = datetime.now()
         self._message_count = 0
-        self._retry_count = 0
         self._error_count = 0
+        self._process_task = None  # Task for the processing loop
 
     async def start(self) -> None:
-        """Start the email processor."""
+        """Start the queue manager."""
         if self.running:
             return
 
         self.running = True
-        logger.info("Starting email processor")
+        logger.info("Starting queue manager")
 
         # Initial connection
         if not self.connection.connect():
@@ -54,131 +52,105 @@ class QueueManager:
             return
 
         # Start processing loop
-        asyncio.create_task(self._processing_loop())
+        self._process_task = asyncio.create_task(self._processing_loop())
 
     async def stop(self) -> None:
-        """Stop the email processor and cleanup resources."""
-        logger.info("Shutting down email processor...")
+        """Stop the queue manager and cleanup resources."""
+        logger.info("Shutting down queue manager...")
         self.running = False
+
+        # Cancel the processing loop task if running
+        if self._process_task and not self._process_task.done():
+            self._process_task.cancel()
+            try:
+                await self._process_task
+            except asyncio.CancelledError:
+                logger.debug("Processing loop cancelled")
 
         try:
             if self.connection.is_connected():
                 self.connection.close()
-            logger.info("Email processor shutdown complete")
+            logger.info("Queue manager shutdown complete")
         except (imaplib.IMAP4.error, socket.error) as e:
             logger.error(f"Error during shutdown: {str(e)}")
 
-    async def _process_message(self, message: EmailMessage) -> None:
-        """Process a single email message with retry support.
-        
-        Args:
-            message: Email message to process
-        """
-        try:
-            # Simulate processing (replace with actual processing logic)
-            await asyncio.sleep(1)  # Placeholder for actual processing
-            
-            # Record success metrics
-            if message.retry_count > 0:
-                self._retry_count += 1
-                logger.info("Successfully processed message after retry", metadata={
-                    "uid": message.uid,
-                    "retry_count": message.retry_count,
-                    "system": message.system
-                })
-            
-            self._message_count += 1
-
-        except ProcessingError as e:
-            if e.is_retryable and message.should_retry():
-                message.mark_retry()
-                logger.warn("Scheduling message for retry", metadata={
-                    "uid": message.uid,
-                    "retry_count": message.retry_count,
-                    "error": str(e)
-                })
-                await self.queue.put(message)
-            else:
-                self._error_count += 1
-                logger.error("Message processing failed", metadata={
-                    "uid": message.uid,
-                    "retry_count": message.retry_count,
-                    "error": str(e),
-                    "is_retryable": e.is_retryable
-                })
-        except (ValueError, RuntimeError) as e:
-            self._error_count += 1
-            logger.error("Unexpected error processing message", metadata={
-                "uid": message.uid,
-                "retry_count": message.retry_count,
-                "error": str(e),
-                "error_type": type(e).__name__
-            })
-
     async def _processing_loop(self) -> None:
-        """Main processing loop with retry support."""
+        """Main processing loop for fetching and queueing emails."""
         while self.running:
             try:
-                # Get new messages
+                # Ensure connection is active
+                if not self.connection.is_connected():
+                    if not self.connection.connect():
+                        logger.error("Failed to reconnect to IMAP server")
+                        await asyncio.sleep(5)  # Reduced wait time before retry
+                        continue
+
+                # Fetch and process new messages
                 messages = self.connection.get_unread_messages()
-                if not messages:
-                    await asyncio.sleep(5)
-                    continue
+                if messages:
+                    self._message_count += len(messages)
+                    logger.info(f"Retrieved {len(messages)} new messages")
+                    
+                    # Add messages to queue
+                    for message in messages:
+                        try:
+                            await self.queue.add_email(message)
+                            logger.debug(f"Queued message {message.uid} from {message.from_addr}")
+                        except QueueError as e:
+                            logger.error(f"Failed to queue message: {str(e)}")
+                
+                # Mark processed messages as read in IMAP
+                processed_uids = self.queue.get_processed_uids()
+                if processed_uids:
+                    logger.info(f"Marking {len(processed_uids)} messages as read")
+                    for uid in processed_uids:
+                        # Assuming we need to get the appropriate mailbox for each message
+                        # For now using a default mailbox value
+                        self.connection.mark_as_read(uid, mailbox="INBOX")
+                    self.queue.clear_processed_uids()  # Clear the processed UIDs
 
-                # Filter out already processed messages
-                new_messages = [
-                    msg for msg in messages
-                    if msg.uid not in self._processed_uids
-                ]
-
-                if new_messages:
-                    # Add valid messages to queue
-                    valid_messages = [
-                        msg for msg in new_messages
-                        if msg.is_valid()
-                    ]
-
-                    if valid_messages:
-                        for msg in valid_messages:
-                            await self.queue.put(msg)
-                            logger.debug("Added message to queue", metadata={
-                                "uid": msg.uid,
-                                "system": msg.system,
-                                "from": msg.from_addr
-                            })
-
-                        # Process messages
-                        for msg in valid_messages:
-                            await self._process_message(msg)
-                            self._processed_uids.add(msg.uid)
-
-                await asyncio.sleep(5)
-
+                # Allow other tasks to run and throttle polling - use shorter interval
+                # for more responsive shutdown
+                for _ in range(5):  # Check for shutdown every second
+                    if not self.running:
+                        break
+                    await asyncio.sleep(1)
+                
+            except asyncio.CancelledError:
+                logger.debug("Processing loop cancelled during operation")
+                raise
             except (imaplib.IMAP4.error, socket.error) as e:
-                logger.error("IMAP error in processing loop", metadata={
-                    "error": str(e),
-                    "retry_count": self.connection.retry_count
+                self._error_count += 1
+                logger.error(f"IMAP error: {str(e)}", metadata={
+                    "error_count": self._error_count,
+                    "retry_count": self.connection.retry_count if hasattr(self.connection, 'retry_count') else 0
                 })
-                await asyncio.sleep(5)
+                await asyncio.sleep(2)  # Reduced wait time
 
     def get_health_check(self) -> EmailHealthCheck:
-        """Get processor health status with metrics."""
+        """Get queue manager health status with metrics."""
         queue_stats = self.queue.get_stats()
         
         metrics = {
             "uptime_seconds": (datetime.now() - self._start_time).total_seconds(),
             "message_count": self._message_count,
-            "retry_count": self._retry_count,
-            "error_count": self._error_count,
-            "success_rate": (
-                (self._message_count - self._error_count) / self._message_count 
-                if self._message_count > 0 else 0
-            )
+            "error_count": self._error_count
+        }
+        
+        connection_health = self.connection.get_health_check() if hasattr(self.connection, 'get_health_check') else {
+            "connected": self.connection.is_connected(),
+            "errors": self._error_count,
+            "retry_count": getattr(self.connection, 'retry_count', 0)
         }
         
         return {
-            "running": self.running,
-            "queue": queue_stats,
-            "connection": self.connection.get_health_check(),
-            "metrics": metrics
+            "connection": connection_health,
+            "queue": {
+                "size": queue_stats["size"],
+                "capacity": queue_stats["capacity"],
+                "processing": queue_stats["processing"],
+                "processed": queue_stats["processed"],
+                "failed": queue_stats["failed"],
+                "metrics": metrics
+            }
         }
