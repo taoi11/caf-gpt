@@ -2,11 +2,18 @@
 Extracts and normalizes email content from raw IMAP data, including:
 - Header information (from/to/subject)
 - Body content (HTML/plain text conversion)
-Provides robust error handling and logging for parsing operations."""
+Provides robust error handling and logging for parsing operations.
+
+Key Features:
+- Safe handling of malformed email formats
+- Comprehensive validation of parsed content
+- Detailed logging for debugging and monitoring
+- Consistent type hints for better IDE support"""
 
 import re
 import html
 from typing import Optional
+import datetime
 import mailparser
 from mailparser.exceptions import MailParserError
 
@@ -24,8 +31,13 @@ except ImportError:
 class EmailParser:
     """Handles parsing of raw email data into structured format.
     
-    Uses mailparser library to extract email content and metadata while maintaining
-    error tracking and logging.
+    Responsibilities include:
+    - Extracting headers (From/To/Subject)
+    - Converting HTML content to clean plain text
+    - Validating parsed messages
+    - Robust error handling and logging
+    
+    Uses mailparser library under the hood with fallback processing.
     """
     def __init__(self):
         self.parser = mailparser
@@ -36,6 +48,20 @@ class EmailParser:
             self.html_converter.ignore_images = True
 
     def parse_email(self, raw_bytes: bytes, uid: int) -> Optional[EmailMessage]:
+        """Parse raw email bytes into structured EmailMessage object.
+        
+        Args:
+            raw_bytes: Raw email content bytes from IMAP server
+            uid: IMAP UID of the email message
+            
+        Returns:
+            EmailMessage object on success; None on failure
+            
+        Raises:
+            MailParserError: If low-level parsing fails
+            UnicodeError: If encoding issues occur
+            ValueError: If message validation fails
+        """
         """Parse raw email bytes into EmailMessage object.
         
         Args:
@@ -48,8 +74,20 @@ class EmailParser:
         try:
             mail = self.parser.parse_from_bytes(raw_bytes)
             
+            # Safely extract addresses with format validation
+            def safe_get_address(field):
+                addrs = getattr(mail, field, [])
+                return addrs[0][1] if len(addrs) > 0 else ""
+            
+            # Extract validated addresses    
+            valid_tos = [
+                addr[1]
+                for addr in getattr(mail, 'to', [])
+                if len(addr) > 1  # Validate tuple structure  
+            ]
+            
             # Get primary recipient for system detection
-            to_addr = mail.to[0] if mail.to else ""
+            to_addr = safe_get_address('to')
             system = detect_system(to_addr)
             
             # Create EmailMetadata with system info
@@ -57,8 +95,8 @@ class EmailParser:
             
             message = EmailMessage(
                 uid=uid,
-                from_addr=mail.from_[0][1] if mail.from_ else "",  # Take email part of tuple
-                to_addr=[addr[1] for addr in mail.to],  # Extract email parts
+                from_addr=safe_get_address('from'),
+                to_addr=valid_tos,
                 subject=mail.subject.strip() if mail.subject else "",
                 body=self._get_clean_body(mail),
                 metadata=metadata
@@ -77,11 +115,16 @@ class EmailParser:
                 "missing_fields": [
                     f for f in ["uid", "from_addr", "to_addr", "system"]
                     if not getattr(message, f, None)
-                ]
+                ],
+                "received_at": datetime.datetime.now().isoformat(),
             })
             return None
 
-        except (MailParserError, UnicodeError, ValueError) as e:
+        except (MailParserError,
+                UnicodeError,
+                ValueError,
+                AttributeError,
+                IndexError) as e:
             logger.exception("Parse error", metadata={
                 "uid": uid,
                 "error": str(e),
@@ -90,6 +133,19 @@ class EmailParser:
             return None
 
     def _get_clean_body(self, mail) -> str:
+        """Extract and sanitize email body content.
+        
+        Processing steps:
+        1) Prefer plain text body
+        2) Fallback to HTML conversion
+        3) Clean whitespace/special chars
+        
+        Args:
+            mail: Parsed message object from MailParser
+            
+        Returns:
+            Cleaned plain text body content
+        """
         """Extract and clean email body content."""
         if mail.text_plain:
             content = mail.text_plain[0] if isinstance(mail.text_plain, list) else mail.text_plain
