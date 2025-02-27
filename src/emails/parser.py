@@ -62,15 +62,6 @@ class EmailParser:
             UnicodeError: If encoding issues occur
             ValueError: If message validation fails
         """
-        """Parse raw email bytes into EmailMessage object.
-        
-        Args:
-            raw_bytes: Raw email content in bytes
-            uid: IMAP unique identifier for the email
-            
-        Returns:
-            EmailMessage if parsing succeeds, None if fails
-        """
         try:
             mail = self.parser.parse_from_bytes(raw_bytes)
             
@@ -146,7 +137,6 @@ class EmailParser:
         Returns:
             Cleaned plain text body content
         """
-        """Extract and clean email body content."""
         if mail.text_plain:
             content = mail.text_plain[0] if isinstance(mail.text_plain, list) else mail.text_plain
         elif mail.text_html:
