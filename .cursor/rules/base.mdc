@@ -2,33 +2,22 @@
 description: Base set of rules to alway follow
 globs: *
 ---
-<ruel-base>
+<rule-base>
 
 ## Core Principles
-  - Streamline development
-  - Prefer built-in solutions
-  - Minimize dependencies
-  - No code changes without approval
-  - User manages all installations
-  - Clear reasoning for decisions
+- **Simplicity & Clarity**: "Complexity is not the problem, ambiguity is. Simplicity does not solve ambiguity, clarity does."
+- **Code Quality**: "Measure twice, cut once."
+- **Development**: Use built-ins, minimize dependencies, get approval for changes
 
-## Coding philosophy
-"Complexity is not the problem, ambiguity is. Simplicity does not solve ambiguity, clarity does."
-"Measure twice, cut once."
+## Documentation
+- File-level: Brief overview paragraph at top
+- Functions: 1-2 line docstrings for each function
+- Logging: Set appropriate log levels
 
-## Coding docs
-  - Write one or two line doc strings for each function.
-  - Write a very short paragrah doc srting at the top of the file as a overview.
+## Workflow
+- Propose changes before implementing
+- Explain trade-offs and alternatives
+- Wait for user approval
+- Document decisions clearly
 
-## Best Practices
-1. **Clear Communication**:
-   - Simple explanations
-   - Document decisions
-   - Show alternatives
-   
-2. **Development Flow**:
-   - Propose before implementing
-   - Explain trade-offs
-   - Wait for user approval
-   
 </rule-base>

@@ -1,39 +1,31 @@
 ---
-description: Use Aider to offload small and repetitive taskes. 
+description: Use Aider to offload small and repetitive taskes.
 globs: *
 ---
-## Task Offloading to Aider CLI Assistant
-### What is Aider
-Aider is a CLI-based AI coding assistant that can directly edit code files based on provided instructions. In our setup:
-- It's configured to watch specified files and make changes
-- It's default reads context from `.appLogic/` and `prompt.md`
-- It performs tasks via a two-pass system (implementation + verification)
-- It leverages auto-linting with pylint
+<rule-extra>
+## Aider: CLI AI Coding Assistant
 
-### Process
-1. **Identify Suitable Tasks**:
-   - Target repetitive Python code modifications in the src/ directory
-   - Ideal for: formatting, common patterns, docstring updates, type annotation fixes
-   - Tasks should be self-contained and not require complex architectural decisions
-   
-2. **Prompt Creation**:
-   - Write clear, specific instructions in `prompt.md`
-   - Include context, expected changes, and acceptance criteria
-   - Structure prompts as step-by-step instructions rather than open-ended requests
-   - Example: "Update all functions in utils/date_helpers.py to include proper type hints and docstrings"
+### Purpose
+- Cost-effective (5x cheaper than Claude) for routine code tasks
+- Directly edits files based on instructions in prompt.md
+- Two-pass system: implementation + self-review
 
-3. **Execution**:
-   - Use existing `./aider.sh` script which performs a two-pass process:
-     * First run: Implements the changes based on prompt.md
-     * Second run: Reviews and refines its own work
-   - update `--read` to tell Aider additional files to read
-   - udpate `--file` to teil AIder which files it can read and write to. 
+### Best For
+- Docstring improvements
+- Type annotation additions
+- Error handling standardization
+- Formatting and refactoring
+- Code cleanup tasks
 
-4. **Verification**:
-   - The use will init the script and tell you once Aider on finished.
-   - Aider will make a commit for you to review.
+### Usage
+1. **Update prompt.md** with specific, step-by-step, detailed instructions
+2. **Modify aider.sh** to set:
+   - `--read` flags for context files
+   - `--file` flags for target files
+3. **Running**  the user will execute `./aider.sh` script for you
+4. **Review** the user will give you the commits Aider creates to review
 
-### Key Points
-- Preserve the existing aider.sh two-pass workflow
-- Focus on low-complexity tasks
-- No architectural or security-critical changes through Aider
+### Avoid Using For
+- Complex architectural decisions
+- Novel feature implementation
+</rule-extra>
