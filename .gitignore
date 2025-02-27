@@ -1,5 +1,8 @@
 # Node
 node_modules/
+npm-debug.log
+yarn-error.log
+.npm
 
 # TypeScript
 *.tsbuildinfo
@@ -7,17 +10,19 @@ public/js/
 
 # Build output
 dist/
+build/
 
 # Environment variables
 .env
+.env.*
+!.env.example
 data/
 .direnv/
 
 # Development files
 .aider*
-!aider.config.yml
+!.aider.config.yml
 prompt.md
-
 
 # Coverage reports
 coverage/

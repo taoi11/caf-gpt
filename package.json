@@ -5,33 +5,48 @@
   "type": "module",
   "scripts": {
     "start": "node dist/server/index.js",
-    "dev": "npm run clean && concurrently \"tsx watch src/server/index.ts\" \"npm run build:client -- --watch\"",
-    "build": "npm run clean && npm run build:server && npm run build:client",
-    "build:prod": "NODE_ENV=production npm run clean && npm run build:server:prod && npm run build:client:prod",
-    "build:server": "tsc -p tsconfig.server.json",
-    "build:server:prod": "tsc -p tsconfig.server.json --removeComments",
+    "dev": "npm run clean && concurrently \"node --loader ts-node/esm src/server/index.ts\" \"npm run build:client -- --watch\"",
+    "dev:server": "node --loader ts-node/esm src/server/index.ts --watch",
+    "dev:client": "npm run build:client -- --watch",
+    
+    "build": "npm run clean && concurrently \"npm:build:server\" \"npm:build:client\"",
+    "build:prod": "NODE_ENV=production npm run clean && concurrently \"npm:build:server:prod\" \"npm:build:client:prod\"",
+    "build:server": "tsc -p tsconfig.json",
+    "build:server:prod": "tsc -p tsconfig.json --removeComments",
     "build:client": "esbuild src/client/*.ts --bundle --outdir=public/js --sourcemap --format=esm",
     "build:client:prod": "esbuild src/client/*.ts --bundle --outdir=public/js --minify --format=esm",
-    "clean": "rm -rf dist public/js && mkdir -p dist public/js",
+    
+    "clean": "rimraf dist public/js && mkdir -p dist public/js",
+    "clean:all": "rimraf dist public/js node_modules coverage && mkdir -p dist public/js",
+    
+    "lint": "eslint 'src/**/*.{ts,js}'",
+    "lint:fix": "eslint 'src/**/*.{ts,js}' --fix",
+    
     "test": "jest --config jest.config.ts",
-    "test:watch": "jest --config jest.config.ts --watch"
+    "test:watch": "jest --config jest.config.ts --watch",
+    "test:coverage": "jest --config jest.config.ts --coverage"
   },
   "author": "",
   "license": "AGPL-3.0",
   "devDependencies": {
+    "@eslint/js": "^9.21.0",
     "@types/http-server": "^0.12.4",
     "@types/jest": "^29.5.14",
-    "@types/node": "^20.4.5",
-    "concurrently": "^8.2.2",
-    "esbuild": "^0.19.0",
+    "@types/node": "^22.13.5",
+    "@typescript-eslint/eslint-plugin": "^8.25.0",
+    "@typescript-eslint/parser": "^8.25.0",
+    "concurrently": "^9.1.2",
+    "esbuild": "^0.25.0",
+    "eslint": "^9.21.0",
     "jest": "^29.7.0",
-    "ts-jest": "^29.2.5",
+    "ts-jest": "^29.2.6",
     "ts-node": "^10.9.2",
-    "tsx": "^4.7.0",
-    "typescript": "^5.1.6"
+    "tsx": "^4.19.3",
+    "typescript": "^5.7.3",
+    "typescript-eslint": "^8.25.0"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.717.0",
+    "@aws-sdk/client-s3": "^3.750.0",
     "dotenv": "^16.4.7",
     "rimraf": "^6.0.1"
   }

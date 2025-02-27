@@ -1,17 +1,44 @@
 {
   "compilerOptions": {
+    /* Base Options */
     "target": "ES2020",
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "outDir": "dist",
-    "rootDir": "src",
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "allowJs": true,
-    "resolveJsonModule": true
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    
+    /* Module Settings */
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    
+    /* Include DOM libraries needed for client code */
+    "lib": ["ES2020", "DOM", "DOM.Iterable"],
+    
+    /* Root directory for all source files */
+    "rootDir": "./src",
+    
+    /* Output directory structure */
+    "outDir": "./dist",
+    
+    /* Ensure proper path handling */
+    "baseUrl": ".",
+    
+    /* Type checking improvements */
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    
+    /* Support for import.meta */
+    "importsNotUsedAsValues": "remove",
+    
+    /* JSON Module Support */
+    "allowSyntheticDefaultImports": true,
+    
+    /* Additional ESM Support */
+    "verbatimModuleSyntax": true
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules"]
+  "exclude": ["node_modules", "dist", "public"]
 } 

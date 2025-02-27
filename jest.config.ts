@@ -12,20 +12,28 @@ const config: Config.InitialOptions = {
     '**/?(*.)+(spec|test).ts'
   ],
   transform: {
-    '^.+\\.ts$': 'ts-jest'
+    '^.+\\.ts$': [
+      'ts-jest',
+      {
+        useESM: true,
+        tsconfig: 'tsconfig.json'
+      }
+    ]
   },
   moduleFileExtensions: ['ts', 'js', 'json', 'node'],
   extensionsToTreatAsEsm: ['.ts'],
   moduleNameMapper: {
     '^(\\.{1,2}/.*)\\.js$': '$1',
+    // Add any path aliases here
   },
   verbose: true,
   collectCoverage: true,
   coverageDirectory: 'coverage',
-  coverageReporters: ['text', 'lcov'],
+  coverageReporters: ['text', 'lcov', 'html'],
   coveragePathIgnorePatterns: [
     '/node_modules/',
-    '/dist/'
+    '/dist/',
+    '/public/'
   ]
 };
 
