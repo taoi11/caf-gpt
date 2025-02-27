@@ -5,13 +5,17 @@ PROMPT=$(<"prompt.md")
 # Aider first run
 aider \
   --message "$PROMPT" \
-  --read notepad/email_prep_brainstorm.md \
-  --file src/emails/*.py src/llm/*.py src/utils/*.py \
+  --auto-commits \
+  --no-detect-urls \
+  --read src/types.py \
+  --file src/**/*.py \
   --yes
 
 # Aider second run
 aider \
   --message "Double check and fix the work of a code agent that was given the following instructions: $PROMPT" \
-  --read notepad/email_prep_brainstorm.md \
-  --file src/emails/*.py src/llm/*.py src/utils/*.py \
+  --auto-commits \
+  --no-detect-urls \
+  --read src/types.py \
+  --file src/**/*.py \
   --yes
