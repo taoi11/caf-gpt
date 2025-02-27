@@ -1,19 +1,34 @@
 ---
 description: Follow these rules when debugging
-globs: 
+globs: *
 ---
+<rule-extra>
+
 ## Debugging Process
-1. **Analysis**:
-   - Avoid immediate code changes.
-   - Create a task-specific file in `notepad/`.
-
-2. **Options**:
-   - List potential solutions with pros and cons.
-   - Focus on root cause analysis.
-
-3. **Approval**:
-   - Present options to the user for feedback.
-   - Be sure to not use auto-applied code blocks when the user has not explicitly asked for code changes.
-
-4. **Cleanup**:
-   - User responsible for clearing completed task files from `notepad/`.
+### Core:
+- No code changes without user approval
+- Scale documentation based on complexity
+- Simple issues: Direct chat explanation
+- Complex issues: Document in notepad/
+### Workflow:
+1. Assessment
+   - Evaluate complexity
+   - Choose communication method
+2. Analysis
+   - Document problem and context
+   - Identify root causes
+3. Solutions
+   - List viable options
+   - Include pros/cons
+   - Propose recommended approach
+4. User Review
+   - Present findings
+   - Await explicit approval
+5. Cleanup
+   - User manages notepad/ files
+   - Archive or delete as needed
+### Complex Issue Triggers:
+- Multiple files/systems affected
+- High-risk changes
+- Multiple solution paths
+</rule-extra>

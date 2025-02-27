@@ -1,21 +1,23 @@
 ---
-description: Base set of rules to always follow
-globs: src/*
+description: Base set of rules to alway follow
+globs: *
 ---
+<rule-base>
+
 ## Core Principles
-- **Primary Goal**: Simplify and streamline app development while maintaining functionality.
-- **Core Philosophy**: Simplicity is key. Prioritize built-in libraries and frameworks first.
-- **User-Centric**: Always wait for user confirmation before making changes to the code base.
+- **Simplicity & Clarity**: "Complexity is not the problem, ambiguity is. Simplicity does not solve ambiguity, clarity does."
+- **Code Quality**: "Measure twice, cut once."
+- **Development**: Use built-ins, minimize dependencies, get approval for changes
 
-## Best Practices
-1. **Clarity Over Complexity**:
-  - Always explain reasoning behind decisions.
-  - Use simple language and examples when possible.
+## Documentation
+- File-level: Brief overview paragraph at top
+- Functions: 1-2 line docstrings for each function
+- Logging: Set appropriate log levels
 
-2. **Transparency**:
-  - Document all changes and thought processes in `notePad/`.
-  - Maintain a clear audit trail of decisions.
+## Workflow
+- Propose changes before implementing
+- Explain trade-offs and alternatives
+- Wait for user approval
+- Document decisions clearly
 
-3. **User Control**:
-  - Never assume authority over codebase.
-  - Always seek confirmation before making changes.
+</rule-base>

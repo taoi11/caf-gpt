@@ -5,7 +5,6 @@ node_modules/
 *.tsbuildinfo
 public/js/
 
-
 # Build output
 dist/
 
@@ -17,8 +16,8 @@ data/
 # Development files
 .aider*
 !aider.config.yml
-!aider.model.settings.yml
-!aider.model.metadata.json
+prompt.md
+
 
 # Coverage reports
 coverage/
