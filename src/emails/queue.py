@@ -5,7 +5,7 @@ Implements a clean, async-friendly queue for email message processing with:
 - Simple interface for adding and retrieving messages
 """
 
-from typing import Optional, List, Set, Dict, Any
+from typing import Optional, List, Set
 import threading
 import asyncio
 
@@ -139,7 +139,7 @@ class EmailQueue:
                 email = await self.get()
                 if email:
                     self._queue.task_done()
-            except (asyncio.QueueEmpty, Exception) as e:
+            except (asyncio.QueueEmpty, asyncio.CancelledError, RuntimeError) as e:
                 logger.error(f"Error clearing queue: {str(e)}")
                 break
         

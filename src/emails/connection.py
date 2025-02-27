@@ -13,7 +13,7 @@ from src.utils.config import EMAIL_CONFIG
 from src.utils.logger import logger
 from src.types import EmailMessage
 
-# Use TYPE_CHECKING to avoid circular imports
+# Import EmailParser at the module level but only for type checking
 if TYPE_CHECKING:
     from src.emails.parser import EmailParser
 
@@ -48,8 +48,10 @@ class IMAPConnection:
     def parser(self):
         """Lazy-load the parser to avoid circular imports."""
         if self._parser is None:
-            from src.emails.parser import EmailParser
-            self._parser = EmailParser()
+            # pylint: disable=import-outside-toplevel
+            # Must import here to avoid circular dependency with parser.py
+            import src.emails.parser as parser_module
+            self._parser = parser_module.EmailParser()
         return self._parser
 
     async def connect(self) -> bool:
@@ -306,7 +308,7 @@ class IMAPConnection:
                     except (socket.timeout, TimeoutError):
                         logger.warning("IMAP close/logout timed out")
                     
-                except (imaplib.IMAP4.error, socket.error, Exception) as error:
+                except (imaplib.IMAP4.error, socket.error, OSError, ConnectionError) as error:
                     logger.error("Error closing IMAP connection", metadata={
                         "error": str(error)
                     })

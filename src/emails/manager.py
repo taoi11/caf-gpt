@@ -8,7 +8,7 @@ Coordinates the email retrieval, parsing, and queueing process with:
 
 import asyncio
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Optional
 
 from src.utils.logger import logger
 from src.emails.parser import EmailParser
@@ -35,10 +35,12 @@ class QueueManager:
         self._processing_task: Optional[asyncio.Task] = None
         self._shutdown_event = asyncio.Event()
         
-        # Health monitoring
-        self._last_check = datetime.now()
-        self._message_count = 0
-        self._error_count = 0
+        # Group health monitoring metrics in a single dictionary
+        self._health_metrics = {
+            'last_check': datetime.now(),
+            'message_count': 0,
+            'error_count': 0
+        }
 
     async def start(self) -> None:
         """Start the email processing loop."""
@@ -95,7 +97,7 @@ class QueueManager:
                 
                 if messages:
                     logger.info(f"Retrieved {len(messages)} new messages")
-                    self._message_count += len(messages)
+                    self._health_metrics['message_count'] += len(messages)
                     
                     # Add messages to queue
                     added = await self.queue.add_emails(messages)
@@ -114,8 +116,8 @@ class QueueManager:
                     # Timeout means we can continue the loop
                     pass
                     
-            except Exception as e:
-                self._error_count += 1
+            except (ConnectionError, OSError, asyncio.CancelledError, RuntimeError) as e:
+                self._health_metrics['error_count'] += 1
                 logger.exception(f"Error in processing loop: {str(e)}")
                 
                 # Wait a bit before retrying
@@ -128,8 +130,8 @@ class QueueManager:
             EmailHealthCheck: Health check information
         """
         now = datetime.now()
-        uptime = (now - self._last_check).total_seconds()
-        self._last_check = now
+        uptime = (now - self._health_metrics['last_check']).total_seconds()
+        self._health_metrics['last_check'] = now
         
         queue_stats = self.queue.get_stats()
         connection_health = self.connection.get_health_check()
@@ -137,8 +139,8 @@ class QueueManager:
         # Calculate messages per minute
         messages_per_minute = 0
         if uptime > 0:
-            messages_per_minute = int((self._message_count / uptime) * 60)
-            self._message_count = 0  # Reset counter
+            messages_per_minute = int((self._health_metrics['message_count'] / uptime) * 60)
+            self._health_metrics['message_count'] = 0  # Reset counter
         
         return {
             "running": self._running,
@@ -147,6 +149,6 @@ class QueueManager:
             "metrics": {
                 "uptime": uptime,
                 "messages_per_minute": messages_per_minute,
-                "error_count": self._error_count,
+                "error_count": self._health_metrics['error_count'],
             }
         } 

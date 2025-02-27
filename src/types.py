@@ -1,8 +1,8 @@
 """Type definitions for the application. All types are defined here."""
 
 from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from typing import TypedDict, Dict, Any, List, Optional
+from datetime import datetime
+from typing import TypedDict, Dict, Any, List
 
 # LLM types
 @dataclass

@@ -1,8 +1,8 @@
 architect: true
 
 watch-files: true
-# max-chat-history-tokens: 32768
-# restore-chat-history: true
+max-chat-history-tokens: 32768
+restore-chat-history: false
 read:
   - ".appLogic/"
   - "prompt.md"

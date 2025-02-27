@@ -106,8 +106,8 @@ class EmailParser:
         if self.html_converter:
             try:
                 return self.html_converter.handle(html_content)
-            except Exception as e:
-                logger.warn(f"HTML conversion failed: {e}")
+            except (ValueError, AttributeError, TypeError) as e:
+                logger.warning(f"HTML conversion failed: {e}")
                 
         # Fallback to basic cleaning
         html_content = re.sub(r'<[^>]+>', ' ', html_content)

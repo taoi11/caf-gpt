@@ -137,6 +137,11 @@ class Logger:
             **data.get('metadata', {})
         })
 
+    # Add warning as an alias to warn for consistency with standard logger
+    def warning(self, message: str, metadata: Optional[Dict[str, Any]] = None) -> None:
+        """Alias for warn() - log a warning message."""
+        self.warn(message, metadata)
+
 # Create a single logger instance
 _logger_instance = Logger()
 

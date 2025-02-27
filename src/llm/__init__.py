@@ -1,11 +1,17 @@
 """LLM routing and processing module."""
 
 import asyncio
-from typing import Optional, Union
+from typing import Optional, Union, TYPE_CHECKING
+
 from src.utils.logger import logger
 from src.types import EmailMessage
 from src.llm.pace_note import PaceNoteHandler
 from src.emails.queue import EmailQueue, QueueError
+
+# Import IMAPConnection at the module level to avoid import-outside-toplevel
+if TYPE_CHECKING:
+    # This avoids circular imports
+    from src.emails.connection import IMAPConnection
 
 
 class LLMRouter:
@@ -49,7 +55,7 @@ class LLMRouter:
                     logger.warning("Timed out waiting for LLM Router task to cancel")
                 except asyncio.CancelledError:
                     logger.debug("LLM Router task cancellation handled")
-            except Exception as e:
+            except (RuntimeError, ValueError, KeyError) as e:
                 logger.error(f"Error during LLM Router shutdown: {e}")
             self._process_task = None
         
@@ -136,7 +142,7 @@ class LLMRouter:
                     "system": email.get_system()
                 })
                 
-        except Exception as e:
+        except (ValueError, KeyError, AttributeError, ImportError, ModuleNotFoundError, ConnectionError) as e:
             logger.error("Error processing email", metadata={
                 "error": str(e),
                 "error_type": type(e).__name__,
@@ -150,11 +156,13 @@ class LLMRouter:
         Args:
             email: The email message to mark as read
         """
-        from src.emails.connection import IMAPConnection
+        # pylint: disable=import-outside-toplevel
+        # Must import here to avoid circular dependency with connection.py
+        import src.emails.connection as connection_module
         
         try:
             # Create a connection to mark as read
-            connection = IMAPConnection()
+            connection = connection_module.IMAPConnection()
             await connection.connect()
             
             system = email.get_system()
@@ -183,7 +191,7 @@ class LLMRouter:
                 
             # Close connection when done
             await connection.close()
-        except Exception as e:
+        except (ConnectionError, OSError, asyncio.TimeoutError, ValueError) as e:
             logger.error("Error marking email as read", metadata={
                 "error": str(e),
                 "error_type": type(e).__name__,

@@ -9,6 +9,7 @@ Handles:
 
 import asyncio
 import signal as signal_module  # Renamed to avoid conflict
+import sys
 from typing import Optional
 from src.utils.logger import logger
 from src.emails.manager import QueueManager
@@ -116,7 +117,6 @@ class Application:
         """Force exit if shutdown takes too long."""
         if self.running or self._shutting_down:
             logger.warning("Forcing application exit after timeout")
-            import sys
             sys.exit(1)
 
     def setup_signal_handlers(self) -> None:
