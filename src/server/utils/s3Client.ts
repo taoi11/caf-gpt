@@ -1,6 +1,6 @@
-import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
 import { logger } from './logger.js';
-import type { PolicyDocument } from './types.js';
+import type { PolicyDocument } from '../types.js';
 
 const s3Config = {
     endpoint: process.env.S3_ENDPOINT || 'https://gateway.storjshare.io',

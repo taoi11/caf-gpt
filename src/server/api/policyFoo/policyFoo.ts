@@ -1,32 +1,21 @@
-import { ApiResponse, Message } from '../../utils/types.js';
+import type { ApiResponse, Message, PolicyTool, PolicyRequest, ChatResponse } from '../../types.js';
+import type { PolicyHandler, PolicyRouter } from '../../node-types.js';
 import { logger } from '../../utils/logger.js';
 import { rateLimiter } from '../../utils/rateLimiter.js';
 import { IncomingMessage } from 'http';
 import { createDOADHandler } from './doad/doad.js';
-import { ChatResponse } from './doad/types.js';
 
-// Policy tool types
-export type PolicyTool = 'doadFoo';
+// Policy tool implementation
+// Note: Type is defined in types.ts
 
-// Base interfaces
-export interface PolicyRequest {
-    tool: PolicyTool;
-    message: string;
-    conversationHistory?: Message[];
-}
-
+// Response formatter interface
 export interface ResponseFormatter {
     formatResponse(response: ChatResponse): ChatResponse;
     validateRequest(message: string): boolean;
 }
 
-export interface PolicyHandler extends ResponseFormatter {
-    handleMessage(
-        message: string, 
-        history?: Message[], 
-        req?: IncomingMessage
-    ): Promise<ChatResponse>;
-}
+// Extended policy handler with formatting capabilities
+export interface FormattedPolicyHandler extends PolicyHandler, ResponseFormatter {}
 
 // Default response formatter implementation
 export const defaultResponseFormatter: ResponseFormatter = {
@@ -42,16 +31,6 @@ export const defaultResponseFormatter: ResponseFormatter = {
         };
     }
 };
-
-// Policy router interface
-export interface PolicyRouter {
-    handleRequest(
-        tool: PolicyTool,
-        message: string,
-        history?: Message[],
-        req?: IncomingMessage
-    ): Promise<ApiResponse<ChatResponse>>;
-}
 
 // Policy router implementation
 interface PolicyRouterImpl extends PolicyRouter {

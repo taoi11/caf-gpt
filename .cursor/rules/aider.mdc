@@ -1,10 +1,6 @@
 ---
 description: Use Aider to offload small and repetitive taskes.
-globs: *
----
----
-description: Use Aider to offload small and repetitive taskes.
-globs: *
+globs: aider.sh, prompt.md
 ---
 <rule-extra>
 ## Aider: CLI AI Coding Assistant

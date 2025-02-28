@@ -1,7 +1,8 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { logger } from './logger.js';
 import { IS_DEV, RATE_LIMITS } from './config.js';
-import type { RateLimit, RateWindow } from './types';
+import type { RateLimit, RateWindow, RateLimitInfo } from '../types.js';
+import type { NodeRateLimiter } from '../node-types.js';
 
 // Constants
 const HOUR = 60 * 60 * 1000; // 1 hour in milliseconds

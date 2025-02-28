@@ -2,7 +2,7 @@ import { IncomingMessage, ServerResponse } from 'http';
 import { paceNoteAgent } from './paceNoteAgent.js';
 import { logger } from '../../utils/logger.js';
 import { rateLimiter } from '../../utils/rateLimiter.js';
-import type { ApiResponse, PaceNoteRequest, PaceNoteResponse } from '../../utils/types.js';
+import type { ApiResponse, PaceNoteRequest, PaceNoteResponse } from '../../types.js';
 
 export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerResponse) {
     const method = req.method || 'GET';

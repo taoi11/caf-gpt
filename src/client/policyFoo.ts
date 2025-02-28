@@ -1,7 +1,7 @@
 import { parseDOADResponse } from './doadFoo.js';
 import { rateLimiter } from './utils/rateLimiter.js';
 import { Message, UIState, UIElements } from './utils/types.js';
-import { ChatResponse } from '../server/api/policyFoo/doad/types.js';
+import type { ChatResponse } from '../server/types.js';
 
 // Types
 interface ApiResponse<T> {

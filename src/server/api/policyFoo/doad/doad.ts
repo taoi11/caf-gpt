@@ -1,15 +1,18 @@
-import { PolicyHandler } from '../policyFoo.js';
-import { Message, LLMInteractionData } from '../../../utils/types.js';
+import type { Message, LLMInteractionData, DOADFinder, DOADImplementation, ChatResponse } from '../../../types.js';
+import type { PolicyHandler, DOADLogger, DOADChat } from '../../../node-types.js';
+import type { FormattedPolicyHandler, ResponseFormatter } from '../policyFoo.js';
 import { logger } from '../../../utils/logger.js';
 import { MODELS } from '../../../utils/config.js';
 import { createDOADFinder } from './agents/doadFinder.js';
 import { createDOADChat } from './agents/doadChat.js';
 import { s3Utils } from '../../../utils/s3Client.js';
 import { IncomingMessage } from 'http';
-import { DOADFinder, DOADChat, ChatResponse, DOADImplementation } from './types.js';
+
+// Merged interface for implementation
+interface DOADManagerImpl extends DOADImplementation, DOADLogger, ResponseFormatter {}
 
 // Base implementation for DOAD handlers
-export const baseDOADImplementation: DOADImplementation = {
+export const baseDOADImplementation: DOADManagerImpl = {
     validateRequest(message: string): boolean {
         return message.trim().length > 0;
     },
@@ -18,7 +21,7 @@ export const baseDOADImplementation: DOADImplementation = {
         return {
             answer: response.answer || '',
             citations: response.citations || [],
-            followUp: response.followUp || ''
+            followUp: response.followUp || undefined
         };
     },
     
@@ -31,58 +34,49 @@ export const baseDOADImplementation: DOADImplementation = {
     },
     
     isValidDOADNumber(doadNumber: string): boolean {
-        const cleaned = doadNumber
-            .trim()
-            .replace(/\s+/g, '')
-            .replace(/[^\d-]/g, '');
-        return /^\d{5}-\d$/.test(cleaned);
+        // Match pattern like 1234-5 or 12345-6
+        const pattern = /^\d{4,5}-\d+$/;
+        return pattern.test(doadNumber);
     },
     
     extractDOADNumbers(text: string): string[] {
-        const doadPattern = /\b\d{5}-\d\b/g;
-        const matches = text.match(doadPattern) || [];
-        return [...new Set(
-            matches
-                .map(match => match.trim().replace(/\s+/g, ''))
-                .filter(match => this.isValidDOADNumber(match))
-        )];
+        // Match DOAD numbers in format like DOAD 1234-5 or just 1234-5
+        const pattern = /(?:DOAD\s*)?(\d{4,5}-\d+)/gi;
+        const matches = text.match(pattern) || [];
+        return matches.map(match => match.replace(/DOAD\s*/i, ''));
     },
-
+    
     async getDOADContent(doadNumber: string): Promise<string> {
         const path = this.getDOADPath(doadNumber);
         logger.debug(`Fetching DOAD content from path: ${path}`);
         return await s3Utils.fetchRawContent(path);
     },
-
-    // Shared logging methods
+    
     logAgentInteraction(type: 'finder' | 'chat', data: LLMInteractionData) {
         logger.logLLMInteraction({
             ...data,
             metadata: {
                 ...data.metadata,
-                agent: type,
-                timestamp: new Date().toISOString()
+                agent: type
             }
         });
     },
-
-    logAgentError(type: 'finder' | 'chat', error: Error, metadata?: Record<string, any>) {
-        logger.error(`Error in DOAD ${type}`, {
-            error: error.message,
-            stack: error.stack,
-            agent: type,
+    
+    logAgentError(type: 'finder' | 'chat', error: Error, metadata: Record<string, any> = {}) {
+        logger.error(`DOAD ${type} error: ${error.message}`, {
             ...metadata,
-            timestamp: new Date().toISOString()
+            agent: type,
+            error: error.message,
+            stack: error.stack
         });
     }
 };
 
 // DOAD Manager interface
-interface DOADManager extends PolicyHandler, DOADImplementation {
+export interface DOADManager extends FormattedPolicyHandler, DOADManagerImpl {
     finder: DOADFinder;
     chat: DOADChat;
     models: typeof MODELS.doad;
-    handleMessage(message: string, history?: Message[], req?: IncomingMessage): Promise<ChatResponse>;
 }
 
 // Create DOAD manager implementation
@@ -133,11 +127,17 @@ function createDOADManagerImpl(): DOADManager {
                     req
                 );
             } catch (error) {
-                this.logAgentError('chat', error instanceof Error ? error : new Error(String(error)), {
+                const err = error instanceof Error ? error : new Error('Unknown error');
+                this.logAgentError('chat', err, {
                     messageLength: message.length,
                     hasHistory: !!history
                 });
-                throw error;
+                
+                return {
+                    answer: 'I encountered an error trying to access the policy information. Please try again or contact support if the problem persists.',
+                    citations: [],
+                    followUp: 'Try rephrasing your question or asking about a specific policy.'
+                };
             }
         }
     };

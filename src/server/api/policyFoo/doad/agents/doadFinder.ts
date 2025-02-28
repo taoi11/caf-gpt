@@ -1,5 +1,4 @@
-import { LLMRequest, Message } from '../../../../utils/types.js';
-import { DOADFinder } from '../types.js';
+import type { LLMRequest, Message, DOADFinder } from '../../../../types.js';
 import { baseDOADImplementation } from '../doad.js';
 import { logger } from '../../../../utils/logger.js';
 import { readFile } from 'fs/promises';

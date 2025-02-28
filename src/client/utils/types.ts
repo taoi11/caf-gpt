@@ -1,4 +1,4 @@
-import { Message, MessageRole } from '../../server/utils/types.js';
+import type { Message, MessageRole } from '../../server/types.js';
 
 // Re-export shared types
 export { Message, MessageRole };

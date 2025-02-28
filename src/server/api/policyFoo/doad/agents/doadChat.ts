@@ -1,5 +1,5 @@
-import { LLMRequest, Message } from '../../../../utils/types.js';
-import { DOADChat, ChatResponse } from '../types.js';
+import type { LLMRequest, Message, ChatResponse } from '../../../../types.js';
+import type { DOADChat } from '../../../../node-types.js';
 import { baseDOADImplementation } from '../doad.js';
 import { logger } from '../../../../utils/logger.js';
 import { readFile } from 'fs/promises';

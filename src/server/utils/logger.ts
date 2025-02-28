@@ -1,5 +1,5 @@
 import { IS_DEV } from './config.js';
-import type { LLMInteractionData, Message, SystemMessage } from './types';
+import type { LLMInteractionData, Message, SystemMessage, LogEntry } from '../types.js';
 import { randomUUID } from 'crypto';
 
 // Log levels in order of verbosity
@@ -8,16 +8,6 @@ enum LogLevel {
     INFO = 1,
     WARN = 2,
     ERROR = 3
-}
-
-interface LogEntry {
-    timestamp: string;
-    level: LogLevel;
-    message: string;
-    metadata?: {
-        requestId?: string;
-        [key: string]: any;
-    };
 }
 
 interface LogMetadata {
