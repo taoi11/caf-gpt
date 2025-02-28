@@ -1,5 +1,4 @@
-import type { Message, LLMInteractionData, DOADFinder, DOADImplementation, ChatResponse } from '../../../types.js';
-import type { PolicyHandler, DOADLogger, DOADChat } from '../../../node-types.js';
+import type { Message, LLMInteractionData, DOADFinder, DOADImplementation, ChatResponse, PolicyHandler, DOADLogger, DOADChat } from '../../../types.js';
 import type { FormattedPolicyHandler, ResponseFormatter } from '../policyFoo.js';
 import { logger } from '../../../utils/logger.js';
 import { MODELS } from '../../../utils/config.js';

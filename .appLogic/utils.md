@@ -1,7 +1,7 @@
 # Server Utilities Documentation
 
 ## Overview
-The server utilities provide core infrastructure for the application, handling cross-cutting concerns like rate limiting, cost tracking, and more. All utilities follow a consistent pattern of centralized type usage and singleton instances.
+The server utilities provide core infrastructure for the application, handling cross-cutting concerns like rate limiting, cost tracking, logging, and more. All utilities follow a consistent pattern of centralized type usage and singleton instances.
 
 ---
 
@@ -12,6 +12,14 @@ Simple sliding window rate limiter with hourly and daily limits per IP address, 
 
 ### Implementation
 Located in: `src/server/utils/rateLimiter.ts`
+
+### Interface and Type System
+- Implements the `NodeRateLimiter` interface from `src/server/node-types.ts`
+- All type definitions are centralized in `src/server/types.ts`
+- Main types:
+  - `RateLimit`: Internal tracking data structure for IP limits
+  - `RateWindow`: Window tracking for hourly/daily limits
+  - `RateLimitInfo`: Client-compatible rate limit information
 
 ### Core Features
 - Sliding window implementation
@@ -24,12 +32,11 @@ Located in: `src/server/utils/rateLimiter.ts`
   - Hourly: 10 requests/hour
   - Daily: 30 requests/day
 
-### Type Integration
-- Imports types from top-level `src/server/types.ts`:
-  - `RateLimitInfo`: Interface for client-compatible rate limit data 
-- Imports Node.js specific type from 'http':
-  - `IncomingMessage`: For request handling
-- Uses internal interface `RateLimit` from server types
+### Key Methods
+- `canMakeRequest(req)`: Checks if a request can proceed
+- `trackSuccessfulRequest(req)`: Records successful API calls
+- `getLimitInfo(req)`: Gets remaining limits for client display
+- `sendLimitResponse(req, res, type)`: Handles rate limit exceeded responses
 
 ### IP Resolution
 - Uses CF-Connecting-IP header exclusively
@@ -71,6 +78,7 @@ Located in: `src/server/utils/rateLimiter.ts`
 - Missing CF-Connecting-IP returns '0.0.0.0'
 - Detailed warning logs in development mode
 - Consistent error responses across endpoints
+- HTTP 429 responses include Retry-After headers
 
 ### Recent Changes
 - Switched to CF-Connecting-IP for all IP resolution
@@ -90,6 +98,12 @@ Simple cost tracker for the LLM API calls, storing costs in USD with file-based 
 ### Implementation
 Located in: `src/server/utils/costTracker.ts`
 
+### Interface and Type System
+- Uses centralized type definitions from `src/server/types.ts`
+- Main types:
+  - `CostData`: Interface for persistent cost data structure
+  - `LLMResponse`: Interface for API responses used in cost calculations
+
 ### Core Features
 - Tracks total cost in USD
 - Includes base monthly server cost of $15.70 USD
@@ -97,10 +111,10 @@ Located in: `src/server/utils/costTracker.ts`
 - Separate tracking of server and API costs
 - Monthly reset on the first day of each month
 
-### Type Integration
-- Imports types from top-level `src/server/types.ts`:
-  - `CostData`: Interface for cost tracking data structure 
-  - `LLMResponse`: Interface for response data used in cost calculations
+### Key Methods
+- `trackCost(response)`: Calculates and records cost from an LLM API call
+- `getCosts()`: Returns current cost data for API and display
+- `resetMonthly()`: Handles automatic monthly cost resets
 
 ### Storage Implementation
 - JSON file storage in data/costs.json
@@ -149,44 +163,133 @@ Response:
 
 ---
 
-## Other Utils Modules
+## Logger
 
-The following utility modules are also part of the server infrastructure:
+### Overview
+Structured logging system with request tracking, LLM interaction logging, and environment-aware behavior.
 
-### Logger
-- Located in: `src/server/utils/logger.ts`
-- Provides structured logging with multiple log levels (DEBUG, INFO, WARN, ERROR)
-- Special handling for LLM interactions with request/response correlation
-- Environment-aware logging behavior (more verbose in development)
-- Request tracking with unique identifiers
+### Implementation
+Located in: `src/server/utils/logger.ts`
+
+### Interface and Type System
+- Uses centralized type definitions from `src/server/types.ts`
+- Main types:
+  - `LogLevel`: Enum with DEBUG, INFO, WARN, ERROR levels
+  - `LogEntry`: Structured log entry format
+  - `LLMInteractionData`: Data structure for LLM requests/responses
+
+### Core Features
+- Multiple log levels (DEBUG, INFO, WARN, ERROR)
+- String-based enum for LogLevel for better compatibility
+- Environment-aware verbosity (more verbose in dev)
+- Special handling for LLM interactions
+- Request/response correlation with unique IDs
 - Response time measurement for LLM calls
+- Redaction of sensitive information in prompts
+
+### Key Methods
+- `debug()`, `info()`, `warn()`, `error()`: Standard logging methods
+- `logLLMRequest()`: Special handling for LLM API requests
+- `logLLMResponse()`: Records API responses with timing information
+- `logAgentInteraction()`: Used by DOAD agents to log interactions
+
+### Security Features
 - Redaction of sensitive information in system prompts
-- Imports types from server/types.ts including LogLevel enum and structured log interfaces
+- Customizable redaction patterns
+- Truncation of long messages to prevent log bloat
+- Omission of headers in production environment
 
-### LLM Gateway
-- Located in: `src/server/utils/llmGateway.ts`
-- Centralizes all LLM API interactions through OpenRouter
-- Manages request throttling with concurrency control
-- Formats requests with system prompts and context management
-- Handles error normalization using the LLMError type
-- Tracks token usage and costs via costTracker integration
-- Provides logging of all LLM interactions
-- Imports types from server/types.ts for consistent typing across the application
+### Request Tracking
+- Unique identifiers for request/response correlation
+- Request start time tracking
+- Response time calculation
+- Consistent format across all log entries
 
-### S3 Client
-- Located in: `src/server/utils/s3Client.ts`
-- Provides interface to Storj S3-compatible storage
-- Configured for read-only access pattern
+---
+
+## LLM Gateway
+
+### Overview
+Centralized gateway for all LLM API interactions with error handling, cost tracking, and logging.
+
+### Implementation
+Located in: `src/server/utils/llmGateway.ts`
+
+### Interface and Type System
+- Uses centralized type definitions from `src/server/types.ts`
+- Main types:
+  - `LLMRequest`: Structure for API requests
+  - `LLMResponse`: Structure for API responses
+  - `LLMError`: Normalized error format
+
+### Core Features
+- Single point of integration with OpenRouter API
+- Consistent error handling and normalization
+- Automatic retry logic for transient errors
+- Request throttling with concurrency control
+- Token usage and cost tracking
+- Comprehensive logging of all interactions
+- System prompt management
+
+### Key Methods
+- `sendRequest()`: Primary method for sending requests to LLM
+- `formatMessages()`: Prepares message format for API
+- `handleError()`: Normalizes various error responses
+- `getTokenCount()`: Estimates token usage
+
+### Integration Points
+- Integrates with costTracker for usage-based billing
+- Uses logger for request/response tracking
+- Consumes config.ts for model settings
+
+---
+
+## S3 Client
+
+### Overview
+Interface to Storj S3-compatible storage for policy document retrieval.
+
+### Implementation
+Located in: `src/server/utils/s3Client.ts`
+
+### Interface and Type System
+- Uses PolicyDocument type from `src/server/types.ts`
+
+### Core Features
+- Read-only access to S3-compatible storage
 - Used for policy document retrieval
 - Path-style endpoint access
 - Environment-based configuration
-- Imports PolicyDocument type from server/types.ts for consistent type definitions
 
-### Config
-- Located in: `src/server/utils/config.ts`
-- Centralizes environment variables and configuration
-- Validates required environment variables on startup
-- Provides constants used by other modules
-- Defines time constants (HOUR, DAY) used in rate limiting
-- Manages environment-specific behavior
-- Exports model configurations for different features 
+### Key Methods
+- `getPolicyDocument()`: Retrieves document by ID
+- `listPolicyDocuments()`: Lists available documents
+
+---
+
+## Config
+
+### Overview
+Centralized configuration management with environment variable validation.
+
+### Implementation
+Located in: `src/server/utils/config.ts`
+
+### Core Features
+- Environment variable validation
+- Constants used across the application
+- Time constants (HOUR, DAY) for rate limiting
+- Environment-specific behavior flags
+- Model configurations for different features
+
+### Key Sections
+- Environment detection (IS_DEV, IS_PROD)
+- API keys and endpoints
+- Rate limiting configuration
+- Model settings for different agents
+- Feature flags and toggles
+
+### Usage Pattern
+- Imported at the top of utility files
+- Provides consistent configuration across the application
+- Single source of truth for all configuration values 

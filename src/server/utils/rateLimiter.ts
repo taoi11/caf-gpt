@@ -1,8 +1,7 @@
 import { IncomingMessage, ServerResponse } from 'http';
 import { logger } from './logger.js';
 import { IS_DEV, RATE_LIMITS } from './config.js';
-import type { RateLimit, RateWindow, RateLimitInfo } from '../types.js';
-import type { NodeRateLimiter } from '../node-types.js';
+import type { RateLimit, RateWindow, RateLimitInfo, NodeRateLimiter } from '../types.js';
 
 // Constants
 const HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
@@ -33,8 +32,8 @@ class RateLimiter implements NodeRateLimiter {
         
         res.writeHead(429, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-            success: false,
-            error: `Rate limit exceeded. ${type === 'hourly' ? 'Hourly' : 'Daily'} limit is ${limit} requests. Please try again in ${this.formatTime(window.resetIn)}.`
+            error: `Rate limit exceeded. Try again in ${Math.ceil(window.resetIn / 60000)} minutes.`,
+            type: type
         }));
         
         logger.warn(`Rate limit exceeded: ${type}`, {
@@ -198,9 +197,18 @@ class RateLimiter implements NodeRateLimiter {
 
     public getLimitInfo(req: IncomingMessage): RateLimitInfo {
         const ip = this.getClientIP(req);
+        
+        // If whitelisted, return unlimited
+        if (this.isWhitelisted(ip)) {
+            return {
+                hourly: { remaining: Infinity, resetIn: 0 },
+                daily: { remaining: Infinity, resetIn: 0 }
+            };
+        }
+        
         const limit = this.limits.get(ip);
         const now = Date.now();
-
+        
         if (!limit) {
             return {
                 hourly: { remaining: RATE_LIMITS.HOURLY_LIMIT, resetIn: RATE_LIMITS.HOUR },

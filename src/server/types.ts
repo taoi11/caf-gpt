@@ -1,4 +1,5 @@
 // Server Types - Consolidated Types for the Server Module
+import { IncomingMessage, ServerResponse } from 'http';
 
 // ----------
 // Message Types (shared between client and server)
@@ -23,6 +24,26 @@ export interface ApiResponse<T> {
     success: boolean;
     data?: T;
     error?: string;
+}
+
+// ----------
+// HTTP & Server Related Types
+// ----------
+export interface PolicyHandler {
+    handleMessage(
+        message: string, 
+        history?: Message[], 
+        req?: IncomingMessage
+    ): Promise<ChatResponse>;
+}
+
+export interface PolicyRouter {
+    handleRequest(
+        tool: PolicyTool,
+        message: string,
+        history?: Message[],
+        req?: IncomingMessage
+    ): Promise<ApiResponse<ChatResponse>>;
 }
 
 // ----------
@@ -55,6 +76,11 @@ export interface LLMInteractionData {
         conversationId?: string;
         [key: string]: any;
     };
+}
+
+export interface DOADLogger {
+    logAgentInteraction(type: 'finder' | 'chat', data: LLMInteractionData): void;
+    logAgentError(type: 'finder' | 'chat', error: Error, metadata?: Record<string, any>): void;
 }
 
 // ----------
@@ -101,6 +127,13 @@ export interface RateLimit {
 export interface RateLimitInfo {
     hourly: { remaining: number; resetIn: number };
     daily: { remaining: number; resetIn: number };
+}
+
+export interface NodeRateLimiter {
+    canMakeRequest(req: IncomingMessage): boolean | Promise<boolean>;
+    trackSuccessfulRequest(req: IncomingMessage): void;
+    getLimitInfo(req: IncomingMessage): any;
+    sendLimitResponse(req: IncomingMessage, res: ServerResponse, type: string): void;
 }
 
 // ----------
@@ -157,6 +190,17 @@ export interface DOADHandler {
 export interface DOADFinder extends DOADHandler {
     handleMessage(message: string, history?: Message[]): Promise<string[]>;
     logAgentError(type: 'finder', error: Error, metadata?: Record<string, any>): void;
+}
+
+export interface DOADChat {
+    handleMessage(
+        message: string,
+        userHistory: Message[],
+        policyContext: string,
+        req?: IncomingMessage
+    ): Promise<ChatResponse>;
+    
+    logAgentError(type: 'chat', error: Error, metadata?: Record<string, any>): void;
 }
 
 export interface DOADImplementation extends DOADHandler {}

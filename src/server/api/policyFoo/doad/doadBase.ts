@@ -1,5 +1,4 @@
-import type { Message, LLMInteractionData, ChatResponse, DOADImplementation } from '../../../types.js';
-import type { DOADLogger } from '../../../node-types.js';
+import type { Message, LLMInteractionData, ChatResponse, DOADImplementation, DOADLogger } from '../../../types.js';
 import { logger } from '../../../utils/logger.js';
 import { s3Utils } from '../../../utils/s3Client.js';
 
