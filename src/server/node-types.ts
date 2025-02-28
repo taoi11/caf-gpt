@@ -31,6 +31,9 @@ export interface DOADChat {
         policyContext: string,
         req?: IncomingMessage
     ): Promise<ChatResponse>;
+    
+    // Error logging method
+    logAgentError(type: 'chat', error: Error, metadata?: Record<string, any>): void;
 }
 
 // ----------

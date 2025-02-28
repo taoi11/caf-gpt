@@ -1,22 +1,14 @@
 import { parseDOADResponse } from './doadFoo.js';
 import { rateLimiter } from './utils/rateLimiter.js';
-import { Message, UIState, UIElements } from './utils/types.js';
-import type { ChatResponse } from '../server/types.js';
-
-// Types
-interface ApiResponse<T> {
-    success: boolean;
-    data?: T;
-    error?: string;
-}
+import type { Message, UIState, UIElements, ApiResponse, ChatResponse, PolicyTool } from './utils/types.js';
 
 // Constants
-const SESSION_KEY = 'policyFoo_input';
+const STORAGE_KEY = 'caf-gpt-policyfoo-input';
 const MAX_MESSAGES = 50;
 
 // UI State
 const state: UIState = {
-    inputText: sessionStorage.getItem(SESSION_KEY) || '',
+    inputText: sessionStorage.getItem(STORAGE_KEY) || '',
     messages: [],
     isProcessing: false
 };
@@ -48,7 +40,7 @@ async function sendMessage() {
         
         // Clear input
         state.inputText = '';
-        sessionStorage.setItem(SESSION_KEY, '');
+        sessionStorage.setItem(STORAGE_KEY, '');
         updateUI();
 
         // Send to backend with recent messages
@@ -147,7 +139,7 @@ function appendFollowUp(followUp: string) {
     followUpDiv.textContent = `Suggested follow-up: ${followUp}`;
     followUpDiv.onclick = () => {
         state.inputText = followUp;
-        sessionStorage.setItem(SESSION_KEY, followUp);
+        sessionStorage.setItem(STORAGE_KEY, followUp);
         updateUI();
         userInput.focus();
     };
@@ -173,7 +165,7 @@ userInput.onkeydown = (e: KeyboardEvent) => {
 
 userInput.oninput = () => {
     state.inputText = userInput.value;
-    sessionStorage.setItem(SESSION_KEY, state.inputText);
+    sessionStorage.setItem(STORAGE_KEY, state.inputText);
 };
 
 // Initial setup

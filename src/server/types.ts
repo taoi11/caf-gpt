@@ -156,6 +156,7 @@ export interface DOADHandler {
 
 export interface DOADFinder extends DOADHandler {
     handleMessage(message: string, history?: Message[]): Promise<string[]>;
+    logAgentError(type: 'finder', error: Error, metadata?: Record<string, any>): void;
 }
 
 export interface DOADImplementation extends DOADHandler {}
@@ -172,4 +173,21 @@ export interface PaceNoteResponse {
     content: string;
     timestamp: string;
     rank: string;
+}
+
+// ----------
+// Client UI Types
+// ----------
+export interface UIState {
+    inputText: string;          // Only this persists on refresh
+    messages: Message[];        // Cleared on refresh
+    isProcessing: boolean;
+}
+
+export interface UIElements {
+    userInput: HTMLTextAreaElement;
+    sendButton: HTMLButtonElement;
+    chatHistory: HTMLDivElement;
+    policySelector?: HTMLSelectElement;
+    outputBox?: HTMLDivElement;
 }

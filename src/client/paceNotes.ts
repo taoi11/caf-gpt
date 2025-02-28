@@ -1,4 +1,4 @@
-import { PaceNoteRequest, PaceNoteResponse } from './utils/types.js';
+import type { PaceNoteRequest, PaceNoteResponse, ApiResponse } from './utils/types.js';
 import { rateLimiter } from './utils/rateLimiter.js';
 
 // Types
@@ -7,14 +7,8 @@ interface OutputBox {
     timestamp: string;
 }
 
-interface ApiResponse<T> {
-    success: boolean;
-    data?: T;
-    error?: string;
-}
-
-// Constants
-const SESSION_KEY = 'paceNotes_input';
+// const SESSION_KEY = 'caf-gpt-pacenotes-input';
+const SESSION_KEY = 'caf-gpt-pacenotes-input';
 
 class PaceNotesUI {
     private readonly outputSection: HTMLElement;

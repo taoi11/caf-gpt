@@ -1,31 +1,22 @@
-import type { Message, MessageRole } from '../../server/types.js';
-
-// Re-export shared types
-export { Message, MessageRole };
-
-// UI-specific Types
-export interface UIState {
-    inputText: string;          // Only this persists on refresh
-    messages: Message[];        // Cleared on refresh
-    isProcessing: boolean;
-}
-
-export interface UIElements {
-    userInput: HTMLTextAreaElement;
-    sendButton: HTMLButtonElement;
-    chatHistory: HTMLDivElement;
-    policySelector?: HTMLSelectElement;
-    outputBox?: HTMLDivElement;
-}
-
-// Tool-Specific Types
-export interface PaceNoteRequest {
-    input: string;
-    rank: string;
-}
-
-export interface PaceNoteResponse {
-    content: string;
-    timestamp: string;
-    rank: string;
-} 
+// Re-export types from server/types.ts
+// This file is used as a bridge for client modules to access types
+export type { 
+    // Message types
+    Message,
+    MessageRole,
+    
+    // UI types
+    UIState, 
+    UIElements,
+    
+    // API response
+    ApiResponse,
+    
+    // Tool-specific types
+    PaceNoteRequest,
+    PaceNoteResponse,
+    
+    // Policy types
+    ChatResponse,
+    PolicyTool
+} from '../../server/types.js'; 

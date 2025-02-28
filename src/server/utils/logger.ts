@@ -3,11 +3,11 @@ import type { LLMInteractionData, Message, SystemMessage, LogEntry } from '../ty
 import { randomUUID } from 'crypto';
 
 // Log levels in order of verbosity
-enum LogLevel {
-    DEBUG = 0,
-    INFO = 1,
-    WARN = 2,
-    ERROR = 3
+export enum LogLevel {
+    DEBUG = "DEBUG",
+    INFO = "INFO",
+    WARN = "WARN",
+    ERROR = "ERROR"
 }
 
 interface LogMetadata {
@@ -164,12 +164,20 @@ class Logger {
     }
 
     private formatMessage(entry: LogEntry): string {
-        const base = `[${entry.timestamp.split('.')[0]}Z] ${LogLevel[entry.level]}: ${entry.message}`;
+        const base = `[${entry.timestamp.split('.')[0]}Z] ${entry.level}: ${entry.message}`;
         return entry.metadata ? `${base} ${JSON.stringify(entry.metadata)}` : base;
     }
 
     private shouldLog(level: LogLevel): boolean {
-        return IS_DEV || level >= this.currentLevel;
+        // Compare using the string values
+        const levels = {
+            [LogLevel.DEBUG]: 0,
+            [LogLevel.INFO]: 1,
+            [LogLevel.WARN]: 2,
+            [LogLevel.ERROR]: 3
+        };
+        
+        return levels[level] >= levels[this.currentLevel];
     }
 }
 
