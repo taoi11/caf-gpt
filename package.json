@@ -5,8 +5,8 @@
   "type": "module",
   "scripts": {
     "start": "node dist/server/index.js",
-    "dev": "npm run clean && concurrently \"node --loader ts-node/esm src/server/index.ts\" \"npm run build:client -- --watch\"",
-    "dev:server": "node --loader ts-node/esm src/server/index.ts --watch",
+    "dev": "npm run clean && concurrently \"node --import tsx src/server/index.ts\" \"npm run build:client -- --watch\"",
+    "dev:server": "node --import tsx src/server/index.ts",
     "dev:client": "npm run build:client -- --watch",
     
     "build": "npm run clean && concurrently \"npm:build:server\" \"npm:build:client\"",
@@ -22,9 +22,9 @@
     "lint": "eslint 'src/**/*.{ts,js}'",
     "lint:fix": "eslint 'src/**/*.{ts,js}' --fix",
     
-    "test": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs",
-    "test:watch": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs --watch",
-    "test:coverage": "node --experimental-vm-modules node_modules/jest/bin/jest.js --config jest.config.cjs --coverage"
+    "test": "node --import tsx node_modules/jest/bin/jest.js --config jest.config.cjs",
+    "test:watch": "node --import tsx node_modules/jest/bin/jest.js --config jest.config.cjs --watch",
+    "test:coverage": "node --import tsx node_modules/jest/bin/jest.js --config jest.config.cjs --coverage"
   },
   "author": "",
   "license": "AGPL-3.0",
