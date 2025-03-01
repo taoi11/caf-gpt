@@ -4,8 +4,8 @@ import { randomUUID } from 'crypto';
 
 /**
  * Unified logging system with structured JSON output and LLM interaction tracking.
- * Supports multiple log levels, request/response formatting, and development/production
- * mode differences. Integrates with all application subsystems.
+ * Handles log formatting, level filtering, and LLM request/response correlation.
+ * Integrates with all application subsystems and provides development/production mode differences.
  */
 export enum LogLevel {
     DEBUG = "DEBUG",
@@ -82,7 +82,11 @@ class Logger {
         }, null, 2);
     }
 
-    // LLM logging method - console only, dev mode only
+    /**
+     * Logs LLM API interactions with request/response correlation
+     * @param data - Interaction data including metadata and content
+     * @remarks Only active in development mode, silences in production
+     */
     async logLLMInteraction(data: LLMInteractionData): Promise<void> {
         if (!IS_DEV) return;
 
@@ -131,7 +135,13 @@ class Logger {
         console.error(this.formatMessage(entry));
     }
 
-    // Utility method for logging request information
+    /**
+     * Logs HTTP request information with status-based log levels
+     * @param method - HTTP method used
+     * @param url - Request URL path
+     * @param statusCode - HTTP response status code
+     * @param metadata - Additional request metadata
+     */
     logRequest(method: string, url: string, statusCode: number, metadata?: Record<string, any>): void {
         if (!IS_DEV) return;
         

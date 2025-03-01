@@ -22,10 +22,17 @@ export const s3Client = new S3Client(s3Config);
 
 /**
  * S3 client wrapper for policy document storage operations.
- * Provides validated access to policy documents and raw content,
- * with integrated error handling and request logging.
+ * Provides validated access to policy documents and raw content storage,
+ * with integrated error handling and request logging for S3 interactions.
  */
 export const s3Utils = {
+    /**
+     * Retrieves a policy document from S3 storage
+     * @param docId - Document identifier (DOAD number)
+     * @param group - Policy group/directory (default: 'doad')
+     * @returns PolicyDocument with content and metadata
+     * @throws Error if document retrieval fails or content is empty
+     */
     async fetchDocument(docId: string, group: string = 'doad'): Promise<PolicyDocument> {
         try {
             const key = `${group}/${docId}.md`;
@@ -59,6 +66,11 @@ export const s3Utils = {
         }
     },
 
+    /**
+     * Fetches raw content from S3 without document validation
+     * @param path - Full S3 object path
+     * @returns Raw content as string
+     */
     async fetchRawContent(path: string): Promise<string> {
         try {
             logger.debug(`Fetching raw content from path: ${path}`);

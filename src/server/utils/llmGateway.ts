@@ -21,6 +21,12 @@ const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
 class LLMGateway {
     private activeRequests = 0;
 
+    /**
+     * Executes LLM request with concurrency control and logging
+     * @param request - LLM request parameters including messages and model config
+     * @returns Processed LLM response
+     * @throws LLMError for API failures or rate limits
+     */
     public async query(request: LLMRequest): Promise<LLMResponse> {
         try {
             // Wait if too many active requests

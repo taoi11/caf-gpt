@@ -139,6 +139,11 @@ class RateLimiter implements NodeRateLimiter {
     }
 
     // Implementation of NodeRateLimiter interface methods
+    /**
+     * Checks if request is allowed under current rate limits
+     * @param req - Incoming HTTP request
+     * @returns True if request is permitted, false if rate limited
+     */
     public canMakeRequest(req: IncomingMessage): boolean {
         const ip = this.getClientIP(req);
         if (this.isWhitelisted(ip)) return true;
@@ -167,6 +172,10 @@ class RateLimiter implements NodeRateLimiter {
                !this.isWindowExceeded(limit.daily.timestamps, RATE_LIMITS.DAY, RATE_LIMITS.DAILY_LIMIT, now);
     }
 
+    /**
+     * Records successful request in rate limit windows
+     * @param req - Incoming HTTP request to track
+     */
     public trackSuccessfulRequest(req: IncomingMessage): void {
         const ip = this.getClientIP(req);
         if (this.isWhitelisted(ip)) return;
