@@ -10,6 +10,7 @@ const DEFAULT_TEMPERATURE = 0.1; // Default to low temperature for more consiste
 
 // OpenRouter configuration
 const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
+const OPENROUTER_AUTH_URL = 'https://openrouter.ai/api/v1/auth/key';
 const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
 
@@ -20,6 +21,36 @@ const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
  */
 class LLMGateway {
     private activeRequests = 0;
+
+    /**
+     * Validates if the OpenRouter API key is valid
+     * @param apiKey - Optional API key to validate (uses environment API key if not provided)
+     * @returns True if the API key is valid, false otherwise
+     */
+    public async validateApiKey(apiKey?: string): Promise<boolean> {
+        try {
+            const keyToValidate = apiKey || OPENROUTER_API_KEY;
+            
+            if (!keyToValidate) {
+                logger.warn('No API key provided for validation');
+                return false;
+            }
+
+            const response = await fetch(OPENROUTER_AUTH_URL, {
+                method: 'GET',
+                headers: {
+                    'Authorization': `Bearer ${keyToValidate}`,
+                }
+            });
+            
+            return response.ok;
+        } catch (error) {
+            logger.error('API key validation failed', {
+                error: error instanceof Error ? error.message : 'Unknown error',
+            });
+            return false;
+        }
+    }
 
     /**
      * Executes LLM request with concurrency control and logging

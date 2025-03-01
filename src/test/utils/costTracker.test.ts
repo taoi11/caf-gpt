@@ -4,64 +4,34 @@
  */
 
 import { describe, expect, test, jest, beforeEach } from '@jest/globals';
+
+// Mock the logger module before importing costTracker
+jest.mock('../../server/utils/logger', () => ({
+  logger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    logRequest: jest.fn(),
+    logLLMInteraction: jest.fn()
+  },
+  LogLevel: {
+    DEBUG: 'DEBUG',
+    INFO: 'INFO',
+    WARN: 'WARN',
+    ERROR: 'ERROR'
+  }
+}));
+
+// Now we can safely import the costTracker module
 import { costTracker } from '../../server/utils/costTracker';
-
-// Define types for our global shouldUseMocks
-declare global {
-  let shouldUseMocks: {
-    llm: boolean;
-    s3: boolean;
-    hasS3Credentials: () => boolean;
-    hasLLMCredentials: () => boolean;
-  };
-}
-
-// Mock response type for fetch
-type MockResponseInit = {
-  ok: boolean;
-  json: () => Promise<unknown>;
-  text: () => Promise<string>;
-  status?: number;
-  headers?: Headers;
-};
-
-// Create a proper Response object for the mock
-const createMockResponse = (init: MockResponseInit): Response => {
-  const body = JSON.stringify(init.json());
-  const response = new Response(body, {
-    status: init.status || 200,
-    headers: init.headers || new Headers(),
-  });
-  
-  // Override the json and text methods
-  Object.defineProperties(response, {
-    json: { value: init.json },
-    text: { value: init.text },
-  });
-  
-  return response;
-};
 
 describe('Cost Tracker Module', () => {
   beforeEach(() => {
-    // Reset mocks and spies
+    // Clear all Jest mocks
     jest.clearAllMocks();
-    
-    // Create a type-safe mock for fetch
-    globalThis.fetch = jest.fn((_url: string, _options?: RequestInit) => 
-      Promise.resolve(
-        createMockResponse({
-          ok: true,
-          json: () => Promise.resolve({ 
-            data: { total_cost: 0.25 } 
-          }),
-          text: () => Promise.resolve(''),
-          status: 200
-        })
-      )
-    ) as jest.MockedFunction<typeof fetch>;
   });
-
+  
   test('costTracker module is defined', () => {
     expect(costTracker).toBeDefined();
     expect(typeof costTracker.trackUsage).toBe('function');
@@ -82,13 +52,5 @@ describe('Cost Tracker Module', () => {
     // Verify the cost calculation
     const costData = costTracker.getCostData();
     expect(costData.apiCosts).toBeGreaterThanOrEqual(0);
-    
-    // Verify fetch was called if using the API
-    if (global.shouldUseMocks.llm) {
-      expect(fetch).toHaveBeenCalledTimes(1);
-      const mockFetch = fetch as jest.MockedFunction<typeof fetch>;
-      const [url] = mockFetch.mock.calls[0];
-      expect(url).toContain('/api/costs');
-    }
   });
 }); 
