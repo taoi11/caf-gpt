@@ -8,6 +8,11 @@ const DATA_DIR = join(process.cwd(), 'data');
 const COST_FILE = join(DATA_DIR, 'costs.json');
 const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 
+/**
+ * Cost tracking system for API usage and infrastructure expenses.
+ * Persists data to disk, handles monthly resets, and provides both
+ * actual costs from LLM providers and token-based estimates.
+ */
 class CostTracker {
     private data: CostData = {
         apiCosts: 0,

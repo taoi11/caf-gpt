@@ -13,6 +13,11 @@ const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
 const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
 
+/**
+ * LLM API gateway with concurrency control and request processing pipeline.
+ * Handles message formatting, error translation, and integrates with logging
+ * and cost tracking subsystems.
+ */
 class LLMGateway {
     private activeRequests = 0;
 

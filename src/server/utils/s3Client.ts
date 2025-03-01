@@ -20,7 +20,11 @@ logger.debug('Initializing S3 client with config:', {
 
 export const s3Client = new S3Client(s3Config);
 
-// Utility functions for S3 operations
+/**
+ * S3 client wrapper for policy document storage operations.
+ * Provides validated access to policy documents and raw content,
+ * with integrated error handling and request logging.
+ */
 export const s3Utils = {
     async fetchDocument(docId: string, group: string = 'doad'): Promise<PolicyDocument> {
         try {

@@ -2,7 +2,11 @@ import { IS_DEV } from './config.js';
 import type { LLMInteractionData, Message, SystemMessage, LogEntry } from '../types.js';
 import { randomUUID } from 'crypto';
 
-// Log levels in order of verbosity
+/**
+ * Unified logging system with structured JSON output and LLM interaction tracking.
+ * Supports multiple log levels, request/response formatting, and development/production
+ * mode differences. Integrates with all application subsystems.
+ */
 export enum LogLevel {
     DEBUG = "DEBUG",
     INFO = "INFO",

@@ -1,3 +1,7 @@
+/**
+ * Primary HTTP server with API endpoints and static file serving.
+ * Orchestrates request handling, rate limiting, and subsystem integration.
+ */
 import { createServer } from 'http';
 import { join } from 'path';
 import { readFile } from 'fs/promises';

@@ -8,6 +8,11 @@ const HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
 const DAY = 24 * 60 * 60 * 1000; // 1 day in milliseconds
 const MAX_IPS = 10000; // Maximum number of IPs to track
 
+/**
+ * IP-based rate limiting system with hourly/daily windows and CIDR whitelists.
+ * Tracks request timestamps, manages storage cleanup, and provides client-facing
+ * limit information via HTTP headers.
+ */
 class RateLimiter implements NodeRateLimiter {
     private readonly limits: Map<string, RateLimit> = new Map();
     private cleanupInterval?: NodeJS.Timeout;

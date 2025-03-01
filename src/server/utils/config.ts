@@ -1,6 +1,9 @@
+/**
+ * Centralized configuration manager for environment variables and application constants.
+ * Validates required environment settings on startup and provides typed access to
+ * model configurations, rate limiting parameters, and time constants.
+ */
 import 'dotenv/config';
-
-// Load and validate environment variables
 const env = process.env;
 
 // Validate required environment variables
