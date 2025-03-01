@@ -1,8 +1,10 @@
-import type { ApiResponse, Message, PolicyTool, PolicyRequest, ChatResponse, PolicyHandler, PolicyRouter } from '../../types.js';
-import { logger } from '../../utils/logger.js';
-import { rateLimiter } from '../../utils/rateLimiter.js';
+import type { ApiResponse, Message, PolicyTool, ChatResponse, PolicyHandler, PolicyRouter } from '../../types';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { PolicyRequest } from '../../types';
+import { logger } from '../../utils/logger';
+import { rateLimiter } from '../../utils/rateLimiter';
 import { IncomingMessage } from 'http';
-import { createDOADHandler } from './doad/doad.js';
+import { createDOADHandler } from './doad/doad';
 
 // Policy tool implementation
 // Note: Type is defined in types.ts

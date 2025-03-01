@@ -1,8 +1,11 @@
 import { IncomingMessage, ServerResponse } from 'http';
-import { paceNoteAgent } from './paceNoteAgent.js';
-import { logger } from '../../utils/logger.js';
-import { rateLimiter } from '../../utils/rateLimiter.js';
-import type { ApiResponse, PaceNoteRequest, PaceNoteResponse } from '../../types.js';
+import { paceNoteAgent } from './paceNoteAgent';
+import { logger } from '../../utils/logger';
+import { rateLimiter } from '../../utils/rateLimiter';
+import type { PaceNoteRequest } from '../../types';
+// These types are used indirectly in the function
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { ApiResponse, PaceNoteResponse } from '../../types';
 
 export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerResponse) {
     const method = req.method || 'GET';

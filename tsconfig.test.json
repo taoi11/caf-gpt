@@ -1,0 +1,32 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    /* Override specific options for testing */
+    "moduleResolution": "node",
+    "module": "commonjs",
+    "target": "ES2020",
+    
+    /* Enable Jest globals */
+    "types": ["jest", "node"],
+    
+    /* Important for Jest */
+    "esModuleInterop": true,
+    
+    /* Don't require .js extensions */
+    "allowImportingTsExtensions": true,
+    "resolveJsonModule": true,
+    "isolatedModules": false,
+    
+    /* Allow mixed import styles */
+    "verbatimModuleSyntax": false,
+    
+    /* Path mappings for test imports */
+    "paths": {
+      "@server/*": ["./src/server/*"],
+      "@utils/*": ["./src/server/utils/*"],
+      "@test/*": ["./src/test/*"]
+    }
+  },
+  "include": ["src/**/*", "**/*.test.ts"],
+  "exclude": ["node_modules", "dist"]
+} 

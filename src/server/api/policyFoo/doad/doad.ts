@@ -1,10 +1,10 @@
-import type { Message, LLMInteractionData, DOADFinder, DOADImplementation, ChatResponse, PolicyHandler, DOADLogger, DOADChat } from '../../../types.js';
-import type { FormattedPolicyHandler, ResponseFormatter } from '../policyFoo.js';
-import { logger } from '../../../utils/logger.js';
-import { MODELS } from '../../../utils/config.js';
-import { createDOADFinder } from './agents/doadFinder.js';
-import { createDOADChat } from './agents/doadChat.js';
-import { s3Utils } from '../../../utils/s3Client.js';
+import type { Message, LLMInteractionData, DOADFinder, DOADImplementation, ChatResponse, PolicyHandler, DOADLogger, DOADChat } from '../../../types';
+import type { FormattedPolicyHandler, ResponseFormatter } from '../policyFoo';
+import { logger } from '../../../utils/logger';
+import { MODELS } from '../../../utils/config';
+import { createDOADFinder } from './agents/doadFinder';
+import { createDOADChat } from './agents/doadChat';
+import { s3Utils } from '../../../utils/s3Client';
 import { IncomingMessage } from 'http';
 
 // Merged interface for implementation
@@ -61,7 +61,7 @@ export const baseDOADImplementation: DOADManagerImpl = {
         });
     },
     
-    logAgentError(type: 'finder' | 'chat', error: Error, metadata: Record<string, any> = {}) {
+    logAgentError(type: 'finder' | 'chat', error: Error, metadata: Record<string, unknown> = {}) {
         logger.error(`DOAD ${type} error: ${error.message}`, {
             ...metadata,
             agent: type,

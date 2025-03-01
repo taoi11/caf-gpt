@@ -4,8 +4,8 @@
  * logging, and request tracking to aid in development and troubleshooting.
  */
 
-import { IS_DEV } from './config.js';
-import type { LLMInteractionData, Message, SystemMessage, LogEntry } from '../types.js';
+import { IS_DEV } from './config';
+import type { LLMInteractionData, Message, SystemMessage, LogEntry } from '../types';
 import { randomUUID } from 'crypto';
 
 export enum LogLevel {

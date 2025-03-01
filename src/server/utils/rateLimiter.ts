@@ -4,9 +4,9 @@
  * supports whitelisting via CIDR notation, and provides diagnostic information about limits.
  */
 import { IncomingMessage, ServerResponse } from 'http';
-import { logger } from './logger.js';
-import { IS_DEV, RATE_LIMITS } from './config.js';
-import type { RateLimit, RateLimitInfo, NodeRateLimiter } from '../types.js';
+import { logger } from './logger';
+import { IS_DEV, RATE_LIMITS } from './config';
+import type { RateLimit, RateLimitInfo, NodeRateLimiter } from '../types';
 
 /**
  * IP-based rate limiting system with hourly/daily windows and CIDR whitelists.

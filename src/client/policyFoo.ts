@@ -1,6 +1,8 @@
-import { parseDOADResponse } from './doadFoo.js';
-import { rateLimiter } from './utils/rateLimiter.js';
-import type { Message, UIState, UIElements, ApiResponse, ChatResponse, PolicyTool } from './utils/types.js';
+import { parseDOADResponse } from './doadFoo';
+import { rateLimiter } from './utils/rateLimiter';
+import type { Message, UIState, ApiResponse, ChatResponse } from './utils/types';
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+import type { UIElements, PolicyTool } from './utils/types';
 
 // Constants
 const STORAGE_KEY = 'caf-gpt-policyfoo-input';
@@ -102,7 +104,7 @@ function updateUI() {
     sendButton.disabled = state.isProcessing;
 }
 
-function appendMessage(role: 'user' | 'assistant', content: string, citations?: string[]) {
+function appendMessage(role: 'user' | 'assistant', content: string, _citations?: string[]) {
     const messageDiv = document.createElement('div');
     messageDiv.className = `message ${role}-message`;
     

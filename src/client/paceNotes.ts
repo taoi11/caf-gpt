@@ -1,5 +1,5 @@
-import type { PaceNoteRequest, PaceNoteResponse, ApiResponse } from './utils/types.js';
-import { rateLimiter } from './utils/rateLimiter.js';
+import type { PaceNoteRequest, PaceNoteResponse, ApiResponse } from './utils/types';
+import { rateLimiter } from './utils/rateLimiter';
 
 // Types
 interface OutputBox {
@@ -183,6 +183,7 @@ class PaceNotesUI {
 
 // Initialize when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const ui = new PaceNotesUI();
     rateLimiter.initializeDisplay();
 }); 

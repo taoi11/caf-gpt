@@ -1,10 +1,10 @@
-import type { LLMRequest, Message, DOADFinder } from '../../../../types.js';
-import { baseDOADImplementation } from '../doad.js';
-import { logger } from '../../../../utils/logger.js';
+import type { LLMRequest, Message, DOADFinder } from '../../../../types';
+import { baseDOADImplementation } from '../doad';
+import { logger } from '../../../../utils/logger';
 import { readFile } from 'fs/promises';
 import { join } from 'path';
-import { llmGateway } from '../../../../utils/llmGateway.js';
-import { MODELS } from '../../../../utils/config.js';
+import { llmGateway } from '../../../../utils/llmGateway';
+import { MODELS } from '../../../../utils/config';
 
 export function createDOADFinder(llm = llmGateway): DOADFinder {
     let systemPrompt = '';

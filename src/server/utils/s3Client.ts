@@ -4,8 +4,8 @@
  * with proper error handling and logging to support policy access.
  */
 import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
-import { logger } from './logger.js';
-import type { PolicyDocument } from '../types.js';
+import { logger } from './logger';
+import type { PolicyDocument } from '../types';
 
 const s3Config = {
     endpoint: process.env.S3_ENDPOINT || 'https://gateway.storjshare.io',

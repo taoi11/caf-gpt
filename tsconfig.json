@@ -11,8 +11,8 @@
     "sourceMap": true,
     
     /* Module Settings */
-    "module": "NodeNext",
-    "moduleResolution": "NodeNext",
+    "module": "commonjs",
+    "moduleResolution": "node",
     
     /* Include DOM libraries needed for client code */
     "lib": ["ES2020", "DOM", "DOM.Iterable"],
@@ -33,11 +33,8 @@
     /* Support for import.meta */
     "importsNotUsedAsValues": "remove",
     
-    /* JSON Module Support */
-    "allowSyntheticDefaultImports": true,
-    
-    /* Additional ESM Support */
-    "verbatimModuleSyntax": true
+    /* CommonJS compatibility */
+    "allowSyntheticDefaultImports": true
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "public"]

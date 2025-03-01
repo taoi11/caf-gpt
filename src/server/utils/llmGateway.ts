@@ -1,6 +1,6 @@
-import { logger } from './logger.js';
-import { costTracker } from './costTracker.js';
-import type { LLMRequest, LLMResponse, LLMError, Message, SystemMessage } from '../types.js';
+import { logger } from './logger';
+import { costTracker } from './costTracker';
+import type { LLMRequest, LLMResponse, LLMError, Message, SystemMessage } from '../types';
 import { randomUUID } from 'crypto';
 
 // Connection pool configuration

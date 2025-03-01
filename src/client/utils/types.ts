@@ -19,4 +19,4 @@ export type {
     // Policy types
     ChatResponse,
     PolicyTool
-} from '../../server/types.js'; 
+} from '../../server/types'; 

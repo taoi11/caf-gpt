@@ -5,12 +5,12 @@
 import { createServer } from 'http';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { PORT } from './utils/config.js';
-import { handlePaceNoteRequest } from './api/paceNotes/paceNotes.js';
-import { createPolicyRouter } from './api/policyFoo/policyFoo.js';
-import { logger } from './utils/logger.js';
-import { rateLimiter } from './utils/rateLimiter.js';
-import { costTracker } from './utils/costTracker.js';
+import { PORT } from './utils/config';
+import { handlePaceNoteRequest } from './api/paceNotes/paceNotes';
+import { createPolicyRouter } from './api/policyFoo/policyFoo';
+import { logger } from './utils/logger';
+import { rateLimiter } from './utils/rateLimiter';
+import { costTracker } from './utils/costTracker';
 
 // Initialize policy router
 const policyRouter = createPolicyRouter();
