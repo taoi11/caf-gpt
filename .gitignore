@@ -21,7 +21,7 @@ data/
 
 # Development files
 .aider*
-!.aider.config.yml
+!.aider.conf.yml
 prompt.md
 
 # Coverage reports

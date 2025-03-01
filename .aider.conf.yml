@@ -1,0 +1,24 @@
+architect: true
+
+watch-files: true
+max-chat-history-tokens: 32768
+restore-chat-history: false
+read:
+  - ".appLogic/"
+file:
+  - "src/server/types.ts"
+  - "src/client/types.ts"
+  - "src/server/index.ts"
+
+auto-commits: false
+attribute-commit-message-author: true
+auto-lint: true
+lint-cmd: 
+  - "npm run lint"
+# auto-test: true  
+# test-cmd: "npm test"
+
+map-tokens: 2048
+map-refresh: always
+
+editor: neovim

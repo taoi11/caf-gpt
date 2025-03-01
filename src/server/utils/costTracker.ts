@@ -1,5 +1,10 @@
+/**
+ * Cost tracking system for monitoring API and server expenses in the application.
+ * Manages monthly cost tracking, data persistence, and OpenRouter API integration
+ * for accurate token-based pricing calculations and reporting.
+ */
 import { readFile, writeFile, mkdir } from 'fs/promises';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { logger } from './logger.js';
 import type { CostData, LLMResponse } from '../types.js';
 
@@ -8,11 +13,6 @@ const DATA_DIR = join(process.cwd(), 'data');
 const COST_FILE = join(DATA_DIR, 'costs.json');
 const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 
-/**
- * Cost tracking system for API usage and infrastructure expenses.
- * Persists data to disk, handles monthly resets, and provides both
- * actual costs from LLM providers and token-based estimates.
- */
 class CostTracker {
     private data: CostData = {
         apiCosts: 0,

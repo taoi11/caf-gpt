@@ -1,12 +1,12 @@
+/**
+ * Rate limiting implementation that protects API endpoints from abuse.
+ * Tracks requests by IP address with sliding window counters for both hourly and daily limits,
+ * supports whitelisting via CIDR notation, and provides diagnostic information about limits.
+ */
 import { IncomingMessage, ServerResponse } from 'http';
 import { logger } from './logger.js';
 import { IS_DEV, RATE_LIMITS } from './config.js';
-import type { RateLimit, RateWindow, RateLimitInfo, NodeRateLimiter } from '../types.js';
-
-// Constants
-const HOUR = 60 * 60 * 1000; // 1 hour in milliseconds
-const DAY = 24 * 60 * 60 * 1000; // 1 day in milliseconds
-const MAX_IPS = 10000; // Maximum number of IPs to track
+import type { RateLimit, RateLimitInfo, NodeRateLimiter } from '../types.js';
 
 /**
  * IP-based rate limiting system with hourly/daily windows and CIDR whitelists.

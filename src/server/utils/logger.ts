@@ -1,12 +1,13 @@
+/**
+ * Comprehensive logging system for application-wide event tracking and monitoring.
+ * Provides structured logging with multiple severity levels, specialized LLM interaction
+ * logging, and request tracking to aid in development and troubleshooting.
+ */
+
 import { IS_DEV } from './config.js';
 import type { LLMInteractionData, Message, SystemMessage, LogEntry } from '../types.js';
 import { randomUUID } from 'crypto';
 
-/**
- * Unified logging system with structured JSON output and LLM interaction tracking.
- * Handles log formatting, level filtering, and LLM request/response correlation.
- * Integrates with all application subsystems and provides development/production mode differences.
- */
 export enum LogLevel {
     DEBUG = "DEBUG",
     INFO = "INFO",
@@ -15,7 +16,7 @@ export enum LogLevel {
 }
 
 interface LogMetadata {
-    [key: string]: any;
+    [key: string]: unknown;
 }
 
 class Logger {
@@ -53,7 +54,7 @@ class Logger {
         };
 
         // Add any additional metadata, excluding what we've already used
-        const { model, temperature, messages: _, rawResponse, ...restMetadata } = data.metadata || {};
+        const { messages: _, ...restMetadata } = data.metadata || {};
         
         return JSON.stringify({
             ...request,
@@ -74,7 +75,7 @@ class Logger {
         };
 
         // Add any additional metadata, excluding what we've already used
-        const { model, usage, rawResponse, ...restMetadata } = data.metadata || {};
+        const { ...restMetadata } = data.metadata || {};
         
         return JSON.stringify({
             ...response,
@@ -142,7 +143,7 @@ class Logger {
      * @param statusCode - HTTP response status code
      * @param metadata - Additional request metadata
      */
-    logRequest(method: string, url: string, statusCode: number, metadata?: Record<string, any>): void {
+    logRequest(method: string, url: string, statusCode: number, metadata?: Record<string, unknown>): void {
         if (!IS_DEV) return;
         
         const level = statusCode >= 500 ? LogLevel.ERROR :
@@ -168,7 +169,7 @@ class Logger {
         }
     }
 
-    private createLogEntry(level: LogLevel, message: string, metadata?: Record<string, any>): LogEntry {
+    private createLogEntry(level: LogLevel, message: string, metadata?: Record<string, unknown>): LogEntry {
         return {
             timestamp: new Date().toISOString(),
             level,

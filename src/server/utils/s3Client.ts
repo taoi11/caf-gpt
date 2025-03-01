@@ -1,4 +1,9 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from "@aws-sdk/client-s3";
+/**
+ * S3 storage client for managing policy document storage and retrieval.
+ * Provides a simple interface for fetching documents from cloud storage
+ * with proper error handling and logging to support policy access.
+ */
+import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { logger } from './logger.js';
 import type { PolicyDocument } from '../types.js';
 

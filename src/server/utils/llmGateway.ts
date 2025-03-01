@@ -14,9 +14,9 @@ const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
 
 /**
- * LLM API gateway with concurrency control and request processing pipeline.
- * Handles message formatting, error translation, and integrates with logging
- * and cost tracking subsystems.
+ * LLM API gateway that manages communication with external language model providers.
+ * Handles request formatting, concurrent connection management, system prompting,
+ * response processing, and error handling while integrating with the cost tracking system.
  */
 class LLMGateway {
     private activeRequests = 0;
@@ -145,12 +145,13 @@ class LLMGateway {
         return messages;
     }
 
-    private handleError(error: any): LLMError {
+    private handleError(error: unknown): LLMError {
         // Map OpenRouter error to our error type
-        const errorType = error.error?.type || 'api_error';
+        const errorObj = error as { error?: { type?: string, code?: string, message?: string } };
+        const errorType = errorObj.error?.type || 'api_error';
         return {
-            code: error.error?.code || 'unknown',
-            message: error.error?.message || 'Unknown error occurred',
+            code: errorObj.error?.code || 'unknown',
+            message: errorObj.error?.message || 'Unknown error occurred',
             type: errorType as LLMError['type']
         };
     }

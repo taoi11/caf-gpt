@@ -5,7 +5,7 @@
 import { createServer } from 'http';
 import { join } from 'path';
 import { readFile } from 'fs/promises';
-import { PORT, IS_DEV } from './utils/config.js';
+import { PORT } from './utils/config.js';
 import { handlePaceNoteRequest } from './api/paceNotes/paceNotes.js';
 import { createPolicyRouter } from './api/policyFoo/policyFoo.js';
 import { logger } from './utils/logger.js';
@@ -35,7 +35,7 @@ const server = createServer(async (req, res) => {
                 
                 // Validate conversation history
                 const history = Array.isArray(data.conversationHistory) 
-                    ? data.conversationHistory.filter((msg: any) => 
+                    ? data.conversationHistory.filter((msg: { role?: string; content?: string }) => 
                         msg && typeof msg.role === 'string' && 
                         typeof msg.content === 'string' &&
                         (msg.role === 'user' || msg.role === 'assistant')

@@ -55,7 +55,7 @@ export interface LogEntry {
     message: string;
     metadata?: {
         requestId?: string;
-        [key: string]: any;
+        [key: string]: unknown;
     };
 }
 
@@ -74,13 +74,13 @@ export interface LLMInteractionData {
         agent?: 'finder' | 'chat';
         temperature?: number;
         conversationId?: string;
-        [key: string]: any;
+        [key: string]: unknown;
     };
 }
 
 export interface DOADLogger {
     logAgentInteraction(type: 'finder' | 'chat', data: LLMInteractionData): void;
-    logAgentError(type: 'finder' | 'chat', error: Error, metadata?: Record<string, any>): void;
+    logAgentError(type: 'finder' | 'chat', error: Error, metadata?: Record<string, unknown>): void;
 }
 
 // ----------
@@ -132,7 +132,7 @@ export interface RateLimitInfo {
 export interface NodeRateLimiter {
     canMakeRequest(req: IncomingMessage): boolean | Promise<boolean>;
     trackSuccessfulRequest(req: IncomingMessage): void;
-    getLimitInfo(req: IncomingMessage): any;
+    getLimitInfo(req: IncomingMessage): RateLimitInfo;
     sendLimitResponse(req: IncomingMessage, res: ServerResponse, type: string): void;
 }
 
@@ -189,7 +189,7 @@ export interface DOADHandler {
 
 export interface DOADFinder extends DOADHandler {
     handleMessage(message: string, history?: Message[]): Promise<string[]>;
-    logAgentError(type: 'finder', error: Error, metadata?: Record<string, any>): void;
+    logAgentError(type: 'finder', error: Error, metadata?: Record<string, unknown>): void;
 }
 
 export interface DOADChat {
@@ -200,10 +200,12 @@ export interface DOADChat {
         req?: IncomingMessage
     ): Promise<ChatResponse>;
     
-    logAgentError(type: 'chat', error: Error, metadata?: Record<string, any>): void;
+    logAgentError(type: 'chat', error: Error, metadata?: Record<string, unknown>): void;
 }
 
-export interface DOADImplementation extends DOADHandler {}
+export interface DOADImplementation extends DOADHandler {
+    initialize(): Promise<void>;
+}
 
 // ----------
 // PaceNote Types
