@@ -24,6 +24,11 @@ export const baseDOADImplementation: DOADManagerImpl = {
         };
     },
     
+    async initialize(): Promise<void> {
+        logger.debug('Initializing DOAD implementation');
+        // Perform any necessary initialization here
+    },
+    
     getDOADPath(doadNumber: string): string {
         const cleaned = doadNumber
             .trim()

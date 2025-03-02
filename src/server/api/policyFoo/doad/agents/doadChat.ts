@@ -1,4 +1,4 @@
-import type { LLMRequest, Message, ChatResponse, DOADChat } from '../../../../types';
+import type { LLMRequest, Message, ChatResponse, DOADChat, DOADPrompts } from '../../../../types';
 import { baseDOADImplementation } from '../doad';
 import { logger } from '../../../../utils/logger';
 import { readFile } from 'fs/promises';
@@ -7,8 +7,6 @@ import { llmGateway } from '../../../../utils/llmGateway';
 import { MODELS } from '../../../../utils/config';
 import { rateLimiter } from '../../../../utils/rateLimiter';
 import { IncomingMessage } from 'http';
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-import { type DOADPrompts } from '../../../../utils/prompts';
 
 export function createDOADChat(llm = llmGateway): DOADChat {
     let systemPrompt = '';

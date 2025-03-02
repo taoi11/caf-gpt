@@ -37,11 +37,12 @@ class Logger {
     // Format LLM request for logging
     private formatLLMRequest(data: LLMInteractionData, requestId: string): string {
         // Trim system messages in the messages array
-        const messages = data.metadata?.messages?.map((msg: Message | SystemMessage) => 
+        const messagesMetadata = data.metadata?.messages as (Message | SystemMessage)[] | undefined;
+        const messages = messagesMetadata ? messagesMetadata.map((msg: Message | SystemMessage) => 
             msg.role === 'system' ? 
                 { ...msg, content: this.trimSystemMessage(msg.content) } : 
                 msg
-        );
+        ) : [];
 
         // Create request object with trimmed content
         const request = {
@@ -54,7 +55,10 @@ class Logger {
         };
 
         // Add any additional metadata, excluding what we've already used
-        const { messages: _, ...restMetadata } = data.metadata || {};
+        const restMetadata = data.metadata ? { ...data.metadata } : {};
+        if (restMetadata.messages) {
+            delete restMetadata.messages;
+        }
         
         return JSON.stringify({
             ...request,
@@ -91,7 +95,7 @@ class Logger {
     async logLLMInteraction(data: LLMInteractionData): Promise<void> {
         if (!IS_DEV) return;
 
-        let requestId = data.metadata?.requestId;
+        let requestId = data.metadata?.requestId as string | undefined;
         const isRequest = data.metadata?.type === 'request';
 
         if (isRequest) {

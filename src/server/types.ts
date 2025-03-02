@@ -207,6 +207,11 @@ export interface DOADImplementation extends DOADHandler {
     initialize(): Promise<void>;
 }
 
+export interface DOADPrompts {
+    chatAgent: string;
+    finderAgent: string;
+}
+
 // ----------
 // PaceNote Types
 // ----------
