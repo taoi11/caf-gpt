@@ -42,24 +42,5 @@ module.exports = tseslint.config(
         varsIgnorePattern: '^_' 
       }],
     },
-  },
-  {
-    // Special configuration for test files
-    files: ['**/*.test.ts', '**/*.spec.ts'],
-    languageOptions: {
-      globals: {
-        jest: 'readonly',
-        expect: 'readonly',
-        describe: 'readonly',
-        it: 'readonly',
-        test: 'readonly',
-        beforeEach: 'readonly',
-        afterEach: 'readonly',
-        beforeAll: 'readonly',
-        afterAll: 'readonly',
-        vi: 'readonly',
-        mock: 'readonly',
-      }
-    }
   }
 ); 
