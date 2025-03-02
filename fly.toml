@@ -1,5 +1,5 @@
 app = "caf-gpt"
-primary_region = "sjc" # Change to your preferred region
+primary_region = "yul" # Montreal
 
 [build]
   dockerfile = "Dockerfile"
