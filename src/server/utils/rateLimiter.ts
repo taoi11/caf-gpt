@@ -18,7 +18,10 @@ class RateLimiter implements NodeRateLimiter {
     private cleanupInterval?: NodeJS.Timeout;
 
     constructor() {
-        this.cleanupInterval = setInterval(() => this.cleanupOldEntries(), RATE_LIMITS.CLEANUP_INTERVAL);
+        // Don't start the interval in test environments to prevent open handles
+        if (process.env.NODE_ENV !== 'test') {
+            this.cleanupInterval = setInterval(() => this.cleanupOldEntries(), RATE_LIMITS.CLEANUP_INTERVAL);
+        }
     }
 
     // Implementation of NodeRateLimiter interface
