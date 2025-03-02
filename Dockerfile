@@ -31,6 +31,7 @@ RUN npm ci --only=production --no-audit --no-fund && npm cache clean --force
 # Copy built application from builder stage
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/public ./public
+COPY --from=builder /app/src/prompts ./src/prompts
 
 # Create a non-root user and switch to it
 RUN adduser -D appuser
