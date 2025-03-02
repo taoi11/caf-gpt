@@ -11,6 +11,7 @@ import { createPolicyRouter } from './api/policyFoo/policyFoo';
 import { logger } from './utils/logger';
 import { rateLimiter } from './utils/rateLimiter';
 import { costTracker } from './utils/costTracker';
+import { quickStartup, getHealthStatus } from './utils/bootup';
 
 // Initialize policy router
 const policyRouter = createPolicyRouter();
@@ -78,14 +79,15 @@ const server = createServer(async (req, res) => {
         return;
     }
 
-    // Health check endpoint
+    // Enhanced health check endpoint
     if (url === '/health') {
+        const healthStatus = getHealthStatus();
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok' }));
+        res.end(JSON.stringify(healthStatus));
         return;
     }
 
-    // Cost endpoint
+    // Cost endpoint with improved error handling
     if (url === '/api/costs' && method === 'GET') {
         try {
             const costs = costTracker.getCostData();
@@ -100,7 +102,10 @@ const server = createServer(async (req, res) => {
                 stack: err.stack
             });
             res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: 'Failed to fetch costs' }));
+            res.end(JSON.stringify({ 
+                error: 'Failed to fetch costs',
+                message: err.message
+            }));
             logger.logRequest(method, url, 500);
             return;
         }
@@ -144,5 +149,13 @@ const server = createServer(async (req, res) => {
 
 server.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
+    
+    // Run quick startup after server is listening
+    quickStartup().catch(error => {
+        logger.error('Quick startup failed', {
+            error: error instanceof Error ? error.message : String(error)
+        });
+    });
+    
     logger.debug('Debug logging enabled');
 }); 

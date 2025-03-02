@@ -37,7 +37,7 @@ describe('S3 Client Module', () => {
     jest.clearAllMocks();
     
     // Reset the mock implementation for s3Client.send
-    // @ts-ignore - TypeScript doesn't recognize jest mocks well
+    // @ts-expect-error - TypeScript doesn't recognize jest mocks well
     s3Client.send.mockReset();
   });
 
@@ -55,7 +55,7 @@ describe('S3 Client Module', () => {
     };
     
     // Set up the mock to return our response
-    // @ts-ignore - TypeScript doesn't recognize jest mocks well
+    // @ts-expect-error - TypeScript doesn't recognize jest mocks well
     s3Client.send.mockResolvedValueOnce(mockResponse);
     
     // Call the function we want to test
@@ -82,7 +82,7 @@ describe('S3 Client Module', () => {
     
     // Create a mock stream that we can read from
     const mockStream = {
-      // @ts-ignore - TypeScript doesn't recognize jest mocks well
+      // @ts-expect-error - TypeScript doesn't recognize jest mocks well
       transformToString: jest.fn().mockResolvedValue(mockContent)
     };
     
@@ -92,7 +92,7 @@ describe('S3 Client Module', () => {
     };
     
     // Set up the mock to return our response
-    // @ts-ignore - TypeScript doesn't recognize jest mocks well
+    // @ts-expect-error - TypeScript doesn't recognize jest mocks well
     s3Client.send.mockResolvedValueOnce(mockGetObjectResponse);
     
     // Call the function with test params
@@ -116,7 +116,7 @@ describe('S3 Client Module', () => {
 
   test('fetchDocument handles error when document does not exist', async () => {
     // Mock an error response for a non-existent file
-    // @ts-ignore - TypeScript doesn't recognize jest mocks well
+    // @ts-expect-error - TypeScript doesn't recognize jest mocks well
     s3Client.send.mockRejectedValueOnce(
       new Error('NoSuchKey: The specified key does not exist')
     );
@@ -136,7 +136,7 @@ describe('S3 Client Module', () => {
     
     // Create a mock stream
     const mockStream = {
-      // @ts-ignore - TypeScript doesn't recognize jest mocks well
+      // @ts-expect-error - TypeScript doesn't recognize jest mocks well
       transformToString: jest.fn().mockResolvedValue(mockContent)
     };
     
@@ -145,7 +145,7 @@ describe('S3 Client Module', () => {
     };
     
     // Set up the mock to return our response
-    // @ts-ignore - TypeScript doesn't recognize jest mocks well
+    // @ts-expect-error - TypeScript doesn't recognize jest mocks well
     s3Client.send.mockResolvedValueOnce(mockGetObjectResponse);
     
     // Call the function with test path
@@ -163,7 +163,7 @@ describe('S3 Client Module', () => {
 
   test('fetchRawContent handles error when file does not exist', async () => {
     // Mock an error response for a non-existent file
-    // @ts-ignore - TypeScript doesn't recognize jest mocks well
+    // @ts-expect-error - TypeScript doesn't recognize jest mocks well
     s3Client.send.mockRejectedValueOnce(
       new Error('NoSuchKey: The specified key does not exist')
     );

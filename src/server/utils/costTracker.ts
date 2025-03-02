@@ -1,16 +1,13 @@
 /**
- * Cost tracking system for monitoring API and server expenses in the application.
- * Manages monthly cost tracking, data persistence, and OpenRouter API integration
- * for accurate token-based pricing calculations and reporting.
+ * Cost tracking system with database persistence.
+ * Simplified implementation with basic error handling.
  */
-import { readFile, writeFile, mkdir } from 'fs/promises';
-import { join } from 'path';
 import { logger } from './logger';
+import { dbClient } from './dbClient';
+import { appState } from './bootup';
 import type { CostData, LLMResponse } from '../types';
 
 const MONTHLY_SERVER_COST = 15.70; // Base monthly server cost in USD
-const DATA_DIR = join(process.cwd(), 'data');
-const COST_FILE = join(DATA_DIR, 'costs.json');
 const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 
 class CostTracker {
@@ -20,7 +17,7 @@ class CostTracker {
         lastReset: new Date().toISOString().split('T')[0],
         lastUpdated: new Date().toISOString()
     };
-
+    
     constructor() {
         this.initializeStorage().catch(error => {
             logger.error('Failed to initialize cost tracker:', error);
@@ -29,15 +26,13 @@ class CostTracker {
 
     private async initializeStorage(): Promise<void> {
         try {
-            // Ensure data directory exists
-            await mkdir(DATA_DIR, { recursive: true });
             await this.loadData();
             await this.checkMonthlyReset();
         } catch (error) {
             logger.error('Failed to initialize storage', {
                 error: error instanceof Error ? error.message : String(error)
             });
-            throw error;
+            // Continue with default values
         }
     }
 
@@ -63,31 +58,55 @@ class CostTracker {
 
     private async loadData(): Promise<void> {
         try {
-            const content = await readFile(COST_FILE, 'utf-8');
-            this.data = JSON.parse(content);
-            logger.info('Cost data loaded successfully');
-        } catch (error) {
-            if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
-                logger.info('No existing cost data found, starting fresh');
-                await this.saveData();
-            } else {
-                logger.error('Error loading cost data', {
-                    error: error instanceof Error ? error.message : String(error)
-                });
-                throw error;
+            // Only attempt to load data if database is connected
+            if (!appState.isDbConnected && !process.env.DATABASE_URL) {
+                logger.warn('Database not connected, using default cost values');
+                return;
             }
+            
+            const result = await dbClient.query(
+                'SELECT api_costs, server_costs, last_reset::text, last_updated::text FROM costs WHERE id = 1'
+            );
+            
+            if (result.rows.length > 0) {
+                const row = result.rows[0];
+                this.data = {
+                    apiCosts: parseFloat(row.api_costs),
+                    serverCosts: parseFloat(row.server_costs),
+                    lastReset: row.last_reset,
+                    lastUpdated: row.last_updated
+                };
+                logger.info('Cost data loaded successfully from database');
+            } else {
+                logger.info('No existing cost data found in database, using defaults');
+                await this.saveData();
+            }
+        } catch (error) {
+            logger.error('Error loading cost data from database', {
+                error: error instanceof Error ? error.message : String(error)
+            });
+            // Continue with default values
         }
     }
 
     private async saveData(): Promise<void> {
         try {
-            await writeFile(COST_FILE, JSON.stringify(this.data, null, 2));
-            logger.debug('Cost data saved successfully');
+            // Only attempt to save data if database is connected
+            if (!appState.isDbConnected && !process.env.DATABASE_URL) {
+                logger.warn('Database not connected, skipping cost data save');
+                return;
+            }
+            
+            await dbClient.query(
+                'UPDATE costs SET api_costs = $1, server_costs = $2, last_reset = $3, last_updated = $4 WHERE id = 1',
+                [this.data.apiCosts, this.data.serverCosts, this.data.lastReset, this.data.lastUpdated]
+            );
+            logger.debug('Cost data saved successfully to database');
         } catch (error) {
-            logger.error('Failed to save cost data', {
+            logger.error('Failed to save cost data to database', {
                 error: error instanceof Error ? error.message : String(error)
             });
-            throw error;
+            // Continue without saving - will try again next time
         }
     }
 
@@ -168,6 +187,10 @@ class CostTracker {
         });
     }
 
+    /**
+     * Returns current cost data
+     * Always returns data even if database operations fail
+     */
     public getCostData(): CostData {
         return { ...this.data };
     }
