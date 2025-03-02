@@ -1,8 +1,44 @@
-# Node
-node_modules/
-dist/
-public/js/
-coverage/
+# Node.js
+node_modules
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+
+# Build artifacts
+dist
+build
+.next
+.nuxt
+.cache
+# Don't ignore public directory as we need it in the final image
+!public
+
+# Development files
+.git
+.github
+.vscode
+.idea
+*.md
+!README.md
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Test files
+__tests__
+test
+tests
+coverage
+
+# Misc
+.DS_Store
+Thumbs.db
+*.log
+*.bak
+*.tmp
+*.swp
 
 # TypeScript
 *.tsbuildinfo
@@ -11,7 +47,6 @@ coverage/
 docker-compose.yml
 
 # Project files
-.git/
 .env
 *.log
 .appLogic/

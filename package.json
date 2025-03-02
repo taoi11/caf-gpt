@@ -3,8 +3,8 @@
   "version": "1.0.0",
   "description": "A collection of AI tools and agents for CAF personnel",
   "scripts": {
-    "start": "node dist/app.js",
-    "dev": "nodemon --exec 'node' -r ts-node/register src/app.ts",
+    "start": "node dist/server/index.js",
+    "dev": "nodemon --exec 'node' -r ts-node/register src/server/index.ts",
     "dev:server": "node -r ts-node/register src/server/index.ts",
     "dev:client": "npm run build:client -- --watch",
     "build": "tsc",
@@ -30,6 +30,7 @@
   "license": "AGPL-3.0",
   "devDependencies": {
     "@eslint/js": "^9.21.0",
+    "@flydotio/dockerfile": "^0.7.8",
     "@types/http-server": "^0.12.4",
     "@types/jest": "^29.5.14",
     "@types/node": "^22.13.7",

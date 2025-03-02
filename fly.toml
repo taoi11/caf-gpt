@@ -1,5 +1,5 @@
 app = "caf-gpt"
-primary_region = "yyz"  # Toronto region
+primary_region = "sjc" # Change to your preferred region
 
 [build]
   dockerfile = "Dockerfile"
@@ -7,11 +7,15 @@ primary_region = "yyz"  # Toronto region
 [env]
   PORT = "8080"
   NODE_ENV = "production"
+  PACE_NOTE_MODEL = "meta-llama/llama-3.3-70b-instruct"
+  DOAD_FINDER_MODEL = "amazon/nova-pro-v1"
+  DOAD_CHAT_MODEL = "anthropic/claude-3.5-sonnet:beta"
+  S3_BUCKET_NAME = "policies"
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = "stop"
   auto_start_machines = true
   min_machines_running = 0
   processes = ["app"]
@@ -30,4 +34,9 @@ primary_region = "yyz"  # Toronto region
 
 [metrics]
   port = 8080
-  path = "/metrics" 
+  path = "/metrics"
+
+[[vm]]
+  cpu_kind = "shared"
+  cpus = 1
+  memory_mb = 256
