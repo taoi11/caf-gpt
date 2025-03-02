@@ -40,3 +40,4 @@ primary_region = "yul" # Montreal
   cpu_kind = "shared"
   cpus = 1
   memory_mb = 256
+  min_machines_running = 0
