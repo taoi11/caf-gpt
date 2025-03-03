@@ -184,6 +184,13 @@ class Logger {
      * @param metadata - Additional context data
      * @returns Complete log entry object
      */
+    /**
+     * Creates a structured log entry with standardized metadata
+     * @param level - Log severity level from LogLevel enum
+     * @param message - Human-readable description of the event
+     * @param metadata - Additional context data as key-value pairs
+     * @returns Complete LogEntry object with timestamp and formatted data
+     */
     private createLogEntry(level: LogLevel, message: string, metadata?: Record<string, unknown>): LogEntry {
         return {
             timestamp: new Date().toISOString(),

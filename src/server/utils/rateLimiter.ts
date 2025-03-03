@@ -75,6 +75,12 @@ class RateLimiter implements NodeRateLimiter {
             .slice(-RATE_LIMITS.MAX_TIMESTAMPS_PER_WINDOW);  // Keep only most recent
     }
 
+    /**
+     * Maintains rate limit state for IP addresses with hourly/daily windows
+     * @param ip - Client IP address to check
+     * @param now - Current timestamp in milliseconds
+     * @returns RateLimit object containing timestamp arrays and cleanup state
+     */
     private cleanupWindows(limit: RateLimit, now: number): void {
         limit.hourly.timestamps = this.cleanTimestamps(
             limit.hourly.timestamps, 

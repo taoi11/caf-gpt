@@ -20,6 +20,11 @@ const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
  * response processing, and error handling while integrating with the cost tracking system.
  */
 class LLMGateway {
+    /**
+     * Manages concurrent LLM API connections using a simple pool pattern.
+     * Ensures we never exceed MAX_CONCURRENT_REQUESTS simultaneous requests
+     * by tracking active request count and queueing when necessary.
+     */
     private activeRequests = 0;
 
     /**

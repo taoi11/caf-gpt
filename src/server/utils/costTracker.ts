@@ -24,6 +24,11 @@ class CostTracker {
         });
     }
 
+    /**
+     * Initializes cost tracking system by loading persisted data and
+     * checking for monthly reset conditions. Handles database connection
+     * states gracefully.
+     */
     private async initializeStorage(): Promise<void> {
         try {
             await this.loadData();
