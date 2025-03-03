@@ -8,12 +8,12 @@ aider \
   --auto-commits \
   --no-detect-urls \
   --read "src/server/types.ts" \
-  --file "src/server/utils/config.ts" \
-  --file "src/server/utils/logger.ts" \
-  --file "src/server/utils/costTracker.ts" \
-  --file "src/server/utils/llmGateway.ts" \
-  --file "src/server/utils/rateLimiter.ts" \
-  --file "src/server/utils/s3Client.ts" \
+  --read ".appLogic/policyFoo.md" \
+  --read "src/server/index.ts" \
+  --file "src/server/api/policyFoo/policyFoo.ts" \
+  --file "src/server/api/policyFoo/doad/doad.ts" \
+  --file "src/server/api/policyFoo/doad/agents/doadChat.ts" \
+  --file "src/server/api/policyFoo/doad/agents/doadFinder.ts" \
   --yes
 
 # Aider second run
@@ -22,10 +22,10 @@ aider \
   --auto-commits \
   --no-detect-urls \
   --read "src/server/types.ts" \
-  --file "src/server/utils/config.ts" \
-  --file "src/server/utils/logger.ts" \
-  --file "src/server/utils/costTracker.ts" \
-  --file "src/server/utils/llmGateway.ts" \
-  --file "src/server/utils/rateLimiter.ts" \
-  --file "src/server/utils/s3Client.ts" \
+  --read "src/server/index.ts" \
+  --read ".appLogic/policyFoo.md" \
+  --file "src/server/api/policyFoo/policyFoo.ts" \
+  --file "src/server/api/policyFoo/doad/doad.ts" \
+  --file "src/server/api/policyFoo/doad/agents/doadChat.ts" \
+  --file "src/server/api/policyFoo/doad/agents/doadFinder.ts" \
   --yes
