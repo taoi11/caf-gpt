@@ -32,9 +32,9 @@ primary_region = "yul" # Montreal
     path = "/health"
     protocol = "http"
 
-[metrics]
-  port = 8080
-  path = "/metrics"
+# [metrics]
+#   port = 8080
+#   path = "/metrics"
 
 [[vm]]
   cpu_kind = "shared"
