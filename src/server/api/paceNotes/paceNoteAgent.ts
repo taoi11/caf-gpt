@@ -1,3 +1,8 @@
+/**
+ * Core agent for generating standardized performance notes. Handles prompt
+ * management, competency data loading, and LLM interactions. Maintains
+ * read-only access to templates and S3 data sources.
+ */
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client } from "../../utils/s3Client";
 import { llmGateway } from "../../utils/llmGateway";
@@ -9,7 +14,22 @@ import { randomUUID } from "crypto";
 import { MODELS } from '../../utils/config';
 import type { PaceNoteRequest, PaceNoteResponse, Message } from "../../types";
 
+/**
+ * Central coordinator for pace note generation. Manages:
+ * - Prompt template loading
+ * - Competency data retrieval
+ * - LLM interaction orchestration
+ * - Response formatting
+ */
 class PaceNoteAgent {
+    /**
+     * Initializes a new PaceNoteAgent instance
+     * @constructor
+     * @param promptPath - Filesystem path to system prompt template
+     * @param examplesPath - Filesystem path to example notes
+     * @param systemPrompt - Loaded system prompt content
+     * @param examples - Loaded example notes content
+     */
     private readonly promptPath: string;
     private readonly examplesPath: string;
     private systemPrompt: string = '';
@@ -24,7 +44,11 @@ class PaceNoteAgent {
         });
     }
 
-    // Initialize by loading the prompt files (read-only)
+    /**
+     * Loads prompt templates from filesystem during initialization
+     * @throws Error if template files cannot be loaded
+     * @returns Promise resolving when templates are loaded
+     */
     private async initializePrompts(): Promise<void> {
         try {
             logger.debug('Loading system prompt', { path: this.promptPath });
@@ -56,7 +80,12 @@ class PaceNoteAgent {
         }
     }
 
-    // Read competencies from S3 (read-only)
+    /**
+     * Retrieves competency data from configured S3 bucket
+     * @param path - S3 object path for competency data
+     * @throws Error if S3 retrieval fails or returns empty data
+     * @returns Promise resolving with competency markdown content
+     */
     private async readCompetencies(path: string = 'paceNote/cpl_mcpl.md'): Promise<string> {
         try {
             logger.debug('Reading competencies', { path, source: 'S3' });
@@ -81,7 +110,12 @@ class PaceNoteAgent {
         }
     }
 
-    // Generate pace note
+    /**
+     * Generates a formatted pace note from user input
+     * @param request - PaceNoteRequest containing input text and rank
+     * @returns Promise resolving with formatted PaceNoteResponse
+     * @throws Error if any generation step fails
+     */
     public async generateNote(request: PaceNoteRequest): Promise<PaceNoteResponse> {
         // Ensure prompts are loaded
         if (!this.systemPrompt || !this.examples) {

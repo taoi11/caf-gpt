@@ -1,3 +1,9 @@
+/**
+ * Pace Notes API handler that processes incoming requests for generating
+ * standardized performance notes for CAF Members. Handles validation,
+ * rate limiting, and error handling for the pace notes generation process.
+ * Orchestrates the interaction between the HTTP layer and the PaceNoteAgent.
+ */
 import { IncomingMessage, ServerResponse } from 'http';
 import { paceNoteAgent } from './paceNoteAgent';
 import { logger } from '../../utils/logger';
@@ -7,6 +13,12 @@ import type { PaceNoteRequest } from '../../types';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { ApiResponse, PaceNoteResponse } from '../../types';
 
+/**
+ * Handles incoming pace note generation requests with full lifecycle management
+ * @param req - Incoming HTTP request containing user input and rank selection
+ * @param res - Server response object for sending generated notes or errors
+ * @returns Promise resolving when request processing completes
+ */
 export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerResponse) {
     const method = req.method || 'GET';
     const url = req.url || '/';
