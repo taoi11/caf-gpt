@@ -19,13 +19,7 @@ import { randomUUID } from "crypto";
 import { MODELS } from '../../utils/config';
 import type { PaceNoteRequest, PaceNoteResponse, Message } from "../../types";
 
-/**
- * Central coordinator for pace note generation. Manages:
- * - Prompt template loading
- * - Competency data retrieval
- * - LLM interaction orchestration
- * - Response formatting
- */
+// Pace note agent class
 class PaceNoteAgent {
     /**
      * Initializes a new PaceNoteAgent instance with required paths
@@ -38,7 +32,6 @@ class PaceNoteAgent {
     private readonly examplesPath: string;
     private systemPrompt: string = '';
     private examples: string = '';
-
     constructor() {
         this.promptPath = join(process.cwd(), 'src', 'prompts', 'paceNote', 'paceNote.md');
         this.examplesPath = join(process.cwd(), 'src', 'prompts', 'paceNote', 'examples.md');
@@ -47,26 +40,20 @@ class PaceNoteAgent {
             logger.error('Failed to initialize prompts:', error);
         });
     }
-
-    /**
-     * Loads prompt templates from filesystem during initialization
-     * @throws {Error} If template files cannot be loaded or are empty
-     * @returns {Promise<void>} Resolves when templates are loaded successfully
-     */
+    // Initialize prompts
     private async initializePrompts(): Promise<void> {
         try {
             logger.debug('Loading system prompt', { path: this.promptPath });
             logger.debug('Loading examples', { path: this.examplesPath });
-
             // Read both files concurrently
             const [promptContent, examplesContent] = await Promise.all([
                 readFile(this.promptPath, 'utf-8'),
                 readFile(this.examplesPath, 'utf-8')
             ]);
-
+            // Store loaded content
             this.systemPrompt = promptContent;
             this.examples = examplesContent;
-
+            // Log loaded content
             logger.logLLMInteraction({
                 role: 'system',
                 content: this.systemPrompt,
@@ -74,7 +61,6 @@ class PaceNoteAgent {
                     timestamp: new Date().toISOString()
                 }
             });
-
             logger.info('System prompt and examples loaded successfully');
         } catch (error) {
             logger.error('Failed to initialize prompts', {
@@ -83,13 +69,7 @@ class PaceNoteAgent {
             throw new Error('Failed to load prompt files');
         }
     }
-
-    /**
-     * Retrieves competency data from configured S3 bucket
-     * @param {string} [path='paceNote/cpl_mcpl.md'] - S3 object path for competency data
-     * @throws {Error} If S3 retrieval fails or returns empty data
-     * @returns {Promise<string>} Markdown-formatted competency list
-     */
+    // Read competencies
     private async readCompetencies(path: string = 'paceNote/cpl_mcpl.md'): Promise<string> {
         try {
             logger.debug('Reading competencies', { path, source: 'S3' });
@@ -97,7 +77,7 @@ class PaceNoteAgent {
                 Bucket: process.env.S3_BUCKET_NAME,
                 Key: path,
             }));
-
+            // Transform response body to string
             const competencies = await response.Body?.transformToString();
             if (!competencies) {
                 logger.error('Empty competencies list received from S3');
@@ -113,36 +93,26 @@ class PaceNoteAgent {
             throw new Error('Failed to read competencies list');
         }
     }
-
-    /**
-     * Generates a formatted pace note from validated user input
-     * @param {PaceNoteRequest} request - Validated request containing input text and rank
-     * @returns {Promise<PaceNoteResponse>} Structured response with generated content
-     * @throws {Error} If any generation step fails (prompt loading, competency fetch, LLM error)
-     */
+    // Generate FeedBack Note
     public async generateNote(request: PaceNoteRequest): Promise<PaceNoteResponse> {
         // Ensure prompts are loaded
         if (!this.systemPrompt || !this.examples) {
             logger.info('Prompts not loaded, loading now...');
             await this.initializePrompts();
         }
-
         // Read competencies
         const competencies = await this.readCompetencies();
-
         // Fill the prompt template
         logger.debug('Preparing prompt with competencies and examples');
         const filledPrompt = this.systemPrompt
             .replace('{competency_list}', competencies)
             .replace('{examples}', this.examples);
-        
         // Create message with timestamp
         const userMessage: Message = {
             role: 'user',
             content: request.input,
             timestamp: new Date().toISOString()
         };
-
         logger.debug('Sending request to LLM');
         const response = await llmGateway.query({
             messages: [userMessage],
@@ -150,7 +120,7 @@ class PaceNoteAgent {
             model: MODELS.paceNote,
             temperature: 0.7
         });
-
+        // Log LLM interaction
         logger.logLLMInteraction({
             role: 'assistant',
             content: response.content,
@@ -159,7 +129,7 @@ class PaceNoteAgent {
                 usage: response.usage
             }
         });
-
+        // Prepare response
         logger.debug('LLM response received, preparing response');
         return {
             content: response.content,
@@ -168,6 +138,5 @@ class PaceNoteAgent {
         };
     }
 }
-
 // Export singleton instance
 export const paceNoteAgent = new PaceNoteAgent(); 

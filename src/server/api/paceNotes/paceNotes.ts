@@ -17,16 +17,11 @@ import type { PaceNoteRequest } from '../../types';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { ApiResponse, PaceNoteResponse } from '../../types';
 
-/**
- * Handles full lifecycle of pace note generation requests
- * @param {IncomingMessage} req - Incoming HTTP request with JSON payload
- * @param {ServerResponse} res - Server response object for sending HTTP replies
- * @returns {Promise<void>} Resolves when request processing completes
- */
+// Handle pace note request
 export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerResponse) {
     const method = req.method || 'GET';
     const url = req.url || '/';
-
+    // Check if request method is POST
     if (req.method !== 'POST') {
         logger.warn(`Method ${method} not allowed for ${url}`);
         res.writeHead(405, { 'Content-Type': 'application/json' });
@@ -34,7 +29,6 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         logger.logRequest(method, url, 405);
         return;
     }
-
     // Check if request can be made
     if (!(await rateLimiter.canMakeRequest(req))) {
         const limits = rateLimiter.getLimitInfo(req);
@@ -46,14 +40,13 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         logger.logRequest(method, url, 429);
         return;
     }
-
+    // Read request body
     try {
-        // Read request body
         let body = '';
         for await (const chunk of req) {
             body += chunk;
         }
-        
+        // Parse request body
         const request: PaceNoteRequest = JSON.parse(body);
         if (!request.input?.trim()) {
             logger.warn('Empty input received');
@@ -65,15 +58,14 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
             logger.logRequest(method, url, 400);
             return;
         }
-
         logger.debug('Generating pace note for input', { 
             input: request.input.substring(0, 50) + '...' 
         });
+        // Generate pace note
         const response = await paceNoteAgent.generateNote(request);
-        
         // Track the request only ONCE after successful completion
         await rateLimiter.trackSuccessfulRequest(req);
-        
+        // Send response
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
             success: true,
@@ -81,6 +73,7 @@ export async function handlePaceNoteRequest(req: IncomingMessage, res: ServerRes
         }));
         logger.logRequest(method, url, 200);
     } catch (error) {
+        // Handle error
         const err = error instanceof Error ? error : new Error('Unknown error');
         logger.error('Pace Note generation error', {
             error: err.message,
