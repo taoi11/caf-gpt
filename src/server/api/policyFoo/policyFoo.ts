@@ -17,28 +17,19 @@ import { rateLimiter } from '../../utils/rateLimiter';
 import { IncomingMessage } from 'http';
 import { createDOADHandler } from './doad/doad';
 
-// Policy tool implementation
-// Note: Type is defined in types.ts
-
 // Response formatter interface
 export interface ResponseFormatter {
     formatResponse(response: ChatResponse): ChatResponse;
     validateRequest(message: string): boolean;
 }
-
 // Extended policy handler with formatting capabilities
 export interface FormattedPolicyHandler extends PolicyHandler, ResponseFormatter {}
-
 // Default response formatter implementation
-/**
- * Default response formatter implementation ensuring consistent response structure.
- * Provides basic validation and response formatting for policy tool outputs.
- */
 export const defaultResponseFormatter: ResponseFormatter = {
     validateRequest(message: string): boolean {
         return message.trim().length > 0;
     },
-    
+    // Format response
     formatResponse(response: ChatResponse): ChatResponse {
         return {
             answer: response.answer || '',
@@ -47,7 +38,6 @@ export const defaultResponseFormatter: ResponseFormatter = {
         };
     }
 };
-
 // Policy router implementation
 interface PolicyRouterImpl extends PolicyRouter {
     handlers: Map<PolicyTool, PolicyHandler>;
@@ -68,16 +58,7 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
 
     return {
         handlers,
-        /**
-         * Processes policy tool request through configured handler
-         * @param tool - Policy tool identifier from client
-         * @param message - User message content
-         * @param history - Conversation history array
-         * @param req - Optional HTTP request object
-         * @returns Formatted API response with either:
-         * - Success: Chat response data
-         * - Error: Failure details
-         */
+        // Handle request
         async handleRequest(
             tool: PolicyTool,
             message: string,
@@ -92,7 +73,6 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
                         error: 'Invalid request parameters'
                     };
                 }
-
                 // Check if we can make more requests
                 if (req && !(await rateLimiter.canMakeRequest(req))) {
                     logger.warn('Rate limit exceeded for request');
@@ -101,22 +81,17 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
                         error: 'Rate limit exceeded. Please try again later.'
                     };
                 }
-
                 const handler = handlers.get(tool)!;
                 logger.info(`Processing ${tool} request`);
-                
                 // Filter out system messages and keep only user-assistant interaction
                 const userHistory = history?.filter(msg => 
                     msg.role === 'user' || msg.role === 'assistant'
                 ) || [];
-
                 const response = await handler.handleMessage(message, userHistory, req);
-                
                 return {
                     success: true,
                     data: response
                 };
-
             } catch (error) {
                 logger.error('PolicyRouter error', {
                     error: error instanceof Error ? error.message : String(error)
@@ -129,7 +104,6 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
         }
     };
 }
-
 // Factory function to create policy router
 export function createPolicyRouter(): PolicyRouter {
     logger.info('Creating policy router');

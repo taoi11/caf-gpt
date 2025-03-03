@@ -23,7 +23,6 @@ import { MODELS } from '../../../../utils/config';
  */
 export function createDOADFinder(llm = llmGateway): DOADFinder {
     let systemPrompt = '';
-
     // Load prompts immediately
     Promise.all([
         readFile(join(process.cwd(), 'src/prompts/doad/policyFinder.md'), 'utf-8'),
@@ -38,54 +37,46 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
 
     return {
         ...baseDOADImplementation,
-        
-        /**
-         * Analyzes message text to identify relevant policies
-         * @param message - User query text
-         * @param history - Conversation history context
-         * @returns Array of valid DOAD numbers from:
-         * - Direct message matches
-         * - LLM analysis of query context
-         */
+        // Analyzes message text to identify relevant policies
         async handleMessage(message: string, history?: Message[]): Promise<string[]> {
             try {
                 // Log initial request for file logging
                 logger.debug('Finding relevant DOADs', { message, history });
-
                 // Add timestamp to new message
                 const newMessage: Message = {
                     role: 'user',
                     content: message,
                     timestamp: new Date().toISOString()
                 };
-                
+                // Create LLM request
                 const request: LLMRequest = {
                     messages: [...(history || []).slice(0, -1), newMessage],
                     systemPrompt,
                     model: MODELS.doad.finder,
                 };
-
+                // Get response
                 const response = await llm.query(request);
-                
+                // Get content
                 const content = response.content.trim();
-                
+                // Check for no relevant policies
                 if (content.toLowerCase() === 'none') {
                     logger.info('No relevant policies found');
                     return [];
                 }
-
+                // Split and filter policies
                 const policies = content
                     .split(',')
                     .map(p => p.trim())
                     .filter(p => p && p.includes('-'));
-
+                // Log trimmed policies
                 policies.forEach(p => {
                     logger.debug(`Trimmed policy number: "${p}"`);
                 });
-
+                // Log found policies
                 logger.info(`Found policies: ${policies.join(', ')}`);
                 return policies;
             } catch (error) {
+                // Log agent error
                 this.logAgentError('finder', error instanceof Error ? error : new Error(String(error)), {
                     messageLength: message.length,
                     hasHistory: !!history

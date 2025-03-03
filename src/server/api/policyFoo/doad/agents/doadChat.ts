@@ -18,18 +18,9 @@ import { MODELS } from '../../../../utils/config';
 import { rateLimiter } from '../../../../utils/rateLimiter';
 import { IncomingMessage } from 'http';
 
-/**
- * Creates DOAD Chat agent instance with policy context integration
- * @param llm - LLM gateway instance (defaults to shared instance)
- * @returns Configured DOADChat implementation with:
- * - Dynamic system prompt loading
- * - Conversation history management
- * - Rate limit tracking
- * - Error handling
- */
+// Create DOAD chat agent
 export function createDOADChat(llm = llmGateway): DOADChat {
     let systemPrompt = '';
-
     readFile(join(process.cwd(), 'src/prompts/doad/chatAgent.md'), 'utf-8')
         .then(content => {
             systemPrompt = content;
@@ -39,18 +30,9 @@ export function createDOADChat(llm = llmGateway): DOADChat {
             logger.error('Failed to load chat prompt:', error);
             throw new Error('Failed to initialize DOADChat');
         });
-
     return {
         ...baseDOADImplementation,
-
-        /**
-         * Processes user message through LLM with policy context
-         * @param message - Current user query
-         * @param userHistory - Conversation history array
-         * @param policyContext - Combined policy documents text
-         * @param req - HTTP request for rate limiting
-         * @returns ChatResponse with formatted answer and citations
-         */
+        // Processes user message through LLM with policy context
         async handleMessage(
             message: string, 
             userHistory: Message[], 
@@ -59,45 +41,41 @@ export function createDOADChat(llm = llmGateway): DOADChat {
         ): Promise<ChatResponse> {
             try {
                 logger.info('Processing chat response');
-
                 // Add timestamp to new message
                 const newMessage: Message = {
                     role: 'user',
                     content: message,
                     timestamp: new Date().toISOString()
                 };
-
                 // Combine history with new message
                 const messages = userHistory.length > 0 ? userHistory : [];
                 if (!messages.some(m => m.content === message)) {
                     messages.push(newMessage);
                 }
-
+                // Create LLM request
                 const request: LLMRequest = {
                     messages,
                     systemPrompt: systemPrompt.replace('{policies_content}', policyContext),
                     model: MODELS.doad.chat
                 };
-
                 logger.debug('Chat agent request:', {
                     messageCount: messages.length,
                     hasSystemPrompt: !!request.systemPrompt,
                     policyContextLength: policyContext.length
                 });
-
+                // Get response
                 const response = await llm.query(request);
-                
+                // Track successful request
                 if (req) {
                     rateLimiter.trackSuccessfulRequest(req);
                 }
-
                 return {
                     answer: response.content,
                     citations: [],
                     followUp: ''
                 };
-
             } catch (error) {
+                // Log agent error
                 this.logAgentError('chat', error instanceof Error ? error : new Error(String(error)), {
                     messageLength: message.length,
                     historyLength: userHistory.length,
