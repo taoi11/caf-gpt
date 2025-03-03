@@ -19,14 +19,12 @@ const policyRouter = createPolicyRouter();
 const server = createServer(async (req, res) => {
     const url = req.url || '/';
     const method = req.method || 'GET';
-
+    // Log incoming request
     logger.debug(`Incoming request: ${method} ${url}`);
-
     // Pace note endpoint
     if (url === '/api/paceNotes/generate') {
         return handlePaceNoteRequest(req, res);
     }
-
     // Policy endpoint
     if (url === '/api/policyfoo/doad/generate' && method === 'POST') {
         let body = '';
@@ -34,7 +32,6 @@ const server = createServer(async (req, res) => {
         req.on('end', async () => {
             try {
                 const data = JSON.parse(body);
-                
                 // Validate conversation history
                 const history = Array.isArray(data.conversationHistory) 
                     ? data.conversationHistory.filter((msg: { role?: string; content?: string }) => 
@@ -43,18 +40,20 @@ const server = createServer(async (req, res) => {
                         (msg.role === 'user' || msg.role === 'assistant')
                       )
                     : [];
-
+                // Handle policy request
                 const response = await policyRouter.handleRequest(
                     data.tool,
                     data.message,
                     history,
                     req
                 );
-                
+                // Write response
                 res.writeHead(200, { 'Content-Type': 'application/json' });
                 res.end(JSON.stringify(response));
+                // Log request
                 logger.logRequest(method, url, 200);
             } catch (error) {
+                // Log error
                 const err = error instanceof Error ? error : new Error('Unknown error');
                 logger.error('Policy request error', {
                     error: err.message,
@@ -70,7 +69,6 @@ const server = createServer(async (req, res) => {
         });
         return;
     }
-
     // Rate limit info endpoint
     if (url === '/api/ratelimit') {
         const limits = rateLimiter.getLimitInfo(req);
@@ -79,7 +77,6 @@ const server = createServer(async (req, res) => {
         logger.debug('Rate limit info request', { limits });
         return;
     }
-
     // Enhanced health check endpoint
     if (url === '/health') {
         const healthStatus = getHealthStatus();
@@ -87,7 +84,6 @@ const server = createServer(async (req, res) => {
         res.end(JSON.stringify(healthStatus));
         return;
     }
-
     // Cost endpoint with improved error handling
     if (url === '/api/costs' && method === 'GET') {
         try {
@@ -111,15 +107,12 @@ const server = createServer(async (req, res) => {
             return;
         }
     }
-
     // Serve static files
     try {
         // Default to index.html for root path
         const filePath = (url === '/' ? '/index.html' : url) as string;
         const fullPath = join(process.cwd(), 'public', filePath);
-        
         const content = await readFile(fullPath);
-        
         // Set content type based on file extension
         const ext = filePath.split('.').pop() || '';
         const contentTypes: Record<string, string> = {
@@ -129,7 +122,6 @@ const server = createServer(async (req, res) => {
             'json': 'application/json',
             'ico': 'image/x-icon'
         };
-        
         res.writeHead(200, { 'Content-Type': contentTypes[ext] || 'text/plain' });
         res.end(content);
         logger.logRequest(method, url, 200);
@@ -147,17 +139,15 @@ const server = createServer(async (req, res) => {
         logger.logRequest(method, url, 404);
     }
 });
-
 // Start the server
 server.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
-    
     // Run quick startup after server is listening
     quickStartup().catch(error => {
         logger.error('Quick startup failed', {
             error: error instanceof Error ? error.message : String(error)
         });
     });
-    
+    // Log debug logging enabled
     logger.debug('Debug logging enabled');
 }); 

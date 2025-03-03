@@ -4,14 +4,16 @@ import { IncomingMessage, ServerResponse } from 'http';
 // ----------
 // Message Types (shared between client and server)
 // ----------
-export type MessageRole = 'user' | 'assistant' | 'system';
 
+// Message role
+export type MessageRole = 'user' | 'assistant' | 'system';
+// Message interface
 export interface Message {
     role: MessageRole;
     content: string;
     timestamp: string;
 }
-
+// System message interface
 export interface SystemMessage {
     role: 'system';
     content: string;
@@ -20,6 +22,7 @@ export interface SystemMessage {
 // ----------
 // API Response Types
 // ----------
+
 export interface ApiResponse<T> {
     success: boolean;
     data?: T;
@@ -29,6 +32,8 @@ export interface ApiResponse<T> {
 // ----------
 // HTTP & Server Related Types
 // ----------
+
+// Policy handler interface
 export interface PolicyHandler {
     handleMessage(
         message: string, 
@@ -36,7 +41,7 @@ export interface PolicyHandler {
         req?: IncomingMessage
     ): Promise<ChatResponse>;
 }
-
+// Policy router interface
 export interface PolicyRouter {
     handleRequest(
         tool: PolicyTool,
@@ -58,7 +63,7 @@ export interface LogEntry {
         [key: string]: unknown;
     };
 }
-
+// LLM interaction data
 export interface LLMInteractionData {
     role: MessageRole;
     content: string;
@@ -77,7 +82,7 @@ export interface LLMInteractionData {
         [key: string]: unknown;
     };
 }
-
+// DOAD logger interface
 export interface DOADLogger {
     logAgentInteraction(type: 'finder' | 'chat', data: LLMInteractionData): void;
     logAgentError(type: 'finder' | 'chat', error: Error, metadata?: Record<string, unknown>): void;
@@ -86,6 +91,8 @@ export interface DOADLogger {
 // ----------
 // LLM Core Types
 // ----------
+
+// LLM request interface
 export interface LLMRequest {
     messages: Message[];
     systemPrompt?: string;      // Separate system prompt from conversation
@@ -93,7 +100,7 @@ export interface LLMRequest {
     model?: string;
     maxContextLength?: number;
 }
-
+// LLM response interface
 export interface LLMResponse {
     content: string;
     model: string;
@@ -103,7 +110,7 @@ export interface LLMResponse {
         total_tokens: number;
     };
 }
-
+// LLM error interface
 export interface LLMError {
     code: string;
     message: string;
@@ -113,22 +120,24 @@ export interface LLMError {
 // ----------
 // Rate Limiting Types
 // ----------
+
+// Rate window interface
 export interface RateWindow {
     timestamps: number[];  // Array of request timestamps in milliseconds
 }
-
+// Rate limit interface
 export interface RateLimit {
     ip: string;
     hourly: RateWindow;
     daily: RateWindow;
     lastCleanup: number;  // Track last cleanup time
 }
-
+// Rate limit info interface
 export interface RateLimitInfo {
     hourly: { remaining: number; resetIn: number };
     daily: { remaining: number; resetIn: number };
 }
-
+// Node rate limiter interface
 export interface NodeRateLimiter {
     canMakeRequest(req: IncomingMessage): boolean | Promise<boolean>;
     trackSuccessfulRequest(req: IncomingMessage): void;
@@ -139,6 +148,8 @@ export interface NodeRateLimiter {
 // ----------
 // Cost Tracking Types
 // ----------
+
+// Cost data interface
 export interface CostData {
     apiCosts: number;        // Monthly LLM API costs in USD
     serverCosts: number;     // Monthly server costs in USD
@@ -149,14 +160,16 @@ export interface CostData {
 // ----------
 // Policy Types
 // ----------
-export type PolicyTool = 'doadFoo';
 
+// Policy tool type
+export type PolicyTool = 'doadFoo';
+// Policy request interface
 export interface PolicyRequest {
     tool: PolicyTool;
     message: string;
     conversationHistory?: Message[];
 }
-
+// Policy document interface
 export interface PolicyDocument {
     docId: string;
     content: string;
@@ -167,17 +180,19 @@ export interface PolicyDocument {
 // ----------
 // DOAD Types
 // ----------
+
+// Policy reference interface
 export interface PolicyReference {
     docId: string;          // DOAD number (e.g., "10001-1")
     section?: string;       // Policy section (e.g., "5.1")
 }
-
+// Chat response interface
 export interface ChatResponse {
     answer: string;         // Main response to user
     citations: string[];    // List of DOAD references used
     followUp?: string;      // Optional follow-up suggestions
 }
-
+// DOAD handler interface
 export interface DOADHandler {
     getDOADPath(doadNumber: string): string;
     isValidDOADNumber(doadNumber: string): boolean;
@@ -186,12 +201,12 @@ export interface DOADHandler {
     formatResponse(response: ChatResponse): ChatResponse;
     getDOADContent(doadNumber: string): Promise<string>;
 }
-
+// DOAD finder interface
 export interface DOADFinder extends DOADHandler {
     handleMessage(message: string, history?: Message[]): Promise<string[]>;
     logAgentError(type: 'finder', error: Error, metadata?: Record<string, unknown>): void;
 }
-
+// DOAD chat interface
 export interface DOADChat {
     handleMessage(
         message: string,
@@ -202,11 +217,11 @@ export interface DOADChat {
     
     logAgentError(type: 'chat', error: Error, metadata?: Record<string, unknown>): void;
 }
-
+// DOAD implementation interface
 export interface DOADImplementation extends DOADHandler {
     initialize(): Promise<void>;
 }
-
+// DOAD prompts interface
 export interface DOADPrompts {
     chatAgent: string;
     finderAgent: string;
@@ -215,11 +230,13 @@ export interface DOADPrompts {
 // ----------
 // PaceNote Types
 // ----------
+
+// Pace note request interface
 export interface PaceNoteRequest {
     input: string;
     rank: string;
 }
-
+// Pace note response interface
 export interface PaceNoteResponse {
     content: string;
     timestamp: string;
@@ -229,12 +246,14 @@ export interface PaceNoteResponse {
 // ----------
 // Client UI Types
 // ----------
+
+// UI state interface
 export interface UIState {
     inputText: string;          // Only this persists on refresh
     messages: Message[];        // Cleared on refresh
     isProcessing: boolean;
 }
-
+// UI elements interface
 export interface UIElements {
     userInput: HTMLTextAreaElement;
     sendButton: HTMLButtonElement;

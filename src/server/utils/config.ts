@@ -5,7 +5,6 @@
  */
 import 'dotenv/config';
 const env = process.env;
-
 // Validate required environment variables
 const required = [
     'PORT',
@@ -17,17 +16,15 @@ const required = [
     'S3_ACCESS_KEY',
     'S3_SECRET_KEY'
 ];
-
+// Throw error if any required variables are missing
 for (const key of required) {
     if (!env[key]) {
         throw new Error(`Missing required environment variable: ${key}`);
     }
 }
-
 // Export environment helpers
 export const IS_DEV = env.NODE_ENV !== 'production';
 export const PORT = parseInt(env.PORT || '3000', 10);
-
 // Export model configurations
 export const MODELS = {
     doad: {
@@ -36,11 +33,9 @@ export const MODELS = {
     },
     paceNote: env.PACE_NOTE_MODEL
 } as const;
-
 // Time constants in milliseconds
 export const HOUR = 60 * 60 * 1000;
 export const DAY = 24 * HOUR;
-
 // Rate limiting configuration
 export const RATE_LIMITS = {
     WHITELISTED_CIDRS: [

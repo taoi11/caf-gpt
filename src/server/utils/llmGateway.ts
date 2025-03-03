@@ -1,3 +1,8 @@
+/**
+ * LLM API gateway that manages communication with external language model providers.
+ * Handles request formatting, concurrent connection management, system prompting,
+ * response processing, and error handling while integrating with the cost tracking system.
+ */
 import { logger } from './logger';
 import { costTracker } from './costTracker';
 import type { LLMRequest, LLMResponse, LLMError, Message, SystemMessage } from '../types';
@@ -14,55 +19,35 @@ const OPENROUTER_AUTH_URL = 'https://openrouter.ai/api/v1/auth/key';
 const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
 const LLM_MODEL = process.env.PACE_NOTE_MODEL || '';
 
-/**
- * LLM API gateway that manages communication with external language model providers.
- * Handles request formatting, concurrent connection management, system prompting,
- * response processing, and error handling while integrating with the cost tracking system.
- */
+// LLM Gateway class
 class LLMGateway {
-    /**
-     * Manages concurrent LLM API connections using a simple pool pattern.
-     * Ensures we never exceed MAX_CONCURRENT_REQUESTS simultaneous requests
-     * by tracking active request count and queueing when necessary.
-     */
     private activeRequests = 0;
-
-    /**
-     * Validates if the OpenRouter API key is valid
-     * @param apiKey - Optional API key to validate (uses environment API key if not provided)
-     * @returns True if the API key is valid, false otherwise
-     */
     public async validateApiKey(apiKey?: string): Promise<boolean> {
         try {
             const keyToValidate = apiKey || OPENROUTER_API_KEY;
-            
+            // Validate API key
             if (!keyToValidate) {
                 logger.warn('No API key provided for validation');
                 return false;
             }
-
+            // Fetch API key validation response
             const response = await fetch(OPENROUTER_AUTH_URL, {
                 method: 'GET',
                 headers: {
                     'Authorization': `Bearer ${keyToValidate}`,
                 }
             });
-            
+            // Return true if response is successful
             return response.ok;
         } catch (error) {
+            // Log error
             logger.error('API key validation failed', {
                 error: error instanceof Error ? error.message : 'Unknown error',
             });
             return false;
         }
     }
-
-    /**
-     * Executes LLM request with concurrency control and logging
-     * @param request - LLM request parameters including messages and model config
-     * @returns Processed LLM response
-     * @throws LLMError for API failures or rate limits
-     */
+    // Executes LLM request with concurrency control and logging
     public async query(request: LLMRequest): Promise<LLMResponse> {
         try {
             // Wait if too many active requests
@@ -70,20 +55,16 @@ class LLMGateway {
                 throw new Error('Too many concurrent requests');
             }
             this.activeRequests++;
-
             // Generate request ID
             const requestId = randomUUID();
-
             // Prepare messages with system prompt if provided
             const messages = this.prepareMessages(request);
-
             // Prepare complete request body
             const requestBody = {
                 model: request.model || LLM_MODEL,
                 messages,
                 temperature: request.temperature || DEFAULT_TEMPERATURE
             };
-
             // Log request
             logger.logLLMInteraction({
                 role: 'system',
@@ -97,7 +78,7 @@ class LLMGateway {
                     timestamp: new Date().toISOString()
                 }
             });
-
+            // Fetch LLM response
             const response = await fetch(OPENROUTER_API_URL, {
                 method: 'POST',
                 headers: {
@@ -106,24 +87,22 @@ class LLMGateway {
                 },
                 body: JSON.stringify(requestBody)
             });
-
+            // Check if response is successful
             if (!response.ok) {
                 const error = await response.json();
                 throw this.handleError(error);
             }
-
+            // Parse LLM response
             const result = await response.json();
             const llmResponse: LLMResponse = {
                 content: result.choices[0].message.content,
                 model: result.model,
                 usage: result.usage
             };
-
             // Track costs
             if (result.usage) {
                 await costTracker.trackUsage(result.usage);
             }
-
             // Log response with same request ID
             logger.logLLMInteraction({
                 role: 'assistant',
@@ -137,10 +116,9 @@ class LLMGateway {
                     rawResponse: result // Include full response for debugging
                 }
             });
-
             return llmResponse;
-
         } catch (error) {
+            // Log error
             const err = error instanceof Error ? error : new Error('Unknown error');
             logger.error('LLM request failed', {
                 error: err.message,
@@ -154,18 +132,9 @@ class LLMGateway {
             this.activeRequests--;
         }
     }
-
-    /**
-     * Processes message history for LLM requests:
-     * - Applies context window limits
-     * - Prepends system prompt if provided
-     * - Trims long system messages in dev mode
-     * @param request - LLM request parameters
-     * @returns Prepared messages array for API consumption
-     */
+    // Prepares messages for LLM request
     private prepareMessages(request: LLMRequest): (Message | SystemMessage)[] {
         let messages = request.messages;
-
         // Apply context length limit if specified
         const maxContext = request.maxContextLength || DEFAULT_MAX_CONTEXT;
         if (messages.length > maxContext) {
@@ -176,7 +145,6 @@ class LLMGateway {
                 maxContext
             });
         }
-
         // Add system prompt if provided
         if (request.systemPrompt) {
             const systemMessage: SystemMessage = {
@@ -185,15 +153,9 @@ class LLMGateway {
             };
             return [systemMessage, ...messages];
         }
-
         return messages;
     }
-
-    /**
-     * Maps OpenRouter API errors to standardized LLMError format
-     * @param error - Raw error from API response
-     * @returns Normalized error object with classification
-     */
+    // Handles OpenRouter API errors
     private handleError(error: unknown): LLMError {
         // Map OpenRouter error to our error type
         const errorObj = error as { error?: { type?: string, code?: string, message?: string } };
@@ -205,6 +167,5 @@ class LLMGateway {
         };
     }
 }
-
 // Export singleton instance
 export const llmGateway = new LLMGateway(); 

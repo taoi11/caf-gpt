@@ -7,6 +7,7 @@ import { S3Client, GetObjectCommand } from "@aws-sdk/client-s3";
 import { logger } from './logger';
 import type { PolicyDocument } from '../types';
 
+// S3 configuration
 const s3Config = {
     endpoint: process.env.S3_ENDPOINT || 'https://gateway.storjshare.io',
     region: process.env.S3_REGION || 'us-1',
@@ -16,45 +17,36 @@ const s3Config = {
         secretAccessKey: process.env.S3_SECRET_KEY || ''
     }
 };
-
+// Initialize S3 client
 logger.debug('Initializing S3 client with config:', {
     endpoint: s3Config.endpoint,
     bucket: process.env.S3_BUCKET || 'policies',
     forcePathStyle: true
 });
-
 export const s3Client = new S3Client(s3Config);
 
-/**
- * S3 client wrapper for policy document storage operations.
- * Provides validated access to policy documents and raw content storage,
- * with integrated error handling and request logging for S3 interactions.
- */
+// S3 utility functions
 export const s3Utils = {
-    /**
-     * Retrieves a policy document from S3 storage
-     * @param docId - Document identifier (DOAD number)
-     * @param group - Policy group/directory (default: 'doad')
-     * @returns PolicyDocument with content and metadata
-     * @throws Error if document retrieval fails or content is empty
-     */
+    // Fetches a policy document from S3
     async fetchDocument(docId: string, group: string = 'doad'): Promise<PolicyDocument> {
         try {
             const key = `${group}/${docId}.md`;
             logger.debug(`Fetching document: ${key}`);
-            
+            // Fetch document from S3
             const response = await s3Client.send(new GetObjectCommand({
                 Bucket: process.env.S3_BUCKET || 'policies',
                 Key: key,
             }));
-
+            // Get content from response
             const content = await response.Body?.transformToString();
+            // Check if content is empty
             if (!content) {
                 logger.error(`Empty content received for document ${key}`);
                 throw new Error(`Empty content for document ${docId}`);
             }
-
+            // Log success
             logger.debug(`Successfully fetched document ${key}`);
+            // Return document
             return {
                 docId,
                 content,
@@ -70,27 +62,22 @@ export const s3Utils = {
             throw error;
         }
     },
-
-    /**
-     * Fetches raw content from S3 without document validation
-     * @param path - Full S3 object path
-     * @returns Raw content as string
-     */
+    // Fetches raw content from S3
     async fetchRawContent(path: string): Promise<string> {
         try {
             logger.debug(`Fetching raw content from path: ${path}`);
-            
+            // Fetch content from S3
             const response = await s3Client.send(new GetObjectCommand({
                 Bucket: process.env.S3_BUCKET || 'policies',
                 Key: path
             }));
-
+            // Get content from response
             const content = await response.Body?.transformToString() || '';
-            
+            // Check if content is empty
             if (!content) {
                 logger.warn(`Empty content received for path ${path}`);
             }
-
+            // Return content
             return content;
         } catch (error) {
             logger.error('Failed to get content', {

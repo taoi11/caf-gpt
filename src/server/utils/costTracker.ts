@@ -7,9 +7,11 @@ import { dbClient } from './dbClient';
 import { appState } from './bootup';
 import type { CostData, LLMResponse } from '../types';
 
-const MONTHLY_SERVER_COST = 15.70; // Base monthly server cost in USD
+// Base monthly server cost in USD
+const MONTHLY_SERVER_COST = 15.70; 
+// OpenRouter API key
 const OPENROUTER_API_KEY = process.env.LLM_API_KEY || '';
-
+// Cost tracker class
 class CostTracker {
     private data: CostData = {
         apiCosts: 0,
@@ -17,18 +19,12 @@ class CostTracker {
         lastReset: new Date().toISOString().split('T')[0],
         lastUpdated: new Date().toISOString()
     };
-    
     constructor() {
         this.initializeStorage().catch(error => {
             logger.error('Failed to initialize cost tracker:', error);
         });
     }
-
-    /**
-     * Initializes cost tracking system by loading persisted data and
-     * checking for monthly reset conditions. Handles database connection
-     * states gracefully.
-     */
+    // Initializes cost tracking by loading data, checking monthly reset, and handling DB states
     private async initializeStorage(): Promise<void> {
         try {
             await this.loadData();
@@ -37,18 +33,15 @@ class CostTracker {
             logger.error('Failed to initialize storage', {
                 error: error instanceof Error ? error.message : String(error)
             });
-            // Continue with default values
         }
     }
-
+    // Checks if it's the first day of the month and performs monthly cost reset if needed
     private async checkMonthlyReset(): Promise<void> {
         const now = new Date();
         const today = now.toISOString().split('T')[0];
-        
         // Check if it's the first day of the month
         if (now.getDate() === 1) {
             const lastResetDate = new Date(this.data.lastReset);
-            
             // Only reset if we haven't already reset this month
             if (lastResetDate.getMonth() !== now.getMonth() || 
                 lastResetDate.getFullYear() !== now.getFullYear()) {
@@ -60,7 +53,7 @@ class CostTracker {
             }
         }
     }
-
+    // Loads cost data from database
     private async loadData(): Promise<void> {
         try {
             // Only attempt to load data if database is connected
@@ -68,11 +61,11 @@ class CostTracker {
                 logger.warn('Database not connected, using default cost values');
                 return;
             }
-            
+            // Query database for cost data
             const result = await dbClient.query(
                 'SELECT api_costs, server_costs, last_reset::text, last_updated::text FROM costs WHERE id = 1'
             );
-            
+            // If data is found, update cost tracker
             if (result.rows.length > 0) {
                 const row = result.rows[0];
                 this.data = {
@@ -93,7 +86,7 @@ class CostTracker {
             // Continue with default values
         }
     }
-
+    // Persists cost data to database and handles connection failures
     private async saveData(): Promise<void> {
         try {
             // Only attempt to save data if database is connected
@@ -101,7 +94,7 @@ class CostTracker {
                 logger.warn('Database not connected, skipping cost data save');
                 return;
             }
-            
+            // Update database with cost data
             await dbClient.query(
                 'UPDATE costs SET api_costs = $1, server_costs = $2, last_reset = $3, last_updated = $4 WHERE id = 1',
                 [this.data.apiCosts, this.data.serverCosts, this.data.lastReset, this.data.lastUpdated]
@@ -114,12 +107,7 @@ class CostTracker {
             // Continue without saving - will try again next time
         }
     }
-
-    /**
-     * Fetches actual API costs from OpenRouter's generation endpoint
-     * @param genId - Unique generation ID from LLM response
-     * @returns Resolved cost in USD, 0 on failure
-     */
+    // Fetches API costs from OpenRouter using generation ID, returns USD cost or 0 on error
     private async fetchGenerationCost(genId: string): Promise<number> {
         try {
             // Add required OpenRouter headers
@@ -130,7 +118,7 @@ class CostTracker {
                     'X-Title': 'CAF-GPT'
                 }
             });
-
+            // Check if response is successful
             if (!response.ok) {
                 // Enhanced error logging
                 const errorBody = await response.text();
@@ -142,8 +130,9 @@ class CostTracker {
                 });
                 throw new Error(`Failed to fetch generation cost: ${response.status} ${response.statusText}`);
             }
-
+            // Parse response JSON  
             const data = await response.json();
+            // Return total cost or 0 if not found
             return data.data.total_cost || 0;
         } catch (error) {
             logger.error('Error fetching generation cost', {
@@ -153,25 +142,17 @@ class CostTracker {
             return 0;
         }
     }
-
-    /**
-     * Tracks API costs using OpenRouter's generation endpoint
-     * @param genId - OpenRouter generation ID from API response
-     */
-    /**
-     * Updates cost tracking with new API usage
-     * @param genId - Generation ID from successful LLM response
-     */
+    // Tracks API costs via OpenRouter generation ID and updates usage
     public async trackRequest(genId: string): Promise<void> {
         // Wait 1 second before fetching cost to ensure generation is complete
         await new Promise(resolve => setTimeout(resolve, 1000));
-
+        // Fetch cost from OpenRouter
         const cost = await this.fetchGenerationCost(genId);
         if (cost > 0) {
             this.data.apiCosts += cost;
             this.data.lastUpdated = new Date().toISOString();
             await this.saveData();
-            
+            // Log cost tracking
             logger.debug('Cost tracked:', {
                 generationId: genId,
                 cost: cost.toFixed(6),
@@ -179,40 +160,26 @@ class CostTracker {
             });
         }
     }
-
-    /**
-     * Estimates costs based on token usage from LLM responses
-     * @param usage - Token usage data from LLM response
-     */
-    /**
-     * Estimates costs from token usage when exact costs unavailable
-     * @param usage - Token counts from LLM response
-     */
+    // Estimates costs based on token usage from LLM responses
     public async trackUsage(usage: LLMResponse['usage']): Promise<void> {
         if (!usage) return;
-
         // Estimate cost based on token usage (simplified calculation)
         const cost = (usage.prompt_tokens + usage.completion_tokens) * 0.000001; // $0.001 per 1K tokens
-        
+        // Update cost tracking
         this.data.apiCosts += cost;
         this.data.lastUpdated = new Date().toISOString();
         await this.saveData();
-        
+        // Log usage tracking
         logger.debug('Usage tracked:', {
             tokens: usage.total_tokens,
             cost: cost.toFixed(6),
             totalApiCost: this.data.apiCosts.toFixed(6)
         });
     }
-
-    /**
-     * Returns current cost data
-     * Always returns data even if database operations fail
-     */
+    // Returns current cost data
     public getCostData(): CostData {
         return { ...this.data };
     }
 }
-
 // Export singleton instance
 export const costTracker = new CostTracker(); 
