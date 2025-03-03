@@ -1,7 +1,12 @@
 /**
- * Core agent for generating standardized performance notes. Handles prompt
- * management, competency data loading, and LLM interactions. Maintains
- * read-only access to templates and S3 data sources.
+ * Core agent for generating standardized CAF performance notes. Handles:
+ * - Prompt template management
+ * - Competency data loading from S3
+ * - LLM interaction orchestration
+ * - Response formatting and logging
+ * 
+ * Maintains read-only access to templates and external data sources following
+ * strict data integrity policies.
  */
 import { GetObjectCommand } from "@aws-sdk/client-s3";
 import { s3Client } from "../../utils/s3Client";
@@ -23,12 +28,11 @@ import type { PaceNoteRequest, PaceNoteResponse, Message } from "../../types";
  */
 class PaceNoteAgent {
     /**
-     * Initializes a new PaceNoteAgent instance
-     * @constructor
-     * @param promptPath - Filesystem path to system prompt template
-     * @param examplesPath - Filesystem path to example notes
-     * @param systemPrompt - Loaded system prompt content
-     * @param examples - Loaded example notes content
+     * Initializes a new PaceNoteAgent instance with required paths
+     * @param promptPath - Absolute filesystem path to system prompt template
+     * @param examplesPath - Absolute filesystem path to example notes
+     * @param systemPrompt - Loaded system prompt content (initialized empty)
+     * @param examples - Loaded example notes content (initialized empty)
      */
     private readonly promptPath: string;
     private readonly examplesPath: string;
@@ -46,8 +50,8 @@ class PaceNoteAgent {
 
     /**
      * Loads prompt templates from filesystem during initialization
-     * @throws Error if template files cannot be loaded
-     * @returns Promise resolving when templates are loaded
+     * @throws {Error} If template files cannot be loaded or are empty
+     * @returns {Promise<void>} Resolves when templates are loaded successfully
      */
     private async initializePrompts(): Promise<void> {
         try {
@@ -82,9 +86,9 @@ class PaceNoteAgent {
 
     /**
      * Retrieves competency data from configured S3 bucket
-     * @param path - S3 object path for competency data
-     * @throws Error if S3 retrieval fails or returns empty data
-     * @returns Promise resolving with competency markdown content
+     * @param {string} [path='paceNote/cpl_mcpl.md'] - S3 object path for competency data
+     * @throws {Error} If S3 retrieval fails or returns empty data
+     * @returns {Promise<string>} Markdown-formatted competency list
      */
     private async readCompetencies(path: string = 'paceNote/cpl_mcpl.md'): Promise<string> {
         try {
@@ -111,10 +115,10 @@ class PaceNoteAgent {
     }
 
     /**
-     * Generates a formatted pace note from user input
-     * @param request - PaceNoteRequest containing input text and rank
-     * @returns Promise resolving with formatted PaceNoteResponse
-     * @throws Error if any generation step fails
+     * Generates a formatted pace note from validated user input
+     * @param {PaceNoteRequest} request - Validated request containing input text and rank
+     * @returns {Promise<PaceNoteResponse>} Structured response with generated content
+     * @throws {Error} If any generation step fails (prompt loading, competency fetch, LLM error)
      */
     public async generateNote(request: PaceNoteRequest): Promise<PaceNoteResponse> {
         // Ensure prompts are loaded
