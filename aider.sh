@@ -14,7 +14,6 @@ aider \
   --file "src/server/utils/llmGateway.ts" \
   --file "src/server/utils/rateLimiter.ts" \
   --file "src/server/utils/s3Client.ts" \
-  --file "src/server/index.ts" \
   --yes
 
 # Aider second run
@@ -29,5 +28,4 @@ aider \
   --file "src/server/utils/llmGateway.ts" \
   --file "src/server/utils/rateLimiter.ts" \
   --file "src/server/utils/s3Client.ts" \
-  --file "src/server/index.ts" \
   --yes

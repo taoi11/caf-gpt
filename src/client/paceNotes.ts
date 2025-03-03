@@ -152,10 +152,6 @@ class PaceNotesUI {
             // Display the result
             this.addOutput(result.data.content, result.data.timestamp);
             
-            // Clear input after successful generation
-            this.inputBox.value = '';
-            sessionStorage.setItem(SESSION_KEY, '');
-            
             // Update rate limits after successful generation
             await rateLimiter.updateLimits();
 

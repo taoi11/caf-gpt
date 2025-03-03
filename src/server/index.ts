@@ -22,11 +22,12 @@ const server = createServer(async (req, res) => {
 
     logger.debug(`Incoming request: ${method} ${url}`);
 
-    // API endpoints
+    // Pace note endpoint
     if (url === '/api/paceNotes/generate') {
         return handlePaceNoteRequest(req, res);
     }
 
+    // Policy endpoint
     if (url === '/api/policyfoo/doad/generate' && method === 'POST') {
         let body = '';
         req.on('data', chunk => body += chunk);
@@ -147,6 +148,7 @@ const server = createServer(async (req, res) => {
     }
 });
 
+// Start the server
 server.listen(PORT, () => {
     logger.info(`Server running on port ${PORT}`);
     
