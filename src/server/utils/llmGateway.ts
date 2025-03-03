@@ -150,6 +150,14 @@ class LLMGateway {
         }
     }
 
+    /**
+     * Processes message history for LLM requests:
+     * - Applies context window limits
+     * - Prepends system prompt if provided
+     * - Trims long system messages in dev mode
+     * @param request - LLM request parameters
+     * @returns Prepared messages array for API consumption
+     */
     private prepareMessages(request: LLMRequest): (Message | SystemMessage)[] {
         let messages = request.messages;
 
@@ -176,6 +184,11 @@ class LLMGateway {
         return messages;
     }
 
+    /**
+     * Maps OpenRouter API errors to standardized LLMError format
+     * @param error - Raw error from API response
+     * @returns Normalized error object with classification
+     */
     private handleError(error: unknown): LLMError {
         // Map OpenRouter error to our error type
         const errorObj = error as { error?: { type?: string, code?: string, message?: string } };

@@ -110,6 +110,11 @@ class CostTracker {
         }
     }
 
+    /**
+     * Fetches actual API costs from OpenRouter's generation endpoint
+     * @param genId - Unique generation ID from LLM response
+     * @returns Resolved cost in USD, 0 on failure
+     */
     private async fetchGenerationCost(genId: string): Promise<number> {
         try {
             // Add required OpenRouter headers
@@ -148,6 +153,10 @@ class CostTracker {
      * Tracks API costs using OpenRouter's generation endpoint
      * @param genId - OpenRouter generation ID from API response
      */
+    /**
+     * Updates cost tracking with new API usage
+     * @param genId - Generation ID from successful LLM response
+     */
     public async trackRequest(genId: string): Promise<void> {
         // Wait 1 second before fetching cost to ensure generation is complete
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -169,6 +178,10 @@ class CostTracker {
     /**
      * Estimates costs based on token usage from LLM responses
      * @param usage - Token usage data from LLM response
+     */
+    /**
+     * Estimates costs from token usage when exact costs unavailable
+     * @param usage - Token counts from LLM response
      */
     public async trackUsage(usage: LLMResponse['usage']): Promise<void> {
         if (!usage) return;

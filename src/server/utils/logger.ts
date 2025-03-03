@@ -92,6 +92,10 @@ class Logger {
      * @param data - Interaction data including metadata and content
      * @remarks Only active in development mode, silences in production
      */
+    /**
+     * Tracks LLM request/response lifecycle with timing data
+     * @param data - Interaction data including metadata
+     */
     async logLLMInteraction(data: LLMInteractionData): Promise<void> {
         if (!IS_DEV) return;
 
@@ -173,6 +177,13 @@ class Logger {
         }
     }
 
+    /**
+     * Creates structured log entry with common metadata
+     * @param level - Log severity level
+     * @param message - Human-readable log message
+     * @param metadata - Additional context data
+     * @returns Complete log entry object
+     */
     private createLogEntry(level: LogLevel, message: string, metadata?: Record<string, unknown>): LogEntry {
         return {
             timestamp: new Date().toISOString(),

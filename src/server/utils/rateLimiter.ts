@@ -1,7 +1,8 @@
 /**
- * Rate limiting implementation that protects API endpoints from abuse.
- * Tracks requests by IP address with sliding window counters for both hourly and daily limits,
- * supports whitelisting via CIDR notation, and provides diagnostic information about limits.
+ * IP-based rate limiting system with hourly/daily windows and CIDR whitelists.
+ * Implements sliding window counters with automated cleanup of stale entries.
+ * Tracks request timestamps per IP, provides client-facing limit headers,
+ * and integrates with application logging for diagnostics.
  */
 import { IncomingMessage, ServerResponse } from 'http';
 import { logger } from './logger';
@@ -147,6 +148,11 @@ class RateLimiter implements NodeRateLimiter {
      * @param req - Incoming HTTP request
      * @returns True if request is permitted, false if rate limited
      */
+    /**
+     * Checks if request is allowed under current rate limits
+     * @param req - Incoming HTTP request to evaluate
+     * @returns True if request is within allowed limits, false if rate limited
+     */
     public canMakeRequest(req: IncomingMessage): boolean {
         const ip = this.getClientIP(req);
         if (this.isWhitelisted(ip)) return true;
@@ -178,6 +184,10 @@ class RateLimiter implements NodeRateLimiter {
     /**
      * Records successful request in rate limit windows
      * @param req - Incoming HTTP request to track
+     */
+    /**
+     * Records successful request in rate limit windows
+     * @param req - Request to track in rate limit counters
      */
     public trackSuccessfulRequest(req: IncomingMessage): void {
         const ip = this.getClientIP(req);
@@ -212,6 +222,11 @@ class RateLimiter implements NodeRateLimiter {
         }
     }
 
+    /**
+     * Gets current rate limit state for a client
+     * @param req - Request to get limits for
+     * @returns Object with hourly/daily remaining counts and reset times
+     */
     public getLimitInfo(req: IncomingMessage): RateLimitInfo {
         const ip = this.getClientIP(req);
         
