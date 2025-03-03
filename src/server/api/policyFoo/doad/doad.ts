@@ -1,3 +1,8 @@
+/**
+ * DOAD policy implementation core - provides document retrieval, content processing,
+ * and orchestration between finder/chat agents. Implements S3 integration for
+ * policy document storage and retrieval.
+ */
 import type { Message, LLMInteractionData, DOADFinder, DOADImplementation, ChatResponse, PolicyHandler, DOADLogger, DOADChat } from '../../../types';
 import type { FormattedPolicyHandler, ResponseFormatter } from '../policyFoo';
 import { logger } from '../../../utils/logger';
@@ -11,6 +16,10 @@ import { IncomingMessage } from 'http';
 interface DOADManagerImpl extends DOADImplementation, DOADLogger, ResponseFormatter {}
 
 // Base implementation for DOAD handlers
+/**
+ * Base DOAD implementation providing common functionality for all DOAD handlers.
+ * Includes document path resolution, validation, logging, and content retrieval.
+ */
 export const baseDOADImplementation: DOADManagerImpl = {
     validateRequest(message: string): boolean {
         return message.trim().length > 0;

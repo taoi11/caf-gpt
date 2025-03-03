@@ -1,3 +1,7 @@
+/**
+ * DOAD Finder Agent - Identifies relevant policy documents for user queries.
+ * Uses LLM to analyze messages/history and extract applicable DOAD numbers.
+ */
 import type { LLMRequest, Message, DOADFinder } from '../../../../types';
 import { baseDOADImplementation } from '../doad';
 import { logger } from '../../../../utils/logger';
@@ -6,6 +10,11 @@ import { join } from 'path';
 import { llmGateway } from '../../../../utils/llmGateway';
 import { MODELS } from '../../../../utils/config';
 
+/**
+ * Creates DOAD Finder agent instance with configured LLM integration
+ * @param llm - LLM gateway instance (defaults to shared instance)
+ * @returns Configured DOADFinder implementation
+ */
 export function createDOADFinder(llm = llmGateway): DOADFinder {
     let systemPrompt = '';
 

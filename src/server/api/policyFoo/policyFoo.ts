@@ -1,3 +1,8 @@
+/**
+ * Core policy router implementation for handling policy tool requests.
+ * Manages request routing, rate limiting, and integration of policy handlers.
+ * Provides base interfaces for extending policy tool implementations.
+ */
 import type { ApiResponse, Message, PolicyTool, ChatResponse, PolicyHandler, PolicyRouter } from '../../types';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { PolicyRequest } from '../../types';
@@ -19,6 +24,10 @@ export interface ResponseFormatter {
 export interface FormattedPolicyHandler extends PolicyHandler, ResponseFormatter {}
 
 // Default response formatter implementation
+/**
+ * Default response formatter implementation ensuring consistent response structure.
+ * Provides basic validation and response formatting for policy tool outputs.
+ */
 export const defaultResponseFormatter: ResponseFormatter = {
     validateRequest(message: string): boolean {
         return message.trim().length > 0;

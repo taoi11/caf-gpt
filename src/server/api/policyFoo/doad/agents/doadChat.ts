@@ -1,3 +1,7 @@
+/**
+ * DOAD Chat Agent - Generates responses using policy document context.
+ * Combines user conversation history with policy content for LLM processing.
+ */
 import type { LLMRequest, Message, ChatResponse, DOADChat, DOADPrompts } from '../../../../types';
 import { baseDOADImplementation } from '../doad';
 import { logger } from '../../../../utils/logger';
@@ -8,6 +12,11 @@ import { MODELS } from '../../../../utils/config';
 import { rateLimiter } from '../../../../utils/rateLimiter';
 import { IncomingMessage } from 'http';
 
+/**
+ * Creates DOAD Chat agent instance with policy context integration
+ * @param llm - LLM gateway instance (defaults to shared instance)
+ * @returns Configured DOADChat implementation
+ */
 export function createDOADChat(llm = llmGateway): DOADChat {
     let systemPrompt = '';
 
