@@ -1,6 +1,12 @@
 /**
  * DOAD Finder Agent - Identifies relevant policy documents for user queries.
  * Uses LLM to analyze messages/history and extract applicable DOAD numbers.
+ * 
+ * Responsibilities:
+ * - Maintains policy lookup prompt template
+ * - Processes LLM responses into policy numbers
+ * - Filters invalid policy references
+ * - Handles error logging
  */
 import type { LLMRequest, Message, DOADFinder } from '../../../../types';
 import { baseDOADImplementation } from '../doad';
@@ -33,6 +39,14 @@ export function createDOADFinder(llm = llmGateway): DOADFinder {
     return {
         ...baseDOADImplementation,
         
+        /**
+         * Analyzes message text to identify relevant policies
+         * @param message - User query text
+         * @param history - Conversation history context
+         * @returns Array of valid DOAD numbers from:
+         * - Direct message matches
+         * - LLM analysis of query context
+         */
         async handleMessage(message: string, history?: Message[]): Promise<string[]> {
             try {
                 // Log initial request for file logging

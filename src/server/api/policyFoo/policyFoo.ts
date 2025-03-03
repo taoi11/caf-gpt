@@ -2,6 +2,12 @@
  * Core policy router implementation for handling policy tool requests.
  * Manages request routing, rate limiting, and integration of policy handlers.
  * Provides base interfaces for extending policy tool implementations.
+ * 
+ * Responsibilities:
+ * - Maintains registry of policy handlers
+ * - Enforces rate limiting
+ * - Validates incoming requests
+ * - Orchestrates request flow between components
  */
 import type { ApiResponse, Message, PolicyTool, ChatResponse, PolicyHandler, PolicyRouter } from '../../types';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -47,7 +53,14 @@ interface PolicyRouterImpl extends PolicyRouter {
     handlers: Map<PolicyTool, PolicyHandler>;
 }
 
-// Create policy router implementation
+/**
+ * Creates concrete policy router instance with configured handlers
+ * @returns Policy router implementation with:
+ * - Handler registry
+ * - Request validation
+ * - Rate limiting enforcement
+ * - Error handling
+ */
 function createPolicyRouterImpl(): PolicyRouterImpl {
     const handlers = new Map<PolicyTool, PolicyHandler>([
         ['doadFoo', createDOADHandler()]
@@ -55,6 +68,16 @@ function createPolicyRouterImpl(): PolicyRouterImpl {
 
     return {
         handlers,
+        /**
+         * Processes policy tool request through configured handler
+         * @param tool - Policy tool identifier from client
+         * @param message - User message content
+         * @param history - Conversation history array
+         * @param req - Optional HTTP request object
+         * @returns Formatted API response with either:
+         * - Success: Chat response data
+         * - Error: Failure details
+         */
         async handleRequest(
             tool: PolicyTool,
             message: string,
