@@ -50,6 +50,7 @@
 	},
 	"dependencies": {
 		"@libsql/client": "^0.14.0",
+		"agents": "^0.0.95",
 		"drizzle-orm": "^0.40.0"
 	}
 }
