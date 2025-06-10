@@ -27,6 +27,13 @@
 Start by gaining a clear understanding of the project.
 - Overview First : Begin with `README.md`
 - Investigation : Use tools to understand current usage/dependencies before asking user
+- Study : fetch docs for each Cloudflare product by appending `llms-full.txt` to the root URL.
+  - for example: 
+    - https://developers.cloudflare.com/agents/llms-full.txt
+    - https://developers.cloudflare.com/ai-gateway/llms-full.txt
+    - https://developers.cloudflare.com/workers/llms-full.txt
+    - https://developers.cloudflare.com/r2/llms-full.txt
+    - https://developers.cloudflare.com/d1/llms-full.txt
 - Ask user: ask user for more info if you can get it yourself.
 - Notepad : Create a file in `.ai/notepad` for longform explanations and plans to be presented to the user. (optional)
 
@@ -45,12 +52,15 @@ Start by gaining a clear understanding of the project.
 - Use Sveltekit builtins 
 - Place reusable code in core/ 
 - Keep the README files updated and accurate.
+- Optimize for cold starts
+- Minimize unnecessary computation
 
 #### Coding Standards
-- Models : Descriptive names, `__str__` methods, validators, business logic
-- Views : Class-based when appropriate, focused, leverage generics
-- Templates : Inheritance, minimal logic, Django template tags
-- Services : Use for business logic, keep views thin
+- Minimize other external dependencies
+- Do NOT use libraries that have FFI/native/C bindings.
+- Follow Cloudflare Workers security best practices
+- Include proper error handling and logging
+- Include comments explaining complex logic
 
 ## Efficiency Guidelines
 - **Investigate Before Asking**: Use semantic_search, file_search, grep_search to understand the codebase before asking clarifying questions
