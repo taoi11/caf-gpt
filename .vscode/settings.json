@@ -1,5 +1,7 @@
 {
 	"files.associations": {
 		"wrangler.json": "jsonc"
-	}
+	},
+	"svelte.enable-ts-plugin": true,
+	"javascript.referencesCodeLens.enabled": true
 }
