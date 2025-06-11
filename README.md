@@ -21,12 +21,14 @@ CAF GPT provides two main AI-powered services:
 ## Key Features
 
 ### Core Services
+
 - Rate limiting and cost tracking
 - File upload and processing
 - Session management
 - User authentication
 
 ### PaceNote Module
+
 - AI-powered feedback generation
 - Chat session management
 - Prompt template system
@@ -102,15 +104,18 @@ npm run deploy
 ## API Endpoints
 
 ### Core
+
 - `GET /api/health` - Health check
 - `POST /api/auth/login` - User authentication
 
 ### PaceNote
+
 - `POST /api/pacenote/chat` - Create chat session
 - `GET /api/pacenote/sessions` - List user sessions
 - `POST /api/pacenote/generate` - Generate feedback note
 
 ### Policy
+
 - `POST /api/policy/upload` - Upload policy document
 - `POST /api/policy/query` - Query documents
 - `GET /api/policy/documents` - List uploaded documents

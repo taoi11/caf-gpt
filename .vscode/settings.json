@@ -1,4 +1,20 @@
 {
+	"editor.accessibilitySupport": "off",
+	"github.copilot.chat.codeGeneration.instructions": [
+		{
+			"file": ".ai/rules/base.md"
+		}
+	],
+	"extensions.ignoreRecommendations": true,
+	"github.copilot.chat.commitMessageGeneration.instructions": [
+		{
+			"text": "Always start the commit message with `Copilot:`"
+		}
+	],
+	"chat.promptFilesLocations": {
+		".ai/rules": true
+	},
+	"typos.config": ".vscode/typos.toml",
 	"files.associations": {
 		"wrangler.json": "jsonc"
 	},

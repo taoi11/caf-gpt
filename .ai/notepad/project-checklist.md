@@ -5,6 +5,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 1: Foundation & Core Infrastructure
 
 ### 1.1 Database Schema Setup
+
 - [ ] Convert Django User model to Drizzle schema
 - [ ] Create PaceNote chat session models
 - [ ] Create Policy document models
@@ -13,6 +14,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Test database connections and queries
 
 ### 1.2 Environment & Configuration
+
 - [ ] Set up comprehensive environment variables
 - [ ] Configure Wrangler for different environments (dev/prod)
 - [ ] Set up Cloudflare bindings (R2, KV, D1 if needed)
@@ -21,6 +23,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Create configuration validation
 
 ### 1.3 Core Services Foundation
+
 - [ ] Create base service architecture
 - [ ] Implement error handling patterns
 - [ ] Set up service dependency injection
@@ -31,6 +34,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 2: Core Services Implementation
 
 ### 2.1 OpenRouter Service (LLM Integration)
+
 - [ ] Convert Python OpenRouter service to TypeScript
 - [ ] Implement chat completion endpoints
 - [ ] Add streaming response support
@@ -40,6 +44,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Create usage tracking
 
 ### 2.2 Rate Limiting Service
+
 - [ ] Implement rate limiting with Cloudflare KV
 - [ ] Create user-based rate limits
 - [ ] Add IP-based rate limits
@@ -49,6 +54,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Create admin override functionality
 
 ### 2.3 Cost Tracking Service
+
 - [ ] Implement LLM usage cost tracking
 - [ ] Create cost calculation utilities
 - [ ] Add user spending limits
@@ -58,6 +64,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Export cost data functionality
 
 ### 2.4 File Storage Service (R2)
+
 - [ ] Convert S3 service to Cloudflare R2
 - [ ] Implement file upload handling
 - [ ] Add file type validation
@@ -69,6 +76,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 3: Authentication & User Management
 
 ### 3.1 User Authentication
+
 - [ ] Implement JWT-based authentication
 - [ ] Create user registration system
 - [ ] Add password hashing and validation
@@ -78,6 +86,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Implement user roles and permissions
 
 ### 3.2 Session Management
+
 - [ ] Create session storage with KV
 - [ ] Implement session expiration
 - [ ] Add session cleanup routines
@@ -88,6 +97,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 4: PaceNote Module
 
 ### 4.1 PaceNote Backend Services
+
 - [ ] Convert PaceNote models to TypeScript
 - [ ] Implement chat session management
 - [ ] Create prompt template service
@@ -97,6 +107,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Add search and filtering
 
 ### 4.2 PaceNote API Endpoints
+
 - [ ] Create chat session endpoints
 - [ ] Implement message sending/receiving
 - [ ] Add session management APIs
@@ -106,6 +117,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Create batch processing endpoints
 
 ### 4.3 PaceNote Frontend
+
 - [ ] Create chat interface components
 - [ ] Implement real-time messaging
 - [ ] Add session management UI
@@ -117,6 +129,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 5: Policy Module
 
 ### 5.1 Document Processing
+
 - [ ] Convert document upload system
 - [ ] Implement document parsing (PDF, DOCX, TXT)
 - [ ] Add document indexing and search
@@ -126,6 +139,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Create document cleanup routines
 
 ### 5.2 Policy Backend Services
+
 - [ ] Implement document finder service
 - [ ] Create document reader service
 - [ ] Add response synthesizer
@@ -135,6 +149,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Implement multi-document queries
 
 ### 5.3 Policy API Endpoints
+
 - [ ] Create document upload endpoints
 - [ ] Implement document query APIs
 - [ ] Add document management endpoints
@@ -144,6 +159,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Create admin management APIs
 
 ### 5.4 Policy Frontend
+
 - [ ] Create document upload interface
 - [ ] Implement document management UI
 - [ ] Add query interface with citations
@@ -155,6 +171,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 6: Frontend Integration & Polish
 
 ### 6.1 UI/UX Implementation
+
 - [ ] Create unified navigation system
 - [ ] Implement responsive design
 - [ ] Add dark/light theme support
@@ -164,6 +181,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Create mobile-optimized layouts
 
 ### 6.2 Advanced Features
+
 - [ ] Implement real-time notifications
 - [ ] Add keyboard shortcuts
 - [ ] Create user onboarding flow
@@ -175,6 +193,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 7: Testing & Quality Assurance
 
 ### 7.1 Unit Testing
+
 - [ ] Create service layer tests
 - [ ] Add database operation tests
 - [ ] Implement API endpoint tests
@@ -184,6 +203,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Implement cost tracking tests
 
 ### 7.2 Integration Testing
+
 - [ ] Create end-to-end API tests
 - [ ] Add database integration tests
 - [ ] Implement file upload tests
@@ -193,6 +213,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Implement security tests
 
 ### 7.3 Frontend Testing
+
 - [ ] Create component unit tests
 - [ ] Add user interaction tests
 - [ ] Implement accessibility tests
@@ -204,6 +225,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 8: Deployment & DevOps
 
 ### 8.1 Production Setup
+
 - [ ] Configure production environment
 - [ ] Set up monitoring and alerting
 - [ ] Implement health checks
@@ -213,6 +235,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Implement rate limiting at edge
 
 ### 8.2 CI/CD Pipeline
+
 - [ ] Create automated testing pipeline
 - [ ] Set up automated deployments
 - [ ] Implement rollback strategies
@@ -222,6 +245,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Implement feature flags
 
 ### 8.3 Documentation & Maintenance
+
 - [ ] Create API documentation
 - [ ] Write deployment guides
 - [ ] Create troubleshooting guides
@@ -233,6 +257,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 ## Phase 9: Migration & Launch
 
 ### 9.1 Data Migration
+
 - [ ] Create data export from Django
 - [ ] Implement data import utilities
 - [ ] Validate data integrity
@@ -242,6 +267,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Implement data validation
 
 ### 9.2 Launch Preparation
+
 - [ ] Performance testing and optimization
 - [ ] Security audit and fixes
 - [ ] User acceptance testing
@@ -251,6 +277,7 @@ This document outlines the complete migration plan from Django to Cloudflare ser
 - [ ] Launch communication plan
 
 ### 9.3 Post-Launch
+
 - [ ] Monitor system performance
 - [ ] Collect user feedback
 - [ ] Fix critical issues

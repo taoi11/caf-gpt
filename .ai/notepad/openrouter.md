@@ -1,6 +1,7 @@
 ## Usage
 
 ### Basic
+
 ```python
 import requests
 import json
@@ -18,7 +19,7 @@ response = requests.post(
         "content": "What is the meaning of life?"
       }
     ]
-    
+
   })
 )
 ```
@@ -27,13 +28,14 @@ response = requests.post(
 
 ```typescript
 type ErrorResponse = {
-  error: {
-    code: number;
-    message: string;
-    metadata?: Record<string, unknown>;
-  };
+	error: {
+		code: number;
+		message: string;
+		metadata?: Record<string, unknown>;
+	};
 };
 ```
+
 ```
 Error Codes
 400: Bad Request (invalid or missing params, CORS)
@@ -45,47 +47,47 @@ Error Codes
 502: Your chosen model is down or we received an invalid response from it
 503: There is no available model provider that meets your routing requirements
 ```
+
 ### Structured Output
+
 ```typescript
 const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    Authorization: 'Bearer YOUR_API_KEY',
-    'HTTP-Referer': 'https://your-app.com',
-  },
-  body: JSON.stringify({
-    model: 'openai/gpt-4',
-    messages: [
-      { role: 'user', content: 'What is the weather like in London?' },
-    ],
-    response_format: {
-      type: 'json_schema',
-      json_schema: {
-        name: 'weather',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            location: {
-              type: 'string',
-              description: 'City or location name',
-            },
-            temperature: {
-              type: 'number',
-              description: 'Temperature in Celsius',
-            },
-            conditions: {
-              type: 'string',
-              description: 'Weather conditions description',
-            },
-          },
-          required: ['location', 'temperature', 'conditions'],
-          additionalProperties: false,
-        },
-      },
-    },
-  }),
+	method: 'POST',
+	headers: {
+		'Content-Type': 'application/json',
+		Authorization: 'Bearer YOUR_API_KEY',
+		'HTTP-Referer': 'https://your-app.com'
+	},
+	body: JSON.stringify({
+		model: 'openai/gpt-4',
+		messages: [{ role: 'user', content: 'What is the weather like in London?' }],
+		response_format: {
+			type: 'json_schema',
+			json_schema: {
+				name: 'weather',
+				strict: true,
+				schema: {
+					type: 'object',
+					properties: {
+						location: {
+							type: 'string',
+							description: 'City or location name'
+						},
+						temperature: {
+							type: 'number',
+							description: 'Temperature in Celsius'
+						},
+						conditions: {
+							type: 'string',
+							description: 'Weather conditions description'
+						}
+					},
+					required: ['location', 'temperature', 'conditions'],
+					additionalProperties: false
+				}
+			}
+		}
+	})
 });
 
 const data = await response.json();
@@ -93,7 +95,8 @@ const weatherInfo = data.choices[0].message.content;
 ```
 
 ### Get Generation - Auth needed for this
-```
+
+````
 https://openrouter.ai/api/v1/generation?id=gen-######
 {"data":
   {"id":
@@ -141,22 +144,23 @@ response = requests.post(
         "content": "What is the meaning of life?"
       }
     ]
-    
+
   })
 )
-```
+````
 
 ### Error Handling
 
 ```typescript
 type ErrorResponse = {
-  error: {
-    code: number;
-    message: string;
-    metadata?: Record<string, unknown>;
-  };
+	error: {
+		code: number;
+		message: string;
+		metadata?: Record<string, unknown>;
+	};
 };
 ```
+
 ```
 Error Codes
 400: Bad Request (invalid or missing params, CORS)
@@ -168,47 +172,47 @@ Error Codes
 502: Your chosen model is down or we received an invalid response from it
 503: There is no available model provider that meets your routing requirements
 ```
+
 ### Structured Output
+
 ```typescript
 const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
-  method: 'POST',
-  headers: {
-    'Content-Type': 'application/json',
-    Authorization: 'Bearer YOUR_API_KEY',
-    'HTTP-Referer': 'https://your-app.com',
-  },
-  body: JSON.stringify({
-    model: 'openai/gpt-4',
-    messages: [
-      { role: 'user', content: 'What is the weather like in London?' },
-    ],
-    response_format: {
-      type: 'json_schema',
-      json_schema: {
-        name: 'weather',
-        strict: true,
-        schema: {
-          type: 'object',
-          properties: {
-            location: {
-              type: 'string',
-              description: 'City or location name',
-            },
-            temperature: {
-              type: 'number',
-              description: 'Temperature in Celsius',
-            },
-            conditions: {
-              type: 'string',
-              description: 'Weather conditions description',
-            },
-          },
-          required: ['location', 'temperature', 'conditions'],
-          additionalProperties: false,
-        },
-      },
-    },
-  }),
+	method: 'POST',
+	headers: {
+		'Content-Type': 'application/json',
+		Authorization: 'Bearer YOUR_API_KEY',
+		'HTTP-Referer': 'https://your-app.com'
+	},
+	body: JSON.stringify({
+		model: 'openai/gpt-4',
+		messages: [{ role: 'user', content: 'What is the weather like in London?' }],
+		response_format: {
+			type: 'json_schema',
+			json_schema: {
+				name: 'weather',
+				strict: true,
+				schema: {
+					type: 'object',
+					properties: {
+						location: {
+							type: 'string',
+							description: 'City or location name'
+						},
+						temperature: {
+							type: 'number',
+							description: 'Temperature in Celsius'
+						},
+						conditions: {
+							type: 'string',
+							description: 'Weather conditions description'
+						}
+					},
+					required: ['location', 'temperature', 'conditions'],
+					additionalProperties: false
+				}
+			}
+		}
+	})
 });
 
 const data = await response.json();
@@ -216,6 +220,7 @@ const weatherInfo = data.choices[0].message.content;
 ```
 
 ### Get Generation - Auth needed for this
+
 ```
 https://openrouter.ai/api/v1/generation?id=gen-######
 {"data":
