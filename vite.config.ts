@@ -8,11 +8,11 @@ export default defineConfig({
 	test: {
 		projects: [
 			{
-				extends: './vite.base-test-config.ts',
-				plugins: [svelteTesting()],
+				plugins: [tailwindcss(), sveltekit(), svelteTesting()],
 				test: {
 					name: 'client',
 					environment: 'jsdom',
+					globals: true,
 					clearMocks: true,
 					include: [
 						'src/**/*.svelte.{test,spec}.{js,ts}',
@@ -24,10 +24,10 @@ export default defineConfig({
 				}
 			},
 			{
-				extends: './vite.config.ts',
 				test: {
 					name: 'server',
 					environment: 'node',
+					globals: true,
 					include: [
 						'src/lib/server/**/*.{test,spec}.{js,ts}',
 						'src/routes/api/**/*.test.{js,ts}'
@@ -36,12 +36,12 @@ export default defineConfig({
 				}
 			},
 			{
-				extends: './vite.config.ts',
 				test: {
 					name: 'integration',
 					environment: 'node',
+					globals: true,
 					include: ['tests/integration/**/*.{test,spec}.{js,ts}'],
-					timeout: 30000
+					testTimeout: 30000
 				}
 			}
 		]
