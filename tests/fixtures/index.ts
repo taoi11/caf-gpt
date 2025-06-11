@@ -50,26 +50,14 @@ export const createMockPolicyDocument = (overrides = {}) => ({
 });
 
 // Mock API responses
-export const mockOpenRouterResponse = {
-	id: 'chatcmpl-test-123',
-	object: 'chat.completion',
-	created: 1699000000,
-	model: 'anthropic/claude-3.5-sonnet',
-	choices: [
-		{
-			index: 0,
-			message: {
-				role: 'assistant',
-				content: 'This is a mock AI response for testing.'
-			},
-			finish_reason: 'stop'
-		}
-	],
+export const mockWorkersAIResponse = {
+	response: 'This is a mock AI response for testing.',
 	usage: {
 		prompt_tokens: 10,
 		completion_tokens: 15,
 		total_tokens: 25
-	}
+	},
+	cost: 0.00375 // $0.00375 for 25 tokens
 };
 
 export const mockR2UploadResponse = {
