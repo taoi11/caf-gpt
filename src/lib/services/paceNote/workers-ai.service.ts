@@ -1,7 +1,8 @@
 /**
- * Workers AI Service
+ * Workers AI Service for PaceNote
  * 
  * Handles LLM interactions using Cloudflare Workers AI platform.
+ * Co-located with PaceNote service as it's the primary consumer.
  * Provides text generation, cost tracking, and error handling.
  */
 
@@ -78,10 +79,10 @@ const MODEL_COSTS: Record<string, number> = {
 };
 
 export class WorkersAIService {
-	private ai: any; // Using any for now until proper types are available
+	private ai: { run: (model: SupportedModel, input: AiTextGenerationInput) => Promise<AiTextGenerationOutput | ReadableStream> };
 	private config: WorkersAIConfig;
 
-	constructor(ai: any, config: Partial<WorkersAIConfig> = {}) {
+	constructor(ai: { run: (model: SupportedModel, input: AiTextGenerationInput) => Promise<AiTextGenerationOutput | ReadableStream> }, config: Partial<WorkersAIConfig> = {}) {
 		this.ai = ai;
 		this.config = { ...DEFAULT_CONFIG, ...config };
 	}
@@ -120,15 +121,17 @@ export class WorkersAIService {
 			const responseText = typeof response === 'string' ? response : response.response || '';
 
 			// Calculate approximate cost
-			const totalTokens = this.estimateTokens(messages, responseText);
+			const promptTokens = this.estimateTokens(messages);
+			const completionTokens = this.estimateTokens(responseText);
+			const totalTokens = promptTokens + completionTokens;
 			const cost = this.calculateCost(finalConfig.model, totalTokens);
 
 			return {
 				response: responseText,
 				usage: {
 					total_tokens: totalTokens,
-					prompt_tokens: this.estimateTokens(messages),
-					completion_tokens: this.estimateTokens([{ role: 'assistant', content: responseText }])
+					prompt_tokens: promptTokens,
+					completion_tokens: completionTokens
 				},
 				cost
 			};
@@ -184,7 +187,7 @@ export class WorkersAIService {
 	private handleError(error: unknown): WorkersAIError {
 		if (error instanceof Error) {
 			// Check for specific Workers AI error patterns
-			if (error.message.includes('rate limit')) {
+			if (error.message.includes('rate limit') || error.message.includes('Rate limit')) {
 				return {
 					code: 'RATE_LIMITED',
 					message: 'AI service rate limit exceeded. Please try again later.',

@@ -15,7 +15,13 @@
 	// Bindings https://developers.cloudflare.com/workers/runtime-apis/bindings/
 	"ai": {
 		"binding": "AI"
-	}
+	},
+	"r2_buckets": [
+    {
+      "binding": "POLICIES",
+      "bucket_name": "policies"
+    }
+  ],
 	/**
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
