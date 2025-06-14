@@ -1,142 +1,115 @@
 # CAF GPT - Cloudflare Serverless Edition
 
-An AI-powered application suite built with SvelteKit and deployed on Cloudflare's serverless platform. This is a complete rewrite of the original Django-based CAF GPT project, modernized for serverless architecture with improved performance, scalability, and cost-effectiveness.
+An AI-powered application built with SvelteKit and deployed on Cloudflare's serverless platform.
 
 ## Overview
 
 CAF GPT provides AI-powered assistance tools for CAF troops:
-- **PaceNote**: Generate professional feedback notes for CAF members based on observations and rank-specific competencies
-- **Policy Q&A**: Document-based question answering with citations *(coming soon)*
-
-### Migration from Django
-
-This project migrates from the original Django-based architecture to a modern serverless stack, maintaining all core functionality while improving:
-- **Performance**: Edge computing with Cloudflare Workers
-- **Scalability**: Serverless auto-scaling
-- **Cost**: Pay-per-use pricing model
-- **Developer Experience**: TypeScript and modern tooling
+- **PaceNote**: ✅ **Fully Functional** - Generate feedback notes for lazy CAF members based on observations and rank-specific competencies.
+- **Policy Q&A**: Document-based question answering with citations *(coming soon)*.
 
 ## Architecture
 
 **Modern Serverless Stack:**
 - **Frontend**: SvelteKit with TypeScript
-- **Backend**: Cloudflare Workers/Pages  
-- **Database**: Turso (LibSQL) with Drizzle ORM
-- **Styling**: Tailwind CSS
-- **AI Integration**: OpenRouter API
+- **Backend**: Cloudflare Workers  
+- **AI Integration**: Cloudflare Workers AI
 - **File Storage**: Cloudflare R2 Storage
-- **Authentication**: Cloudflare Access
+- **Authentication**: API Key-based with rate limiting
+- **Styling**: Tailwind CSS
 
 **Migrated from Django Stack:**
 - **Frontend**: Django Templates → SvelteKit
 - **Backend**: Django/Python → Cloudflare Workers/TypeScript  
-- **Database**: PostgreSQL → Turso (LibSQL)
+- **AI Provider**: OpenRouter → Cloudflare Workers AI
 - **Storage**: AWS S3 → Cloudflare R2
 - **Deployment**: Traditional hosting → Serverless edge
-
-## Key Features
-
-### Core Services
-
-- **Workers AI Integration**: Multi-model LLM access using Cloudflare's AI platform
-- **R2 Storage**: Document and template storage
-- **Health Monitoring**: System status and connectivity checks
-
-### PaceNote Module
-
-- **AI-Powered Generation**: Generate professional pace notes using Cloudflare Workers AI
-- **Rank-Specific Templates**: Customized feedback based on CAF rank levels (Cpl, MCpl, Sgt, WO)
-- **Competency Integration**: Leverage rank-specific competency frameworks
-- **Structured Output**: Two-paragraph format with events description and outcomes
-- **Interactive Interface**: Real-time generation with copy-to-clipboard functionality
-
-### Policy Module *(Coming Soon)*
-- Document upload and indexing
-- Intelligent document search  
-- Q&A with source citations
-- Multi-document querying
 
 ## Technology Stack
 
 - **Runtime**: Cloudflare Workers
 - **Framework**: SvelteKit  
 - **Language**: TypeScript
-- **Database**: Turso (LibSQL)
-- **ORM**: Drizzle
+- **AI Provider**: Cloudflare Workers AI (Llama 3.1 8B Instruct)
 - **Storage**: Cloudflare R2
+- **Authentication**: API Key with rate limiting
 - **Styling**: Tailwind CSS
-- **AI Provider**: OpenRouter
 
-## Development Setup
+## Quick Start
+
+### Prerequisites
+- Node.js 18+ 
+- Cloudflare account with Workers AI enabled
+- Wrangler CLI installed 
+
+### API Configuration
+
+The application uses API key authentication for secure access. 
+
+**For Production (Recommended):**
+Use Cloudflare secrets for secure key management:
+```bash
+wrangler secret put API_KEY
+```
+
+### Required Cloudflare Bindings
+
+Configure these bindings in your Cloudflare dashboard or `wrangler.jsonc`:
+
+- **AI Binding**: `AI` (Cloudflare Workers AI)
+- **R2 Bucket**: `POLICIES` (for document storage)  
+- **Secret**: `API_KEY` ✅ **Already configured** via `wrangler secret put API_KEY`
+
+> **Note**: The API_KEY secret is already configured for production deployment. No additional environment variable setup required.
+
+## API Reference
+
+### Authentication
+
+All API endpoints (except health check) require authentication via Bearer token:
 
 ```bash
-# Install dependencies
-npm install
-
-# Set up environment variables
-cp .env.example .env.local
-# Edit .env.local with your configuration
-
-# Initialize database
-npm run db:generate
-npm run db:migrate
-
-# Start development server
-npm run dev
-
-# Run tests
-npm run test
+curl -H "Authorization: Bearer your-api-key" \
+     -H "Content-Type: application/json" \
+     https://your-app.pages.dev/api/pacenote
 ```
 
-## Environment Variables
+### Endpoints
 
-```env
-# Database (Turso)
-DATABASE_URL=your_turso_database_url
-DATABASE_AUTH_TOKEN=your_turso_auth_token
-
-# Cloudflare R2 Storage
-R2_ACCOUNT_ID=your_r2_account_id
-R2_ACCESS_KEY_ID=your_r2_access_key
-R2_SECRET_ACCESS_KEY=your_r2_secret_key
-R2_BUCKET_NAME=your_bucket_name
-
-# Application Configuration
-APP_SECRET_KEY=your_secret_key
-RATE_LIMIT_HOURLY=10
-RATE_LIMIT_DAILY=50
-AI_MODEL=@cf/meta/llama-3.1-8b-instruct
-```
-
-## Deployment
-
-This application is designed to deploy seamlessly on Cloudflare Pages with Workers integration.
-
+#### Health Check
 ```bash
-# Build for production
-npm run build
-
-# Deploy to Cloudflare Pages
-npm run deploy
+GET /api/health
+# Returns: Service status and binding availability
 ```
 
-## API Endpoints
+#### PaceNote Generation
+```bash
+POST /api/pacenote
+Content-Type: application/json
+Authorization: Bearer your-api-key
 
-### Core Services
+{
+  "rank": "Cpl",
+  "observations": "Member demonstrated exceptional leadership...",
+  "competencyFocus": ["Leadership", "Technical Competence"] // optional
+}
 
-- `GET /api/health` - System health check and status
-- `GET /api/rate-limits` - Current rate limit status
+# Returns: Generated pace note with usage metrics
+```
 
-### PaceNote Module
+#### PaceNote Configuration
+```bash
+GET /api/pacenote
+Authorization: Bearer your-api-key
 
-- `POST /api/pacenote/generate` - Generate pace note from user input
-- `GET /api/pacenote/rate-limits` - PaceNote-specific rate limits
+# Returns: Available ranks, limits, and configuration
+```
 
-### Policy Module *(Coming Soon)*
+### Rate Limiting
 
-- `POST /api/policy/upload` - Upload policy document
-- `POST /api/policy/query` - Query documents  
-- `GET /api/policy/documents` - List uploaded documents
+- **10 requests per minute per IP**
+- **Rate limit headers** included in responses
+- **429 status code** when limit exceeded
 
 ## Project Structure
 
@@ -144,59 +117,22 @@ npm run deploy
 src/
 ├── lib/
 │   ├── server/
-│   │   ├── db/           # Database schemas and connections
-│   │   ├── services/     # Core business logic services
-│   │   ├── middleware/   # Request/response middleware
-│   │   └── config/       # Configuration management
-│   └── components/       # Reusable Svelte components
+│   │   └── auth.ts          # API authentication and rate limiting
+│   ├── services/
+│   │   └── paceNote/        # PaceNote service module
+│   │       ├── service.ts   # Main PaceNote service
+│   │       ├── workers-ai.service.ts  # AI integration
+│   │       ├── types.ts     # Type definitions
+│   │       ├── constants.ts # Configuration constants
+│   │       └── prompts/     # AI prompt templates
+│   └── types/
+│       └── api.ts           # API contract types
 ├── routes/
-│   ├── +page.svelte      # Landing page
-│   └── api/              # API endpoints
-│       ├── health/       # Health check endpoints
-│       └── pacenote/     # PaceNote API routes
-└── workers/              # Cloudflare Workers
-    ├── shared/           # Shared worker utilities
-    └── pacenote/         # PaceNote-specific workers
+│   ├── +page.svelte         # Landing page
+│   ├── pacenote/
+│   │   └── +page.svelte     # PaceNote generator interface
+│   └── api/                 # API endpoints
+│       ├── health/          # Health check endpoint
+│       └── pacenote/        # PaceNote API routes
+└── worker-configuration.d.ts # Cloudflare Workers type definitions
 ```
-
-## Migration Status
-
-This is an active migration from the original Django-based CAF GPT. Current status:
-
-✅ **Completed:**
-- Project structure and tooling setup
-- Database configuration (Turso + Drizzle)
-
-🔄 **In Progress:**
-- Core services (rate limiting, cost tracking)
-- PaceNote functionality migration
-
-⏳ **Planned:**
-- Frontend UI components
-- API endpoint implementation
-- Deployment configuration
-
-See `.ai/notepad/migration-checklist.md` for detailed progress tracking.
-
-## Contributing
-
-1. Fork the repository
-2. Create a feature branch
-3. Make your changes
-4. Run tests: `npm run test`
-5. Submit a pull request
-
-## License
-
-This project is licensed under the AGPL-3.0 License.
-
-## Migration Notes
-
-This project is a complete rewrite of the original Django-based CAF GPT application, migrated to a modern serverless architecture for improved performance, scalability, and cost-effectiveness.
-
-**Key improvements:**
-- **Performance**: Edge computing with sub-100ms response times
-- **Scalability**: Auto-scaling serverless functions
-- **Cost**: Pay-per-request pricing model
-- **Developer Experience**: TypeScript, modern tooling, and better testing
-- **Deployment**: Zero-downtime deployments via Cloudflare Pages
