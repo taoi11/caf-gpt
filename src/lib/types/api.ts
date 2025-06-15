@@ -51,13 +51,3 @@ export function isPaceNoteData(obj: unknown): obj is PaceNoteData {
 	return typeof obj === 'object' && obj !== null && 
 		'feedback' in obj && 'rank' in obj && 'generatedAt' in obj;
 }
-
-// Export default to make it a proper module
-export default {
-	ApiResponse,
-	PaceNoteRequest,
-	PaceNoteData,
-	PaceNoteConfigData,
-	isApiResponse,
-	isPaceNoteData
-};

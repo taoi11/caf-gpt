@@ -17,7 +17,7 @@ export type {
 export {
 	AVAILABLE_RANKS,
 	VALID_RANKS,
-	AI_CONFIG,
+	AI_GATEWAY_CONFIG,
 	VALIDATION_LIMITS,
 	R2_PATHS
 } from './constants.js';
@@ -28,12 +28,11 @@ export { PaceNoteService, createPaceNoteService } from './service.js';
 // Export R2 utilities (co-located with service)
 export { readFileAsText } from './r2.util.js';
 
-// Export Workers AI services (co-located with service)
+// Export AI Gateway services (co-located with service)
 export {
-	WorkersAIService,
-	createWorkersAIService,
-	type WorkersAIConfig,
-	type WorkersAIMessage,
-	type WorkersAIResponse,
-	type WorkersAIError
-} from './workers-ai.service.js';
+	createAIGatewayService,
+	type AIGatewayService,
+	type AIGatewayConfig,
+	type AIGatewayResponse,
+	type AIGatewayError
+} from './ai-gateway.service.js';

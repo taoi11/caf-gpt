@@ -13,7 +13,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops:
 **Modern Serverless Stack:**
 - **Frontend**: SvelteKit with TypeScript
 - **Backend**: Cloudflare Workers  
-- **AI Integration**: Cloudflare Workers AI
+- **AI Integration**: AI Gateway with OpenRouter provider
 - **File Storage**: Cloudflare R2 Storage
 - **Authentication**: API Key-based with rate limiting
 - **Styling**: Tailwind CSS
@@ -21,7 +21,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops:
 **Migrated from Django Stack:**
 - **Frontend**: Django Templates → SvelteKit
 - **Backend**: Django/Python → Cloudflare Workers/TypeScript  
-- **AI Provider**: OpenRouter → Cloudflare Workers AI
+- **AI Provider**: OpenRouter → AI Gateway + OpenRouter
 - **Storage**: AWS S3 → Cloudflare R2
 - **Deployment**: Traditional hosting → Serverless edge
 
@@ -30,7 +30,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops:
 - **Runtime**: Cloudflare Workers
 - **Framework**: SvelteKit  
 - **Language**: TypeScript
-- **AI Provider**: Cloudflare Workers AI (Llama 3.1 8B Instruct)
+- **AI Provider**: AI Gateway with OpenRouter
 - **Storage**: Cloudflare R2
 - **Authentication**: API Key with rate limiting
 - **Styling**: Tailwind CSS
@@ -39,7 +39,8 @@ CAF GPT provides AI-powered assistance tools for CAF troops:
 
 ### Prerequisites
 - Node.js 18+ 
-- Cloudflare account with Workers AI enabled
+- Cloudflare account with AI Gateway enabled
+- OpenRouter account and API key
 - Wrangler CLI installed 
 
 ### API Configuration
@@ -50,17 +51,34 @@ The application uses API key authentication for secure access.
 Use Cloudflare secrets for secure key management:
 ```bash
 wrangler secret put API_KEY
+wrangler secret put OPENROUTER_TOKEN
+wrangler secret put AI_GATEWAY_BASE_URL
 ```
 
 ### Required Cloudflare Bindings
 
 Configure these bindings in your Cloudflare dashboard or `wrangler.jsonc`:
 
-- **AI Binding**: `AI` (Cloudflare Workers AI)
 - **R2 Bucket**: `POLICIES` (for document storage)  
-- **Secret**: `API_KEY` ✅ **Already configured** via `wrangler secret put API_KEY`
+- **Environment Variables**:
+    - `FN_MODEL` - AI model to use (configured in wrangler.jsonc)
+- **Secrets**: 
+    - `API_KEY` - API authentication key
+    - `OPENROUTER_TOKEN` - OpenRouter API key for AI Gateway
+    - `AI_GATEWAY_BASE_URL` - AI Gateway endpoint URL
 
-> **Note**: The API_KEY secret is already configured for production deployment. No additional environment variable setup required.
+> **Note**: All secrets should be configured via `wrangler secret put` for production deployment.
+
+### AI Gateway Setup
+
+The application uses Cloudflare AI Gateway with OpenRouter as the provider:
+
+1. **Create AI Gateway**: Set up an AI Gateway in your Cloudflare dashboard
+2. **Configure OpenRouter**: Get an API key from OpenRouter and configure it as `OPENROUTER_TOKEN`
+3. **Set Gateway URL**: Configure `AI_GATEWAY_BASE_URL` to point to your AI Gateway endpoint
+4. **Model Selection**: The AI model is configured via `FN_MODEL` in `wrangler.jsonc` (currently set to `google/gemini-2.5-pro-preview`)
+
+This setup provides cost tracking, caching, and monitoring through Cloudflare AI Gateway while using OpenRouter's model providers.
 
 ## API Reference
 
@@ -121,7 +139,8 @@ src/
 │   ├── services/
 │   │   └── paceNote/        # PaceNote service module
 │   │       ├── service.ts   # Main PaceNote service
-│   │       ├── workers-ai.service.ts  # AI integration
+│   │       ├── ai-gateway.service.ts  # AI Gateway integration
+│   │       ├── workers-ai.service.ts  # Legacy Workers AI service
 │   │       ├── types.ts     # Type definitions
 │   │       ├── constants.ts # Configuration constants
 │   │       └── prompts/     # AI prompt templates

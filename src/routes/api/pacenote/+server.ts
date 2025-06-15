@@ -11,9 +11,23 @@ type ValidRank = 'Cpl' | 'MCpl' | 'Sgt' | 'WO';
 export const POST: RequestHandler = async ({ request, platform }) => {
 	try {
 		// Check if required services are available
-		if (!platform?.env?.AI) {
+		if (!platform?.env?.OPENROUTER_TOKEN) {
 			return json(
-				{ error: 'AI service is not available' },
+				{ error: 'OpenRouter token is not configured' },
+				{ status: 500 }
+			);
+		}
+
+		if (!platform?.env?.AI_GATEWAY_BASE_URL) {
+			return json(
+				{ error: 'AI Gateway base URL is not configured' },
+				{ status: 500 }
+			);
+		}
+
+		if (!platform?.env?.FN_MODEL) {
+			return json(
+				{ error: 'AI model is not configured' },
 				{ status: 500 }
 			);
 		}
@@ -89,7 +103,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 
 		// Create PaceNote service instance
 		const paceNoteService = new PaceNoteService(
-			platform.env.AI,
+			platform.env.OPENROUTER_TOKEN,
+			platform.env.AI_GATEWAY_BASE_URL,
+			platform.env.FN_MODEL,
 			platform.env.POLICIES
 		);
 
@@ -154,18 +170,15 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 // Optional: GET endpoint to provide configuration data
 export const GET: RequestHandler = async ({ request, platform }) => {
 	try {
-		if (!platform?.env?.API_KEY) {
-			return json(
-				{ error: 'API authentication is not configured' },
-				{ status: 500 }
-			);
-		}
-
-		// Authentication
-		const authMiddleware = createAuthMiddleware(platform.env.API_KEY);
-		const authError = authMiddleware(request);
-		if (authError) {
-			return authError;
+		// For GET endpoint returning static configuration, allow access in development
+		// when API_KEY is not configured
+		if (platform?.env?.API_KEY) {
+			// Authentication required when API_KEY is configured
+			const authMiddleware = createAuthMiddleware(platform.env.API_KEY);
+			const authError = authMiddleware(request);
+			if (authError) {
+				return authError;
+			}
 		}
 
 		// Return configuration data for the frontend

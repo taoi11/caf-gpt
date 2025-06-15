@@ -1,22 +1,30 @@
 /**
  * PaceNote Service
  * 
- * Handles generation of professional pace notes for CAF members using Workers AI.
+ * Handles generation of professional pace notes for CAF members using AI Gateway.
  * Integrates rank-specific competencies and structured feedback templates.
  */
 
-import { createWorkersAIService, type WorkersAIService, type WorkersAIResponse } from './workers-ai.service.js';
+import { createAIGatewayService, type AIGatewayService, type AIGatewayResponse } from './ai-gateway.service.js';
 import { readFileAsText } from './r2.util.js';
 import basePromptTemplate from './prompts/base.md?raw';
 import type { PaceNoteInput, PaceNoteOutput, PaceNoteRank, RankInfo } from './types.js';
-import { AVAILABLE_RANKS, VALID_RANKS, AI_CONFIG, VALIDATION_LIMITS, R2_PATHS } from './constants.js';
+import { AVAILABLE_RANKS, VALID_RANKS, AI_GATEWAY_CONFIG, VALIDATION_LIMITS, R2_PATHS } from './constants.js';
 
 export class PaceNoteService {
-	private aiService: WorkersAIService;
+	private aiService: AIGatewayService;
 	private policiesBucket: R2Bucket;
 	
-	constructor(ai: Ai, policiesBucket: R2Bucket) {
-		this.aiService = createWorkersAIService(ai, AI_CONFIG);
+	constructor(
+		openrouterToken: string,
+		aiGatewayBaseURL: string,
+		model: string,
+		policiesBucket: R2Bucket
+	) {
+		this.aiService = createAIGatewayService(openrouterToken, aiGatewayBaseURL, {
+			...AI_GATEWAY_CONFIG,
+			model
+		});
 		this.policiesBucket = policiesBucket;
 	}
 
@@ -40,7 +48,7 @@ export class PaceNoteService {
 				generatedAt: new Date(),
 				usage: {
 					tokens: response.usage?.total_tokens || 0,
-					cost: response.cost || 0
+					cost: 0 // Simplified - no cost tracking
 				}
 			};
 
@@ -179,16 +187,9 @@ Example 3: When faced with equipment failure, the member quickly adapted and fou
 	}
 	
 	/**
-	 * Update AI service configuration
-	 */
-	updateAIConfig(config: Parameters<WorkersAIService['updateConfig']>[0]): void {
-		this.aiService.updateConfig(config);
-	}
-
-	/**
 	 * Get current AI configuration
 	 */
-	getAIConfig(): ReturnType<WorkersAIService['getConfig']> {
+	getAIConfig(): ReturnType<AIGatewayService['getConfig']> {
 		return this.aiService.getConfig();
 	}
 }
@@ -196,6 +197,11 @@ Example 3: When faced with equipment failure, the member quickly adapted and fou
 /**
  * Factory function to create PaceNoteService instance
  */
-export function createPaceNoteService(ai: Ai, policiesBucket: R2Bucket): PaceNoteService {
-	return new PaceNoteService(ai, policiesBucket);
+export function createPaceNoteService(
+	openrouterToken: string,
+	aiGatewayBaseURL: string,
+	model: string,
+	policiesBucket: R2Bucket
+): PaceNoteService {
+	return new PaceNoteService(openrouterToken, aiGatewayBaseURL, model, policiesBucket);
 }

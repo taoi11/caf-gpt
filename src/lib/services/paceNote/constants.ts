@@ -38,10 +38,10 @@ export const AVAILABLE_RANKS: RankInfo[] = [
 export const VALID_RANKS = ['Cpl', 'MCpl', 'Sgt', 'WO'] as const;
 
 /**
- * AI service configuration for pace note generation
+ * AI Gateway configuration for pace note generation
+ * Note: model is configured via FN_MODEL environment variable
  */
-export const AI_CONFIG = {
-	model: '@cf/meta/llama-3.1-8b-instruct',
+export const AI_GATEWAY_CONFIG = {
 	maxTokens: 800,
 	temperature: 0.7,
 	topP: 0.9
