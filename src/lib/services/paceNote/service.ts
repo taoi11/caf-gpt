@@ -19,12 +19,18 @@ export class PaceNoteService {
 		openrouterToken: string,
 		aiGatewayBaseURL: string,
 		model: string,
-		policiesBucket: R2Bucket
+		policiesBucket: R2Bucket,
+		cfAigToken?: string
 	) {
-		this.aiService = createAIGatewayService(openrouterToken, aiGatewayBaseURL, {
-			...AI_GATEWAY_CONFIG,
-			model
-		});
+		this.aiService = createAIGatewayService(
+			openrouterToken, 
+			aiGatewayBaseURL, 
+			{
+				...AI_GATEWAY_CONFIG,
+				model
+			},
+			cfAigToken
+		);
 		this.policiesBucket = policiesBucket;
 	}
 

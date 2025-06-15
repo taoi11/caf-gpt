@@ -2,8 +2,7 @@
 	import { onMount } from 'svelte';
 	import type { ApiResponse, PaceNoteConfigData, PaceNoteData } from '$lib/types/api.js';
 	
-	// API configuration
-	const API_KEY = '123'; // Development key
+	// API configuration - no authentication needed for internal use
 	const API_BASE = '/api/pacenote';
 	
 	// State management
@@ -16,15 +15,10 @@
 	let error = '';
 	let usage = { tokens: 0, cost: 0 };
 	
-	// Load configuration on mount
+	// Load configuration on mount (no auth needed for config)
 	onMount(async () => {
 		try {
-			const response = await fetch(API_BASE, {
-				headers: {
-					'Authorization': `Bearer ${API_KEY}`,
-					'Content-Type': 'application/json'
-				}
-			});
+			const response = await fetch(API_BASE);
 			
 			if (response.ok) {
 				const result: ApiResponse<PaceNoteConfigData> = await response.json();
@@ -37,7 +31,7 @@
 		}
 	});
 	
-	// Generate pace note
+	// Generate pace note (no API key needed - internal only)
 	async function generatePaceNote() {
 		if (!selectedRank || !observations.trim()) {
 			error = 'Please select a rank and provide observations';
@@ -52,7 +46,6 @@
 			const response = await fetch(API_BASE, {
 				method: 'POST',
 				headers: {
-					'Authorization': `Bearer ${API_KEY}`,
 					'Content-Type': 'application/json'
 				},
 				body: JSON.stringify({

@@ -1,15 +1,50 @@
 import type { RequestHandler } from './$types';
 import { json } from '@sveltejs/kit';
 import { PaceNoteService } from '$lib/services/paceNote/service.js';
-import { createAuthMiddleware, checkRateLimit, getClientIP } from '$lib/server/auth.js';
 import type { PaceNoteInput } from '$lib/services/paceNote/types.js';
 import type { PaceNoteRequest, ApiResponse, PaceNoteData, PaceNoteConfigData } from '$lib/types/api.js';
 
 // Define a union type for valid ranks
 type ValidRank = 'Cpl' | 'MCpl' | 'Sgt' | 'WO';
 
+// Simple origin validation for internal-only access
+function validateOrigin(request: Request): boolean {
+	const origin = request.headers.get('origin');
+	const referer = request.headers.get('referer');
+	
+	// Allow requests from same origin or direct navigation
+	if (!origin && !referer) return true; // Direct navigation
+	
+	// Get the request URL to compare with origin
+	const requestUrl = new URL(request.url);
+	const expectedOrigin = `${requestUrl.protocol}//${requestUrl.host}`;
+	
+	// Also allow requests from dev.caf-gpt.com (your custom domain)
+	const allowedOrigins = [
+		expectedOrigin,
+		'https://dev.caf-gpt.com'
+	];
+	
+	// Check if origin or referer matches our allowed domains
+	return allowedOrigins.some(allowed => 
+		origin === allowed || referer?.startsWith(allowed)
+	);
+}
+
 export const POST: RequestHandler = async ({ request, platform }) => {
 	try {
+		// Validate origin for internal-only access
+		if (!validateOrigin(request)) {
+			return json(
+				{ 
+					error: 'Forbidden',
+					message: 'Access denied - external requests not allowed',
+					code: 'FORBIDDEN'
+				},
+				{ status: 403 }
+			);
+		}
+
 		// Check if required services are available
 		if (!platform?.env?.OPENROUTER_TOKEN) {
 			return json(
@@ -30,33 +65,6 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 				{ error: 'AI model is not configured' },
 				{ status: 500 }
 			);
-		}
-
-		if (!platform?.env?.API_KEY) {
-			return json(
-				{ error: 'API authentication is not configured' },
-				{ status: 500 }
-			);
-		}
-
-		// Rate limiting
-		const clientIP = getClientIP(request);
-		if (!checkRateLimit(clientIP)) {
-			return json(
-				{ 
-					error: 'Rate limit exceeded',
-					message: 'Too many requests. Please try again later.',
-					code: 'RATE_LIMITED'
-				},
-				{ status: 429 }
-			);
-		}
-
-		// Authentication
-		const authMiddleware = createAuthMiddleware(platform.env.API_KEY);
-		const authError = authMiddleware(request);
-		if (authError) {
-			return authError;
 		}
 
 		// Parse and validate request body
@@ -106,7 +114,8 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 			platform.env.OPENROUTER_TOKEN,
 			platform.env.AI_GATEWAY_BASE_URL,
 			platform.env.FN_MODEL,
-			platform.env.POLICIES
+			platform.env.POLICIES,
+			(platform.env as any).CF_AIG_TOKEN
 		);
 
 		// Prepare input for pace note generation
@@ -170,17 +179,9 @@ export const POST: RequestHandler = async ({ request, platform }) => {
 // Optional: GET endpoint to provide configuration data
 export const GET: RequestHandler = async ({ request, platform }) => {
 	try {
-		// For GET endpoint returning static configuration, allow access in development
-		// when API_KEY is not configured
-		if (platform?.env?.API_KEY) {
-			// Authentication required when API_KEY is configured
-			const authMiddleware = createAuthMiddleware(platform.env.API_KEY);
-			const authError = authMiddleware(request);
-			if (authError) {
-				return authError;
-			}
-		}
-
+		// Configuration endpoint is public - no authentication required
+		// This allows the frontend to fetch available ranks without API key
+		
 		// Return configuration data for the frontend
 		return json({
 			success: true,

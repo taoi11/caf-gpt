@@ -4,7 +4,7 @@
 	"name": "caf-gpt",
 	"main": ".svelte-kit/cloudflare/_worker.js",
 	"compatibility_date": "2025-06-10",
-	"assets": {
+	"assets": {	// https://developers.cloudflare.com/workers/static-assets/binding/
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
 	},
@@ -22,18 +22,9 @@
       "bucket_name": "policies"
     }
   ],
-	/**
-	 * Environment Variables
-	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-	 */
-	"vars": { 
+	"vars": {	// https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 		"FN_MODEL": "google/gemini-2.5-pro-preview"
-	},
-	/**
-	 * Note: Use secrets to store sensitive data.
-	 * https://developers.cloudflare.com/workers/configuration/secrets/
-	 */
-
+	}
 	/**
 	 * Static Assets
 	 * https://developers.cloudflare.com/workers/static-assets/binding/

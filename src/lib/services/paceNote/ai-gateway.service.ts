@@ -51,11 +51,20 @@ export class AIGatewayService {
 	constructor(
 		openrouterToken: string,
 		aiGatewayBaseURL: string,
-		config: AIGatewayConfig
+		config: AIGatewayConfig,
+		cfAigToken?: string
 	) {
+		const headers: Record<string, string> = {};
+		
+		// Add CF AI Gateway authorization header if provided
+		if (cfAigToken) {
+			headers['cf-aig-authorization'] = `Bearer ${cfAigToken}`;
+		}
+
 		this.openai = new OpenAI({
 			apiKey: openrouterToken,
-			baseURL: aiGatewayBaseURL
+			baseURL: aiGatewayBaseURL,
+			defaultHeaders: headers
 		});
 		this.config = { ...DEFAULT_CONFIG, ...config };
 	}
@@ -180,7 +189,8 @@ export class AIGatewayService {
 export function createAIGatewayService(
 	openrouterToken: string,
 	aiGatewayBaseURL: string,
-	config: AIGatewayConfig
+	config: AIGatewayConfig,
+	cfAigToken?: string
 ): AIGatewayService {
-	return new AIGatewayService(openrouterToken, aiGatewayBaseURL, config);
+	return new AIGatewayService(openrouterToken, aiGatewayBaseURL, config, cfAigToken);
 }
