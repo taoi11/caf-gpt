@@ -3,7 +3,7 @@
 </script>
 
 <svelte:head>
-	<title>CAF GPT - AI-Powered Military Tools</title>
+	<title>CAF GPT - AI-Powered Tools</title>
 	<meta name="description" content="AI-powered tools for Canadian Armed Forces personnel including pace note generation and policy assistance." />
 </svelte:head>
 
@@ -14,8 +14,8 @@
 			CAF GPT
 		</h1>
 		<p class="text-xl text-gray-600 mb-8 max-w-3xl mx-auto">
-			AI-powered tools designed for Canadian Armed Forces personnel. 
-			Generate professional pace notes, search policy documents, and streamline administrative tasks.
+			AI-powered tools for lazy J-bros. 
+			Generate professional pace notes and search policy documents.
 		</p>
 		<div class="flex flex-col sm:flex-row gap-4 justify-center">
 			<a 
@@ -42,7 +42,7 @@
 				Available Tools
 			</h2>
 			<p class="text-lg text-gray-600 max-w-2xl mx-auto">
-				Professional AI tools built specifically for military personnel and administrative tasks.
+				Professional AI tools for lazy J-bros.
 			</p>
 		</div>
 
@@ -58,29 +58,8 @@
 					PaceNote Generator
 				</h3>
 				<p class="text-gray-600 mb-6">
-					Generate professional pace notes using AI. Rank-specific templates ensure appropriate 
-					competency frameworks and structured feedback for all CAF ranks.
+					Generate good enough pacenotes for lazy J-bros.
 				</p>
-				<div class="space-y-2 mb-6">
-					<div class="flex items-center text-sm text-gray-600">
-						<svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-							<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-						</svg>
-						Rank-specific competencies (Cpl, MCpl, Sgt, WO)
-					</div>
-					<div class="flex items-center text-sm text-gray-600">
-						<svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-							<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-						</svg>
-						Professional structured format
-					</div>
-					<div class="flex items-center text-sm text-gray-600">
-						<svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-							<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-						</svg>
-						AI-powered with Cloudflare Workers
-					</div>
-				</div>
 				<a 
 					href="/pacenote" 
 					class="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
@@ -144,15 +123,14 @@
 		<h2 class="text-3xl font-bold text-gray-900 mb-8">
 			Built on Modern Technology
 		</h2>
-		<div class="grid md:grid-cols-3 gap-8 max-w-4xl mx-auto">
+		<div class="grid md:grid-cols-2 gap-8 max-w-4xl mx-auto">
 			<div class="text-center">
 				<div class="w-16 h-16 bg-orange-100 rounded-lg flex items-center justify-center mx-auto mb-4">
 					<svg class="w-8 h-8 text-orange-600" fill="currentColor" viewBox="0 0 20 20">
 						<path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
 					</svg>
 				</div>
-				<h3 class="text-lg font-semibold text-gray-900 mb-2">Cloudflare Workers AI</h3>
-				<p class="text-gray-600">Edge-deployed AI models for fast, reliable responses</p>
+				<h3 class="text-lg font-semibold text-gray-900 mb-2">Cloudflare Workers</h3>
 			</div>
 			<div class="text-center">
 				<div class="w-16 h-16 bg-blue-100 rounded-lg flex items-center justify-center mx-auto mb-4">
@@ -161,16 +139,6 @@
 					</svg>
 				</div>
 				<h3 class="text-lg font-semibold text-gray-900 mb-2">SvelteKit</h3>
-				<p class="text-gray-600">Modern web framework for fast, interactive interfaces</p>
-			</div>
-			<div class="text-center">
-				<div class="w-16 h-16 bg-green-100 rounded-lg flex items-center justify-center mx-auto mb-4">
-					<svg class="w-8 h-8 text-green-600" fill="currentColor" viewBox="0 0 20 20">
-						<path fill-rule="evenodd" d="M2 5a2 2 0 012-2h8a2 2 0 012 2v10a2 2 0 002 2H4a2 2 0 01-2-2V5zm3 1h6v4H5V6zm6 6H5v2h6v-2z" clip-rule="evenodd"></path>
-					</svg>
-				</div>
-				<h3 class="text-lg font-semibold text-gray-900 mb-2">Serverless</h3>
-				<p class="text-gray-600">Scalable, cost-effective infrastructure</p>
 			</div>
 		</div>
 	</div>

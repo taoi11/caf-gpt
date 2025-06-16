@@ -32,8 +32,8 @@
 	<footer class="bg-white border-t mt-auto">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 			<div class="text-center text-gray-500 text-sm">
-				<p>CAF GPT - AI-Powered Military Tools</p>
-				<p class="mt-2">Powered by Cloudflare Workers AI</p>
+				<p>CAF GPT - AI-Powered Tools</p>
+				<p class="mt-2">Powered by Cloudflare Workers</p>
 			</div>
 		</div>
 	</footer>

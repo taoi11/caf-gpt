@@ -94,8 +94,7 @@
 			PaceNote Generator
 		</h1>
 		<p class="text-lg text-gray-600 max-w-2xl mx-auto">
-			Generate professional pace notes using AI with rank-specific competency frameworks 
-			and structured feedback templates.
+			Generate good enough pacenotes for lazy J-bros.
 		</p>
 	</div>
 
@@ -250,19 +249,19 @@
 		<h3 class="text-lg font-semibold text-blue-900 mb-4">Usage Tips</h3>
 		<div class="grid md:grid-cols-2 gap-4 text-sm text-blue-800">
 			<div>
-				<h4 class="font-medium mb-2">Effective Observations</h4>
+				<h4 class="font-medium mb-2">garbage in, garbage out</h4>
 				<ul class="space-y-1 text-blue-700">
 					<li>• Include specific examples and achievements</li>
-					<li>• Mention dates and context when relevant</li>
-					<li>• Focus on professional behaviors and competencies</li>
+					<li>• Mention context and relevant details</li>
+					<li>• Acronyms, Jargon and abbreviations are fine</li>
 				</ul>
 			</div>
 			<div>
 				<h4 class="font-medium mb-2">Best Practices</h4>
 				<ul class="space-y-1 text-blue-700">
-					<li>• Review and edit generated content before use</li>
-					<li>• Ensure accuracy of names and details</li>
-					<li>• Customize language to match your unit's style</li>
+					<li>• Do not include sensitive information</li>
+					<li>• Use placeholders for names and details</li>
+					<li>• Review and edit the generated note</li>
 				</ul>
 			</div>
 		</div>
