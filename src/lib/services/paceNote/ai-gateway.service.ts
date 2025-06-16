@@ -39,9 +39,7 @@ export interface AIGatewayError {
  * Default configuration for AI Gateway
  */
 const DEFAULT_CONFIG: Partial<AIGatewayConfig> = {
-	maxTokens: 1000,
-	temperature: 0.7,
-	topP: 0.9
+	temperature: 0.1
 };
 
 export class AIGatewayService {
