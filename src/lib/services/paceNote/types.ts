@@ -37,7 +37,6 @@ export interface PaceNoteOutput {
 export interface RankInfo {
 	value: string;
 	label: string;
-	description: string;
 }
 
 /**

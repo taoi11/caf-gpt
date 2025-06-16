@@ -111,11 +111,6 @@
 							<option value={rank.value}>{rank.label}</option>
 						{/each}
 					</select>
-					{#if selectedRank}
-						<p class="text-sm text-gray-500 mt-1">
-							{availableRanks.find(r => r.value === selectedRank)?.description}
-						</p>
-					{/if}
 				</div>
 				
 				<!-- Observations -->

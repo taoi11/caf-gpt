@@ -12,23 +12,19 @@ import type { RankInfo } from './types.js';
 export const AVAILABLE_RANKS: RankInfo[] = [
 	{
 		value: 'Cpl',
-		label: 'Corporal (Cpl)',
-		description: 'Junior NCO - Team leadership and technical proficiency'
+		label: 'Corporal (Cpl)'
 	},
 	{
 		value: 'MCpl',
-		label: 'Master Corporal (MCpl)', 
-		description: 'Experienced NCO - Team mentoring and training'
+		label: 'Master Corporal (MCpl)'
 	},
 	{
 		value: 'Sgt',
-		label: 'Sergeant (Sgt)',
-		description: 'Senior NCO - Supervision and management'
+		label: 'Sergeant (Sgt)'
 	},
 	{
 		value: 'WO',
-		label: 'Warrant Officer (WO)',
-		description: 'Senior leader - Strategic planning and organizational impact'
+		label: 'Warrant Officer (WO)'
 	}
 ];
 

@@ -2,18 +2,12 @@ import type { PageServerLoad, Actions } from './$types';
 import { fail } from '@sveltejs/kit';
 import { PaceNoteService } from '$lib/services/paceNote/service.js';
 import type { PaceNoteInput } from '$lib/services/paceNote/types.js';
+import { AVAILABLE_RANKS } from '$lib/services/paceNote/constants.js';
 
 // Define valid ranks
 type ValidRank = 'Cpl' | 'MCpl' | 'Sgt' | 'WO';
 
 // Configuration data
-const AVAILABLE_RANKS = [
-	{ value: 'Cpl', label: 'Corporal (Cpl)', description: 'Junior NCO - Team leadership and technical proficiency' },
-	{ value: 'MCpl', label: 'Master Corporal (MCpl)', description: 'Experienced NCO - Team mentoring and training' },
-	{ value: 'Sgt', label: 'Sergeant (Sgt)', description: 'Senior NCO - Supervision and management' },
-	{ value: 'WO', label: 'Warrant Officer (WO)', description: 'Senior leader - Strategic planning and organizational impact' }
-];
-
 const LIMITS = {
 	maxObservationLength: 2000,
 	maxCompetencyFocus: 5
