@@ -42,11 +42,12 @@ export class PaceNoteService {
 			// Validate input
 			this.validateInput(input);
 			
-			// Build the prompt with inline competencies
-			const prompt = this.buildPrompt(input);
+			// Build the system prompt and user message
+			const systemPrompt = await this.buildSystemPrompt(input.rank, input.competencyFocus);
+			const userMessage = this.buildUserMessage(input.observations);
 
-			// Generate the pace note using AI
-			const response = await this.aiService.generateFromPrompt(prompt);
+			// Generate the pace note using AI with proper message structure
+			const response = await this.aiService.generateFromPrompt(userMessage, systemPrompt);
 
 			return {
 				feedback: response.response,
@@ -102,87 +103,50 @@ export class PaceNoteService {
 	}
 
 	/**
-	 * Build the complete prompt for pace note generation
+	 * Build the system prompt with competencies and examples
 	 */
-	private buildPrompt(input: PaceNoteInput): string {
-		const competencies = this.getCompetenciesForRank(input.rank);
-		const examples = this.getExamples();
+	private async buildSystemPrompt(rank: PaceNoteRank, competencyFocus?: string[]): Promise<string> {
+		const competencies = await this.getCompetenciesForRank(rank);
+		const examples = await this.getExamples();
 		
-		const competencyList = competencies
-			.map((comp: string, index: number) => `${index + 1}. ${comp}`)
-			.join('\n');
-		
-		// Replace the placeholder variables in the template
-		let prompt = basePromptTemplate
-			.replace('{{competency_list}}', competencyList)
+		// Replace the placeholder variables in the base template
+		let systemPrompt = basePromptTemplate
+			.replace('{{competency_list}}', competencies)
 			.replace('{{examples}}', examples);
 		
-		// Add context specific to this pace note
-		prompt += `\n\nRANK: ${input.rank}\n\n`;
-		prompt += `OBSERVATIONS:\n${input.observations.trim()}`;
-
 		// Add specific competency focus if provided
-		if (input.competencyFocus && input.competencyFocus.length > 0) {
-			const focusAreas = input.competencyFocus.join(', ');
-			prompt += `\n\nSPECIFIC COMPETENCY FOCUS: Pay particular attention to ${focusAreas}`;
+		if (competencyFocus && competencyFocus.length > 0) {
+			const focusAreas = competencyFocus.join(', ');
+			systemPrompt += `\n\nSPECIFIC COMPETENCY FOCUS: Pay particular attention to ${focusAreas}`;
 		}
 
-		return prompt;
+		return systemPrompt;
 	}
 
 	/**
-	 * Get competencies for a specific rank (inline implementation)
+	 * Build the user message with just the observations
 	 */
-	private getCompetenciesForRank(rank: PaceNoteRank): string[] {
-		const competencies = {
-			'Cpl': [
-				'Leadership and Team Management',
-				'Technical and Professional Competence',
-				'Communication and Interpersonal Skills',
-				'Problem Solving and Decision Making',
-				'Adaptability and Learning',
-				'Initiative and Accountability'
-			],
-			'MCpl': [
-				'Supervision and Mentoring',
-				'Training and Development',
-				'Operational Planning',
-				'Resource Management',
-				'Quality Assurance',
-				'Professional Development'
-			],
-			'Sgt': [
-				'Strategic Planning',
-				'Personnel Management',
-				'Operational Leadership',
-				'Risk Management',
-				'Performance Management',
-				'Change Management'
-			],
-			'WO': [
-				'Organizational Leadership',
-				'Strategic Vision',
-				'Policy Development',
-				'Stakeholder Management',
-				'Innovation and Improvement',
-				'Professional Excellence'
-			]
-		};
+	private buildUserMessage(observations: string): string {
+		return observations.trim();
+	}
+
+	/**
+	 * Get competencies for a specific rank from R2 storage
+	 */
+	private async getCompetenciesForRank(rank: PaceNoteRank): Promise<string> {
+		const filePath = R2_PATHS.COMPETENCIES(rank);
+		const competencyContent = await readFileAsText(this.policiesBucket, filePath);
 		
-		return competencies[rank] || competencies['Cpl'];
+		// Return the entire file content as-is
+		return competencyContent;
 	}
 
 	/**
-	 * Get example pace notes (inline implementation)
+	 * Get example pace notes from R2 storage
 	 */
-	private getExamples(): string {
-		return `
-Example 1: During the field exercise, the member demonstrated exceptional leadership by coordinating multiple teams under challenging conditions. The member's clear communication and decisive action resulted in successful mission completion ahead of schedule.
-
-Example 2: The member consistently showed initiative by identifying process improvements and implementing solutions that enhanced unit efficiency. This proactive approach contributed to a 15% improvement in operational readiness.
-
-Example 3: When faced with equipment failure, the member quickly adapted and found alternative solutions, ensuring minimal disruption to operations. The member's technical expertise and problem-solving skills were instrumental in maintaining mission success.
-		`.trim();
+	private async getExamples(): Promise<string> {
+		const exampleContent = await readFileAsText(this.policiesBucket, R2_PATHS.EXAMPLES);
+		return exampleContent;
 	}
 
 	/**
