@@ -30,9 +30,6 @@ export const GET: RequestHandler = async ({ platform }) => {
 			}
 		}
 
-		// Check API key configuration
-		status.checks.auth = !!platform?.env?.API_KEY;
-
 		// Check R2 storage
 		status.checks.storage = !!platform?.env?.POLICIES;
 

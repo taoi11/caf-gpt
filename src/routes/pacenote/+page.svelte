@@ -9,7 +9,7 @@
 	// Reactive state based on server data
 	$: availableRanks = data.availableRanks;
 	$: isConfigured = data.isConfigured;
-	$: debugInfo = data.debug; // Add debug info
+	$: debugInfo = data.debug; // Access debug info with proper typing
 	
 	// Form state
 	let selectedRank = form?.rank || '';
@@ -22,6 +22,9 @@
 	$: error = form?.error || '';
 	$: usage = form?.success ? form.usage : { tokens: 0, cost: 0 };
 	
+	// Reference for output box scrolling
+	let outputBoxElement: HTMLDivElement;
+	
 	// Form enhancement for better UX
 	const handleSubmit = () => {
 		isGenerating = true;
@@ -29,6 +32,13 @@
 		return async ({ update }: { update: () => Promise<void> }) => {
 			isGenerating = false;
 			await update();
+			// Scroll to center the output box after form submission
+			if (outputBoxElement) {
+				outputBoxElement.scrollIntoView({ 
+					behavior: 'smooth', 
+					block: 'center' 
+				});
+			}
 		};
 	};
 	
@@ -67,7 +77,7 @@
 		</p>
 	</div>
 
-	<div class="grid lg:grid-cols-2 gap-8">
+	<div class="space-y-8">
 		<!-- Input Form -->
 		<div class="bg-white rounded-lg shadow-sm border p-6">
 			<h2 class="text-xl font-semibold text-gray-900 mb-6">Generate Pace Note</h2>
@@ -91,7 +101,6 @@
 						<div>OpenRouter Token: {debugInfo.hasOpenRouter ? '✅' : '❌'}</div>
 						<div>AI Gateway URL: {debugInfo.hasAIGateway ? '✅' : '❌'}</div>
 						<div>FN Model: {debugInfo.hasFnModel ? '✅' : '❌'}</div>
-						<div>API Key: {debugInfo.hasAPIKey ? '✅' : '❌'}</div>
 						<div>CF AIG Token: {debugInfo.hasCfAigToken ? '✅' : '❌'}</div>
 						<div>Policies Bucket: {debugInfo.hasPoliciesBucket ? '✅' : '❌'}</div>
 					</div>
@@ -181,7 +190,7 @@
 		</div>
 		
 		<!-- Results -->
-		<div class="bg-white rounded-lg shadow-sm border p-6">
+		<div bind:this={outputBoxElement} class="bg-white rounded-lg shadow-sm border p-6">
 			<div class="flex items-center justify-between mb-6">
 				<h2 class="text-xl font-semibold text-gray-900">Generated Pace Note</h2>
 				{#if generatedFeedback}

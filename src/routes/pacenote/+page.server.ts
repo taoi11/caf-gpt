@@ -29,7 +29,6 @@ export const load: PageServerLoad = async ({ platform }) => {
 		hasOpenRouter: !!env?.OPENROUTER_TOKEN,
 		hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
 		hasFnModel: !!env?.FN_MODEL,
-		hasAPIKey: !!env?.API_KEY,
 		hasCfAigToken: !!env?.CF_AIG_TOKEN
 	});
 	
@@ -45,7 +44,6 @@ export const load: PageServerLoad = async ({ platform }) => {
 		hasOpenRouter: !!env?.OPENROUTER_TOKEN,
 		hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
 		hasFnModel: !!env?.FN_MODEL,
-		hasAPIKey: !!env?.API_KEY,
 		hasCfAigToken: !!env?.CF_AIG_TOKEN,
 		hasPoliciesBucket: !!platform?.env?.POLICIES
 	};
@@ -154,7 +152,6 @@ export const actions: Actions = {
 				hasOpenRouter: !!env?.OPENROUTER_TOKEN,
 				hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
 				hasFnModel: !!env?.FN_MODEL,
-				hasAPIKey: !!env?.API_KEY,
 				hasCfAigToken: !!env?.CF_AIG_TOKEN,
 				hasPoliciesBucket: !!platform?.env?.POLICIES
 			});
