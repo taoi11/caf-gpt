@@ -9,6 +9,7 @@
 	// Reactive state based on server data
 	$: availableRanks = data.availableRanks;
 	$: isConfigured = data.isConfigured;
+	$: debugInfo = data.debug; // Add debug info
 	
 	// Form state
 	let selectedRank = form?.rank || '';
@@ -78,6 +79,21 @@
 							<path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
 						</svg>
 						<p class="text-sm text-yellow-700">Service not fully configured. Some features may not work.</p>
+					</div>
+				</div>
+			{/if}
+
+			<!-- Debug Information -->
+			{#if debugInfo}
+				<div class="bg-blue-50 border border-blue-200 rounded-md p-4 mb-6">
+					<h3 class="text-sm font-medium text-blue-800 mb-2">Debug Information</h3>
+					<div class="text-xs text-blue-700 space-y-1">
+						<div>OpenRouter Token: {debugInfo.hasOpenRouter ? '✅' : '❌'}</div>
+						<div>AI Gateway URL: {debugInfo.hasAIGateway ? '✅' : '❌'}</div>
+						<div>FN Model: {debugInfo.hasFnModel ? '✅' : '❌'}</div>
+						<div>API Key: {debugInfo.hasAPIKey ? '✅' : '❌'}</div>
+						<div>CF AIG Token: {debugInfo.hasCfAigToken ? '✅' : '❌'}</div>
+						<div>Policies Bucket: {debugInfo.hasPoliciesBucket ? '✅' : '❌'}</div>
 					</div>
 				</div>
 			{/if}

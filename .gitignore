@@ -29,3 +29,4 @@ vite.config.ts.timestamp-*
 *.d.ts
 
 .dev.vars*
+!.dev.vars.example

@@ -24,6 +24,15 @@ export const load: PageServerLoad = async ({ platform }) => {
 	// Get environment variables from either Cloudflare Workers or Node.js
 	const env = platform?.env || process.env;
 	
+	// Debug: Log available environment variables
+	console.log('Available env vars:', {
+		hasOpenRouter: !!env?.OPENROUTER_TOKEN,
+		hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
+		hasFnModel: !!env?.FN_MODEL,
+		hasAPIKey: !!env?.API_KEY,
+		hasCfAigToken: !!env?.CF_AIG_TOKEN
+	});
+	
 	// Check if required environment variables are available
 	const hasRequiredConfig = Boolean(
 		env?.OPENROUTER_TOKEN &&
@@ -31,10 +40,21 @@ export const load: PageServerLoad = async ({ platform }) => {
 		env?.FN_MODEL
 	);
 
+	// Debug information to return to client
+	const debugInfo = {
+		hasOpenRouter: !!env?.OPENROUTER_TOKEN,
+		hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
+		hasFnModel: !!env?.FN_MODEL,
+		hasAPIKey: !!env?.API_KEY,
+		hasCfAigToken: !!env?.CF_AIG_TOKEN,
+		hasPoliciesBucket: !!platform?.env?.POLICIES
+	};
+
 	return {
 		availableRanks: AVAILABLE_RANKS,
 		limits: LIMITS,
-		isConfigured: hasRequiredConfig
+		isConfigured: hasRequiredConfig,
+		debug: debugInfo // Add debug info for troubleshooting
 	};
 };
 
@@ -129,13 +149,33 @@ export const actions: Actions = {
 			// Get environment variables from either Cloudflare Workers or Node.js
 			const env = platform?.env || process.env;
 			
+			// Debug: Log available environment variables
+			console.log('Available env vars:', {
+				hasOpenRouter: !!env?.OPENROUTER_TOKEN,
+				hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
+				hasFnModel: !!env?.FN_MODEL,
+				hasAPIKey: !!env?.API_KEY,
+				hasCfAigToken: !!env?.CF_AIG_TOKEN,
+				hasPoliciesBucket: !!platform?.env?.POLICIES
+			});
+			
+			// Check if R2 bucket is available
+			if (!platform?.env?.POLICIES) {
+				return fail(500, { 
+					error: 'R2 bucket (POLICIES) is not available. Please check your Cloudflare bindings.',
+					rank,
+					observations,
+					competencyFocus
+				});
+			}
+			
 			// Create PaceNote service instance
 			const paceNoteService = new PaceNoteService(
 				env.OPENROUTER_TOKEN!,
 				env.AI_GATEWAY_BASE_URL!,
 				env.FN_MODEL!,
-				platform?.env?.POLICIES || null, // R2 bucket only available in Cloudflare Workers
-				(env as any).CF_AIG_TOKEN || process.env.CF_AIG_TOKEN
+				platform.env.POLICIES, // R2 bucket only available in Cloudflare Workers
+				env.CF_AIG_TOKEN
 			);
 
 			// Prepare input for pace note generation
