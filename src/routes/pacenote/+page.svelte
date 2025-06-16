@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { enhance } from '$app/forms';
+	import { enhance, applyAction } from '$app/forms';
 	import type { PageData, ActionData } from './$types';
 	
 	// Props from server-side load function
@@ -10,11 +10,18 @@
 	$: availableRanks = data.availableRanks;
 	$: isConfigured = data.isConfigured;
 	
-	// Form state
-	let selectedRank = form?.rank || '';
-	let observations = form?.observations || '';
-	let competencyFocus: string[] = form?.competencyFocus || [];
+	// Form state - preserve user input independently of server response
+	let selectedRank = '';
+	let observations = '';
+	let competencyFocus: string[] = [];
 	let isGenerating = false;
+	
+	// Only restore form data on validation errors (so user can correct and retry)
+	$: if (form && form.error && form.rank) {
+		selectedRank = form.rank;
+		observations = form.observations || '';
+		competencyFocus = form.competencyFocus || [];
+	}
 	
 	// Results from form action
 	$: generatedFeedback = form?.success ? form.feedback : '';
@@ -28,16 +35,32 @@
 	const handleSubmit = () => {
 		isGenerating = true;
 		error = '';
-		return async ({ update }: { update: () => Promise<void> }) => {
+		
+		// Store current form values to preserve them
+		const currentRank = selectedRank;
+		const currentObservations = observations;
+		const currentCompetencyFocus = [...competencyFocus];
+		
+		return async ({ result }: { result: any }) => {
 			isGenerating = false;
-			await update();
-			// Scroll to center the output box after form submission
-			if (outputBoxElement) {
-				outputBoxElement.scrollIntoView({ 
-					behavior: 'smooth', 
-					block: 'center' 
-				});
-			}
+			
+			// Apply the action result but preserve our form state
+			await applyAction(result);
+			
+			// Restore form values immediately to prevent any flash
+			selectedRank = currentRank;
+			observations = currentObservations;
+			competencyFocus = currentCompetencyFocus;
+			
+			// Small delay to ensure DOM is updated before scrolling
+			setTimeout(() => {
+				if (outputBoxElement) {
+					outputBoxElement.scrollIntoView({ 
+						behavior: 'smooth', 
+						block: 'center' 
+					});
+				}
+			}, 50);
 		};
 	};
 	
