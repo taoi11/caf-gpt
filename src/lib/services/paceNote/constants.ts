@@ -38,9 +38,7 @@ export const VALID_RANKS = ['Cpl', 'MCpl', 'Sgt', 'WO'] as const;
  * Note: model is configured via FN_MODEL environment variable
  */
 export const AI_GATEWAY_CONFIG = {
-	maxTokens: 800,
-	temperature: 0.7,
-	topP: 0.9
+	temperature: 0.1
 } as const;
 
 /**
