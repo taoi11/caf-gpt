@@ -32,7 +32,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops:
 - **Language**: TypeScript
 - **AI Provider**: AI Gateway with OpenRouter
 - **Storage**: Cloudflare R2
-- **Authentication**: API Key with rate limiting
+- **Security**: Server-side only, built-in CSRF protection
 - **Styling**: Tailwind CSS
 
 ## Quick Start
@@ -43,17 +43,17 @@ CAF GPT provides AI-powered assistance tools for CAF troops:
 - OpenRouter account and API key
 - Wrangler CLI installed 
 
-### API Configuration
+### Configuration
 
-The application uses API key authentication for secure access. 
+The application runs entirely server-side for security.
 
-**For Production (Recommended):**
-Use Cloudflare secrets for secure key management:
+**Required Cloudflare Secrets:**
 ```bash
-wrangler secret put API_KEY
 wrangler secret put OPENROUTER_TOKEN
 wrangler secret put AI_GATEWAY_BASE_URL
 ```
+
+**Note**: No API key authentication needed - the application is secured by running server-side only.
 
 ### Required Cloudflare Bindings
 
@@ -63,7 +63,6 @@ Configure these bindings in your Cloudflare dashboard or `wrangler.jsonc`:
 - **Environment Variables**:
     - `FN_MODEL` - AI model to use (configured in wrangler.jsonc)
 - **Secrets**: 
-    - `API_KEY` - API authentication key
     - `OPENROUTER_TOKEN` - OpenRouter API key for AI Gateway
     - `AI_GATEWAY_BASE_URL` - AI Gateway endpoint URL
 
@@ -80,54 +79,29 @@ The application uses Cloudflare AI Gateway with OpenRouter as the provider:
 
 This setup provides cost tracking, caching, and monitoring through Cloudflare AI Gateway while using OpenRouter's model providers.
 
-## API Reference
+## Architecture Changes
 
-### Authentication
+**New Secure Server-Side Architecture:**
+- **No Public APIs**: All backend logic runs server-side via SvelteKit load functions and form actions
+- **Built-in CSRF Protection**: SvelteKit provides automatic CSRF protection for form submissions
+- **No Authentication Required**: Frontend and backend are unified, eliminating the need for API keys
+- **Better Performance**: Server-side rendering with progressive enhancement
+- **Cloudflare Workers Compatible**: Optimized for serverless deployment
 
-All API endpoints (except health check) require authentication via Bearer token:
+**Removed Components:**
+- API endpoints (`/api/pacenote`) - replaced with server-side actions
+- API key authentication system - no longer needed
+- Rate limiting middleware - handled at Cloudflare level
 
-```bash
-curl -H "Authorization: Bearer your-api-key" \
-     -H "Content-Type: application/json" \
-     https://your-app.pages.dev/api/pacenote
-```
+## Available Endpoints
 
-### Endpoints
-
-#### Health Check
+### Health Check (Still Available)
 ```bash
 GET /api/health
 # Returns: Service status and binding availability
 ```
 
-#### PaceNote Generation
-```bash
-POST /api/pacenote
-Content-Type: application/json
-Authorization: Bearer your-api-key
-
-{
-  "rank": "Cpl",
-  "observations": "Member demonstrated exceptional leadership...",
-  "competencyFocus": ["Leadership", "Technical Competence"] // optional
-}
-
-# Returns: Generated pace note with usage metrics
-```
-
-#### PaceNote Configuration
-```bash
-GET /api/pacenote
-Authorization: Bearer your-api-key
-
-# Returns: Available ranks, limits, and configuration
-```
-
-### Rate Limiting
-
-- **10 requests per minute per IP**
-- **Rate limit headers** included in responses
-- **429 status code** when limit exceeded
+**Note**: The PaceNote functionality is now fully integrated into the web interface at `/pacenote` and no longer exposes public API endpoints. This provides better security and user experience.
 
 ## Project Structure
 
