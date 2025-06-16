@@ -4,8 +4,8 @@
 	"version": "0.0.1",
 	"type": "module",
 	"scripts": {
-		"dev": "wrangler dev",
-		"dev:wrangler": "wrangler dev",
+		"dev": "wrangler dev --local",
+		"dev:remote": "wrangler dev",
 		"build": "vite build",
 		"preview": "npm run build && wrangler dev",
 		"prepare": "svelte-kit sync || echo ''",
