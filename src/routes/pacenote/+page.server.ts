@@ -24,14 +24,6 @@ export const load: PageServerLoad = async ({ platform }) => {
 	// Get environment variables from either Cloudflare Workers or Node.js
 	const env = platform?.env || process.env;
 	
-	// Debug: Log available environment variables
-	console.log('Available env vars:', {
-		hasOpenRouter: !!env?.OPENROUTER_TOKEN,
-		hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
-		hasFnModel: !!env?.FN_MODEL,
-		hasCfAigToken: !!env?.CF_AIG_TOKEN
-	});
-	
 	// Check if required environment variables are available
 	const hasRequiredConfig = Boolean(
 		env?.OPENROUTER_TOKEN &&
@@ -39,20 +31,10 @@ export const load: PageServerLoad = async ({ platform }) => {
 		env?.FN_MODEL
 	);
 
-	// Debug information to return to client
-	const debugInfo = {
-		hasOpenRouter: !!env?.OPENROUTER_TOKEN,
-		hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
-		hasFnModel: !!env?.FN_MODEL,
-		hasCfAigToken: !!env?.CF_AIG_TOKEN,
-		hasPoliciesBucket: !!platform?.env?.POLICIES
-	};
-
 	return {
 		availableRanks: AVAILABLE_RANKS,
 		limits: LIMITS,
-		isConfigured: hasRequiredConfig,
-		debug: debugInfo // Add debug info for troubleshooting
+		isConfigured: hasRequiredConfig
 	};
 };
 
@@ -146,15 +128,6 @@ export const actions: Actions = {
 		try {
 			// Get environment variables from either Cloudflare Workers or Node.js
 			const env = platform?.env || process.env;
-			
-			// Debug: Log available environment variables
-			console.log('Available env vars:', {
-				hasOpenRouter: !!env?.OPENROUTER_TOKEN,
-				hasAIGateway: !!env?.AI_GATEWAY_BASE_URL,
-				hasFnModel: !!env?.FN_MODEL,
-				hasCfAigToken: !!env?.CF_AIG_TOKEN,
-				hasPoliciesBucket: !!platform?.env?.POLICIES
-			});
 			
 			// Check if R2 bucket is available
 			if (!platform?.env?.POLICIES) {
