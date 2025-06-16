@@ -54,7 +54,9 @@ export class AIGatewayService {
 		config: AIGatewayConfig,
 		cfAigToken?: string
 	) {
-		const headers: Record<string, string> = {};
+		const headers: Record<string, string> = {
+			'X-Title': 'caf-gpt'
+		};
 		
 		// Add CF AI Gateway authorization header if provided
 		if (cfAigToken) {
