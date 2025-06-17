@@ -1,152 +1,72 @@
 import type { PageServerLoad, Actions } from './$types';
-import { fail } from '@sveltejs/kit';
 import { PaceNoteService } from '$lib/services/paceNote/service.js';
-import type { PaceNoteInput } from '$lib/services/paceNote/types.js';
+import type { PaceNoteInput, PaceNoteRank } from '$lib/services/paceNote/types.js';
 import { AVAILABLE_RANKS } from '$lib/services/paceNote/constants.js';
-
-// Define valid ranks
-type ValidRank = 'Cpl' | 'MCpl' | 'Sgt' | 'WO';
-
-// Configuration data
-const LIMITS = {
-	maxObservationLength: 2000,
-	maxCompetencyFocus: 5
-};
+import { hasRequiredConfig, validateEnvironmentConfig, validateR2Bucket } from './config.server.js';
+import { 
+	parseFormData, 
+	validateFormData, 
+	createConfigError, 
+	createServiceError,
+	getFormLimits 
+} from './form.server.js';
 
 // Load function - runs on server before page renders
 export const load: PageServerLoad = async ({ platform }) => {
-	// Get environment variables from either Cloudflare Workers or Node.js
-	const env = platform?.env || process.env;
-	
-	// Check if required environment variables are available
-	const hasRequiredConfig = Boolean(
-		env?.OPENROUTER_TOKEN &&
-		env?.AI_GATEWAY_BASE_URL &&
-		env?.FN_MODEL
-	);
-
 	return {
 		availableRanks: AVAILABLE_RANKS,
-		limits: LIMITS,
-		isConfigured: hasRequiredConfig
+		limits: getFormLimits(),
+		isConfigured: hasRequiredConfig(platform)
 	};
 };
 
 // Form actions - handle POST requests securely on server
 export const actions: Actions = {
 	generate: async ({ request, platform }) => {
-		// Get environment variables from either Cloudflare Workers or Node.js
-		const env = platform?.env || process.env;
-		
-		// Check if required services are available
-		if (!env?.OPENROUTER_TOKEN) {
-			return fail(500, { 
-				error: 'OpenRouter token is not configured. Please set up your environment variables.',
-				rank: '',
-				observations: '',
-				competencyFocus: []
-			});
+		// Validate environment configuration
+		const configResult = validateEnvironmentConfig(platform);
+		if (!configResult.isValid) {
+			const missingVars = configResult.missingVars!.join(', ');
+			return createConfigError(
+				`Missing required environment variables: ${missingVars}. Please set up your environment variables.`,
+				{ rank: '', observations: '', competencyFocus: [] }
+			);
 		}
 
-		if (!env?.AI_GATEWAY_BASE_URL) {
-			return fail(500, { 
-				error: 'AI Gateway base URL is not configured. Please set up your environment variables.',
-				rank: '',
-				observations: '',
-				competencyFocus: []
-			});
+		// Validate R2 bucket availability
+		if (!validateR2Bucket(platform)) {
+			return createConfigError(
+				'R2 bucket (POLICIES) is not available. Please check your Cloudflare bindings.',
+				{ rank: '', observations: '', competencyFocus: [] }
+			);
 		}
 
-		if (!env?.FN_MODEL) {
-			return fail(500, { 
-				error: 'AI model is not configured. Please set up your environment variables.',
-				rank: '',
-				observations: '',
-				competencyFocus: []
-			});
-		}
-
-		// Get form data
+		// Parse and validate form data
 		const data = await request.formData();
-		const rank = data.get('rank')?.toString() || '';
-		const observations = data.get('observations')?.toString() || '';
+		const formData = parseFormData(data);
 		
-		// Parse competency focus (can be multiple values)
-		const competencyFocus: string[] = [];
-		data.getAll('competencyFocus').forEach(value => {
-			const strValue = value.toString();
-			if (strValue) competencyFocus.push(strValue);
-		});
-
-		// Validate required fields
-		if (!rank || !observations.trim()) {
-			return fail(400, {
-				error: 'Both rank and observations are required',
-				rank,
-				observations,
-				competencyFocus
-			});
-		}
-
-		// Validate rank
-		const validRanks = AVAILABLE_RANKS.map(r => r.value);
-		if (!validRanks.includes(rank)) {
-			return fail(400, {
-				error: `Rank must be one of: ${validRanks.join(', ')}`,
-				rank,
-				observations,
-				competencyFocus
-			});
-		}
-
-		// Validate observations length
-		if (observations.length > LIMITS.maxObservationLength) {
-			return fail(400, {
-				error: `Observations must be less than ${LIMITS.maxObservationLength} characters`,
-				rank,
-				observations,
-				competencyFocus
-			});
-		}
-
-		// Validate competency focus count
-		if (competencyFocus.length > LIMITS.maxCompetencyFocus) {
-			return fail(400, {
-				error: `Maximum ${LIMITS.maxCompetencyFocus} competency focus areas allowed`,
-				rank,
-				observations,
-				competencyFocus
-			});
+		const validationError = validateFormData(formData);
+		if (validationError) {
+			return validationError;
 		}
 
 		try {
-			// Get environment variables from either Cloudflare Workers or Node.js
-			const env = platform?.env || process.env;
-			
-			// Check if R2 bucket is available
-			if (!platform?.env?.POLICIES) {
-				return fail(500, { 
-					error: 'R2 bucket (POLICIES) is not available. Please check your Cloudflare bindings.',
-					rank,
-					observations,
-					competencyFocus
-				});
-			}
+			const config = configResult.config!;
 			
 			// Create PaceNote service instance
 			const paceNoteService = new PaceNoteService(
-				env.OPENROUTER_TOKEN!,
-				env.AI_GATEWAY_BASE_URL!,
-				env.FN_MODEL!,
-				platform.env.POLICIES, // R2 bucket only available in Cloudflare Workers
-				env.CF_AIG_TOKEN
+				config.openrouterToken,
+				config.aiGatewayBaseUrl,
+				config.model,
+				config.policiesBucket!, // Validated above
+				config.cfAigToken
 			);
 
 			// Prepare input for pace note generation
 			const input: PaceNoteInput = {
-				rank: rank as ValidRank,
-				observations: observations.trim(),
-				competencyFocus
+				rank: formData.rank as PaceNoteRank,
+				observations: formData.observations.trim(),
+				competencyFocus: formData.competencyFocus
 			};
 
 			// Generate the pace note
@@ -159,33 +79,13 @@ export const actions: Actions = {
 				rank: result.rank,
 				generatedAt: result.generatedAt.toISOString(),
 				usage: result.usage,
-				observations,
-				competencyFocus
+				observations: formData.observations,
+				competencyFocus: formData.competencyFocus
 			};
 
 		} catch (error) {
 			console.error('PaceNote generation error:', error);
-
-			// Handle known service errors
-			if (error && typeof error === 'object' && 'code' in error) {
-				const serviceError = error as any;
-				return fail(500, {
-					error: serviceError.message || 'Service error occurred',
-					rank,
-					observations,
-					competencyFocus,
-					code: serviceError.code,
-					details: serviceError.details
-				});
-			}
-
-			// Unknown error
-			return fail(500, {
-				error: 'An unexpected error occurred while generating the pace note',
-				rank,
-				observations,
-				competencyFocus
-			});
+			return createServiceError(error, formData);
 		}
 	}
 };

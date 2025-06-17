@@ -4,9 +4,16 @@ An AI-powered application built with SvelteKit and deployed on Cloudflare's serv
 
 ## Overview
 
-CAF GPT provides AI-powered assistance tools for CAF troops:
-- **PaceNote**: ✅ **Fully Functional** - Generate feedback notes for lazy CAF members based on observations and rank-specific competencies.
+CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modular, maintainable architecture:
+
+- **PaceNote**: ✅ **Fully Functional** - Generate feedback notes for lazy CAF members based on observations and rank-specific competencies. Features a complete co-located module with form handling, results display, and route-specific utilities.
 - **Policy Q&A**: Document-based question answering with citations *(coming soon)*.
+
+**Architecture Highlights:**
+- **Co-located Components**: Route-specific UI components live with their routes
+- **Domain Services**: Business logic organized by functional domain
+- **Type-Safe**: End-to-end TypeScript with strict validation
+- **Server-First**: Security and performance through server-side rendering
 
 ## Architecture
 
@@ -300,9 +307,13 @@ GET /api/health
 │   └── routes/
 │       ├── +layout.svelte      # App layout
 │       ├── +page.svelte        # Landing page
-│       ├── pacenote/
-│       │   ├── +page.server.ts # Server-side logic
-│       │   └── +page.svelte    # PaceNote interface
+│       ├── pacenote/           # 🔥 Co-located PaceNote feature
+│       │   ├── +page.server.ts        # Server-side logic
+│       │   ├── +page.svelte           # Main page component
+│       │   ├── PaceNoteForm.svelte    # Form component
+│       │   ├── PaceNoteResults.svelte # Results display component
+│       │   ├── PaceNoteTips.svelte    # Usage tips component
+│       │   └── ui.ts                  # Route-specific utilities
 │       ├── policy/
 │       │   └── +page.svelte    # Policy Q&A (coming soon)
 │       ├── api/
@@ -316,14 +327,37 @@ GET /api/health
 │   └── fixtures/               # Test fixtures
 ```
 
+### Architecture Philosophy
+
+**Co-location Principle:**
+- **Route-Specific Components**: UI components live with their routes (`/pacenote/*`)
+- **Domain Services**: Business logic grouped by domain (`/services/paceNote/`)
+- **Shared Utilities**: Only truly reusable code lives in `/lib/common/`
+
+**Modular Design:**
+- **Single Responsibility**: Each component and service has one clear purpose
+- **Minimal Dependencies**: Components only import what they need
+- **Clear Boundaries**: Separation between UI logic and business logic
+
 ### Key Components
 
-**Services Layer:**
-- **PaceNote Service**: Co-located business logic, types, and utilities
+**Modular Services Layer:**
+- **PaceNote Service**: Complete domain module with business logic, types, and utilities
 - **AI Gateway Service**: Handles AI provider communication and monitoring
 - **R2 Utilities**: File storage and retrieval operations
+- **Rate Limiting**: Request throttling and quota management
+
+**Co-located Route Components:**
+- **PaceNote Route**: Self-contained feature with all UI components and utilities
+  - `+page.server.ts`: Server-side logic and form actions
+  - `+page.svelte`: Main page orchestration
+  - `PaceNoteForm.svelte`: Form input and validation
+  - `PaceNoteResults.svelte`: Results display and interaction
+  - `PaceNoteTips.svelte`: Static usage guidance
+  - `ui.ts`: Route-specific utilities (scroll, clipboard, etc.)
 
 **SvelteKit Architecture:**
 - **Server Actions**: Form handling with automatic CSRF protection
-- **Load Functions**: Server-side data fetching
+- **Load Functions**: Server-side data fetching and configuration
 - **Progressive Enhancement**: JavaScript-optional functionality
+- **Type Safety**: End-to-end TypeScript validation
