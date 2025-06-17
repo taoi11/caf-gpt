@@ -25,7 +25,7 @@
     }
   ],
 	"vars": {	// https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-		"FN_MODEL": "anthropic/claude-3.7-sonnet:beta"
+		"FN_MODEL": "mistralai/mistral-small-3.1-24b-instruct"
 	}
 	/**
 	 * Service Bindings (communicate between multiple Workers)
