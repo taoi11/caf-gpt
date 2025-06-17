@@ -25,7 +25,7 @@
     }
   ],
 	"vars": {	// https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-		"FN_MODEL": "mistralai/mistral-small-3.1-24b-instruct"
+		"FN_MODEL": "openai/gpt-4.1-mini"
 	}
 	/**
 	 * Service Bindings (communicate between multiple Workers)
