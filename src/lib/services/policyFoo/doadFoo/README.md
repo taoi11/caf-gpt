@@ -1,7 +1,7 @@
 # DOAD PolicyFoo Handler
 
 ## Purpose
-LLM workflow for answering questions related to DOAD (Defence Operations and Activities Directives) policies with authoritative citations. Implements a sophisticated two-stage agent architecture for accurate policy identification and comprehensive response generation.
+LLM workflow for answering questions related to DOAD (Defence Administrative Orders and Directives) policies with authoritative citations. Implements a sophisticated two-stage agent architecture for accurate policy identification and comprehensive response generation.
 
 **See also**: [PolicyFoo Main Documentation](../README.md) | [LEAVE Handler](../leaveFoo/README.md)
 

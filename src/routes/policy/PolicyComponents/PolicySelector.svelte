@@ -4,7 +4,7 @@
 
 	// Policy set descriptions
 	const policyDescriptions: Record<string, string> = {
-		DOAD: 'Defence Operations and Activities Directives - Operational policies and procedures',
+		DOAD: 'Defence Administrative Orders and Directives',
 		LEAVE: 'Leave policies and procedures - Annual, sick, and special leave regulations'
 	};
 

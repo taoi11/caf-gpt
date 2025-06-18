@@ -48,7 +48,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **Error Resilience**: Graceful handling of missing policies and service failures
 
 **Supported Policy Sets:**
-- ✅ **DOAD** (Defence Operations and Activities Directives) - Fully implemented
+- ✅ **DOAD** (Defence Administrative Orders and Directives) - Fully implemented
 - 📋 **LEAVE** (Leave Policies) - Planned for future implementation
 
 **Architecture:**

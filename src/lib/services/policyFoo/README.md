@@ -134,7 +134,7 @@ policyFoo/
 
 ## Policy Sets
 
-### DOAD (Defence Operations and Activities Directives)
+### DOAD (Defence Administrative Orders and Directives)
 - **Status**: ✅ Production Ready
 - **Handler**: `doadFoo/` → [Implementation Details](./doadFoo/README.md)
 - **Policies**: Multiple documents in R2 bucket at `doad/*.md`

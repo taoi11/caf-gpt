@@ -1,7 +1,7 @@
 /**
  * DOAD Policy Handler
  * 
- * Handles DOAD (Defence Operations and Activities Directives) policy queries.
+ * Handles DOAD (Defence Administrative Orders and Directives) policy queries.
  * Implements two-stage agent workflow: Finder → Main Agent.
  */
 
