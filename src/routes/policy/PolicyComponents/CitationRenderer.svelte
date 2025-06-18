@@ -67,31 +67,10 @@
 					{index + 1}.
 				</div>
 				<div class="flex-1 text-xs leading-relaxed">
-					{#if isLinkable(parsed)}
-						<!-- Linkable citation with policy number -->
-						<div class="flex flex-col gap-1">
-							<div class="flex items-center gap-1">
-								<span class="font-mono text-xs text-gray-700">DOAD</span>
-								<a 
-									href={getPolicyUrl(parsed.policyNumber || '')}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="inline-flex items-center gap-1 text-blue-600 no-underline font-medium transition-all duration-200 py-0.5 px-1.5 rounded bg-white border border-gray-200 w-fit hover:bg-blue-600 hover:text-white hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-1 focus:ring-blue-600 focus:ring-offset-1"
-								>
-									<span class="font-mono text-xs">{parsed.policyNumber}</span>
-									<span class="text-xs opacity-70">↗</span>
-								</a>
-							</div>
-							{#if parsed.title}
-								<div class="text-gray-500 text-xs italic mt-0.5 pl-1">{parsed.title}</div>
-							{/if}
-						</div>
-					{:else}
-						<!-- Non-linkable citation -->
-						<div class="text-gray-600 py-0.5 px-1.5 bg-white rounded border border-gray-200">
-							{parsed.fullText}
-						</div>
-					{/if}
+					<!-- Citation display without links -->
+					<div class="text-gray-600 py-0.5 px-1.5 bg-white rounded border border-gray-200">
+						{parsed.fullText}
+					</div>
 				</div>
 			</div>
 		{/each}
@@ -99,7 +78,7 @@
 
 	<div class="pt-2 border-t border-gray-200/50 text-center">
 		<small class="text-xs text-gray-500 leading-tight">
-			Click policy numbers to view full documents. Verify current versions through official CAF channels.
+			Please verify current policy versions through official CAF channels.
 		</small>
 	</div>
 </div>
