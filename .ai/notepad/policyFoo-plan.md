@@ -8,6 +8,42 @@ The PolicyFoo module is an LLM-powered system for answering policy/regulation qu
 ✅ **Documentation**: Clear workflow and structure documented
 🔄 **Implementation Needed**: Core TypeScript files need to be created
 
+## Message Processing Architecture
+
+### Backend Responsibilities (Simple)
+- **Input**: Array of `{ role: "user" | "assistant", content: string }` pairs
+- **Processing**: Use conversation context for LLM prompts
+- **Output**: Raw XML response from LLM as `assistant` message
+- **No Parsing**: Backend doesn't interpret or structure the XML response
+
+### Frontend Responsibilities (Smart)
+- **Conversation Management**: Maintain message history in browser
+- **XML Parsing**: Extract structured data from assistant responses:
+  ```xml
+  <response>
+    <answer>...</answer>
+    <citations>
+      <citation>...</citation>
+    </citations>
+    <follow_up>...</follow_up>
+  </response>
+  ```
+- **UI Rendering**: 
+  - Display answers as formatted text
+  - Render citations as clickable/highlighted elements
+  - Present follow-up questions as suggested actions
+- **Message Storage**: Store both raw XML and parsed content for context
+
+### Benefits of This SvelteKit Architecture
+- **Backend Simplicity**: No XML parsing complexity, easier testing
+- **Frontend Flexibility**: Rich UI interactions, better user experience
+- **Progressive Enhancement**: Works without JavaScript enabled
+- **Type Safety**: End-to-end type safety from server to client
+- **SSR Benefits**: Fast initial page loads, better SEO
+- **Form Validation**: Built-in validation and error handling
+- **Separation of Concerns**: Backend focuses on AI, frontend focuses on UX
+- **Maintainability**: Changes to response format only affect frontend
+
 ## Architecture Overview
 
 ### 1. Router Pattern (`src/lib/services/policyFoo/index.ts`)
@@ -63,7 +99,7 @@ Router → Frontend
    - Configuration interfaces
    - Error types
 
-2. **Create AI Gateway Service** (`src/lib/services/policyFoo/ai-gateway.service.ts`)
+2. **Create AI Gateway Service** (`src/lib/services/policyFoo/ai-gateway.util.ts`)
    - Independent OpenRouter integration
    - Support for multiple models (READER_MODEL, MAIN_MODEL)
    - AI Gateway configuration
@@ -117,12 +153,17 @@ Router → Frontend
    - Configuration management
 
 8. **Frontend Integration**
-   - API endpoint creation
-   - Form handling with policy_set dropdown
+   - **SvelteKit routing**: Use file-based routing (`src/routes/policy/+page.svelte`)
+   - **Server-side logic**: Implement in `+page.server.ts` for SSR and form actions
+   - **Form actions**: Use SvelteKit form actions for policy queries
+   - **Load functions**: Server-side data loading with proper type inference
+   - **Progressive enhancement**: Forms work without JavaScript
    - **Client-side conversation state management**
    - **Browser-based chat history** (session persistence)
-   - Response display with citations
-   - **No server-side conversation storage**
+   - **Assistant message XML parsing** (extract answer, citations, follow-up)
+   - **Structured response rendering** (citations as formatted elements)
+   - **Follow-up question integration** (clickable suggested queries)
+   - **Error boundaries**: Use SvelteKit error handling patterns
 
 ## Configuration Requirements
 
@@ -139,12 +180,12 @@ Router → Frontend
 - **READER_MODEL**: Optimized for policy identification and extraction
   - Used by Finder Agent to identify relevant policy numbers
   - Typically faster, lighter models for quick analysis
-  - Examples: `openai/gpt-3.5-turbo`, `anthropic/claude-3-haiku`
+  - Examples: `anthropic/claude-3-haiku`
 
 - **MAIN_MODEL**: Optimized for synthesis and comprehensive responses  
   - Used by Main Agent for detailed policy analysis and citation
   - Typically more capable models for complex reasoning
-  - Examples: `openai/gpt-4`, `anthropic/claude-3-5-sonnet`
+  - Examples: `anthropic/claude-3-5-sonnet`
 
 #### Benefits of Separate Models
 - **Cost Optimization**: Use lighter models for simple tasks
@@ -156,12 +197,13 @@ Router → Frontend
 - `POLICIES` - R2 bucket containing policy documents
 - `AI` - Cloudflare AI Gateway service for LLM requests
 
-## File Structure (Implementation Target)
+## File Structure (SvelteKit Implementation Target)
 
+### Service Layer (Backend Logic)
 ```
-policyFoo/
+src/lib/services/policyFoo/
 ├── README.md                    ✅ Done
-├── types.ts                     🔄 To Create
+├── types.ts                     🔄 To Create (SvelteKit type definitions)
 ├── index.ts                     🔄 To Create (Router)
 ├── constants.ts                 🔄 To Create
 ├── ai-gateway.util.ts           🔄 To Create (Independent AI Gateway)
@@ -180,6 +222,19 @@ policyFoo/
     ├── finder.ts               🔄 Future
     ├── main.ts                 🔄 Future
     └── prompts/                🔄 Future
+```
+
+### SvelteKit Route Structure
+```
+src/routes/policy/
+├── +page.svelte                🔄 To Create (Policy chat interface)
+├── +page.server.ts             🔄 To Create (Server-side logic & actions)
+├── +layout.svelte              🔄 Optional (Policy-specific layout)
+└── PolicyComponents/           🔄 To Create (Reusable components)
+    ├── PolicySelector.svelte   🔄 Component for policy set selection
+    ├── MessageList.svelte      🔄 Component for conversation display
+    ├── ResponseParser.svelte   🔄 Component for XML parsing & display
+    └── CitationRenderer.svelte 🔄 Component for citation formatting
 ```
 
 ## Key Design Principles
@@ -207,6 +262,8 @@ policyFoo/
 - **Session-based persistence** - History lost on page refresh/session change
 - **Multi-turn context passing** - Frontend sends full conversation to server
 - **Follow-up question generation** - Assists user with next queries
+- **Frontend message parsing** - Frontend extracts citations, follow-up questions from assistant responses
+- **Backend simplicity** - Backend only processes `user` and `assistant` message pairs
 
 ## Module Independence Requirements
 
@@ -242,26 +299,112 @@ policyFoo/
 - **Session Scope**: History persists only during browser session
 - **Privacy**: No conversation data stored on servers
 
-### Request/Response Pattern
+### Request/Response Pattern (SvelteKit)
+```typescript
+// src/routes/policy/+page.server.ts
+import type { Actions, PageServerLoad } from './$types';
+import { policyFooService } from '$lib/services/policyFoo';
+
+export const load: PageServerLoad = async () => {
+  return {
+    policy_sets: ['DOAD', 'LEAVE'] // Available policy sets
+  };
+};
+
+export const actions: Actions = {
+  query: async ({ request }) => {
+    const data = await request.formData();
+    const messages = JSON.parse(data.get('messages') as string);
+    const policy_set = data.get('policy_set') as string;
+    
+    const response = await policyFooService.processQuery({
+      messages, // [{ role: "user"|"assistant", content: string }]
+      policy_set
+    });
+    
+    return {
+      success: true,
+      message: response // Raw XML from LLM
+    };
+  }
+};
 ```
-Frontend → Backend Request:
-{
-  messages: [
-    { role: "user", content: "What is DOAD 5001?" },
-    { role: "assistant", content: "..." },
-    { role: "user", content: "What about section 3?" }
-  ],
-  policy_set: "DOAD"
+
+```svelte
+<!-- src/routes/policy/+page.svelte -->
+<script lang="ts">
+  import type { PageData, ActionData } from './$types';
+  import { enhance } from '$app/forms';
+  
+  export let data: PageData;
+  export let form: ActionData;
+  
+  let messages = [];
+  let isLoading = false;
+  
+  // Parse assistant messages on client-side
+  function parseAssistantMessage(xmlContent: string) {
+    // Extract answer, citations, follow-up from XML
+    // Return structured object for UI rendering
+  }
+</script>
+
+<form method="POST" action="?/query" use:enhance>
+  <select name="policy_set">
+    {#each data.policy_sets as set}
+      <option value={set}>{set}</option>
+    {/each}
+  </select>
+  <input type="hidden" name="messages" value={JSON.stringify(messages)} />
+  <input name="user_message" placeholder="Ask about policies..." />
+  <button type="submit">Ask</button>
+</form>
+```
+
+### SvelteKit Architecture Benefits
+- **Progressive Enhancement**: Forms work without JavaScript
+- **Type Safety**: Full type inference from server to client
+- **SSR Support**: Initial page load with server-side rendering
+- **Form Actions**: Native form handling with validation
+- **Error Handling**: Built-in error boundaries and validation
+- **Load Functions**: Server-side data preparation
+
+### Frontend Message Processing
+
+#### SvelteKit Integration Pattern
+```typescript
+// Type definitions for SvelteKit integration
+interface PolicyMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp?: number;
 }
 
-Backend → Frontend Response:
-{
-  role: "assistant",
-  content: "...",
-  citations: ["DOAD 5001-1: Section 3.1, 3.2"],
-  follow_up: "Would you like details on section 3.3?"
+interface ParsedAssistantResponse {
+  answer: string;
+  citations: string[];
+  follow_up?: string;
+  raw_xml: string; // Keep original for conversation history
 }
 ```
+
+#### Assistant Message Parsing (Client-Side)
+The frontend is responsible for:
+1. **XML Parsing**: Extract structured data from assistant responses
+2. **Citation Display**: Render citations as clickable/formatted elements
+3. **Follow-up Integration**: Present follow-up questions as suggested actions
+4. **Conversation Storage**: Maintain clean conversation history for context
+5. **Progressive Enhancement**: Graceful degradation when JS is disabled
+
+#### Backend Message Handling (Server-Side)
+The backend keeps it simple:
+1. **SvelteKit Actions**: Handle form submissions with form actions
+2. **Type Safety**: Leverage SvelteKit's type inference
+3. **Message Pairs Only**: Processes `user` and `assistant` roles only
+4. **No XML Processing**: Returns raw LLM output without parsing
+5. **Context Aware**: Uses full conversation history for context
+6. **Stateless**: Each request is independent
+7. **Error Handling**: Use SvelteKit's error handling patterns
 
 ## Future Extensions
 

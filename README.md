@@ -7,13 +7,55 @@ An AI-powered application built with SvelteKit and deployed on Cloudflare's serv
 CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modular, maintainable architecture:
 
 - **PaceNote**: ✅ **Fully Functional** - Generate feedback notes for lazy CAF members based on observations and rank-specific competencies. Features a complete co-located module with form handling, results display, and route-specific utilities.
-- **Policy Q&A**: Document-based question answering with citations *(coming soon)*.
+- **PolicyFoo**: ✅ **Fully Functional** - AI-powered policy question answering with authoritative citations. Features two-stage agent workflow (finder → main) with support for DOAD policies and extensible architecture for additional policy sets.
 
 **Architecture Highlights:**
 - **Co-located Components**: Route-specific UI components live with their routes
 - **Domain Services**: Business logic organized by functional domain
 - **Type-Safe**: End-to-end TypeScript with strict validation
 - **Server-First**: Security and performance through server-side rendering
+
+## Service Modules
+
+### PaceNote Service
+**Status**: ✅ Production Ready  
+**Route**: `/pacenote`  
+**Purpose**: Generate performance feedback notes based on observations and CAF rank competencies
+
+**Features:**
+- Rank-specific competency mapping (Cpl, MCpl, Sgt, WO)
+- Intelligent feedback generation with AI
+- Form validation and error handling
+- Usage tracking and cost monitoring
+
+### PolicyFoo Service  
+**Status**: ✅ Production Ready  
+**Route**: `/policy`  
+**Documentation**: 
+- [Main Documentation](src/lib/services/policyFoo/README.md)
+- [DOAD Handler Documentation](src/lib/services/policyFoo/doadFoo/README.md)
+
+**Purpose**: Answer policy questions with authoritative citations from CAF policy documents
+
+**Features:**
+- **Two-Stage AI Workflow**: Finder agent identifies relevant policies, main agent synthesizes responses
+- **Multi-Model Strategy**: Optimized model selection (lightweight for identification, powerful for synthesis)
+- **Policy Set Support**: DOAD policies implemented, extensible for additional policy types
+- **Stateless Architecture**: Client-side conversation management, serverless-optimized
+- **Interactive Citations**: Clickable policy references with external links
+- **XML Response Parsing**: Structured responses with answers, citations, and follow-up questions
+- **Progressive Enhancement**: Works with and without JavaScript
+- **Error Resilience**: Graceful handling of missing policies and service failures
+
+**Supported Policy Sets:**
+- ✅ **DOAD** (Defence Operations and Activities Directives) - Fully implemented
+- 📋 **LEAVE** (Leave Policies) - Planned for future implementation
+
+**Architecture:**
+- **Backend**: Stateless request processing with raw XML responses
+- **Frontend**: Smart client-side parsing and conversation management
+- **Storage**: Policy documents stored in Cloudflare R2 bucket
+- **AI Models**: Dual-model approach for cost and performance optimization
 
 ## Architecture
 
@@ -46,6 +88,41 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **Styling**: Tailwind CSS v4 with Vite plugin
 - **Development**: Wrangler CLI with type generation
 
+## Project Structure
+
+```
+src/
+├── lib/
+│   └── services/           # Domain-specific business logic
+│       ├── paceNote/       # PaceNote service module
+│       │   ├── README.md   # PaceNote documentation
+│       │   ├── *.ts        # Service implementation
+│       │   └── __tests__/  # Unit tests
+│       └── policyFoo/      # PolicyFoo service module
+│           ├── README.md   # Main PolicyFoo documentation
+│           ├── *.ts        # Core service files
+│           ├── doadFoo/    # DOAD policy handler
+│           │   ├── README.md      # DOAD-specific docs
+│           │   ├── *.ts           # Handler implementation
+│           │   └── prompts/       # LLM prompts
+│           └── leaveFoo/   # Future: Leave policy handler
+└── routes/                 # SvelteKit routes
+    ├── pacenote/          # PaceNote UI and server logic
+    │   ├── +page.svelte   # PaceNote interface
+    │   ├── +page.server.ts # Server-side logic
+    │   └── *.svelte       # UI components
+    └── policy/            # PolicyFoo UI and server logic
+        ├── +page.svelte   # Policy chat interface
+        ├── +page.server.ts # Server-side logic
+        └── PolicyComponents/ # Reusable UI components
+```
+
+**Architecture Principles:**
+- **Co-location**: Related functionality grouped together
+- **Domain Services**: Business logic separate from UI
+- **Route-Specific Components**: UI components live with their routes
+- **Independent Modules**: Services can be developed and tested independently
+
 ## Quick Start
 
 ### Prerequisites
@@ -70,14 +147,28 @@ wrangler secret put AI_GATEWAY_BASE_URL
 
 Configure in your Cloudflare dashboard or `wrangler.jsonc`:
 
-- **R2 Bucket**: `POLICIES` (for document storage)  
+- **R2 Bucket**: `POLICIES` (for PolicyFoo document storage)  
 - **Environment Variables**:
     - `FN_MODEL` - AI model to use (configured in wrangler.jsonc)
+    - `READER_MODEL` - Optional: PolicyFoo finder agent model (default: claude-3-haiku)
+    - `MAIN_MODEL` - Optional: PolicyFoo main agent model (default: claude-3-5-sonnet)
 - **Secrets**: 
     - `OPENROUTER_TOKEN` - OpenRouter API key for AI Gateway
     - `AI_GATEWAY_BASE_URL` - AI Gateway endpoint URL
+    - `CF_AIG_TOKEN` - Optional: Enhanced AI Gateway monitoring
 
 > **Note**: All secrets should be configured via `wrangler secret put` for production deployment.
+
+**R2 Bucket Structure for PolicyFoo:**
+```
+policies/                    # R2 bucket name
+├── doad/                   # DOAD policies
+│   ├── 1000-1.md          # Individual policy files
+│   ├── 5017-1.md          # Leave policies  
+│   └── ...                # Additional DOAD policies
+└── leave/                 # Future: Leave policies
+    └── ...                # Leave policy files
+```
 
 ### AI Gateway Setup
 
