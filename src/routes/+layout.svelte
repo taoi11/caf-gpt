@@ -17,8 +17,8 @@
 					<a href="/pacenote" class="text-gray-600 hover:text-gray-900 transition-colors">
 						PaceNote
 					</a>
-					<a href="/policy" class="text-gray-400 cursor-not-allowed">
-						Policy <span class="text-xs">(Coming Soon)</span>
+					<a href="/policy" class="text-gray-600 hover:text-gray-900 transition-colors">
+						Policy
 					</a>
 				</div>
 			</div>

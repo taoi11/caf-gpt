@@ -373,6 +373,9 @@
 		gap: 0.5rem;
 		min-width: 120px;
 		justify-content: center;
+		opacity: 1;
+		visibility: visible;
+		flex-shrink: 0;
 	}
 
 	.submit-button:hover:not(:disabled) {
@@ -381,9 +384,12 @@
 	}
 
 	.submit-button:disabled {
-		background: #6c757d;
+		background: #e9ecef;
+		color: #6c757d;
 		cursor: not-allowed;
 		transform: none;
+		opacity: 0.7;
+		border: 2px solid #dee2e6;
 	}
 
 	.loading-spinner {

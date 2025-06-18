@@ -25,7 +25,9 @@
     }
   ],
 	"vars": {	// https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
-		"FN_MODEL": "openai/gpt-4.1-mini"
+		"FN_MODEL": "openai/gpt-4.1-mini",
+		"READER_MODEL": "anthropic/claude-3.5-haiku",
+		"MAIN_MODEL": "google/gemini-2.5-pro",
 	}
 	/**
 	 * Service Bindings (communicate between multiple Workers)

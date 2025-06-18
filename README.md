@@ -405,8 +405,10 @@ GET /api/health
 │       │   ├── PaceNoteResults.svelte # Results display component
 │       │   ├── PaceNoteTips.svelte    # Usage tips component
 │       │   └── ui.ts                  # Route-specific utilities
-│       ├── policy/
-│       │   └── +page.svelte    # Policy Q&A (coming soon)
+│       ├── policy/              # 🔥 Co-located PolicyFoo feature
+│       │   ├── +page.server.ts        # Server-side logic
+│       │   ├── +page.svelte           # Policy chat interface
+│       │   └── PolicyComponents/      # Reusable UI components
 │       ├── api/
 │       │   └── health/
 │       │       └── +server.ts  # Health check endpoint

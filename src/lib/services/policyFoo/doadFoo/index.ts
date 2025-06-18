@@ -17,6 +17,11 @@ import { readPolicyFileAsText } from '../r2.util';
 import { findDOADPolicies } from './finder.js';
 import { generateDOADResponse } from './main.js';
 
+// Import prompt files directly from local codebase
+import finderPromptRaw from './prompts/finder.md?raw';
+import mainPromptRaw from './prompts/main.md?raw';
+import policyListTableRaw from './prompts/DOAD-list-table.md?raw';
+
 /**
  * Handle DOAD policy queries with two-stage agent workflow
  * 
@@ -96,20 +101,14 @@ async function loadDOADConfig(env: PolicyFooEnvironment): Promise<PolicyHandlerC
 	try {
 		const bucket = env.POLICIES!;
 		
-		// Load prompt files
-		const [finderPrompt, mainPrompt, policyListTable] = await Promise.all([
-			readPolicyFileAsText(bucket, `doadFoo/${PROMPT_PATHS.FINDER}`),
-			readPolicyFileAsText(bucket, `doadFoo/${PROMPT_PATHS.MAIN}`),
-			readPolicyFileAsText(bucket, `doadFoo/${PROMPT_PATHS.POLICY_LIST}`)
-		]);
-
+		// Use imported prompt files from local codebase
 		return {
 			readerModel: env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
 			mainModel: env.MAIN_MODEL || MODEL_CONFIG.MAIN_MODEL,
 			prompts: {
-				finder: finderPrompt,
-				main: mainPrompt,
-				policyList: policyListTable
+				finder: finderPromptRaw,
+				main: mainPromptRaw,
+				policyList: policyListTableRaw
 			},
 			r2Bucket: bucket,
 			policyPathPrefix: R2_CONFIG.POLICY_PATHS.DOAD

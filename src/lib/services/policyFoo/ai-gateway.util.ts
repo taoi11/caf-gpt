@@ -37,13 +37,19 @@ export class PolicyAIGatewayService {
 		};
 
 		// Initialize OpenAI client with AI Gateway configuration
+		const headers: Record<string, string> = {
+			'X-Title': 'caf-gpt'
+		};
+		
+		// Add CF AI Gateway authorization header if provided
+		if (cafAigToken) {
+			headers['cf-aig-authorization'] = `Bearer ${cafAigToken}`;
+		}
+
 		this.openai = new OpenAI({
-			baseURL: aiGatewayBaseUrl,
 			apiKey: openrouterToken,
-			defaultHeaders: {
-				'Authorization': `Bearer ${cafAigToken}`,
-				'Content-Type': 'application/json'
-			}
+			baseURL: aiGatewayBaseUrl,
+			defaultHeaders: headers
 		});
 	}
 
