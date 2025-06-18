@@ -1,12 +1,16 @@
 # DOAD PolicyFoo Handler
 
 ## Purpose
-LLM workflow for answering questions related to DOAD (Defence Operations and Activities Directives) policies with authoritative citations. Implements a two-stage agent architecture for accurate policy identification and comprehensive response generation.
+LLM workflow for answering questions related to DOAD (Defence Operations and Activities Directives) policies with authoritative citations. Implements a sophisticated two-stage agent architecture for accurate policy identification and comprehensive response generation.
+
+**See also**: [PolicyFoo Main Documentation](../README.md) | [LEAVE Handler](../leaveFoo/README.md)
 
 ## Overview
 The DOAD handler processes policy queries through a sophisticated two-stage workflow:
-1. **Stage 1**: Finder Agent identifies relevant DOAD policy numbers
+1. **Stage 1**: Finder Agent identifies relevant DOAD policy numbers using lightweight model
 2. **Stage 2**: Main Agent synthesizes policy content and generates structured responses
+
+**Architecture Note**: This differs from the [LEAVE handler](../leaveFoo/README.md) which uses a single-stage workflow since all leave policies are in one document.
 
 ## Workflow
   1. Receives a user message from `policyFoo` Router as init. Or a continuation of a conversation ( `user` + `assistant` message sequence)
@@ -214,8 +218,9 @@ policies/                  # R2 bucket name
 - **Semantic Search**: Enhanced policy discovery beyond exact matches
 - **Caching**: Policy content caching for improved performance
 
-#### Scalability Improvements
-- **Batch Processing**: Process multiple queries efficiently
-- **Load Balancing**: Distribute across multiple AI providers
-- **Monitoring**: Enhanced observability and metrics
-- **A/B Testing**: Prompt optimization through testing
+#### Architecture Evolution
+- **Hybrid Approach**: Consider adopting LEAVE handler's single-stage approach for well-defined policy domains
+- **Shared Components**: Extract common functionality with LEAVE handler into shared utilities
+- **Performance Optimization**: Learn from LEAVE handler's simplified workflow for applicable scenarios
+
+**See also**: [LEAVE Handler optimizations](../leaveFoo/README.md#performance-characteristics) for comparison

@@ -15,6 +15,7 @@ import type {
 } from './types.js';
 import { POLICY_SETS, ERROR_MESSAGES, LIMITS } from './constants.js';
 import { handleDOADQuery } from './doadFoo/index.js';
+import { handleLeaveQuery } from './leaveFoo/index.js';
 
 // Re-export types for easier consumption
 export type { 
@@ -61,7 +62,7 @@ export async function processPolicyQuery(
 				return await handleDOADQuery(input, env);
 			
 			case 'LEAVE':
-				throw createError('GENERAL_ERROR', 'LEAVE policy handler not yet implemented');
+				return await handleLeaveQuery(input, env);
 			
 			default:
 				throw createError('INVALID_POLICY_SET', `Unsupported policy set: ${input.policy_set}`);
