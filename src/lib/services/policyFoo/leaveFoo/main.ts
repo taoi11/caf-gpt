@@ -101,36 +101,34 @@ function buildMainMessages(input: PolicyMainInput): PolicyAIGatewayMessage[] {
 /**
  * Validate main agent input
  */
-import { createError } from '../error.util';
-
 function validateMainInput(input: PolicyMainInput): void {
 	if (!input.messages || input.messages.length === 0) {
-		throw createError(
-			'INVALID_MESSAGES',
-			`${ERROR_MESSAGES.INVALID_MESSAGES}: Messages cannot be empty`
-		);
+		throw {
+			code: 'INVALID_MESSAGES' as const,
+			message: `${ERROR_MESSAGES.INVALID_MESSAGES}: Messages cannot be empty`
+		};
 	}
 
 	if (!input.mainPrompt || input.mainPrompt.trim().length === 0) {
-		throw createError(
-			'PROMPT_NOT_FOUND',
-			`${ERROR_MESSAGES.PROMPT_NOT_FOUND}: Main prompt is required`
-		);
+		throw {
+			code: 'PROMPT_NOT_FOUND' as const,
+			message: `${ERROR_MESSAGES.PROMPT_NOT_FOUND}: Main prompt is required`
+		};
 	}
 
 	if (!Array.isArray(input.policyContent) || input.policyContent.length === 0) {
-		throw createError(
-			'POLICY_NOT_FOUND',
-			`${ERROR_MESSAGES.POLICY_NOT_FOUND}: Leave policy content is required`
-		);
+		throw {
+			code: 'POLICY_NOT_FOUND' as const,
+			message: `${ERROR_MESSAGES.POLICY_NOT_FOUND}: Leave policy content is required`
+		};
 	}
 
 	// Check that leave policy content is valid
 	if (typeof input.policyContent[0] !== 'string' || input.policyContent[0].trim().length === 0) {
-		throw createError(
-			'POLICY_NOT_FOUND',
-			`${ERROR_MESSAGES.POLICY_NOT_FOUND}: Leave policy content is empty or invalid`
-		);
+		throw {
+			code: 'POLICY_NOT_FOUND' as const,
+			message: `${ERROR_MESSAGES.POLICY_NOT_FOUND}: Leave policy content is empty or invalid`
+		};
 	}
 
 	// Leave policy should only have one document
