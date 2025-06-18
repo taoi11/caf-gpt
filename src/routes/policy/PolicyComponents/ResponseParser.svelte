@@ -15,6 +15,56 @@
 	}
 
 	/**
+	 * Shared helper to parse citations from either DOM nodes or raw text.
+	 */
+	function parseCitations(input: Element | string | null): string[] {
+		const citations: string[] = [];
+		if (!input) return citations;
+
+		// DOM Element path
+		if (typeof input !== 'string') {
+			const citationElements = input.querySelectorAll('citation');
+			if (citationElements.length > 0) {
+				citationElements.forEach(citation => {
+					const text = citation.textContent?.trim();
+					if (text) {
+						citations.push(text);
+					}
+				});
+			} else {
+				const citationsText = input.textContent?.trim();
+				if (citationsText) {
+					const citationLines = citationsText.split('\n')
+						.map(line => line.trim())
+						.filter(line => line.length > 0);
+					citations.push(...citationLines);
+				}
+			}
+		} else {
+			// Raw string path (regex fallback)
+			// First try to find individual <citation> tags
+			const citationMatches = input.match(/<citation>([\s\S]*?)<\/citation>/g);
+			if (citationMatches) {
+				citationMatches.forEach(match => {
+					const citation = match.replace(/<\/?citation>/g, '').trim();
+					if (citation) {
+						citations.push(citation);
+					}
+				});
+			} else {
+				const citationsText = input.trim();
+				if (citationsText) {
+					const citationLines = citationsText.split('\n')
+						.map(line => line.trim())
+						.filter(line => line.length > 0);
+					citations.push(...citationLines);
+				}
+			}
+		}
+		return citations;
+	}
+
+	/**
 	 * Parse XML response from assistant
 	 */
 	function parseXMLResponse(xml: string): {
@@ -47,17 +97,8 @@
 			// Extract answer
 			const answer = answerElement?.textContent?.trim() || 'No answer provided';
 
-			// Extract citations
-			const citations: string[] = [];
-			if (citationsElement) {
-				const citationElements = citationsElement.querySelectorAll('citation');
-				citationElements.forEach(citation => {
-					const text = citation.textContent?.trim();
-					if (text) {
-						citations.push(text);
-					}
-				});
-			}
+			// Extract citations using shared helper
+			const citations = parseCitations(citationsElement);
 
 			// Extract follow-up question
 			const follow_up = followUpElement?.textContent?.trim() || undefined;
@@ -88,19 +129,8 @@
 		const followUpMatch = text.match(/<follow_up>([\s\S]*?)<\/follow_up>/);
 
 		const answer = answerMatch?.[1]?.trim() || text;
-		
-		const citations: string[] = [];
-		if (citationsMatch) {
-			const citationMatches = citationsMatch[1].match(/<citation>([\s\S]*?)<\/citation>/g);
-			if (citationMatches) {
-				citationMatches.forEach(match => {
-					const citation = match.replace(/<\/?citation>/g, '').trim();
-					if (citation) {
-						citations.push(citation);
-					}
-				});
-			}
-		}
+
+		const citations = parseCitations(citationsMatch?.[1] ?? '');
 
 		const follow_up = followUpMatch?.[1]?.trim() || undefined;
 
@@ -143,14 +173,14 @@
 
 		<!-- Citations Section -->
 		{#if parsed.citations.length > 0}
-			<div class="mt-2 pt-4 border-t border-gray-200">
+			<div class="mt-4 mb-2">
 				<CitationRenderer citations={parsed.citations} />
 			</div>
 		{/if}
 
 		<!-- Follow-up Question Section -->
 		{#if parsed.follow_up}
-			<div class="mt-2 pt-4 border-t border-gray-200">
+			<div class="mt-4 pt-4 border-t border-gray-200">
 				<div class="flex items-center gap-2 mb-3 text-sm text-gray-500">
 					<span class="text-base">💡</span>
 					<strong>Suggested follow-up:</strong>
