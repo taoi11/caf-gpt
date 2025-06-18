@@ -96,15 +96,15 @@
 	<meta name="description" content={data.description} />
 </svelte:head>
 
-<div class="policy-assistant">
-	<header class="policy-header">
-		<h1>Policy Assistant</h1>
-		<p class="policy-description">{data.description}</p>
+<div class="max-w-6xl mx-auto p-4 min-h-screen flex flex-col">
+	<header class="text-center mb-8 pb-4 border-b-2 border-blue-600">
+		<h1 class="text-4xl font-bold text-gray-700 mb-2">Policy Assistant</h1>
+		<p class="text-lg text-gray-600 opacity-80">{data.description}</p>
 	</header>
 
-	<main class="policy-main">
+	<main class="flex-1 flex flex-col gap-6">
 		<!-- Policy Selector -->
-		<div class="policy-selector-section">
+		<div class="bg-white p-4 rounded-lg shadow-sm">
 			<PolicySelector 
 				policySets={data.policy_sets} 
 				bind:selected={selectedPolicySet} 
@@ -112,13 +112,13 @@
 		</div>
 
 		<!-- Conversation Display -->
-		<div class="conversation-section">
+		<div class="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
 			{#if messages.length > 0}
-				<div class="conversation-header">
-					<h2>Conversation</h2>
+				<div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 p-4 border-b border-gray-200">
+					<h2 class="text-xl font-semibold text-gray-800">Conversation</h2>
 					<button 
 						type="button" 
-						class="clear-button"
+						class="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors duration-200 font-medium"
 						on:click={clearConversation}
 					>
 						Clear
@@ -126,15 +126,15 @@
 				</div>
 				<MessageList {messages} onFollowUpClick={handleFollowUpClick} />
 			{:else}
-				<div class="conversation-placeholder">
-					<h2>Ask a Policy Question</h2>
-					<p>Select a policy set and ask your question to get started.</p>
-					<div class="example-questions">
-						<h3>Example Questions:</h3>
-						<ul>
-							<li>What are the leave approval requirements?</li>
-							<li>How do I request compassionate leave?</li>
-							<li>What is the policy on professional development?</li>
+				<div class="p-8 text-center">
+					<h2 class="text-2xl font-semibold text-gray-800 mb-3">Ask a Policy Question</h2>
+					<p class="text-gray-600 mb-6">Select a policy set and ask your question to get started.</p>
+					<div class="max-w-md mx-auto text-left bg-gray-50 p-4 rounded-lg">
+						<h3 class="font-semibold text-gray-700 mb-2">Example Questions:</h3>
+						<ul class="text-sm text-gray-600 space-y-1">
+							<li>• What are the leave approval requirements?</li>
+							<li>• How do I request compassionate leave?</li>
+							<li>• What is the policy on professional development?</li>
 						</ul>
 					</div>
 				</div>
@@ -146,7 +146,7 @@
 			bind:this={formElement}
 			method="POST" 
 			action="?/query"
-			class="query-form"
+			class="bg-white p-4 rounded-lg shadow-sm"
 			use:enhance={({ formElement, formData, action, cancel, submitter }) => {
 				// Add current messages to form data
 				formData.set('messages', JSON.stringify(messages));
@@ -160,9 +160,9 @@
 				};
 			}}
 		>
-			<div class="form-group">
+			<div class="space-y-4">
 				<label for="user_message" class="sr-only">Your question</label>
-				<div class="input-group">
+				<div class="flex flex-col md:flex-row gap-3">
 					<textarea
 						id="user_message"
 						name="user_message"
@@ -171,14 +171,15 @@
 						rows="3"
 						disabled={isLoading}
 						required
+						class="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
 					></textarea>
 					<button 
 						type="submit" 
-						class="submit-button"
+						class="md:self-end px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 font-medium flex items-center justify-center gap-2"
 						disabled={isLoading || !userMessage.trim()}
 					>
 						{#if isLoading}
-							<span class="loading-spinner"></span>
+							<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
 							Processing...
 						{:else}
 							Ask
@@ -189,278 +190,13 @@
 
 			<!-- Error Display -->
 			{#if form?.error}
-				<div class="error-message" role="alert">
-					<strong>Error:</strong> {form.error}
-					{#if form?.errorCode}
-						<small>(Code: {form.errorCode})</small>
+				<div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 text-red-800" role="alert">
+					<strong class="block mb-1">Error:</strong> {form.error}
+					{#if 'errorCode' in form && form.errorCode}
+						<small class="text-sm opacity-80">(Code: {form.errorCode})</small>
 					{/if}
 				</div>
 			{/if}
 		</form>
 	</main>
 </div>
-
-<style>
-	.policy-assistant {
-		max-width: 1200px;
-		margin: 0 auto;
-		padding: 1rem;
-		min-height: 100vh;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.policy-header {
-		text-align: center;
-		margin-bottom: 2rem;
-		padding-bottom: 1rem;
-		border-bottom: 2px solid var(--color-theme-1);
-	}
-
-	.policy-header h1 {
-		font-size: 2.5rem;
-		font-weight: 700;
-		color: var(--color-theme-2);
-		margin-bottom: 0.5rem;
-	}
-
-	.policy-description {
-		font-size: 1.1rem;
-		color: var(--color-text);
-		opacity: 0.8;
-	}
-
-	.policy-main {
-		flex: 1;
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-	}
-
-	.policy-selector-section {
-		background: white;
-		padding: 1rem;
-		border-radius: 8px;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	}
-
-	.conversation-section {
-		flex: 1;
-		background: white;
-		border-radius: 8px;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-		overflow: hidden;
-		display: flex;
-		flex-direction: column;
-	}
-
-	.conversation-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		padding: 1rem;
-		border-bottom: 1px solid #e5e5e5;
-		background: #f8f9fa;
-	}
-
-	.conversation-header h2 {
-		margin: 0;
-		font-size: 1.25rem;
-		font-weight: 600;
-	}
-
-	.clear-button {
-		padding: 0.5rem 1rem;
-		background: #dc3545;
-		color: white;
-		border: none;
-		border-radius: 4px;
-		cursor: pointer;
-		font-size: 0.875rem;
-		transition: background-color 0.2s;
-	}
-
-	.clear-button:hover {
-		background: #c82333;
-	}
-
-	.conversation-placeholder {
-		padding: 3rem 2rem;
-		text-align: center;
-		color: #6c757d;
-	}
-
-	.conversation-placeholder h2 {
-		margin-bottom: 1rem;
-		color: var(--color-theme-2);
-	}
-
-	.example-questions {
-		margin-top: 2rem;
-		text-align: left;
-		max-width: 400px;
-		margin-left: auto;
-		margin-right: auto;
-	}
-
-	.example-questions h3 {
-		margin-bottom: 0.5rem;
-		color: var(--color-theme-2);
-	}
-
-	.example-questions ul {
-		list-style-type: none;
-		padding: 0;
-	}
-
-	.example-questions li {
-		padding: 0.5rem 0;
-		border-bottom: 1px solid #e9ecef;
-	}
-
-	.query-form {
-		background: white;
-		padding: 1.5rem;
-		border-radius: 8px;
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	}
-
-	.form-group {
-		margin-bottom: 1rem;
-	}
-
-	.input-group {
-		display: flex;
-		gap: 1rem;
-		align-items: flex-end;
-	}
-
-	.input-group textarea {
-		flex: 1;
-		padding: 0.75rem;
-		border: 2px solid #e9ecef;
-		border-radius: 6px;
-		font-family: inherit;
-		font-size: 1rem;
-		resize: vertical;
-		min-height: 80px;
-		transition: border-color 0.2s;
-	}
-
-	.input-group textarea:focus {
-		outline: none;
-		border-color: var(--color-theme-1);
-		box-shadow: 0 0 0 3px rgba(var(--color-theme-1-rgb), 0.1);
-	}
-
-	.input-group textarea:disabled {
-		background-color: #f8f9fa;
-		cursor: not-allowed;
-	}
-
-	.submit-button {
-		padding: 0.75rem 2rem;
-		background: var(--color-theme-1);
-		color: white;
-		border: none;
-		border-radius: 6px;
-		font-size: 1rem;
-		font-weight: 600;
-		cursor: pointer;
-		transition: all 0.2s;
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		min-width: 120px;
-		justify-content: center;
-		opacity: 1;
-		visibility: visible;
-		flex-shrink: 0;
-	}
-
-	.submit-button:hover:not(:disabled) {
-		background: var(--color-theme-2);
-		transform: translateY(-1px);
-	}
-
-	.submit-button:disabled {
-		background: #e9ecef;
-		color: #6c757d;
-		cursor: not-allowed;
-		transform: none;
-		opacity: 0.7;
-		border: 2px solid #dee2e6;
-	}
-
-	.loading-spinner {
-		width: 16px;
-		height: 16px;
-		border: 2px solid transparent;
-		border-top: 2px solid currentColor;
-		border-radius: 50%;
-		animation: spin 1s linear infinite;
-	}
-
-	@keyframes spin {
-		to {
-			transform: rotate(360deg);
-		}
-	}
-
-	.error-message {
-		background: #f8d7da;
-		color: #721c24;
-		padding: 1rem;
-		border-radius: 4px;
-		border: 1px solid #f5c6cb;
-		margin-top: 1rem;
-	}
-
-	.error-message strong {
-		display: block;
-		margin-bottom: 0.25rem;
-	}
-
-	.error-message small {
-		opacity: 0.8;
-		font-size: 0.875rem;
-	}
-
-	.sr-only {
-		position: absolute;
-		width: 1px;
-		height: 1px;
-		padding: 0;
-		margin: -1px;
-		overflow: hidden;
-		clip: rect(0, 0, 0, 0);
-		white-space: nowrap;
-		border: 0;
-	}
-
-	/* Responsive Design */
-	@media (max-width: 768px) {
-		.policy-assistant {
-			padding: 0.5rem;
-		}
-
-		.policy-header h1 {
-			font-size: 2rem;
-		}
-
-		.input-group {
-			flex-direction: column;
-			align-items: stretch;
-		}
-
-		.submit-button {
-			width: 100%;
-		}
-
-		.conversation-header {
-			flex-direction: column;
-			gap: 1rem;
-			align-items: stretch;
-		}
-	}
-</style>

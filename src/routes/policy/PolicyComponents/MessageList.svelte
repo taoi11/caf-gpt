@@ -35,66 +35,54 @@
 	}
 </script>
 
-<div class="message-list" bind:this={messagesContainer}>
+<div class="message-list flex-1 p-4 overflow-y-auto flex flex-col gap-6 min-h-screen max-h-full" bind:this={messagesContainer}>
 	{#each messages as message, index (message.timestamp)}
-		<div class="message message-{message.role}">
-			<div class="message-header">
-				<div class="message-role">
+		<div class="flex flex-col gap-2 animate-fade-in">
+			<div class="flex justify-between items-center text-sm text-gray-500">
+				<div class="flex items-center gap-2 font-semibold">
 					{#if message.role === 'user'}
-						<span class="role-icon">👤</span>
-						You
+						<span class="text-base">👤</span>
+						<span class="text-blue-600">You</span>
 					{:else}
-						<span class="role-icon">🤖</span>
-						Policy Assistant
+						<span class="text-base">🤖</span>
+						<span class="text-gray-700">Policy Assistant</span>
 					{/if}
 				</div>
-				<div class="message-time">
+				<div class="text-xs opacity-70">
 					{formatTime(message.timestamp)}
 				</div>
 			</div>
 
-			<div class="message-content">
+			<div class="relative">
 				{#if message.role === 'user'}
 					<!-- User message: display as plain text -->
-					<p>{message.content}</p>
+					<div class="bg-blue-600 text-white rounded-xl rounded-br-sm p-4 ml-8 shadow-sm relative">
+						<p class="m-0 leading-relaxed">{message.content}</p>
+						<div class="absolute bottom-0 right-[-8px] w-0 h-0 border-l-8 border-l-blue-600 border-t-8 border-t-transparent"></div>
+					</div>
 				{:else}
 					<!-- Assistant message: parse XML and render structured response -->
-					<ResponseParser 
-						xmlContent={message.content} 
-						{onFollowUpClick}
-						bind:parsed={message.parsed}
-					/>
+					<div class="bg-gray-50 rounded-xl rounded-bl-sm p-4 mr-8 shadow-sm border border-gray-200 relative">
+						<ResponseParser 
+							xmlContent={message.content} 
+							{onFollowUpClick}
+							bind:parsed={message.parsed}
+						/>
+						<div class="absolute bottom-0 left-[-8px] w-0 h-0 border-r-8 border-r-gray-50 border-t-8 border-t-transparent"></div>
+					</div>
 				{/if}
 			</div>
 		</div>
 	{/each}
 
 	{#if messages.length === 0}
-		<div class="empty-state">
-			<p>No messages yet. Start a conversation!</p>
+		<div class="flex-1 flex items-center justify-center text-gray-500 italic">
+			<p class="m-0 text-center">No messages yet. Start a conversation!</p>
 		</div>
 	{/if}
 </div>
 
 <style>
-	.message-list {
-		flex: 1;
-		padding: 1rem;
-		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
-		min-height: 400px;
-		max-height: 600px;
-	}
-
-	.message {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		animation: fadeIn 0.3s ease-in-out;
-	}
-
 	@keyframes fadeIn {
 		from {
 			opacity: 0;
@@ -106,145 +94,26 @@
 		}
 	}
 
-	.message-header {
-		display: flex;
-		justify-content: space-between;
-		align-items: center;
-		font-size: 0.875rem;
-		color: #6c757d;
+	.animate-fade-in {
+		animation: fadeIn 0.3s ease-in-out;
 	}
 
-	.message-role {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-weight: 600;
-	}
-
-	.role-icon {
-		font-size: 1rem;
-	}
-
-	.message-user .message-role {
-		color: var(--color-theme-1);
-	}
-
-	.message-assistant .message-role {
-		color: var(--color-theme-2);
-	}
-
-	.message-time {
-		font-size: 0.8rem;
-		opacity: 0.7;
-	}
-
-	.message-content {
-		background: white;
-		border-radius: 12px;
-		padding: 1rem;
-		box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-		position: relative;
-	}
-
-	.message-user .message-content {
-		background: var(--color-theme-1);
-		color: white;
-		margin-left: 2rem;
-		border-bottom-right-radius: 4px;
-	}
-
-	.message-user .message-content::after {
-		content: '';
-		position: absolute;
-		bottom: 0;
-		right: -8px;
-		width: 0;
-		height: 0;
-		border: 8px solid transparent;
-		border-left-color: var(--color-theme-1);
-		border-bottom: none;
-		border-top: none;
-	}
-
-	.message-assistant .message-content {
-		background: #f8f9fa;
-		margin-right: 2rem;
-		border-bottom-left-radius: 4px;
-		border: 1px solid #e9ecef;
-	}
-
-	.message-assistant .message-content::after {
-		content: '';
-		position: absolute;
-		bottom: 0;
-		left: -8px;
-		width: 0;
-		height: 0;
-		border: 8px solid transparent;
-		border-right-color: #f8f9fa;
-		border-bottom: none;
-		border-top: none;
-	}
-
-	.message-content p {
-		margin: 0;
-		line-height: 1.5;
-	}
-
-	.empty-state {
-		flex: 1;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		color: #6c757d;
-		font-style: italic;
-	}
-
-	.empty-state p {
-		margin: 0;
-		text-align: center;
-	}
-
-	/* Responsive adjustments */
-	@media (max-width: 768px) {
-		.message-list {
-			padding: 0.75rem;
-			gap: 1rem;
-		}
-
-		.message-user .message-content {
-			margin-left: 1rem;
-		}
-
-		.message-assistant .message-content {
-			margin-right: 1rem;
-		}
-
-		.message-content {
-			padding: 0.75rem;
-		}
-
-		.message-header {
-			font-size: 0.8rem;
-		}
-	}
-
-	/* Scrollbar styling */
+	/* Custom scrollbar styling */
 	.message-list::-webkit-scrollbar {
 		width: 6px;
 	}
 
 	.message-list::-webkit-scrollbar-track {
-		background: #f1f1f1;
+		background: #f3f4f6;
 		border-radius: 3px;
 	}
 
 	.message-list::-webkit-scrollbar-thumb {
-		background: #c1c1c1;
+		background: #d1d5db;
 		border-radius: 3px;
 	}
 
 	.message-list::-webkit-scrollbar-thumb:hover {
-		background: #a8a8a8;
+		background: #9ca3af;
 	}
 </style>

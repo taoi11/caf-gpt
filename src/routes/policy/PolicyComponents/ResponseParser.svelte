@@ -132,32 +132,32 @@
 	}
 </script>
 
-<div class="response-parser">
+<div class="flex flex-col gap-4">
 	{#if parsed}
 		<!-- Answer Section -->
-		<div class="answer-section">
-			<div class="answer-content">
+		<div class="leading-relaxed">
+			<div class="text-gray-800">
 				{@html `<p>${formatAnswer(parsed.answer)}</p>`}
 			</div>
 		</div>
 
 		<!-- Citations Section -->
 		{#if parsed.citations.length > 0}
-			<div class="citations-section">
+			<div class="mt-2 pt-4 border-t border-gray-200">
 				<CitationRenderer citations={parsed.citations} />
 			</div>
 		{/if}
 
 		<!-- Follow-up Question Section -->
 		{#if parsed.follow_up}
-			<div class="follow-up-section">
-				<div class="follow-up-header">
-					<span class="follow-up-icon">💡</span>
+			<div class="mt-2 pt-4 border-t border-gray-200">
+				<div class="flex items-center gap-2 mb-3 text-sm text-gray-500">
+					<span class="text-base">💡</span>
 					<strong>Suggested follow-up:</strong>
 				</div>
 				<button 
 					type="button" 
-					class="follow-up-button"
+					class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-3 cursor-pointer transition-all duration-200 text-sm leading-relaxed text-left text-gray-700 font-medium hover:bg-white hover:border-blue-500 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
 					on:click={handleFollowUpClick}
 				>
 					{parsed.follow_up}
@@ -166,123 +166,29 @@
 		{/if}
 	{:else}
 		<!-- Fallback for unparseable content -->
-		<div class="fallback-content">
-			<p>{xmlContent}</p>
+		<div class="bg-yellow-50 border border-yellow-200 rounded-md p-4 text-yellow-800">
+			<p class="m-0 text-sm leading-relaxed">{xmlContent}</p>
 		</div>
 	{/if}
 </div>
 
 <style>
-	.response-parser {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-	}
-
-	.answer-section {
-		line-height: 1.6;
-	}
-
-	.answer-content {
-		color: #333;
-	}
-
-	.answer-content :global(p) {
+	/* Global styles for formatted content */
+	:global(.text-gray-800 p) {
 		margin: 0 0 1rem 0;
 	}
 
-	.answer-content :global(p:last-child) {
+	:global(.text-gray-800 p:last-child) {
 		margin-bottom: 0;
 	}
 
-	.answer-content :global(strong) {
-		color: var(--color-theme-2);
+	:global(.text-gray-800 strong) {
+		color: #374151;
 		font-weight: 600;
 	}
 
-	.answer-content :global(em) {
-		color: var(--color-theme-1);
+	:global(.text-gray-800 em) {
+		color: #3b82f6;
 		font-style: italic;
-	}
-
-	.citations-section {
-		margin-top: 0.5rem;
-		padding-top: 1rem;
-		border-top: 1px solid #e9ecef;
-	}
-
-	.follow-up-section {
-		margin-top: 0.5rem;
-		padding-top: 1rem;
-		border-top: 1px solid #e9ecef;
-	}
-
-	.follow-up-header {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 0.75rem;
-		font-size: 0.9rem;
-		color: #6c757d;
-	}
-
-	.follow-up-icon {
-		font-size: 1rem;
-	}
-
-	.follow-up-button {
-		background: #f8f9fa;
-		border: 2px solid #e9ecef;
-		border-radius: 8px;
-		padding: 0.75rem 1rem;
-		cursor: pointer;
-		transition: all 0.2s ease;
-		font-size: 0.9rem;
-		line-height: 1.4;
-		text-align: left;
-		width: 100%;
-		color: var(--color-theme-2);
-		font-weight: 500;
-	}
-
-	.follow-up-button:hover {
-		background: white;
-		border-color: var(--color-theme-1);
-		transform: translateY(-1px);
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	}
-
-	.follow-up-button:active {
-		transform: translateY(0);
-	}
-
-	.fallback-content {
-		background: #fff3cd;
-		border: 1px solid #ffeaa7;
-		border-radius: 6px;
-		padding: 1rem;
-		color: #856404;
-	}
-
-	.fallback-content p {
-		margin: 0;
-		font-size: 0.9rem;
-		line-height: 1.4;
-	}
-
-	/* Responsive adjustments */
-	@media (max-width: 768px) {
-		.response-parser {
-			gap: 0.75rem;
-		}
-
-		.follow-up-button {
-			padding: 0.5rem 0.75rem;
-			font-size: 0.85rem;
-		}
-
-		.follow-up-header {
-			font-size: 0.85rem;
-		}
 	}
 </style>

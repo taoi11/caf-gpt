@@ -53,39 +53,39 @@
 	}
 </script>
 
-<div class="citation-renderer">
-	<div class="citations-header">
-		<span class="citations-icon">📋</span>
+<div class="bg-gray-50 rounded-lg p-4 border border-gray-200">
+	<div class="flex items-center gap-2 mb-3 text-sm font-semibold text-gray-700">
+		<span class="text-base">📋</span>
 		<strong>Sources & References:</strong>
 	</div>
 
-	<div class="citations-list">
+	<div class="flex flex-col gap-3 mb-4">
 		{#each citations as citation, index}
 			{@const parsed = parseCitation(citation)}
-			<div class="citation-item">
-				<div class="citation-number">
+			<div class="flex gap-3 items-start">
+				<div class="font-semibold text-blue-600 min-w-[1.5rem] text-sm">
 					{index + 1}.
 				</div>
-				<div class="citation-content">
+				<div class="flex-1 text-sm leading-relaxed">
 					{#if isLinkable(parsed)}
 						<!-- Linkable citation with policy number -->
-						<div class="citation-main">
+						<div class="flex flex-col gap-1">
 							<a 
 								href={getPolicyUrl(parsed.policyNumber || '')}
 								target="_blank"
 								rel="noopener noreferrer"
-								class="policy-link"
+								class="inline-flex items-center gap-2 text-blue-600 no-underline font-semibold transition-all duration-200 py-1 px-2 rounded bg-white border border-gray-200 w-fit hover:bg-blue-600 hover:text-white hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-blue-600 focus:ring-offset-2"
 							>
-								<span class="policy-number">DOAD {parsed.policyNumber}</span>
-								<span class="external-link-icon">↗</span>
+								<span class="font-mono text-xs">DOAD {parsed.policyNumber}</span>
+								<span class="text-xs opacity-70">↗</span>
 							</a>
 							{#if parsed.title}
-								<div class="policy-title">{parsed.title}</div>
+								<div class="text-gray-500 text-xs italic mt-1 pl-2">{parsed.title}</div>
 							{/if}
 						</div>
 					{:else}
 						<!-- Non-linkable citation -->
-						<div class="citation-text">
+						<div class="text-gray-700 py-1 px-2 bg-white rounded border border-gray-200">
 							{parsed.fullText}
 						</div>
 					{/if}
@@ -94,8 +94,8 @@
 		{/each}
 	</div>
 
-	<div class="citations-note">
-		<small>
+	<div class="pt-3 border-t border-gray-200 text-center">
+		<small class="text-xs text-gray-500 leading-tight">
 			Click on policy numbers to view the full document. 
 			Please verify current policy versions through official CAF channels.
 		</small>
@@ -103,168 +103,14 @@
 </div>
 
 <style>
-	.citation-renderer {
-		background: #f8f9fa;
-		border-radius: 8px;
-		padding: 1rem;
-		border: 1px solid #e9ecef;
-	}
-
-	.citations-header {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 0.75rem;
-		font-size: 0.9rem;
-		color: var(--color-theme-2);
-	}
-
-	.citations-icon {
-		font-size: 1rem;
-	}
-
-	.citations-list {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		margin-bottom: 1rem;
-	}
-
-	.citation-item {
-		display: flex;
-		gap: 0.75rem;
-		align-items: flex-start;
-	}
-
-	.citation-number {
-		font-weight: 600;
-		color: var(--color-theme-1);
-		min-width: 1.5rem;
-		font-size: 0.9rem;
-	}
-
-	.citation-content {
-		flex: 1;
-		font-size: 0.9rem;
-		line-height: 1.4;
-	}
-
-	.citation-main {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.policy-link {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--color-theme-1);
-		text-decoration: none;
-		font-weight: 600;
-		transition: all 0.2s ease;
-		padding: 0.25rem 0.5rem;
-		border-radius: 4px;
-		background: white;
-		border: 1px solid #e9ecef;
-		width: fit-content;
-	}
-
-	.policy-link:hover {
-		background: var(--color-theme-1);
-		color: white;
-		transform: translateY(-1px);
-		box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-	}
-
-	.policy-number {
-		font-family: 'Courier New', monospace;
-		font-size: 0.85rem;
-	}
-
-	.external-link-icon {
-		font-size: 0.8rem;
-		opacity: 0.7;
-	}
-
-	.policy-title {
-		color: #6c757d;
-		font-size: 0.85rem;
-		font-style: italic;
-		margin-top: 0.25rem;
-		padding-left: 0.5rem;
-	}
-
-	.citation-text {
-		color: #495057;
-		padding: 0.25rem 0.5rem;
-		background: white;
-		border-radius: 4px;
-		border: 1px solid #e9ecef;
-	}
-
-	.citations-note {
-		padding-top: 0.75rem;
-		border-top: 1px solid #e9ecef;
-		color: #6c757d;
-		text-align: center;
-	}
-
-	.citations-note small {
-		font-size: 0.8rem;
-		line-height: 1.3;
-	}
-
-	/* Responsive adjustments */
-	@media (max-width: 768px) {
-		.citation-renderer {
-			padding: 0.75rem;
-		}
-
-		.citation-item {
-			gap: 0.5rem;
-		}
-
-		.citations-header {
-			font-size: 0.85rem;
-		}
-
-		.citation-content {
-			font-size: 0.85rem;
-		}
-
-		.policy-link {
-			padding: 0.2rem 0.4rem;
-			font-size: 0.85rem;
-		}
-
-		.policy-number {
-			font-size: 0.8rem;
-		}
-
-		.citations-note small {
-			font-size: 0.75rem;
-		}
-	}
-
-	/* Focus styles for accessibility */
-	.policy-link:focus {
-		outline: 2px solid var(--color-theme-1);
-		outline-offset: 2px;
-	}
-
 	/* Print styles */
 	@media print {
-		.policy-link {
-			color: black;
+		.bg-gray-50 a {
+			color: black !important;
 			text-decoration: underline;
 		}
 		
-		.external-link-icon {
-			display: none;
-		}
-		
-		.policy-link::after {
+		.bg-gray-50 a::after {
 			content: " (" attr(href) ")";
 			font-size: 0.8em;
 			color: #666;
