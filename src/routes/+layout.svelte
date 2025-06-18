@@ -15,10 +15,10 @@
 				</div>
 				<div class="flex items-center space-x-8">
 					<a href="/pacenote" class="text-gray-600 hover:text-gray-900 transition-colors">
-						PaceNote
+						PaceNoteFoo
 					</a>
 					<a href="/policy" class="text-gray-600 hover:text-gray-900 transition-colors">
-						Policy
+						PolicyFoo
 					</a>
 				</div>
 			</div>

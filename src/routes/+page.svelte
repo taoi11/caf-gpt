@@ -22,13 +22,13 @@
 				href="/pacenote" 
 				class="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-lg font-medium transition-colors"
 			>
-				Try PaceNote Generator
+				Try PaceNoteFoo
 			</a>
 			<a 
 				href="/policy" 
 				class="bg-green-600 hover:bg-green-700 text-white px-8 py-3 rounded-lg font-medium transition-colors"
 			>
-				Ask Policy Questions
+				Try PolicyFoo
 			</a>
 			<a 
 				href="#features" 
@@ -61,7 +61,7 @@
 					</svg>
 				</div>
 				<h3 class="text-xl font-semibold text-gray-900 mb-4">
-					PaceNote Generator
+					PaceNoteFoo
 				</h3>
 				<p class="text-gray-600 mb-6">
 					Generate good enough pacenotes for lazy J-bros.
@@ -70,7 +70,7 @@
 					href="/pacenote" 
 					class="inline-flex items-center text-blue-600 hover:text-blue-700 font-medium"
 				>
-					Start Generating
+					Get a feedback note
 					<svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
 					</svg>
@@ -85,38 +85,16 @@
 					</svg>
 				</div>
 				<h3 class="text-xl font-semibold text-gray-900 mb-4">
-					Policy Assistant
-					<span class="text-sm font-normal text-green-600 ml-2 bg-green-100 px-2 py-1 rounded">✅ Available</span>
+					PolicyFoo
 				</h3>
 				<p class="text-gray-600 mb-6">
-					Ask questions about CAF policies and get instant answers with authoritative citations. 
-					Search DOAD policies, get accurate information, and find relevant regulations quickly.
+					Ask questions about CAF policies and find relevant regulations quickly.
 				</p>
-				<div class="space-y-2 mb-6">
-					<div class="flex items-center text-sm text-green-600">
-						<svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-							<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-						</svg>
-						DOAD policy support with citations
-					</div>
-					<div class="flex items-center text-sm text-green-600">
-						<svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-							<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-						</svg>
-						Intelligent two-stage AI workflow
-					</div>
-					<div class="flex items-center text-sm text-green-600">
-						<svg class="w-4 h-4 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
-							<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"></path>
-						</svg>
-						Multi-turn conversation support
-					</div>
-				</div>
 				<a 
 					href="/policy" 
 					class="inline-flex items-center text-green-600 hover:text-green-700 font-medium"
 				>
-					Ask Policy Questions
+					Ask PolicyFoo
 					<svg class="w-4 h-4 ml-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path>
 					</svg>
