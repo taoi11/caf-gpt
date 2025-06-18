@@ -130,10 +130,10 @@ policyFoo/
 - **Features**: Two-stage agent workflow, citation extraction, policy linking
 
 ### LEAVE (Leave Policies)
-- **Status**: 📋 Planned
-- **Handler**: `leaveFoo/` (future)
-- **Policies**: Will be stored at `leave/*.md`
-- **Features**: Similar workflow to DOAD handler
+- **Status**: ✅ Implemented
+- **Handler**: `leaveFoo/`
+- **Policies**: Stored in R2 bucket at `leave/leave_policy_2025.md`
+- **Features**: Single-stage workflow, citation extraction, policy guidance
 
 ## Error Codes
 - `INVALID_POLICY_SET` - Unknown or unsupported policy set
