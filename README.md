@@ -1,19 +1,19 @@
-# CAF GPT - Cloudflare Serverless Edition
+# CAF GPT - Go + HTMX Edition
 
-An AI-powered application built with SvelteKit and deployed on Cloudflare's serverless platform.
+An AI-powered application built with Go and HTMX, deployed on Fly.io with TigrisData storage.
 
 ## Overview
 
-CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modular, maintainable architecture:
+CAF GPT provides AI-powered assistance tools for CAF troops with a focus on simplicity and performance:
 
-- **PaceNote**: ✅ **Fully Functional** - Generate feedback notes for lazy CAF members based on observations and rank-specific competencies. Features a complete co-located module with form handling, results display, and route-specific utilities.
+- **PaceNote**: ✅ **Fully Functional** - Generate feedback notes for lazy CAF members based on observations and rank-specific competencies. Features a complete server-side rendered interface with HTMX for dynamic interactions.
 - **PolicyFoo**: ✅ **Fully Functional** - AI-powered policy question answering with authoritative citations. Features two-stage agent workflow (finder → main) with support for DOAD policies and extensible architecture for additional policy sets.
 
 **Architecture Highlights:**
-- **Co-located Components**: Route-specific UI components live with their routes
-- **Domain Services**: Business logic organized by functional domain
-- **Type-Safe**: End-to-end TypeScript with strict validation
-- **Server-First**: Security and performance through server-side rendering
+- **Go Backend**: Fast, reliable server with embedded templates and static files
+- **HTMX Frontend**: Interactive UI without complex JavaScript frameworks  
+- **Server-Side Rendering**: Security and performance through Go's html/template package
+- **Fly.io Deployment**: Modern cloud deployment with TigrisData S3-compatible storage
 
 ## Service Modules
 

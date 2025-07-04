@@ -14,7 +14,7 @@ import (
 	"caf-gpt/internal/storage"
 )
 
-//go:embed templates
+//go:embed internal/templates
 var templateFS embed.FS
 
 //go:embed static
@@ -75,7 +75,7 @@ func main() {
 	mux := http.NewServeMux()
 
 	// Static files
-	mux.Handle("/static/", http.FileServer(http.FS(staticFS)))
+	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
 	// Page routes
 	mux.HandleFunc("/", h.HomeHandler)
@@ -105,7 +105,7 @@ func parseTemplates() (*template.Template, error) {
 	tmpl := template.New("")
 
 	// Parse base layout
-	layoutContent, err := templateFS.ReadFile("templates/base/layout.html")
+	layoutContent, err := templateFS.ReadFile("internal/templates/base/layout.html")
 	if err != nil {
 		return nil, err
 	}
@@ -118,9 +118,9 @@ func parseTemplates() (*template.Template, error) {
 
 	// Parse page templates
 	pageFiles := []string{
-		"templates/pages/index.html",
-		"templates/pages/pacenote.html",
-		"templates/pages/policy.html",
+		"internal/templates/pages/index.html",
+		"internal/templates/pages/pacenote.html",
+		"internal/templates/pages/policy.html",
 	}
 
 	for _, file := range pageFiles {
@@ -138,8 +138,8 @@ func parseTemplates() (*template.Template, error) {
 
 	// Parse partial templates
 	partialFiles := []string{
-		"templates/partials/pacenote_results.html",
-		"templates/partials/policy_response.html",
+		"internal/templates/partials/pacenote_results.html",
+		"internal/templates/partials/policy_response.html",
 	}
 
 	for _, file := range partialFiles {
