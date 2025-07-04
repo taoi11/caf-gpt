@@ -28,7 +28,7 @@ caf-gpt/
 │   │   ├── partials.go          # HTMX partial handlers
 │   │   └── health.go            # Health check handler
 │   ├── services/                # Business logic (internal only)
-│   │   ├── ai_service.go        # AI service integration
+│   │   ├── openrouter.go        # OpenRouter API client
 │   │   ├── pacenote_service.go  # PaceNote business logic
 │   │   └── policy_service.go    # Policy business logic
 │   ├── storage/                 # Tigris S3 integration
@@ -123,12 +123,14 @@ caf-gpt/
 
 ### 4.2 Service Layer (Internal)
 
-- Create service layers to handle business logic and AI interactions
+- Create service layers to handle business logic and OpenRouter API interactions
 - Implement functions to:
-  - Generate pace notes with AI
-  - Answer policy questions with AI  
+  - Generate pace notes using OpenRouter API
+  - Answer policy questions using OpenRouter API  
   - Validate input data
   - Read/write from/to storage
+- **OpenRouter Integration**: Direct API calls to https://openrouter.ai/api/v1
+- **Model Selection**: Configure preferred models (e.g., Claude 3.5 Sonnet, GPT-4, etc.)
 - **Conversation State**: PolicyFoo conversation managed in browser (JavaScript)
 
 ## 5. Fly.io Deployment (Following Official Best Practices)
@@ -340,6 +342,7 @@ go get github.com/aws/aws-sdk-go-v2/service/s3
 
 2. **Core Development**
    - Implement HTTP server with template embedding
+   - Create OpenRouter API client with standard HTTP library
    - Create service layer for business logic (internal only)
    - Add HTMX integration for interactive components
 
@@ -347,6 +350,7 @@ go get github.com/aws/aws-sdk-go-v2/service/s3
    - Run `flyctl launch` for auto-configuration via buildpacks
    - Customize `fly.toml` for Canadian region
    - Set up Tigris storage: `fly storage create`
+   - Configure OpenRouter API key: `fly secrets set OPENROUTER_API_KEY=sk-or-v1-...`
 
 4. **Testing & Deployment**
    - Local testing with `go run ./cmd/cafgpt` (or `go run app.go`)
@@ -366,6 +370,8 @@ go get github.com/aws/aws-sdk-go-v2/service/s3
 - **HTMX Integration**: Interactive frontend without exposing backend
 - **Browser State Management**: Conversation state handled client-side
 - **Single Health Endpoint**: Only `/health` returns JSON for monitoring
+- **Direct OpenRouter Integration**: No proxy layer, simpler security model
+- **API Key Management**: Secure API key storage via Fly.io secrets
 
 ## 10. AI Agent Rules & File Preservation
 
