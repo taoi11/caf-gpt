@@ -30,3 +30,7 @@ vite.config.ts.timestamp-*
 
 .dev.vars*
 !.dev.vars.example
+
+# Go binaries
+cafgpt
+*.exe

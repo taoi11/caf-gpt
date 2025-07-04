@@ -1,0 +1,112 @@
+<div class="max-w-4xl mx-auto px-4 py-12">
+    <div class="text-center mb-12">
+        <h1 class="text-4xl font-bold text-gray-900 mb-4">
+            PaceNote Generator
+        </h1>
+        <p class="text-lg text-gray-600 max-w-2xl mx-auto">
+            Generate good enough pacenotes for lazy J-bros.
+        </p>
+    </div>
+
+    <div class="space-y-8">
+        <!-- Input Form -->
+        <div class="card">
+            {{if not .IsConfigured}}
+            <div class="alert alert-error">
+                <strong>Configuration Error:</strong> The application is not properly configured. Please check your environment variables.
+            </div>
+            {{else}}
+            <form hx-post="/pacenote/generate" 
+                  hx-target="#results" 
+                  hx-swap="innerHTML"
+                  hx-indicator="#spinner">
+                
+                <div class="space-y-4">
+                    <!-- Rank Selection -->
+                    <div>
+                        <label for="rank" class="block text-sm font-medium text-gray-700 mb-2">
+                            Rank
+                        </label>
+                        <select id="rank" name="rank" class="form-input form-select" required>
+                            <option value="">Select a rank</option>
+                            {{range .AvailableRanks}}
+                            <option value="{{.Value}}">{{.Label}}</option>
+                            {{end}}
+                        </select>
+                    </div>
+
+                    <!-- Observations -->
+                    <div>
+                        <label for="observations" class="block text-sm font-medium text-gray-700 mb-2">
+                            Observations (minimum 20 characters)
+                        </label>
+                        <textarea id="observations" 
+                                  name="observations" 
+                                  class="form-input form-textarea" 
+                                  rows="6"
+                                  placeholder="Enter your observations about the member's performance..."
+                                  required
+                                  minlength="20"
+                                  maxlength="2000"></textarea>
+                        <p class="text-sm text-gray-500 mt-1">
+                            Describe specific behaviors, achievements, or areas for improvement.
+                        </p>
+                    </div>
+
+                    <!-- Competency Focus (Optional) -->
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
+                            Competency Focus (Optional)
+                        </label>
+                        <div class="grid grid-cols-2 gap-2">
+                            <label class="flex items-center">
+                                <input type="checkbox" name="competency_focus" value="Leadership" class="mr-2">
+                                Leadership
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="competency_focus" value="Communication" class="mr-2">
+                                Communication
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="competency_focus" value="Technical Skills" class="mr-2">
+                                Technical Skills
+                            </label>
+                            <label class="flex items-center">
+                                <input type="checkbox" name="competency_focus" value="Teamwork" class="mr-2">
+                                Teamwork
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Submit Button -->
+                    <div class="flex items-center gap-4">
+                        <button type="submit" class="btn btn-primary">
+                            Generate PaceNote
+                        </button>
+                        <div id="spinner" class="htmx-indicator flex items-center gap-2">
+                            <div class="spinner"></div>
+                            <span>Generating...</span>
+                        </div>
+                    </div>
+                </div>
+            </form>
+            {{end}}
+        </div>
+        
+        <!-- Results -->
+        <div id="results">
+            <!-- HTMX will inject results here -->
+        </div>
+    </div>
+    
+    <!-- Usage Tips -->
+    <div class="mt-12 card">
+        <h3 class="text-lg font-semibold text-gray-900 mb-4">Usage Tips</h3>
+        <ul class="text-sm text-gray-600 space-y-2">
+            <li>• Be specific in your observations - include concrete examples</li>
+            <li>• Focus on behaviors and outcomes rather than personality traits</li>
+            <li>• Include both strengths and areas for improvement</li>
+            <li>• Use the competency focus to emphasize specific areas</li>
+        </ul>
+    </div>
+</div>

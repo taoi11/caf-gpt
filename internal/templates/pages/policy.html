@@ -1,0 +1,74 @@
+<div class="max-w-6xl mx-auto p-4 min-h-screen flex flex-col">
+    <header class="text-center mb-8 pb-4 border-b-2 border-blue-600">
+        <h1 class="text-4xl font-bold text-gray-700 mb-2">Policy Assistant</h1>
+        <p class="text-lg text-gray-600">Ask questions about CAF policies and get authoritative answers with citations.</p>
+    </header>
+
+    <main class="flex-1 flex flex-col gap-6">
+        <!-- Policy Selector -->
+        <div class="card">
+            <label for="policy_set" class="block text-sm font-medium text-gray-700 mb-2">
+                Policy Set
+            </label>
+            <select id="policy_set" name="policy_set" class="form-input form-select">
+                {{range .PolicySets}}
+                <option value="{{.}}">{{.}}</option>
+                {{end}}
+            </select>
+        </div>
+
+        <!-- Conversation Display -->
+        <div class="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
+            <div id="conversation-container">
+                <div class="p-8 text-center">
+                    <h2 class="text-2xl font-semibold text-gray-800 mb-3">Ask a Policy Question</h2>
+                    <p class="text-gray-600 mb-6">Select a policy set and ask your question to get started.</p>
+                    <div class="max-w-md mx-auto text-left bg-gray-50 p-4 rounded-lg">
+                        <h3 class="font-semibold text-gray-700 mb-2">Example Questions:</h3>
+                        <ul class="text-sm text-gray-600 space-y-1">
+                            <li>• What are the leave approval requirements?</li>
+                            <li>• How do I request compassionate leave?</li>
+                            <li>• What is the policy on professional development?</li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Query Form -->
+        <form class="card" 
+              hx-post="/policy/ask" 
+              hx-target="#conversation-container" 
+              hx-swap="innerHTML"
+              hx-indicator="#policy-spinner">
+            
+            <div class="space-y-4">
+                <label for="user_message" class="sr-only">Your question</label>
+                <div class="flex flex-col md:flex-row gap-3">
+                    <textarea id="user_message"
+                              name="user_message"
+                              placeholder="Ask a question about policies..."
+                              rows="3"
+                              required
+                              class="flex-1 form-input form-textarea"></textarea>
+                    
+                    <button type="submit" 
+                            class="btn btn-primary md:self-end">
+                        <span id="policy-spinner" class="htmx-indicator spinner mr-2"></span>
+                        Ask
+                    </button>
+                </div>
+            </div>
+
+            <!-- Hidden field for policy set -->
+            <input type="hidden" name="policy_set" id="hidden_policy_set" value="{{index .PolicySets 0}}">
+        </form>
+    </main>
+</div>
+
+<script>
+    // Update hidden field when policy set changes
+    document.getElementById('policy_set').addEventListener('change', function() {
+        document.getElementById('hidden_policy_set').value = this.value;
+    });
+</script>
