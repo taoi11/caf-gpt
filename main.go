@@ -94,8 +94,8 @@ func main() {
 	handler := addMiddleware(mux)
 
 	// Start server
-	log.Printf("Server starting on :%s", cfg.Port)
-	if err := http.ListenAndServe(":"+cfg.Port, handler); err != nil {
+	log.Printf("Server starting on 0.0.0.0:%s", cfg.Port)
+	if err := http.ListenAndServe("0.0.0.0:"+cfg.Port, handler); err != nil {
 		log.Fatalf("Server failed to start: %v", err)
 	}
 }
