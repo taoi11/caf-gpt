@@ -1,0 +1,88 @@
+# Git and version control
+.git/
+.gitignore
+.github/
+
+# Documentation
+README*.md
+LICENSE
+CHANGELOG.md
+docs/
+
+# Development and IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Environment and configuration files (keep only what's needed)
+.env
+.env.*
+!.env.example
+
+# Build artifacts and binaries
+/caf-gpt
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+/dist/
+/build/
+
+# Go workspace and modules cache
+go.work
+go.work.sum
+/vendor/
+
+# Testing
+/tests/
+coverage.out
+*.cover
+.nyc_output
+
+# Logs and temporary files
+*.log
+*.tmp
+/tmp/
+/logs/
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+
+# Node.js (if any frontend build tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+
+# AI and development tools
+.ai/
+
+# Docker files themselves
+.dockerignore
+docker-compose*.yml
+
+# Deployment and infrastructure
+k8s/
+terraform/
+.terraform/
+*.tfstate
+*.tfplan

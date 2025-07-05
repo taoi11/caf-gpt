@@ -1,6 +1,6 @@
 module caf-gpt
 
-go 1.21
+go 1.24.3
 
 require (
 	github.com/aws/aws-sdk-go-v2 v1.32.6

@@ -1,57 +1,22 @@
-# fly.toml app configuration file generated for caf-gpt on 2025-07-04T15:59:00-07:00
-# See https://fly.io/docs/reference/configuration/ for information about how to use this file.
-
-app = "caf-gpt"
-primary_region = "yyz"
+app = 'caf-gpt'
+primary_region = 'sea'
 
 [build]
+  [build.args]
+    GO_VERSION = '1.24.3'
+
+[env]
+  PORT = '8080'
 
 [http_service]
   internal_port = 8080
   force_https = true
-  auto_stop_machines = true
+  auto_stop_machines = 'stop'
   auto_start_machines = true
   min_machines_running = 0
-  processes = ["app"]
+  processes = ['app']
 
 [[vm]]
-  cpu_kind = "shared"
+  memory = '256mb'
+  cpu_kind = 'shared'
   cpus = 1
-  memory_mb = 512
-
-[env]
-  PORT = "8080"
-
-[[services]]
-  protocol = "tcp"
-  internal_port = 8080
-  processes = ["app"]
-
-  [[services.ports]]
-    port = 80
-    handlers = ["http"]
-    force_https = true
-
-  [[services.ports]]
-    port = 443
-    handlers = ["tls", "http"]
-
-  [services.concurrency]
-    type = "connections"
-    hard_limit = 25
-    soft_limit = 20
-
-  [[services.tcp_checks]]
-    interval = "15s"
-    timeout = "2s"
-    grace_period = "1s"
-    method = "connection"
-
-  [[services.http_checks]]
-    interval = "10s"
-    timeout = "2s"
-    grace_period = "5s"
-    method = "get"
-    path = "/health"
-    protocol = "http"
-    tls_skip_verify = false
