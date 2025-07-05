@@ -5,8 +5,10 @@ import (
 	"embed"
 	"html/template"
 	"log"
+	"mime"
 	"net/http"
 	"path/filepath"
+	"strings"
 
 	"caf-gpt/internal/config"
 	"caf-gpt/internal/handlers"
@@ -17,7 +19,7 @@ import (
 //go:embed internal/templates
 var templateFS embed.FS
 
-//go:embed static
+//go:embed static/*
 var staticFS embed.FS
 
 // Note: Prompt files are read from Tigris storage, not embedded
@@ -74,8 +76,8 @@ func main() {
 	// Set up routes
 	mux := http.NewServeMux()
 
-	// Static files
-	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
+	// Static files with proper MIME types
+	mux.HandleFunc("/static/", staticFileHandler)
 
 	// Page routes
 	mux.HandleFunc("/", h.HomeHandler)
@@ -156,6 +158,98 @@ func parseTemplates() (*template.Template, error) {
 	}
 
 	return tmpl, nil
+}
+
+// staticFileHandler serves static files with proper MIME types
+func staticFileHandler(w http.ResponseWriter, r *http.Request) {
+	// Remove /static/ prefix to get the relative path
+	path := strings.TrimPrefix(r.URL.Path, "/static/")
+	if path == r.URL.Path {
+		// Path didn't start with /static/
+		http.NotFound(w, r)
+		return
+	}
+
+	// Sanitize the path to prevent directory traversal
+	cleaned := filepath.Clean(path)
+	if strings.HasPrefix(cleaned, "..") {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Construct the full path in the embedded filesystem
+	embeddedPath := "static/" + cleaned
+
+	// Get file extension and set appropriate MIME type
+	ext := strings.ToLower(filepath.Ext(path))
+	switch ext {
+	case ".css":
+		w.Header().Set("Content-Type", "text/css; charset=utf-8")
+	case ".js":
+		w.Header().Set("Content-Type", "application/javascript; charset=utf-8")
+	case ".png":
+		w.Header().Set("Content-Type", "image/png")
+	case ".jpg", ".jpeg":
+		w.Header().Set("Content-Type", "image/jpeg")
+	case ".gif":
+		w.Header().Set("Content-Type", "image/gif")
+	case ".svg":
+		w.Header().Set("Content-Type", "image/svg+xml")
+	case ".ico":
+		w.Header().Set("Content-Type", "image/x-icon")
+	default:
+		// Use Go's built-in MIME type detection as fallback
+		if mimeType := mime.TypeByExtension(ext); mimeType != "" {
+			w.Header().Set("Content-Type", mimeType)
+		}
+	}
+
+	// Read the file directly from embedded filesystem
+	content, err := staticFS.ReadFile(embeddedPath)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	// Set Cache-Control header for static assets (1 week)
+	w.Header().Set("Cache-Control", "public, max-age=604800, immutable")
+
+	// Set ETag header based on file content hash
+	etag := `W/"` + computeETag(content) + `"`
+	w.Header().Set("ETag", etag)
+
+	// Handle If-None-Match for client-side caching
+	if match := r.Header.Get("If-None-Match"); match != "" {
+		if match == etag {
+			w.WriteHeader(http.StatusNotModified)
+			return
+		}
+	}
+
+	w.Write(content)
+}
+
+// computeETag returns a weak ETag for the given content
+func computeETag(content []byte) string {
+	// Use a simple hash for ETag (not cryptographically secure)
+	const prime32 = 16777619
+	var hash uint32 = 2166136261
+	for _, b := range content {
+		hash ^= uint32(b)
+		hash *= prime32
+	}
+	return strings.ToUpper(hexEncode(hash))
+}
+
+// hexEncode returns the hex string of a uint32
+func hexEncode(u uint32) string {
+	const hex = "0123456789ABCDEF"
+	b := make([]byte, 8)
+	for i := 7; i >= 0; i-- {
+		b[i] = hex[u&0xF]
+		u >>= 4
+	}
+	return string(b)
 }
 
 // addMiddleware adds CORS and security headers
