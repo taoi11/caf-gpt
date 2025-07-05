@@ -1,12 +1,17 @@
-node_modules
+# Go binaries and build files
+/caf-gpt
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+*.test
+*.out
+/bin/
+/dist/
 
-# Output
-.output
-.vercel
-.netlify
-.wrangler
-/.svelte-kit
-/build
+# Go workspace files
+go.work
 
 # OS
 .DS_Store
@@ -18,19 +23,24 @@ Thumbs.db
 !.env.example
 !.env.test
 
-# Vite
-vite.config.js.timestamp-*
-vite.config.ts.timestamp-*
+# IDE files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Temporary files
+/tmp/
+*.tmp
+
+# Downloaded Go packages
+/vendor/
 
 # SQLite
 *.db
 
-# Generated files
-*.d.ts
+# Logs
+*.log
 
-.dev.vars*
-!.dev.vars.example
-
-# Go binaries
-cafgpt
-*.exe
+# Downloaded Go version
+*.tar.gz
