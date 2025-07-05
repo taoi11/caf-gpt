@@ -24,9 +24,9 @@
 - **Co-location**: Related functionality should be grouped together
 - **Single Responsibility**: Files should have one clear purpose
 - **Minimal Files**: Prefer consolidating small, related files over file proliferation
-- **Service Layer**: Business logic belongs in services, not views or models
+- **Service Layer**: Business logic belongs in services, not handlers or templates
 - **Dependency Clarity**: Make dependencies obvious through file organization
-- **1 Types file**: One main `types.ts` at the top of repo.
+- **Go Type Definitions**: Use Go structs and interfaces in service packages for type safety
 
 ## Work follow phases
 
@@ -36,13 +36,6 @@ Start by gaining a clear understanding of the project.
 
 - Overview First : Begin with `README.md`
 - Investigation : Use tools to understand current usage/dependencies before asking user
-- Study : fetch docs for each Cloudflare product by appending `llms-full.txt` to the root URL.
-  - for example:
-    - https://developers.cloudflare.com/agents/llms-full.txt
-    - https://developers.cloudflare.com/ai-gateway/llms-full.txt
-    - https://developers.cloudflare.com/workers/llms-full.txt
-    - https://developers.cloudflare.com/r2/llms-full.txt
-    - https://developers.cloudflare.com/d1/llms-full.txt
 - Ask user: ask user for more info if you can get it yourself.
 - Notepad : Create a file in `.ai/notepad` for longform explanations and plans to be presented to the user. (optional)
 
@@ -55,14 +48,14 @@ Start by gaining a clear understanding of the project.
 1. **Verify Usage**: Check where the code is currently referenced/imported
 2. **Update All References**: Settings, imports, documentation, etc.
 3. **Clean Up**: Remove old files, unused imports.
-4. **Verify**: Run npm / wrangelr checks, test imports, look for errors.
+4. **Verify**: Run go build / go test / flyctl checks, test imports, look for errors.
 5. **Document**: Update README.md and any relevant documentation
 
 #### Architecture
 
-- Use Sveltekit default structure
-- Use Sveltekit builtins
-- Place reusable code in core/
+- Use Go standard project structure
+- Use Go standard library and html/template builtins
+- Place reusable code in internal/
 - Keep the README files updated and accurate.
 - Optimize for cold starts
 - Minimize unnecessary computation
@@ -71,12 +64,12 @@ Start by gaining a clear understanding of the project.
 
 - Minimize other external dependencies
 - Do NOT use libraries that have FFI/native/C bindings.
-- Follow Cloudflare Workers security best practices
+- Follow Fly.io and Go security best practices
 - Include proper error handling and logging
 - Include comments explaining complex logic
 
 ## Efficiency Guidelines
 
 - **Investigate Before Asking**: Use semantic_search, file_search, grep_search to understand the codebase before asking clarifying questions
-- **Assume Complete Tasks**: When asked to move/refactor code, assume the user wants a complete job (update references, clean up, verify)
+- **Assume Complete Tasks**: When asked to move/refactor code, assume the user wants a complete job (update references, clean up, verify) things like `go fmt`, `go vet`, `staticcheck`, `go test` etc.
 - **Batch Related Changes**: Group related edits together rather than asking for permission for each small step

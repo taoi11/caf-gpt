@@ -12,16 +12,16 @@ import (
 
 // PaceNoteResultData represents data for pacenote results partial
 type PaceNoteResultData struct {
-	Error    string                `json:"error,omitempty"`
-	Feedback string                `json:"feedback,omitempty"`
-	Rank     string                `json:"rank,omitempty"`
-	Usage    *services.Usage       `json:"usage,omitempty"`
+	Error    string          `json:"error,omitempty"`
+	Feedback string          `json:"feedback,omitempty"`
+	Rank     string          `json:"rank,omitempty"`
+	Usage    *services.Usage `json:"usage,omitempty"`
 }
 
 // PolicyResponseData represents data for policy response partial
 type PolicyResponseData struct {
-	Error    string                     `json:"error,omitempty"`
-	Messages []services.PolicyMessage  `json:"messages,omitempty"`
+	Error    string                   `json:"error,omitempty"`
+	Messages []services.PolicyMessage `json:"messages,omitempty"`
 }
 
 // PaceNoteGenerateHandler handles HTMX requests for pace note generation

@@ -1,8 +1,0 @@
-# OpenRouter API Key - Get this from your OpenRouter dashboard
-OPENROUTER_TOKEN=your-openrouter-token-here
-
-# AI Gateway Base URL - Your Cloudflare AI Gateway endpoint  
-AI_GATEWAY_BASE_URL=https://gateway.ai.cloudflare.com/v1/YOUR_ACCOUNT_ID/YOUR_GATEWAY_NAME/openai
-
-# Cloudflare AI Gateway Token (optional)
-CF_AIG_TOKEN=your-cf-aig-token-here

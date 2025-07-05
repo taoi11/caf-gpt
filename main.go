@@ -25,13 +25,13 @@ var staticFS embed.FS
 func main() {
 	// Load configuration
 	cfg := config.Load()
-	
+
 	log.Printf("Starting CAF GPT server on port %s", cfg.Port)
 	log.Printf("Configuration status: %v", cfg.IsConfigured())
 
 	// Initialize services
 	ctx := context.Background()
-	
+
 	var tigrisClient *storage.TigrisClient
 	var openRouterClient *services.OpenRouterClient
 	var paceNoteService *services.PaceNoteService
@@ -109,7 +109,7 @@ func parseTemplates() (*template.Template, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Parse layout template
 	_, err = tmpl.New("layout.html").Parse(string(layoutContent))
 	if err != nil {
@@ -128,7 +128,7 @@ func parseTemplates() (*template.Template, error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		name := filepath.Base(file)
 		_, err = tmpl.New(name).Parse(string(content))
 		if err != nil {
@@ -147,7 +147,7 @@ func parseTemplates() (*template.Template, error) {
 		if err != nil {
 			return nil, err
 		}
-		
+
 		name := filepath.Base(file)
 		_, err = tmpl.New(name).Parse(string(content))
 		if err != nil {
