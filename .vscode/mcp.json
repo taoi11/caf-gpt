@@ -3,6 +3,26 @@
 		"Neon": {
 			"command": "npx",
 			"args": ["-y", "mcp-remote@latest", "https://mcp.neon.tech/sse"]
+		},
+		"cloudflare-docs": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote@latest", "https://docs.mcp.cloudflare.com/sse"]
+		},
+		"cloudflare-ai-gateway": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote@latest", "https://ai-gateway.mcp.cloudflare.com/sse"]
+		},
+		"cloudflare-workers": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote@latest", "https://builds.mcp.cloudflare.com/sse"]
+		},
+		"cloudflare-containers": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote@latest", "https://containers.mcp.cloudflare.com/sse"]
+		},
+		"cloudflare-bindings": {
+			"command": "npx",
+			"args": ["-y", "mcp-remote@latest", "https://bindings.mcp.cloudflare.com/sse"]
 		}
 	}
 }
