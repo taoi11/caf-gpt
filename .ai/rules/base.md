@@ -36,13 +36,6 @@ Start by gaining a clear understanding of the project.
 
 - Overview First : Begin with `README.md`
 - Investigation : Use tools to understand current usage/dependencies before asking user
-- Study : fetch docs for each Cloudflare product by appending `llms-full.txt` to the root URL.
-  - for example:
-    - https://developers.cloudflare.com/agents/llms-full.txt
-    - https://developers.cloudflare.com/ai-gateway/llms-full.txt
-    - https://developers.cloudflare.com/workers/llms-full.txt
-    - https://developers.cloudflare.com/r2/llms-full.txt
-    - https://developers.cloudflare.com/d1/llms-full.txt
 - Ask user: ask user for more info if you can get it yourself.
 - Notepad : Create a file in `.ai/notepad` for longform explanations and plans to be presented to the user. (optional)
 
