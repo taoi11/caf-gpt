@@ -3,6 +3,9 @@
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "caf-gpt",
 	"main": ".svelte-kit/cloudflare/_worker.js",
+	"build": {
+		"command": "npm run build"
+	},
 	"compatibility_date": "2025-05-23",
 	"compatibility_flags": ["nodejs_compat"],
 	"assets": {	// https://developers.cloudflare.com/workers/static-assets/binding/
