@@ -77,7 +77,7 @@ DATABASE_URL=postgres://user:password@host:port/db # Neon Postgres connection
 
 ### Usage Example
 ```typescript
-import { processPolicyQuery } from '$lib/services/policyFoo';
+import { processPolicyQuery } from '$lib/modules/policyFoo';
 
 const result = await processPolicyQuery({
   messages: [

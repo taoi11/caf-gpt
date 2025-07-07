@@ -16,7 +16,7 @@ src/
 │   ├── components/__tests__/    # Component unit tests
 │   └── server/
 │       ├── db/__tests__/        # Database layer tests
-│       ├── services/__tests__/  # Business logic tests
+│       ├── modules/__tests__/   # Business logic tests
 │       └── utils/__tests__/     # Utility function tests
 └── routes/
     ├── api/__tests__/          # API endpoint tests

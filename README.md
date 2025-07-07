@@ -16,7 +16,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **Server-First**: Security and performance through server-side rendering
 - **Database-Driven**: Postgres for structured data and D1 for lightweight storage
 
-## Service Modules
+## Domain Modules
 
 ### PaceNote Service
 **Status**: ✅ Production Ready  
@@ -33,8 +33,8 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 **Status**: ✅ Production Ready  
 **Route**: `/policy`  
 **Documentation**: 
-- [Main Documentation](src/lib/services/policyFoo/README.md)
-- [DOAD Handler Documentation](src/lib/services/policyFoo/doadFoo/README.md)
+- [Main Documentation](src/lib/modules/policyFoo/README.md)
+- [DOAD Handler Documentation](src/lib/modules/policyFoo/doadFoo/README.md)
 
 **Purpose**: Answer policy questions with authoritative citations from CAF policy documents
 
@@ -109,7 +109,7 @@ src/
 │   │       ├── client.ts  # Neon Postgres connection pooling with retry logic
 │   │       ├── schema.ts  # Drizzle ORM schema definitions for DOAD table
 │   │       └── types.ts   # Database type definitions and interfaces
-│   └── services/           # Domain-specific business logic
+│   └── modules/            # Domain-specific business logic
 │       ├── paceNote/       # PaceNote service module
 │       │   ├── README.md   # PaceNote documentation
 │       │   ├── *.ts        # Service implementation
@@ -464,7 +464,7 @@ GET /api/health
 │   ├── worker-configuration.d.ts # Cloudflare bindings types
 │   ├── lib/
 │   │   ├── index.ts            # Shared utilities
-│   │   └── services/
+│   │   └── modules/
 │   │       └── paceNote/       # PaceNote service module
 │   │           ├── service.ts          # Main service logic
 │   │           ├── ai-gateway.service.ts # AI Gateway integration
@@ -505,7 +505,7 @@ GET /api/health
 
 **Co-location Principle:**
 - **Route-Specific Components**: UI components live with their routes (`/pacenote/*`)
-- **Domain Services**: Business logic grouped by domain (`/services/paceNote/`)
+- **Domain Modules**: Business logic grouped by domain (`/modules/paceNote/`)
 - **Shared Utilities**: Only truly reusable code lives in `/lib/common/`
 
 **Modular Design:**

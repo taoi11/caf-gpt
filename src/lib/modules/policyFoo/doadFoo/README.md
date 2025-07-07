@@ -15,12 +15,12 @@ The DOAD handler processes policy queries through an enhanced three-stage databa
 
 ## Enhanced Workflow
   1. Receives a user message from `policyFoo` Router as init, or a continuation of a conversation (`user` + `assistant` message sequence)
-  2. Routes the message or conversation to `src/lib/services/policyFoo/doadFoo/finder.ts` 
+  2. Routes the message or conversation to `src/lib/modules/policyFoo/doadFoo/finder.ts` 
   3. Receives the `assistant` message from finder.ts containing DOAD policy numbers relevant to the user question
   4. **Database Phase**: Retrieves metadata for identified DOADs from Neon Postgres using `database.service.ts`
   5. **Metadata Selection**: Routes metadata to `metadata-selector.ts` which uses LLM to intelligently select most relevant chunks
   6. **Content Retrieval**: Retrieves full content for selected chunks from database using optimized queries
-  7. Sends the user message/conversation + selected chunk content to `src/lib/services/policyFoo/doadFoo/main.ts`
+  7. Sends the user message/conversation + selected chunk content to `src/lib/modules/policyFoo/doadFoo/main.ts`
   8. Receives the `assistant` message from `main.ts` with structured response and citations
   9. Sends the updated conversation to the `policyFoo` Router
 

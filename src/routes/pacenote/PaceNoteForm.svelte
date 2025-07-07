@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { enhance, applyAction } from '$app/forms';
-	import type { RankInfo } from '$lib/services/paceNote/types.js';
+	import type { RankInfo } from '$lib/modules/paceNote/types.js';
 	
 	// Props
 	export let availableRanks: RankInfo[];

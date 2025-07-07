@@ -1,6 +1,6 @@
 import type { Actions, PageServerLoad } from './$types';
 import { fail } from '@sveltejs/kit';
-import { processPolicyQuery, getSupportedPolicySets, type PolicyQueryInput, type PolicyFooError } from '$lib/services/policyFoo';
+import { processPolicyQuery, getSupportedPolicySets, type PolicyQueryInput, type PolicyFooError } from '$lib/modules/policyFoo';
 
 /**
  * Load function to provide initial data to the page

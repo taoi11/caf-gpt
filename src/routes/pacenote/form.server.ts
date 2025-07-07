@@ -6,7 +6,7 @@
  */
 
 import { fail } from '@sveltejs/kit';
-import { AVAILABLE_RANKS } from '$lib/services/paceNote/constants.js';
+import { AVAILABLE_RANKS } from '$lib/modules/paceNote/constants.js';
 
 // Form limits
 const LIMITS = {

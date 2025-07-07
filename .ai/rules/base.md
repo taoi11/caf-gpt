@@ -26,7 +26,7 @@
 - **Minimal Files**: Prefer consolidating small, related files over file proliferation
 - **Service Layer**: Business logic belongs in services, not views or models
 - **Dependency Clarity**: Make dependencies obvious through file organization
-- **1 Types file**: One main `types.ts` at the top of repo.
+- **Module level Types file**: One main `types.ts` at the top of each module.
 
 ## Work follow phases
 

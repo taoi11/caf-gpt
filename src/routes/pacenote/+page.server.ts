@@ -1,7 +1,7 @@
 import type { PageServerLoad, Actions } from './$types';
-import { PaceNoteService } from '$lib/services/paceNote/service.js';
-import type { PaceNoteInput, PaceNoteRank } from '$lib/services/paceNote/types.js';
-import { AVAILABLE_RANKS } from '$lib/services/paceNote/constants.js';
+import { PaceNoteService } from '$lib/modules/paceNote/service.js';
+import type { PaceNoteInput, PaceNoteRank } from '$lib/modules/paceNote/types.js';
+import { AVAILABLE_RANKS } from '$lib/modules/paceNote/constants.js';
 import { hasRequiredConfig, validateEnvironmentConfig, validateR2Bucket } from './config.server.js';
 import { 
 	parseFormData, 
