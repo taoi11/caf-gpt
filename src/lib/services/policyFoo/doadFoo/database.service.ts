@@ -1,4 +1,4 @@
-import { query, transaction } from '../../../server/db/client';
+import { query } from '../../../server/db/client';
 import type { DOADChunk, DOADMetadata } from '../../../server/db/types';
 
 /**

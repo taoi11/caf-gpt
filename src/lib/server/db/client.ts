@@ -73,32 +73,6 @@ export const query = async (text: string, params?: any[], retries: number = 2): 
 };
 
 /**
- * Execute multiple queries in a transaction
- */
-export const transaction = async (queries: Array<{ text: string; params?: any[] }>): Promise<any[][]> => {
-  const client = await pool.connect();
-  
-  try {
-    await client.query('BEGIN');
-    
-    const results: any[][] = [];
-    for (const query of queries) {
-      const res = await client.query(query.text, query.params);
-      results.push(res.rows);
-    }
-    
-    await client.query('COMMIT');
-    return results;
-    
-  } catch (error) {
-    await client.query('ROLLBACK');
-    throw error;
-  } finally {
-    client.release();
-  }
-};
-
-/**
  * Check database connection health
  */
 export const healthCheck = async (): Promise<boolean> => {
