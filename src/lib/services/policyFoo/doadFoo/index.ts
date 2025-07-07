@@ -2,7 +2,7 @@
  * DOAD Policy Handler
  * 
  * Handles DOAD (Defence Administrative Orders and Directives) policy queries.
- * Implements two-stage agent workflow: Finder → Main Agent.
+ * Implements enhanced workflow: Finder → Database → Metadata Selector → Main Agent.
  */
 
 import type { 
@@ -13,9 +13,15 @@ import type {
 } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, R2_CONFIG, PROMPT_PATHS, ERROR_MESSAGES } from '../constants';
-import { readPolicyFileAsText } from '../r2.util';
 import { findDOADPolicies } from './finder.js';
 import { generateDOADResponse } from './main.js';
+import { selectRelevantChunks } from './metadata-selector.js';
+import { 
+	getDOADChunksByNumbers, 
+	getDOADMetadataByNumbers, 
+	getDOADChunksByIds,
+	formatChunksForLLM 
+} from './database.service.js';
 
 // Import prompt files directly from local codebase
 import finderPromptRaw from './prompts/finder.md?raw';
@@ -23,7 +29,7 @@ import mainPromptRaw from './prompts/main.md?raw';
 import policyListTableRaw from './prompts/DOAD-list-table.md?raw';
 
 /**
- * Handle DOAD policy queries with two-stage agent workflow
+ * Handle DOAD policy queries with enhanced database-driven workflow
  * 
  * @param input - Query input with messages and policy set
  * @param env - Environment variables and bindings
@@ -33,19 +39,40 @@ export async function handleDOADQuery(
 	input: PolicyQueryInput,
 	env: PolicyFooEnvironment
 ): Promise<PolicyQueryOutput> {
+	const startTime = Date.now();
+	let stage = 'initialization';
+	
 	try {
+		// Performance monitoring and error tracking
+		const performanceMetrics = {
+			finder: 0,
+			database_chunks: 0,
+			database_metadata: 0,
+			metadata_selector: 0,
+			database_selected: 0,
+			main_agent: 0,
+			total: 0
+		};
+		
+		stage = 'config_loading';
 		// Load required prompts
 		const config = await loadDOADConfig(env);
 		
+		stage = 'finder_agent';
+		const finderStart = Date.now();
 		// Stage 1: Find relevant policies using Finder Agent
 		const finderResult = await findDOADPolicies({
 			messages: input.messages,
 			finderPrompt: config.prompts.finder,
 			policyListTable: config.prompts.policyList
 		}, env);
+		performanceMetrics.finder = Date.now() - finderStart;
 
 		// If no policies found, return early response
 		if (finderResult.policyNumbers.length === 0) {
+			performanceMetrics.total = Date.now() - startTime;
+			console.log('DOAD query completed (no policies found):', performanceMetrics);
+			
 			return {
 				message: generateNoPoliciesFoundResponse(),
 				usage: {
@@ -55,19 +82,84 @@ export async function handleDOADQuery(
 			};
 		}
 
-		// Retrieve policy content from R2
-		const policyContent = await retrievePolicyContent(
-			finderResult.policyNumbers,
-			config,
-			env
-		);
+		stage = 'database_chunks_retrieval';
+		const dbChunksStart = Date.now();
+		// Stage 2: Retrieve chunks from database for selected DOADs
+		const allChunks = await getDOADChunksByNumbers(finderResult.policyNumbers);
+		performanceMetrics.database_chunks = Date.now() - dbChunksStart;
+		
+		if (allChunks.length === 0) {
+			performanceMetrics.total = Date.now() - startTime;
+			console.warn('No chunks found in database for DOADs:', finderResult.policyNumbers);
+			
+			return {
+				message: generateNoPoliciesFoundResponse(),
+				usage: {
+					finder: finderResult.usage,
+					main: undefined
+				}
+			};
+		}
 
-		// Stage 2: Generate response using Main Agent
+		stage = 'database_metadata_retrieval';
+		const dbMetadataStart = Date.now();
+		// Stage 3: Get metadata for chunk selection
+		const chunkMetadata = await getDOADMetadataByNumbers(finderResult.policyNumbers);
+		performanceMetrics.database_metadata = Date.now() - dbMetadataStart;
+		
+		// Extract user query from messages
+		const userQuery = extractUserQuery(input.messages);
+		
+		stage = 'metadata_selector';
+		const selectorStart = Date.now();
+		// Stage 4: Select relevant chunks using Metadata Selector Agent
+		const selectorResult = await selectRelevantChunks({
+			userQuery,
+			doadMetadata: chunkMetadata
+		}, env);
+		performanceMetrics.metadata_selector = Date.now() - selectorStart;
+
+		stage = 'database_selected_retrieval';
+		const dbSelectedStart = Date.now();
+		// Stage 5: Retrieve full content for selected chunks
+		const selectedChunks = await getDOADChunksByIds(selectorResult.selectedChunkIds);
+		performanceMetrics.database_selected = Date.now() - dbSelectedStart;
+		
+		if (selectedChunks.length === 0) {
+			performanceMetrics.total = Date.now() - startTime;
+			console.warn('No chunks selected by metadata selector for query:', userQuery.substring(0, 100));
+			
+			return {
+				message: generateNoPoliciesFoundResponse(),
+				usage: {
+					finder: finderResult.usage,
+					main: undefined
+				}
+			};
+		}
+
+		stage = 'main_agent';
+		const mainStart = Date.now();
+		// Stage 6: Generate response using Main Agent with selected chunks
+		const formattedContent = formatChunksForLLM(selectedChunks);
+		
 		const mainResult = await generateDOADResponse({
 			messages: input.messages,
 			mainPrompt: config.prompts.main,
-			policyContent
+			policyContent: [formattedContent] // Convert to array format expected by main agent
 		}, env);
+		performanceMetrics.main_agent = Date.now() - mainStart;
+		
+		performanceMetrics.total = Date.now() - startTime;
+		
+		// Log comprehensive performance metrics
+		console.log('DOAD query completed successfully:', {
+			...performanceMetrics,
+			found_doads: finderResult.policyNumbers.length,
+			total_chunks: allChunks.length,
+			selected_chunks: selectedChunks.length,
+			selection_ratio: `${selectedChunks.length}/${allChunks.length}`
+		});
 
 		return {
 			message: mainResult.response,
@@ -78,18 +170,23 @@ export async function handleDOADQuery(
 		};
 
 	} catch (error) {
-		console.error('DOAD handler error:', error);
+		const totalTime = Date.now() - startTime;
+		console.error(`DOAD handler error at stage '${stage}' after ${totalTime}ms:`, error);
 		
 		if (error && typeof error === 'object' && 'code' in error) {
 			// Re-throw PolicyFooError as-is
 			throw error;
 		}
 		
-		// Wrap unexpected errors
+		// Wrap unexpected errors with stage context
 		throw {
 			code: 'GENERAL_ERROR' as const,
-			message: `${ERROR_MESSAGES.GENERAL_ERROR}: ${error instanceof Error ? error.message : 'Unknown DOAD handler error'}`,
-			details: { originalError: error }
+			message: `${ERROR_MESSAGES.GENERAL_ERROR} at stage '${stage}': ${error instanceof Error ? error.message : 'Unknown DOAD handler error'}`,
+			details: { 
+				originalError: error,
+				stage,
+				duration: totalTime
+			}
 		};
 	}
 }
@@ -99,8 +196,6 @@ export async function handleDOADQuery(
  */
 async function loadDOADConfig(env: PolicyFooEnvironment): Promise<PolicyHandlerConfig> {
 	try {
-		const bucket = env.POLICIES!;
-		
 		// Use imported prompt files from local codebase
 		return {
 			readerModel: env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
@@ -110,7 +205,7 @@ async function loadDOADConfig(env: PolicyFooEnvironment): Promise<PolicyHandlerC
 				main: mainPromptRaw,
 				policyList: policyListTableRaw
 			},
-			r2Bucket: bucket,
+			r2Bucket: env.POLICIES!, // Keep for compatibility but not used in database approach
 			policyPathPrefix: R2_CONFIG.POLICY_PATHS.DOAD
 		};
 
@@ -130,69 +225,12 @@ async function loadDOADConfig(env: PolicyFooEnvironment): Promise<PolicyHandlerC
 }
 
 /**
- * Retrieve policy content from R2 bucket
+ * Extract user query from conversation messages
  */
-async function retrievePolicyContent(
-	policyNumbers: string[],
-	config: PolicyHandlerConfig,
-	env: PolicyFooEnvironment
-): Promise<string[]> {
-	try {
-		const bucket = env.POLICIES!;
-		const policyPaths = policyNumbers.map(num => 
-			`${config.policyPathPrefix}${num}.md`
-		);
-
-		// Attempt to read all policy files
-		const policyContents: string[] = [];
-		const errors: string[] = [];
-
-		for (let i = 0; i < policyPaths.length; i++) {
-			try {
-				const content = await readPolicyFileAsText(bucket, policyPaths[i]);
-				policyContents.push(content);
-			} catch (error) {
-				console.warn(`Failed to load policy ${policyNumbers[i]}:`, error);
-				errors.push(`Policy ${policyNumbers[i]} not found`);
-				// Continue with other policies
-			}
-		}
-
-		// If no policies were successfully loaded, throw error
-		if (policyContents.length === 0) {
-			throw {
-				code: 'POLICY_NOT_FOUND' as const,
-				message: `${ERROR_MESSAGES.POLICY_NOT_FOUND}: None of the policies could be loaded`,
-				details: { 
-					requestedPolicies: policyNumbers,
-					errors 
-				}
-			};
-		}
-
-		// If some policies failed to load, log warning but continue
-		if (errors.length > 0) {
-			console.warn(`Failed to load ${errors.length} out of ${policyNumbers.length} policies:`, errors);
-		}
-
-		return policyContents;
-
-	} catch (error) {
-		console.error('Policy content retrieval error:', error);
-		
-		if (error && typeof error === 'object' && 'code' in error) {
-			throw error;
-		}
-		
-		throw {
-			code: 'R2_ERROR' as const,
-			message: `${ERROR_MESSAGES.R2_ERROR}: ${error instanceof Error ? error.message : 'Unknown policy retrieval error'}`,
-			details: { 
-				policyNumbers,
-				originalError: error 
-			}
-		};
-	}
+function extractUserQuery(messages: PolicyMessage[]): string {
+	// Find the last user message as the current query
+	const userMessages = messages.filter(msg => msg.role === 'user');
+	return userMessages.length > 0 ? userMessages[userMessages.length - 1].content : '';
 }
 
 /**

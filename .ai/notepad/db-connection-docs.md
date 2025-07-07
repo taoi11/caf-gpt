@@ -153,3 +153,13 @@ npx wrangler secret put DATABASE_URL
 ```
 
 When prompted, paste your Neon connection string.
+
+# Wrangler Secret Setup for DATABASE_URL
+
+To set up the `DATABASE_URL` for production, run the following command:
+
+```bash
+npx wrangler secret put DATABASE_URL
+```
+
+Ensure the value matches the connection string format used in `.dev.vars`.

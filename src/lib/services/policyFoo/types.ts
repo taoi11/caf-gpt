@@ -175,3 +175,13 @@ export interface PolicyHandlerResponse {
 		};
 	};
 }
+
+/**
+ * Re-export DOAD-specific types for convenience
+ */
+export type { 
+	DOADChunk, 
+	DOADMetadata, 
+	MetadataSelectorInput, 
+	MetadataSelectorOutput 
+} from './doadFoo/types';
