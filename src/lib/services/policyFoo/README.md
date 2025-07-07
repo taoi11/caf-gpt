@@ -37,16 +37,18 @@ PolicyFoo implements a stateless, router-based architecture that directs queries
 ### Handler Comparison
 | Feature | DOAD Handler | LEAVE Handler |
 |---------|--------------|---------------|
-| **Workflow** | Two-stage (finder → main) | Single-stage (main only) |
-| **Policy Storage** | Multiple files (`doad/*.md`) | Single file (`leave/leave_policy_2025.md`) |
-| **Models Used** | READER_MODEL + MAIN_MODEL | MAIN_MODEL only |
+| **Workflow** | Database-driven with metadata selection | Single-stage (main only) |
+| **Policy Storage** | Postgres database with chunking | Single file (`leave/leave_policy_2025.md`) |
+| **Models Used** | READER_MODEL + Metadata Selector + MAIN_MODEL | MAIN_MODEL only |
 | **Token Efficiency** | ~2500-4500 per query | ~2000-3000 per query |
 | **Response Time** | ~5-12 seconds | ~3-7 seconds |
-| **Cost** | Higher (two AI calls) | Lower (~40% savings) |
+| **Cost** | Higher (multiple AI calls) | Lower (~40% savings) |
 
 ### Shared Infrastructure
 - **AI Gateway Integration**: Both handlers use the same AI Gateway service
-- **R2 Storage**: Common R2 bucket with organized folder structure
+- **Storage**: 
+  - DOAD: Postgres database with chunking and metadata
+  - LEAVE: R2 bucket with organized folder structure
 - **Error Handling**: Unified error types and handling patterns
 - **Response Format**: Both return identical XML structure for frontend parsing
 
@@ -58,6 +60,7 @@ PolicyFoo implements a stateless, router-based architecture that directs queries
 - **`constants.ts`** - Configuration constants and error messages
 - **`ai-gateway.util.ts`** - Independent AI Gateway service
 - **`r2.util.ts`** - R2 bucket utilities for policy retrieval
+- **`/server/db/`** - Database infrastructure for DOAD policy storage
 
 ### Environment Variables
 ```bash
@@ -66,6 +69,7 @@ AI_GATEWAY_BASE_URL=https://your-ai-gateway-url
 CF_AIG_TOKEN=your_caf_aig_token
 READER_MODEL=anthropic/claude-3-haiku  # Optional
 MAIN_MODEL=anthropic/claude-3-5-sonnet # Optional
+DATABASE_URL=postgres://user:password@host:port/db # Neon Postgres connection
 ```
 
 ### Cloudflare Bindings
@@ -119,9 +123,13 @@ policyFoo/
 │   ├── index.ts                # DOAD handler orchestration
 │   ├── finder.ts               # Policy identification agent
 │   ├── main.ts                 # Policy synthesis agent
+│   ├── database.service.ts     # Database operations for policy chunks
+│   ├── metadata-selector.ts    # Intelligent chunk selection
+│   ├── types.ts                # DOAD-specific type definitions
 │   └── prompts/                # LLM prompts
 │       ├── main.md             # Main agent prompt
 │       ├── finder.md           # Finder agent prompt
+│       ├── metadata-selector.md # Chunk selection prompt
 │       └── DOAD-list-table.md  # Available policies reference
 └── leaveFoo/                   # Leave policy handler
     ├── README.md               # LEAVE-specific implementation details
@@ -137,8 +145,8 @@ policyFoo/
 ### DOAD (Defence Administrative Orders and Directives)
 - **Status**: ✅ Production Ready
 - **Handler**: `doadFoo/` → [Implementation Details](./doadFoo/README.md)
-- **Policies**: Multiple documents in R2 bucket at `doad/*.md`
-- **Workflow**: Two-stage (finder identifies policies → main synthesizes response)
+- **Storage**: Postgres database with chunked policy content and metadata
+- **Workflow**: Database-driven with metadata-based chunk selection
 - **Use Cases**: Operational directives, training policies, administrative procedures
 
 ### LEAVE (Leave Policies)  

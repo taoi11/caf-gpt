@@ -7,13 +7,14 @@ An AI-powered application built with SvelteKit and deployed on Cloudflare's serv
 CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modular, maintainable architecture:
 
 - **PaceNote**: ✅ **Fully Functional** - Generate feedback notes for lazy CAF members based on observations and rank-specific competencies. Features a complete co-located module with form handling, results display, and route-specific utilities.
-- **PolicyFoo**: ✅ **Fully Functional** - AI-powered policy question answering with authoritative citations. Features two-stage agent workflow (finder → main) with support for DOAD policies and extensible architecture for additional policy sets.
+- **PolicyFoo**: ✅ **Fully Functional** - AI-powered policy question answering with authoritative citations. Features two-stage agent workflow (finder → main) with database-driven DOAD policy handling and extensible architecture for additional policy sets.
 
 **Architecture Highlights:**
 - **Co-located Components**: Route-specific UI components live with their routes
 - **Domain Services**: Business logic organized by functional domain
 - **Type-Safe**: End-to-end TypeScript with strict validation
 - **Server-First**: Security and performance through server-side rendering
+- **Database-Driven**: Postgres for structured data and D1 for lightweight storage
 
 ## Service Modules
 
@@ -41,6 +42,8 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **Two-Stage AI Workflow**: Finder agent identifies relevant policies, main agent synthesizes responses
 - **Multi-Model Strategy**: Optimized model selection (lightweight for identification, powerful for synthesis)
 - **Policy Set Support**: DOAD policies implemented, extensible for additional policy types
+- **Database-Driven Architecture**: Postgres database for efficient DOAD policy chunk storage and retrieval
+- **Metadata Selection**: Intelligent chunk selection based on metadata for improved relevance
 - **Stateless Architecture**: Client-side conversation management, serverless-optimized
 - **Interactive Citations**: Clickable policy references with external links
 - **XML Response Parsing**: Structured responses with answers, citations, and follow-up questions
@@ -54,15 +57,20 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 **Architecture:**
 - **Backend**: Stateless request processing with raw XML responses
 - **Frontend**: Smart client-side parsing and conversation management
-- **Storage**: Policy documents stored in Cloudflare R2 bucket
+- **Storage**: 
+  - DOAD: Policy chunks stored in Postgres database with metadata
+  - LEAVE: Policy documents stored in Cloudflare R2 bucket
 - **AI Models**: Dual-model approach for cost and performance optimization
+- **Database**: Neon Postgres for efficient chunk retrieval and metadata-based selection
 
 ## Architecture
 
 **Modern Serverless Stack:**
 - **Frontend**: SvelteKit with TypeScript
 - **Backend**: Cloudflare Workers  
-- **Database**: Drizzle ORM with Cloudflare D1 (SQLite)
+- **Databases**: 
+  - Drizzle ORM with Cloudflare D1 (SQLite) for application data
+  - Neon Postgres with Drizzle ORM for policy content storage
 - **AI Integration**: AI Gateway with OpenRouter provider
 - **File Storage**: Cloudflare R2 Storage
 - **Authentication**: Server-side only, no API keys required
@@ -81,7 +89,9 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **Runtime**: Cloudflare Workers
 - **Framework**: SvelteKit v2 with SSR/SSG
 - **Language**: TypeScript with strict typing
-- **Database**: Drizzle ORM + Cloudflare D1 (SQLite)
+- **Databases**: 
+  - Drizzle ORM + Cloudflare D1 (SQLite) for application data
+  - Neon Postgres with @neondatabase/serverless for policy content
 - **AI Provider**: AI Gateway → OpenRouter
 - **Storage**: Cloudflare R2 with libSQL client
 - **Testing**: Vitest with jsdom and testing-library
@@ -93,6 +103,11 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 ```
 src/
 ├── lib/
+│   ├── server/
+│   │   └── db/            # Database infrastructure
+│   │       ├── client.ts  # Postgres connection pooling
+│   │       ├── schema.ts  # Drizzle ORM schema definitions
+│   │       └── types.ts   # Database type definitions
 │   └── services/           # Domain-specific business logic
 │       ├── paceNote/       # PaceNote service module
 │       │   ├── README.md   # PaceNote documentation
@@ -103,6 +118,8 @@ src/
 │           ├── *.ts        # Core service files
 │           ├── doadFoo/    # DOAD policy handler
 │           │   ├── README.md      # DOAD-specific docs
+│           │   ├── database.service.ts # Database operations
+│           │   ├── metadata-selector.ts # Chunk selection logic
 │           │   ├── *.ts           # Handler implementation
 │           │   └── prompts/       # LLM prompts
 │           └── leaveFoo/   # Future: Leave policy handler
@@ -139,6 +156,7 @@ The application runs entirely server-side for security.
 ```bash
 wrangler secret put OPENROUTER_TOKEN
 wrangler secret put AI_GATEWAY_BASE_URL
+wrangler secret put DATABASE_URL
 ```
 
 **Note**: No API key authentication needed - the application is secured by running server-side only.
@@ -152,6 +170,7 @@ Configure in your Cloudflare dashboard or `wrangler.jsonc`:
     - `FN_MODEL` - AI model to use (configured in wrangler.jsonc)
     - `READER_MODEL` - Optional: PolicyFoo finder agent model (default: claude-3-haiku)
     - `MAIN_MODEL` - Optional: PolicyFoo main agent model (default: claude-3-5-sonnet)
+    - `DATABASE_URL` - Postgres connection string for Neon database
 - **Secrets**: 
     - `OPENROUTER_TOKEN` - OpenRouter API key for AI Gateway
     - `AI_GATEWAY_BASE_URL` - AI Gateway endpoint URL
@@ -159,15 +178,27 @@ Configure in your Cloudflare dashboard or `wrangler.jsonc`:
 
 > **Note**: All secrets should be configured via `wrangler secret put` for production deployment.
 
-**R2 Bucket Structure for PolicyFoo:**
+**Storage Structure for PolicyFoo:**
+
+**R2 Bucket:**
 ```
 policies/                    # R2 bucket name
-├── doad/                   # DOAD policies
+├── doad/                   # DOAD policies (legacy, now in database)
 │   ├── 1000-1.md          # Individual policy files
 │   ├── 5017-1.md          # Leave policies  
 │   └── ...                # Additional DOAD policies
-└── leave/                 # Future: Leave policies
+└── leave/                 # Leave policies
     └── ...                # Leave policy files
+```
+
+**Postgres Database:**
+```
+public.doad                  # DOAD policy chunks table
+├── id                      # UUID primary key
+├── text_chunk              # Policy content chunk
+├── metadata                # JSON metadata for chunk selection
+├── doad_number             # Policy number reference
+└── created_at              # Timestamp
 ```
 
 ### AI Gateway Setup
@@ -216,10 +247,10 @@ This setup provides:
 # Core functionality
 wrangler secret put OPENROUTER_TOKEN       # OpenRouter API key
 wrangler secret put AI_GATEWAY_BASE_URL    # AI Gateway endpoint
+wrangler secret put DATABASE_URL          # Neon Postgres connection string
 
 # Optional enhancements
 wrangler secret put CF_AIG_TOKEN          # Enhanced AI Gateway monitoring
-wrangler secret put DATABASE_URL          # External database (if not using D1)
 ```
 
 **Wrangler Configuration:**
@@ -256,8 +287,14 @@ npm run cf-typegen
 # Check D1 database status
 wrangler d1 list
 
-# Test database connectivity
+# Test D1 database connectivity
 wrangler d1 execute your-db --command="SELECT 1"
+
+# Test Postgres database connectivity
+curl -X POST https://your-app.workers.dev/api/health/db
+
+# Verify Postgres schema
+npm run db:push
 ```
 
 **AI Gateway Issues:**
@@ -288,7 +325,9 @@ npm run dev:local
 **Caching Strategy:**
 - **Static Assets**: Cached at edge via Cloudflare CDN
 - **AI Responses**: Cached via AI Gateway (configurable TTL)
-- **Database Queries**: Consider caching frequent lookups
+- **Database Queries**: 
+  - D1: Consider caching frequent lookups
+  - Postgres: Connection pooling and prepared statements
 - **R2 Objects**: Use appropriate cache headers
 
 **Bundle Size:**
@@ -320,6 +359,7 @@ npm run deploy           # Build and deploy to Cloudflare
 npm run db:push          # Push schema changes to database
 npm run db:migrate       # Run database migrations
 npm run db:studio        # Open Drizzle Studio (database GUI)
+npm run db:generate      # Generate migration files from schema changes
 
 # Testing
 npm run test             # Run all tests
