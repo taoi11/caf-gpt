@@ -25,5 +25,5 @@ export {
 // Export service class and factory
 export { PaceNoteService, createPaceNoteService } from './service.js';
 
-// Export R2 utilities (co-located with service)
-export { readFileAsText } from './r2.util.js';
+// Export R2 utilities (now centralized)
+export { readFileAsText } from '$lib/server/r2.util.js';
