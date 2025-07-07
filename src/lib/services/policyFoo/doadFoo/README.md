@@ -1,30 +1,38 @@
 # DOAD PolicyFoo Handler
 
 ## Purpose
-LLM workflow for answering questions related to DOAD (Defence Administrative Orders and Directives) policies with authoritative citations. Implements a sophisticated two-stage agent architecture for accurate policy identification and comprehensive response generation.
+LLM workflow for answering questions related to DOAD (Defence Administrative Orders and Directives) policies with authoritative citations. Implements a sophisticated database-driven architecture with metadata-based chunk selection for accurate policy identification and comprehensive response generation.
 
 **See also**: [PolicyFoo Main Documentation](../README.md) | [LEAVE Handler](../leaveFoo/README.md)
 
 ## Overview
-The DOAD handler processes policy queries through a sophisticated two-stage workflow:
+The DOAD handler processes policy queries through an enhanced database-driven workflow:
 1. **Stage 1**: Finder Agent identifies relevant DOAD policy numbers using lightweight model
-2. **Stage 2**: Main Agent synthesizes policy content and generates structured responses
+2. **Stage 2**: Database retrieval of all chunks for identified DOADs
+3. **Stage 3**: Metadata Selector Agent selects most relevant chunks using lightweight model  
+4. **Stage 4**: Main Agent synthesizes selected chunk content and generates structured responses
 
-**Architecture Note**: This differs from the [LEAVE handler](../leaveFoo/README.md) which uses a single-stage workflow since all leave policies are in one document.
+**Architecture Note**: This uses a database-driven approach with Postgres/Neon for efficient chunk-based content retrieval, unlike the [LEAVE handler](../leaveFoo/README.md) which uses a single-stage workflow with R2 storage.
 
-## Workflow
-  1. Receives a user message from `policyFoo` Router as init. Or a continuation of a conversation ( `user` + `assistant` message sequence)
+## Enhanced Workflow
+  1. Receives a user message from `policyFoo` Router as init, or a continuation of a conversation (`user` + `assistant` message sequence)
   2. Routes the message or conversation to `src/lib/services/policyFoo/doadFoo/finder.ts` 
-  3. Receives the `assistant` message from finder.ts
-    - The `assistant` message contains the DOAD policy numbers relevant to the user question
-  4. Pulls the relevant DOAD policies from R2 bucket
-    - Ref `src/lib/services/policyFoo/r2.util.ts` for implementation
-    - Policies are in `Bucket: policies` file example `doad/1000-1.md`
-    - All policies are in markdown format in the `doad` folder in the `policies` bucket
-  5. Sends the user message or conversation to the `src/lib/services/policyFoo/doadFoo/main.ts`
-  6. Receives the `assistant` message from `main.ts`
-    - Adds the `assistant` message to the conversation end and updates the conversation history
-  7. Sends the updated conversation to the `policyFoo` Router
+  3. Receives the `assistant` message from finder.ts containing DOAD policy numbers relevant to the user question
+  4. **NEW**: Retrieves all chunks for identified DOADs from Postgres database using `database.service.ts`
+  5. **NEW**: Routes metadata to `metadata-selector.ts` which uses LLM to select most relevant chunks
+  6. **NEW**: Retrieves full content for selected chunks from database
+  7. Sends the user message/conversation + selected chunk content to `src/lib/services/policyFoo/doadFoo/main.ts`
+  8. Receives the `assistant` message from `main.ts` with structured response and citations
+  9. Sends the updated conversation to the `policyFoo` Router
+
+## Database Integration
+
+The DOAD handler now uses a Postgres database (Neon.tech) for efficient content retrieval:
+
+- **Schema**: `public.doad` table with `text_chunk`, `metadata`, `doad_number` columns
+- **Chunking**: Policies are pre-chunked with metadata for targeted retrieval
+- **Selection**: Two-phase selection (DOAD numbers → relevant chunks) for precision
+- **Performance**: Leverages database indexing and efficient queries for CF Workers
 
 ## Implementation Details
 
