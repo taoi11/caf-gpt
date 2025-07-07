@@ -151,9 +151,9 @@ Unlike the DOAD handler's two-stage workflow, the LEAVE handler uses a simplifie
 - **Path Construction**: Simple path: `leave/leave_policy_2025.md`
 
 #### With AI Gateway
-- **Single Model**: Only uses `MAIN_MODEL` service
-- **Configuration**: Inherits same AI Gateway configuration
-- **Usage Tracking**: Simplified usage tracking (main stage only)
+- **Single Model**: Only uses `MAIN_MODEL` service via shared AI Gateway
+- **Configuration**: Inherits shared AI Gateway configuration through PolicyFoo wrapper
+- **Usage Tracking**: Simplified usage tracking (main stage only) through shared service
 
 ### Development Tasks
 

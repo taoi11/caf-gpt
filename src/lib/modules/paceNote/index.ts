@@ -27,12 +27,3 @@ export { PaceNoteService, createPaceNoteService } from './service.js';
 
 // Export R2 utilities (co-located with service)
 export { readFileAsText } from './r2.util.js';
-
-// Export AI Gateway services (co-located with service)
-export {
-	createAIGatewayService,
-	type AIGatewayService,
-	type AIGatewayConfig,
-	type AIGatewayResponse,
-	type AIGatewayError
-} from './ai-gateway.service.js';

@@ -1,28 +1,30 @@
 /**
  * AI Gateway Service for PolicyFoo
  * 
- * Independent AI Gateway service for PolicyFoo module.
- * Handles LLM interactions using AI Gateway with OpenRouter provider.
- * Provides text generation, cost tracking, and error handling.
+ * Wrapper around the shared AI Gateway service for PolicyFoo module.
+ * Maintains PolicyFoo-specific error handling and API compatibility.
  */
 
-import OpenAI from 'openai';
+import { 
+	AIGatewayService, 
+	createAIGatewayService,
+	type AIGatewayConfig 
+} from '$lib/server/ai-gateway.service.js';
 import type { 
 	PolicyAIGatewayConfig, 
 	PolicyAIGatewayMessage, 
 	PolicyAIGatewayResponse, 
 	PolicyFooError 
-} from './types';
-import { DEFAULT_AI_CONFIG, ERROR_MESSAGES } from './constants';
+} from './types.js';
+import { DEFAULT_AI_CONFIG, ERROR_MESSAGES } from './constants.js';
 
 /**
  * PolicyFoo AI Gateway Service
  * 
- * Independent implementation for policy-related AI operations.
- * Supports multiple models and error handling.
+ * Wrapper around shared AI Gateway service with PolicyFoo-specific error handling.
  */
 export class PolicyAIGatewayService {
-	private openai: OpenAI;
+	private aiGateway: AIGatewayService;
 	private config: PolicyAIGatewayConfig;
 
 	constructor(
@@ -36,21 +38,13 @@ export class PolicyAIGatewayService {
 			...config
 		};
 
-		// Initialize OpenAI client with AI Gateway configuration
-		const headers: Record<string, string> = {
-			'X-Title': 'caf-gpt'
-		};
-		
-		// Add CF AI Gateway authorization header if provided
-		if (cafAigToken) {
-			headers['cf-aig-authorization'] = `Bearer ${cafAigToken}`;
-		}
-
-		this.openai = new OpenAI({
-			apiKey: openrouterToken,
-			baseURL: aiGatewayBaseUrl,
-			defaultHeaders: headers
-		});
+		// Create shared AI Gateway service
+		this.aiGateway = createAIGatewayService(
+			openrouterToken,
+			aiGatewayBaseUrl,
+			this.config as AIGatewayConfig,
+			cafAigToken
+		);
 	}
 
 	/**
@@ -61,29 +55,17 @@ export class PolicyAIGatewayService {
 	 */
 	async generateCompletion(messages: PolicyAIGatewayMessage[]): Promise<PolicyAIGatewayResponse> {
 		try {
-			const response = await this.openai.chat.completions.create({
-				model: this.config.model,
-				messages: messages,
-				max_tokens: this.config.maxTokens,
-				temperature: this.config.temperature,
-				top_p: this.config.topP
-			});
-
-			const content = response.choices[0]?.message?.content;
-			if (!content) {
-				throw this.createError('AI_GATEWAY_ERROR', 'No content in response');
-			}
-
-			return {
-				response: content,
-				usage: response.usage ? {
-					prompt_tokens: response.usage.prompt_tokens,
-					completion_tokens: response.usage.completion_tokens,
-					total_tokens: response.usage.total_tokens
-				} : undefined
-			};
-
+			const response = await this.aiGateway.generateCompletion(messages);
+			return response;
 		} catch (error) {
+			// Convert AI Gateway errors to PolicyFoo errors
+			if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
+				throw this.createError('AI_GATEWAY_ERROR', 
+					typeof error.message === 'string' ? error.message : 'AI Gateway error', 
+					{ originalError: error }
+				);
+			}
+			
 			console.error('AI Gateway error:', error);
 			throw this.createError('AI_GATEWAY_ERROR', 
 				error instanceof Error ? error.message : 'Unknown AI Gateway error', 
@@ -112,12 +94,16 @@ export class PolicyAIGatewayService {
 
 	/**
 	 * Update model configuration
+	 * Note: This creates a new underlying AI Gateway service instance
 	 */
 	updateConfig(newConfig: Partial<PolicyAIGatewayConfig>): void {
 		this.config = {
 			...this.config,
 			...newConfig
 		};
+		// Note: The underlying AI Gateway service config cannot be updated dynamically
+		// This method maintains API compatibility but doesn't update the service
+		console.warn('PolicyAIGatewayService: updateConfig called but underlying service config cannot be updated');
 	}
 }
 

@@ -199,7 +199,7 @@ CREATE INDEX idx_doad_metadata ON doad USING GIN(metadata);
 - **Monitoring**: Performance logging and slow query detection
 
 #### AI Service Failures
-- **Retry Logic**: Built into AI Gateway service
+- **Retry Logic**: Built into shared AI Gateway service (`$lib/server/ai-gateway.service.js`)
 - **Error Propagation**: Clear error messages to frontend
 - **Logging**: Comprehensive error logging for debugging
 - **Fallback**: Service degradation rather than complete failure
@@ -267,9 +267,9 @@ CREATE INDEX idx_doad_metadata ON doad USING GIN(metadata);
 - **Performance Monitoring**: Slow query detection and logging
 
 #### With AI Gateway
-- **Triple Models**: Separate services for finder, metadata selector, and main agents
-- **Configuration**: Independent model selection per agent
-- **Usage Tracking**: Token usage for all three stages
+- **Triple Models**: Separate services for finder, metadata selector, and main agents via shared AI Gateway
+- **Configuration**: Independent model selection per agent using PolicyFoo wrapper
+- **Usage Tracking**: Token usage for all three stages through shared service
 
 ### Future Enhancements
 

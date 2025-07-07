@@ -105,6 +105,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 src/
 ├── lib/
 │   ├── server/
+│   │   ├── ai-gateway.service.ts  # Shared AI Gateway service
 │   │   └── db/            # Database infrastructure
 │   │       ├── client.ts  # Neon Postgres connection pooling with retry logic
 │   │       ├── schema.ts  # Drizzle ORM schema definitions for DOAD table
@@ -116,6 +117,7 @@ src/
 │       │   └── __tests__/  # Unit tests
 │       └── policyFoo/      # PolicyFoo service module
 │           ├── README.md   # Main PolicyFoo documentation
+│           ├── ai-gateway.util.ts  # PolicyFoo AI Gateway wrapper
 │           ├── *.ts        # Core service files
 │           ├── doadFoo/    # DOAD policy handler (database-driven)
 │           │   ├── README.md              # DOAD-specific docs
@@ -517,7 +519,8 @@ GET /api/health
 
 **Modular Services Layer:**
 - **PaceNote Service**: Complete domain module with business logic, types, and utilities
-- **AI Gateway Service**: Handles AI provider communication and monitoring
+- **Shared AI Gateway Service**: Centralized AI provider communication and monitoring used by all modules
+- **PolicyFoo AI Gateway Wrapper**: Module-specific wrapper maintaining PolicyFoo API compatibility
 - **R2 Utilities**: File storage and retrieval operations
 - **Rate Limiting**: Request throttling and quota management
 

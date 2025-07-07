@@ -1,8 +1,8 @@
 /**
- * AI Gateway Service for PaceNote
+ * AI Gateway Service
  * 
- * Handles LLM interactions using AI Gateway with OpenRouter provider.
- * Co-located with PaceNote service as it's the primary consumer.
+ * Shared service for LLM interactions using AI Gateway with OpenRouter provider.
+ * Used across multiple modules for consistent AI integration.
  * Provides text generation, cost tracking, and error handling.
  */
 
@@ -52,6 +52,7 @@ export class AIGatewayService {
 		config: AIGatewayConfig,
 		cfAigToken?: string
 	) {
+		// X-Title header identifies the application to the AI Gateway (change as needed)
 		const headers: Record<string, string> = {
 			'X-Title': 'caf-gpt'
 		};
@@ -90,8 +91,12 @@ export class AIGatewayService {
 				top_p: finalConfig.topP
 			});
 
-			const responseText = completion.choices[0]?.message?.content || '';
+			const responseText = completion.choices[0]?.message?.content;
 			const usage = completion.usage;
+
+			if (typeof responseText !== 'string' || responseText.trim() === '') {
+				throw new Error('AI Gateway: No message content returned from completion response.');
+			}
 
 			return {
 				response: responseText,

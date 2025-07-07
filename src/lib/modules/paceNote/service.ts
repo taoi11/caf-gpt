@@ -5,7 +5,7 @@
  * Integrates rank-specific competencies and structured feedback templates.
  */
 
-import { createAIGatewayService, type AIGatewayService, type AIGatewayResponse } from './ai-gateway.service.js';
+import { createAIGatewayService, type AIGatewayService, type AIGatewayResponse } from '$lib/server/ai-gateway.service.js';
 import { readFileAsText } from './r2.util.js';
 import basePromptTemplate from './prompts/base.md?raw';
 import type { PaceNoteInput, PaceNoteOutput, PaceNoteRank, RankInfo } from './types.js';
