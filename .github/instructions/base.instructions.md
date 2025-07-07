@@ -1,10 +1,7 @@
+---
+applyTo: '**'
+---
 # AI Instructions
-
-## Workflow
-
-1. Plan : Gain understanding of all relevant parts of the project
-2. Present : Present the plan to the user for approval
-3. Implement : Implement the plan with user approval
 
 ## Development Philosophy
 
@@ -16,7 +13,7 @@
 
 - Clarify Instructions : Ask questions to clear up ambiguities in the users requests
 - Error Correction : Inform the user of mistakes and suggest fixes
-- Contrarian role : Suggest optimal approaches, you are the technical expert, don't be a yes man.
+- Contrarian role : When user approaches may be suboptimal, suggest better alternatives. Guide users learning new frameworks toward best practices. Challenge approaches that could lead to problems.
 - Explanations : Provide rationale for recommendations
 
 ## Code Organization Principles
@@ -28,30 +25,7 @@
 - **Dependency Clarity**: Make dependencies obvious through file organization
 - **Module level Types file**: One main `types.ts` at the top of each module.
 
-## Work follow phases
-
-### Planning Phase
-
-Start by gaining a clear understanding of the project.
-
-- Overview First : Begin with `README.md`
-- Investigation : Use tools to understand current usage/dependencies before asking user
-- Ask user: ask user for more info if you can get it yourself.
-- Notepad : Create a file in `.ai/notepad` for longform explanations and plans to be presented to the user. (optional)
-
-### Implementation Phase
-
-**MUST have explicit approval from the user before implementing any code changes.**
-
-#### Code Movement/Refactoring Protocol
-
-1. **Verify Usage**: Check where the code is currently referenced/imported
-2. **Update All References**: Settings, imports, documentation, etc.
-3. **Clean Up**: Remove old files, unused imports.
-4. **Verify**: Run npm / wrangelr checks, test imports, look for errors.
-5. **Document**: Update README.md and any relevant documentation
-
-#### Architecture
+### Architecture
 
 - Use Sveltekit default structure
 - Use Sveltekit builtins
@@ -59,17 +33,27 @@ Start by gaining a clear understanding of the project.
 - Keep the README files updated and accurate.
 - Optimize for cold starts
 - Minimize unnecessary computation
+- Prioritize computation on Database more than Workers
 
-#### Coding Standards
+### Coding Standards
 
+- Prefer camel case over snake case
 - Minimize other external dependencies
 - Do NOT use libraries that have FFI/native/C bindings.
 - Follow Cloudflare Workers security best practices
 - Include proper error handling and logging
 - Include comments explaining complex logic
 
+### Code Movement/Refactoring Protocol
+
+1. **Verify Usage**: Check where the code is currently referenced/imported
+2. **Update All References**: Settings, imports, documentation, etc.
+3. **Clean Up**: Remove old files, unused imports.
+4. **Verify**: Run npm / wrangler checks, test imports, look for errors.
+5. **Document**: Update README.md and any relevant documentation
+
 ## Efficiency Guidelines
 
-- **Investigate Before Asking**: Use semantic_search, file_search, grep_search to understand the codebase before asking clarifying questions
-- **Assume Complete Tasks**: When asked to move/refactor code, assume the user wants a complete job (update references, clean up, verify)
+- **Investigate Before Asking**: Use semantic_search, file_search, grep_search to understand the codebase before asking clarifying questions. Only ask the user for information that cannot be found through investigation.
+- **Assume Complete Tasks**: When user approves work, execute the complete job including: updating all references, cleaning up old files, verifying with `npx tsc --noEmit` and linting, updating imports and connecting code.
 - **Batch Related Changes**: Group related edits together rather than asking for permission for each small step

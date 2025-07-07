@@ -1,4 +1,8 @@
-# Ai Notepad Usage
+---
+mode: agent
+---
+
+# AI Notepad Usage
 
 ## Purpose
 
