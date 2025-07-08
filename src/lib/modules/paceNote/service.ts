@@ -6,7 +6,7 @@
  */
 
 import { createAIGatewayService, type AIGatewayService, type AIGatewayResponse } from '$lib/server/ai-gateway.service.js';
-import { readFileAsText } from './r2.util.js';
+import { readFileAsText } from '$lib/server/r2.util.js';
 import basePromptTemplate from './prompts/base.md?raw';
 import type { PaceNoteInput, PaceNoteOutput, PaceNoteRank, RankInfo } from './types.js';
 import { AVAILABLE_RANKS, VALID_RANKS, AI_GATEWAY_CONFIG, VALIDATION_LIMITS, R2_PATHS } from './constants.js';

@@ -46,6 +46,7 @@ PolicyFoo implements a stateless, router-based architecture that directs queries
 
 ### Shared Infrastructure
 - **AI Gateway Integration**: Both handlers use the shared AI Gateway service from `$lib/server/ai-gateway.service.js`
+- **R2 Utilities**: Consolidated R2 utility functions in `$lib/server/r2.util.ts` for consistent file operations
 - **Storage**: 
   - DOAD: Postgres database with chunking and metadata
   - LEAVE: R2 bucket with organized folder structure
@@ -59,7 +60,7 @@ PolicyFoo implements a stateless, router-based architecture that directs queries
 - **`types.ts`** - Complete TypeScript type definitions
 - **`constants.ts`** - Configuration constants and error messages
 - **`ai-gateway.util.ts`** - PolicyFoo-specific wrapper for shared AI Gateway service
-- **`r2.util.ts`** - R2 bucket utilities for policy retrieval
+- **`$lib/server/r2.util.ts`** - Consolidated R2 bucket utilities for policy retrieval (shared across modules)
 - **`/server/db/`** - Database infrastructure for DOAD policy storage
 
 ### Environment Variables

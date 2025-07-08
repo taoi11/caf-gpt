@@ -12,7 +12,7 @@ import type {
 } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, R2_CONFIG, ERROR_MESSAGES } from '../constants';
-import { readPolicyFileAsText } from '../r2.util';
+import { readPolicyFileAsText } from '$lib/server/r2.util';
 import { generateLeaveResponse } from './main.js';
 
 // Import prompt file directly from local codebase

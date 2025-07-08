@@ -106,6 +106,7 @@ src/
 ├── lib/
 │   ├── server/
 │   │   ├── ai-gateway.service.ts  # Shared AI Gateway service
+│   │   ├── r2.util.ts     # Consolidated R2 utility functions
 │   │   └── db/            # Database infrastructure
 │   │       ├── client.ts  # Neon Postgres connection pooling with retry logic
 │   │       ├── schema.ts  # Drizzle ORM schema definitions for DOAD table

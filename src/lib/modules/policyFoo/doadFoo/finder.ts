@@ -13,7 +13,7 @@ import type {
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
 import { createPolicyAIGatewayService } from '../ai-gateway.util';
-import { parsePolicyNumbers } from '../r2.util';
+import { parsePolicyNumbers } from '$lib/server/r2.util';
 
 /**
  * Find relevant DOAD policies for a user query

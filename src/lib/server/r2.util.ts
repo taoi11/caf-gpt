@@ -1,17 +1,83 @@
 /// <reference types="@cloudflare/workers-types" />
 
 /**
- * R2 Utility for PolicyFoo Service
+ * Consolidated R2 Utility Functions
  * 
- * Independent R2 utility for PolicyFoo module.
- * Handles file operations with Cloudflare R2 storage for policy documents.
+ * Centralized utility functions for Cloudflare R2 storage operations.
+ * Provides consistent error handling and standardized functionality
+ * across all modules that interact with R2.
  */
 
-import type { PolicyFooError } from './types';
-import { ERROR_MESSAGES } from './constants';
+/**
+ * Standard R2 error types
+ */
+export interface R2Error {
+	code: 
+		| 'FILE_NOT_FOUND'
+		| 'R2_ERROR'
+		| 'PARSING_ERROR'
+		| 'GENERAL_ERROR';
+	message: string;
+	details?: Record<string, unknown>;
+}
+
+/**
+ * Error messages for R2 operations
+ */
+const R2_ERROR_MESSAGES = {
+	FILE_NOT_FOUND: 'File not found in R2 bucket',
+	R2_ERROR: 'R2 bucket operation failed',
+	PARSING_ERROR: 'Failed to parse R2 response',
+	GENERAL_ERROR: 'An unexpected R2 error occurred'
+} as const;
+
+/**
+ * Create a standardized R2 error
+ */
+function createR2Error(
+	code: R2Error['code'], 
+	message: string, 
+	details?: Record<string, unknown>
+): R2Error {
+	return {
+		code,
+		message: `${R2_ERROR_MESSAGES[code]}: ${message}`,
+		details
+	};
+}
 
 /**
  * Read a file from an R2 bucket and return its content as text
+ * 
+ * @param bucket - R2 bucket binding
+ * @param key - Object key (file path)
+ * @returns Promise with the file content as text
+ */
+export async function readFileAsText(bucket: R2Bucket, key: string): Promise<string> {
+	try {
+		const object = await bucket.get(key);
+		
+		if (!object) {
+			throw createR2Error('FILE_NOT_FOUND', `File not found: ${key}`);
+		}
+
+		return await object.text();
+	} catch (error) {
+		if (error && typeof error === 'object' && 'code' in error) {
+			// Re-throw R2Error as-is
+			throw error;
+		}
+		
+		console.error('R2 read error:', error);
+		throw createR2Error('R2_ERROR', 
+			error instanceof Error ? error.message : 'Unknown R2 error',
+			{ key, originalError: error }
+		);
+	}
+}
+
+/**
+ * Read a policy file from an R2 bucket and return its content as text
  * 
  * @param bucket - R2 bucket binding
  * @param key - Object key (file path)
@@ -22,18 +88,18 @@ export async function readPolicyFileAsText(bucket: R2Bucket, key: string): Promi
 		const object = await bucket.get(key);
 		
 		if (!object) {
-			throw createPolicyR2Error('POLICY_FILE_NOT_FOUND', `File not found: ${key}`);
+			throw createR2Error('FILE_NOT_FOUND', `File not found: ${key}`);
 		}
 
 		return await object.text();
 	} catch (error) {
 		if (error && typeof error === 'object' && 'code' in error) {
-			// Re-throw PolicyFooError as-is
+			// Re-throw R2Error as-is
 			throw error;
 		}
 		
 		console.error('R2 read error:', error);
-		throw createPolicyR2Error('R2_ERROR', 
+		throw createR2Error('R2_ERROR', 
 			error instanceof Error ? error.message : 'Unknown R2 error',
 			{ key, originalError: error }
 		);
@@ -96,7 +162,7 @@ export async function listPolicyFiles(
 		return result.objects.map(obj => obj.key);
 	} catch (error) {
 		console.error('R2 list error:', error);
-		throw createPolicyR2Error('R2_ERROR', 
+		throw createR2Error('R2_ERROR', 
 			error instanceof Error ? error.message : 'Unknown R2 list error',
 			{ prefix, originalError: error }
 		);
@@ -134,19 +200,4 @@ export function parsePolicyNumbers(response: string): string[] {
 		.map(num => num.trim())
 		.filter(num => num.length > 0 && num.toLowerCase() !== 'none')
 		.slice(0, 5); // Limit to max 5 policies as per constants
-}
-
-/**
- * Create a standardized PolicyFoo R2 error
- */
-function createPolicyR2Error(
-	code: PolicyFooError['code'], 
-	message: string, 
-	details?: Record<string, unknown>
-): PolicyFooError {
-	return {
-		code,
-		message: `${ERROR_MESSAGES[code]}: ${message}`,
-		details
-	};
 }
