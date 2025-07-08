@@ -19,10 +19,10 @@ describe('Integration Tests', () => {
 			// 3. Send message
 			// 4. Receive AI response
 			// 5. Save message history
-			
+
 			const user = createMockUser();
 			const session = createMockPacenoteSession({ userId: user.id });
-			
+
 			// Add integration test logic here when services are built
 			expect(true).toBe(true);
 		});
@@ -36,7 +36,7 @@ describe('Integration Tests', () => {
 			// 3. Create chunks
 			// 4. Generate embeddings
 			// 5. Store in database
-			
+
 			expect(true).toBe(true);
 		});
 

@@ -28,10 +28,7 @@ export default defineConfig({
 					name: 'server',
 					environment: 'node',
 					globals: true,
-					include: [
-						'src/lib/server/**/*.{test,spec}.{js,ts}',
-						'src/routes/api/**/*.test.{js,ts}'
-					],
+					include: ['src/lib/server/**/*.{test,spec}.{js,ts}', 'src/routes/api/**/*.test.{js,ts}'],
 					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
 				}
 			},

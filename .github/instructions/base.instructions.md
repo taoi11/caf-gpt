@@ -1,6 +1,7 @@
 ---
 applyTo: '**'
 ---
+
 # AI Instructions
 
 ## Development Philosophy

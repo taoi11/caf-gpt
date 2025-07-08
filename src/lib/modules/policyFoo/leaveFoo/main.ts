@@ -1,22 +1,18 @@
 /**
  * Leave Policy Main Agent
- * 
+ *
  * Single-stage agent that processes leave policy content and generates comprehensive responses.
  * Uses the main LLM model optimized for complex reasoning and citation generation.
  */
 
-import type { 
-	PolicyMainInput, 
-	PolicyMainOutput, 
-	PolicyAIGatewayMessage
-} from '../types';
+import type { PolicyMainInput, PolicyMainOutput, PolicyAIGatewayMessage } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
 import { createPolicyAIGatewayService } from '../ai-gateway.util';
 
 /**
  * Generate leave policy response with citations and analysis
- * 
+ *
  * @param input - Main agent input with messages, prompt, and leave policy content
  * @param env - Environment variables and bindings
  * @returns Promise with structured XML response and usage statistics
@@ -47,15 +43,14 @@ export async function generateLeaveResponse(
 			response: response.response,
 			usage: response.usage
 		};
-
 	} catch (error) {
 		console.error('Leave main agent error:', error);
-		
+
 		if (error && typeof error === 'object' && 'code' in error) {
 			// Re-throw PolicyFooError as-is
 			throw error;
 		}
-		
+
 		// Wrap unexpected errors
 		throw {
 			code: 'AI_GATEWAY_ERROR' as const,
@@ -75,10 +70,7 @@ function buildMainMessages(input: PolicyMainInput): PolicyAIGatewayMessage[] {
 	const leavePolicy = input.policyContent[0];
 
 	// Add system message with main prompt and leave policy content
-	const systemContent = input.mainPrompt.replace(
-		'{leave_policy_content}', 
-		leavePolicy
-	);
+	const systemContent = input.mainPrompt.replace('{leave_policy_content}', leavePolicy);
 
 	messages.push({
 		role: 'system',
@@ -133,7 +125,9 @@ function validateMainInput(input: PolicyMainInput): void {
 
 	// Leave policy should only have one document
 	if (input.policyContent.length > 1) {
-		console.warn(`Leave policy handler received ${input.policyContent.length} documents, expected 1. Using first document.`);
+		console.warn(
+			`Leave policy handler received ${input.policyContent.length} documents, expected 1. Using first document.`
+		);
 	}
 }
 
@@ -143,13 +137,13 @@ function validateMainInput(input: PolicyMainInput): void {
  */
 export function extractLeavePolicySections(policyContent: string): string[] {
 	const sections: string[] = [];
-	
+
 	// Look for section numbers in the content (e.g., "3.1", "4.2.1")
 	const matches = policyContent.match(/\b\d+\.\d+(?:\.\d+)?\b/g);
 	if (matches) {
 		sections.push(...matches);
 	}
-	
+
 	// Remove duplicates and return
 	return [...new Set(sections)].sort();
 }

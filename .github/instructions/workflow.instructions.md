@@ -1,6 +1,7 @@
 ---
 applyTo: '**'
 ---
+
 # Workflow
 
 1. Plan : Gain understanding of all relevant parts of the project
@@ -29,5 +30,5 @@ Once approved, execute the complete implementation including verification steps.
 1. **Verify Usage**: Check where the code is currently referenced/imported
 2. **Update All References**: Settings, imports, documentation, etc.
 3. **Clean Up**: Remove old files, unused imports.
-4. **Verify**: Run npm / wrangler checks, test imports, look for errors. Use command like  `npx tsc` and linting to verify correctness.
+4. **Verify**: Run npm / wrangler checks, test imports, look for errors. Use command like `npx tsc` and linting to verify correctness.
 5. **Document**: Update README.md and any relevant documentation

@@ -10,6 +10,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **PolicyFoo**: ✅ **Fully Functional** - AI-powered policy question answering with authoritative citations. Features two-stage agent workflow (finder → main) with database-driven DOAD policy handling and extensible architecture for additional policy sets.
 
 **Architecture Highlights:**
+
 - **Co-located Components**: Route-specific UI components live with their routes
 - **Domain Services**: Business logic organized by functional domain
 - **Type-Safe**: End-to-end TypeScript with strict validation
@@ -19,26 +20,31 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 ## Domain Modules
 
 ### PaceNote Service
+
 **Status**: ✅ Production Ready  
 **Route**: `/pacenote`  
 **Purpose**: Generate performance feedback notes based on observations and CAF rank competencies
 
 **Features:**
+
 - Rank-specific competency mapping (Cpl, MCpl, Sgt, WO)
 - Intelligent feedback generation with AI
 - Form validation and error handling
 - Usage tracking and cost monitoring
 
-### PolicyFoo Service  
+### PolicyFoo Service
+
 **Status**: ✅ Production Ready  
 **Route**: `/policy`  
-**Documentation**: 
+**Documentation**:
+
 - [Main Documentation](src/lib/modules/policyFoo/README.md)
 - [DOAD Handler Documentation](src/lib/modules/policyFoo/doadFoo/README.md)
 
 **Purpose**: Answer policy questions with authoritative citations from CAF policy documents
 
 **Features:**
+
 - **Three-Stage AI Workflow**: Finder agent identifies relevant policies, metadata selector optimizes chunk selection, main agent synthesizes responses
 - **Multi-Model Strategy**: Optimized model selection (lightweight for identification and selection, powerful for synthesis)
 - **Policy Set Support**: DOAD policies implemented with database storage, extensible for additional policy types
@@ -52,13 +58,15 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **Error Resilience**: Graceful handling of missing policies and service failures with automatic retry logic
 
 **Supported Policy Sets:**
+
 - ✅ **DOAD** (Defence Administrative Orders and Directives) - Fully implemented
 - 📋 **LEAVE** (Leave Policies) - Planned for future implementation
 
 **Architecture:**
+
 - **Backend**: Stateless request processing with raw XML responses
 - **Frontend**: Smart client-side parsing and conversation management
-- **Storage**: 
+- **Storage**:
   - DOAD: Policy chunks stored in Neon Postgres database with structured metadata and optimized indexing
   - LEAVE: Policy documents stored in Cloudflare R2 bucket (legacy approach)
 - **AI Models**: Triple-model approach for cost and performance optimization (finder → metadata selector → main agent)
@@ -67,9 +75,10 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 ## Architecture
 
 **Modern Serverless Stack:**
+
 - **Frontend**: SvelteKit with TypeScript
-- **Backend**: Cloudflare Workers  
-- **Databases**: 
+- **Backend**: Cloudflare Workers
+- **Databases**:
   - Drizzle ORM with Cloudflare D1 (SQLite) for application data
   - Neon Postgres with Drizzle ORM for policy content storage
 - **AI Integration**: AI Gateway with OpenRouter provider
@@ -79,6 +88,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **Testing**: Vitest with multiple test environments
 
 **Key Features:**
+
 - **Security-First**: Server-side rendering with built-in CSRF protection
 - **Type-Safe Database**: Drizzle ORM with TypeScript schema validation
 - **Modern AI Integration**: Cloudflare AI Gateway with cost tracking and monitoring
@@ -90,7 +100,7 @@ CAF GPT provides AI-powered assistance tools for CAF troops with a focus on modu
 - **Runtime**: Cloudflare Workers
 - **Framework**: SvelteKit v2 with SSR/SSG
 - **Language**: TypeScript with strict typing
-- **Databases**: 
+- **Databases**:
   - Drizzle ORM + Cloudflare D1 (SQLite) for application data
   - Neon Postgres with @neondatabase/serverless for policy content
 - **AI Provider**: AI Gateway → OpenRouter
@@ -140,6 +150,7 @@ src/
 ```
 
 **Architecture Principles:**
+
 - **Co-location**: Related functionality grouped together
 - **Domain Services**: Business logic separate from UI
 - **Route-Specific Components**: UI components live with their routes
@@ -148,16 +159,18 @@ src/
 ## Quick Start
 
 ### Prerequisites
-- Node.js 18+ 
+
+- Node.js 18+
 - Cloudflare account with AI Gateway enabled
 - OpenRouter account and API key
-- Wrangler CLI installed 
+- Wrangler CLI installed
 
 ### Configuration
 
 The application runs entirely server-side for security.
 
 **Required Cloudflare Secrets:**
+
 ```bash
 wrangler secret put OPENROUTER_TOKEN
 wrangler secret put AI_GATEWAY_BASE_URL
@@ -170,22 +183,23 @@ wrangler secret put DATABASE_URL
 
 Configure in your Cloudflare dashboard or `wrangler.jsonc`:
 
-- **R2 Bucket**: `POLICIES` (for PolicyFoo document storage)  
+- **R2 Bucket**: `POLICIES` (for PolicyFoo document storage)
 - **Environment Variables**:
-    - `FN_MODEL` - AI model to use (configured in wrangler.jsonc)
-    - `READER_MODEL` - Optional: PolicyFoo finder agent model (default: claude-3-haiku)
-    - `MAIN_MODEL` - Optional: PolicyFoo main agent model (default: claude-3-5-sonnet)
-    - `DATABASE_URL` - Postgres connection string for Neon database
-- **Secrets**: 
-    - `OPENROUTER_TOKEN` - OpenRouter API key for AI Gateway
-    - `AI_GATEWAY_BASE_URL` - AI Gateway endpoint URL
-    - `CF_AIG_TOKEN` - Optional: Enhanced AI Gateway monitoring
+  - `FN_MODEL` - AI model to use (configured in wrangler.jsonc)
+  - `READER_MODEL` - Optional: PolicyFoo finder agent model (default: claude-3-haiku)
+  - `MAIN_MODEL` - Optional: PolicyFoo main agent model (default: claude-3-5-sonnet)
+  - `DATABASE_URL` - Postgres connection string for Neon database
+- **Secrets**:
+  - `OPENROUTER_TOKEN` - OpenRouter API key for AI Gateway
+  - `AI_GATEWAY_BASE_URL` - AI Gateway endpoint URL
+  - `CF_AIG_TOKEN` - Optional: Enhanced AI Gateway monitoring
 
 > **Note**: All secrets should be configured via `wrangler secret put` for production deployment.
 
 **Storage Structure for PolicyFoo:**
 
 **Neon Postgres Database (Primary):**
+
 ```sql
 -- DOAD policy chunks table with optimized schema
 public.doad
@@ -203,11 +217,12 @@ public.doad
 ```
 
 **R2 Bucket (Legacy/Fallback):**
+
 ```
 policies/                    # R2 bucket name
 ├── doad/                   # DOAD policies (legacy, migrated to database)
 │   ├── 1000-1.md          # Individual policy files
-│   ├── 5017-1.md          # Leave policies  
+│   ├── 5017-1.md          # Leave policies
 │   └── ...                # Additional DOAD policies
 └── leave/                 # Leave policies (still using R2)
     └── ...                # Leave policy files
@@ -223,8 +238,9 @@ The application uses Cloudflare AI Gateway with OpenRouter:
 4. **Model Selection** via `FN_MODEL` environment variable
 
 This setup provides:
+
 - ✅ Cost tracking and budgets
-- ✅ Request caching and rate limiting  
+- ✅ Request caching and rate limiting
 - ✅ Analytics and monitoring
 - ✅ Fallback and retry logic
 
@@ -233,15 +249,17 @@ This setup provides:
 ### Production Deployment
 
 1. **Build and deploy:**
+
    ```bash
    npm run deploy
    ```
 
 2. **Database setup (if using D1):**
+
    ```bash
    # Apply migrations to production database
    npm run db:migrate
-   
+
    # Or push schema directly
    npm run db:push
    ```
@@ -255,6 +273,7 @@ This setup provides:
 ### Environment Configuration
 
 **Required Secrets:**
+
 ```bash
 # Core functionality
 wrangler secret put OPENROUTER_TOKEN       # OpenRouter API key
@@ -266,24 +285,25 @@ wrangler secret put CF_AIG_TOKEN          # Enhanced AI Gateway monitoring
 ```
 
 **Wrangler Configuration:**
+
 ```jsonc
 {
-  "name": "caf-gpt",
-  "compatibility_date": "2025-05-23",
-  "compatibility_flags": ["nodejs_compat"],
-  "ai": { "binding": "AI" },
-  "r2_buckets": [
-    {
-      "binding": "POLICIES",
-      "bucket_name": "policies",
-      "preview_bucket_name": "policies"
-    }
-  ],
-  "vars": {
-    "FN_MODEL": "openai/gpt-4.1-mini"
-  },
-  "observability": { "enabled": true },
-  "placement": { "mode": "smart" }
+	"name": "caf-gpt",
+	"compatibility_date": "2025-05-23",
+	"compatibility_flags": ["nodejs_compat"],
+	"ai": { "binding": "AI" },
+	"r2_buckets": [
+		{
+			"binding": "POLICIES",
+			"bucket_name": "policies",
+			"preview_bucket_name": "policies"
+		}
+	],
+	"vars": {
+		"FN_MODEL": "openai/gpt-4.1-mini"
+	},
+	"observability": { "enabled": true },
+	"placement": { "mode": "smart" }
 }
 ```
 
@@ -292,6 +312,7 @@ wrangler secret put CF_AIG_TOKEN          # Enhanced AI Gateway monitoring
 ### Common Issues
 
 **Database Connection:**
+
 ```bash
 # Regenerate types if bindings change
 npm run cf-typegen
@@ -316,6 +337,7 @@ npm run db:studio
 ```
 
 **AI Gateway Issues:**
+
 ```bash
 # Verify AI Gateway configuration
 curl -H "Authorization: Bearer $OPENROUTER_TOKEN" \
@@ -326,6 +348,7 @@ curl -H "Authorization: Bearer $OPENROUTER_TOKEN" \
 ```
 
 **Development Environment:**
+
 ```bash
 # Clear Wrangler cache
 rm -rf .wrangler
@@ -341,15 +364,17 @@ npm run dev:local
 ### Performance Optimization
 
 **Caching Strategy:**
+
 - **Static Assets**: Cached at edge via Cloudflare CDN
 - **AI Responses**: Cached via AI Gateway (configurable TTL)
-- **Database Queries**: 
+- **Database Queries**:
   - Neon Postgres: Connection pooling, prepared statements, and query optimization
   - D1: Consider caching frequent lookups (legacy applications)
 - **R2 Objects**: Use appropriate cache headers for policy documents
 - **Metadata Selection**: Optimized chunk selection reduces database load
 
 **Bundle Size:**
+
 ```bash
 # Analyze bundle size
 npm run build
@@ -366,6 +391,7 @@ wrangler deploy --dry-run
 This release includes a major architectural improvement: migration of DOAD policy storage from Cloudflare R2 to Neon Postgres database for enhanced performance and intelligent chunk selection.
 
 **Key Improvements:**
+
 - **3x Faster Query Performance**: Database queries vs. R2 object retrieval
 - **Intelligent Chunk Selection**: LLM-powered metadata analysis for relevance
 - **Connection Pooling**: Optimized for Cloudflare Workers serverless environment
@@ -373,12 +399,14 @@ This release includes a major architectural improvement: migration of DOAD polic
 - **Performance Monitoring**: Slow query detection and logging for optimization
 
 **Migration Benefits:**
+
 - **Structured Data**: JSONB metadata enables complex queries and filtering
 - **Indexed Lookups**: Fast retrieval by DOAD number and chunk ID
 - **Scalable Architecture**: Connection pooling handles concurrent requests efficiently
 - **Cost Optimization**: Reduced AI model usage through better chunk selection
 
 **Technical Implementation:**
+
 - **Database Schema**: Optimized table structure with proper indexing
 - **Connection Management**: Pool-based connections with health monitoring
 - **Query Optimization**: Efficient SQL queries with minimal data transfer
@@ -423,18 +451,21 @@ npm run cf-typegen       # Generate Cloudflare Worker types
 ### Architecture Benefits
 
 **Security-First Design:**
+
 - **Server-Side Rendering**: All sensitive operations happen server-side
 - **No API Key Exposure**: Client never handles API keys or secrets
 - **Built-in CSRF Protection**: SvelteKit handles security automatically
 - **Type Safety**: End-to-end TypeScript validation
 
 **Performance Optimized:**
+
 - **Edge Computing**: Runs on Cloudflare's global network
 - **Smart Placement**: Automatically routes to optimal data centers
 - **Caching**: Built-in request and response caching
 - **Progressive Enhancement**: Works without JavaScript
 
 **Developer Experience:**
+
 - **Hot Module Replacement**: Instant feedback during development
 - **Type Generation**: Automatic types from Cloudflare bindings
 - **Database Introspection**: Drizzle generates types from schema
@@ -443,6 +474,7 @@ npm run cf-typegen       # Generate Cloudflare Worker types
 ## Available Endpoints
 
 ### Health Check
+
 ```bash
 GET /api/health
 # Returns: Service status and binding availability
@@ -507,11 +539,13 @@ GET /api/health
 ### Architecture Philosophy
 
 **Co-location Principle:**
+
 - **Route-Specific Components**: UI components live with their routes (`/pacenote/*`)
 - **Domain Modules**: Business logic grouped by domain (`/modules/paceNote/`)
 - **Shared Utilities**: Only truly reusable code lives in `/lib/common/`
 
 **Modular Design:**
+
 - **Single Responsibility**: Each component and service has one clear purpose
 - **Minimal Dependencies**: Components only import what they need
 - **Clear Boundaries**: Separation between UI logic and business logic
@@ -519,6 +553,7 @@ GET /api/health
 ### Key Components
 
 **Modular Services Layer:**
+
 - **PaceNote Service**: Complete domain module with business logic, types, and utilities
 - **Shared AI Gateway Service**: Centralized AI provider communication and monitoring used by all modules
 - **PolicyFoo AI Gateway Wrapper**: Module-specific wrapper maintaining PolicyFoo API compatibility
@@ -526,6 +561,7 @@ GET /api/health
 - **Rate Limiting**: Request throttling and quota management
 
 **Co-located Route Components:**
+
 - **PaceNote Route**: Self-contained feature with all UI components and utilities
   - `+page.server.ts`: Server-side logic and form actions
   - `+page.svelte`: Main page orchestration
@@ -535,6 +571,7 @@ GET /api/health
   - `ui.ts`: Route-specific utilities (scroll, clipboard, etc.)
 
 **SvelteKit Architecture:**
+
 - **Server Actions**: Form handling with automatic CSRF protection
 - **Load Functions**: Server-side data fetching and configuration
 - **Progressive Enhancement**: JavaScript-optional functionality

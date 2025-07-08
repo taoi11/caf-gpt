@@ -1,14 +1,14 @@
 /**
  * PolicyFoo Service Types
- * 
+ *
  * Co-located types for the PolicyFoo service module.
  * Handles policy question answering with LLM-powered agents.
  */
 
-import type { 
-	AIGatewayConfig, 
-	AIGatewayMessage, 
-	AIGatewayResponse 
+import type {
+	AIGatewayConfig,
+	AIGatewayMessage,
+	AIGatewayResponse
 } from '$lib/server/ai-gateway.service.js';
 
 /**
@@ -121,9 +121,9 @@ export interface PolicyMainOutput {
  * Service error types specific to PolicyFoo
  */
 export interface PolicyFooError {
-	code: 
-		| 'INVALID_POLICY_SET' 
-		| 'INVALID_MESSAGES' 
+	code:
+		| 'INVALID_POLICY_SET'
+		| 'INVALID_MESSAGES'
 		| 'MESSAGES_EMPTY'
 		| 'POLICY_NOT_FOUND'
 		| 'POLICY_FILE_NOT_FOUND'
@@ -141,7 +141,7 @@ export interface PolicyFooError {
  */
 export interface PolicyHandlerConfig {
 	readerModel: string; // Model for finder agent
-	mainModel: string;   // Model for main agent
+	mainModel: string; // Model for main agent
 	prompts: {
 		finder: string;
 		main: string;
@@ -173,9 +173,9 @@ export interface PolicyHandlerResponse {
 /**
  * Re-export DOAD-specific types for convenience
  */
-export type { 
-	DOADChunk, 
-	DOADMetadata, 
-	MetadataSelectorInput, 
-	MetadataSelectorOutput 
+export type {
+	DOADChunk,
+	DOADMetadata,
+	MetadataSelectorInput,
+	MetadataSelectorOutput
 } from './doadFoo/types';

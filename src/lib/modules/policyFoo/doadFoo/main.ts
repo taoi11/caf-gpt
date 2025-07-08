@@ -1,22 +1,18 @@
 /**
  * DOAD Policy Main Agent
- * 
+ *
  * Stage 2 agent that synthesizes policy content and generates comprehensive responses.
  * Uses a more capable LLM model optimized for complex reasoning and citation generation.
  */
 
-import type { 
-	PolicyMainInput, 
-	PolicyMainOutput, 
-	PolicyAIGatewayMessage
-} from '../types';
+import type { PolicyMainInput, PolicyMainOutput, PolicyAIGatewayMessage } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
 import { createPolicyAIGatewayService } from '../ai-gateway.util';
 
 /**
  * Generate DOAD policy response with citations and analysis
- * 
+ *
  * @param input - Main agent input with messages, prompt, and policy content
  * @param env - Environment variables and bindings
  * @returns Promise with structured XML response and usage statistics
@@ -47,15 +43,14 @@ export async function generateDOADResponse(
 			response: response.response,
 			usage: response.usage
 		};
-
 	} catch (error) {
 		console.error('DOAD main agent error:', error);
-		
+
 		if (error && typeof error === 'object' && 'code' in error) {
 			// Re-throw PolicyFooError as-is
 			throw error;
 		}
-		
+
 		// Wrap unexpected errors
 		throw {
 			code: 'AI_GATEWAY_ERROR' as const,
@@ -142,7 +137,7 @@ function validateMainInput(input: PolicyMainInput): void {
  */
 export function extractPolicyCitations(policyContent: string[]): string[] {
 	const citations: string[] = [];
-	
+
 	for (const content of policyContent) {
 		// Look for DOAD numbers in the content (e.g., DOAD 5017-1)
 		const matches = content.match(/DOAD\s+\d{4}-\d+/gi);
@@ -150,7 +145,7 @@ export function extractPolicyCitations(policyContent: string[]): string[] {
 			citations.push(...matches);
 		}
 	}
-	
+
 	// Remove duplicates and return
 	return [...new Set(citations)];
 }

@@ -1,29 +1,29 @@
 /**
  * PolicyFoo Service Router
- * 
+ *
  * Main entry point for PolicyFoo service.
  * Routes queries to appropriate policy-specific handlers based on policy_set.
  * Supports stateless request processing with conversation context.
  */
 
-import type { 
-	PolicyQueryInput, 
-	PolicyQueryOutput, 
-	PolicySet, 
+import type {
+	PolicyQueryInput,
+	PolicyQueryOutput,
+	PolicySet,
 	PolicyMessage,
-	PolicyFooError 
+	PolicyFooError
 } from './types.js';
 import { POLICY_SETS, ERROR_MESSAGES, LIMITS } from './constants.js';
 import { handleDOADQuery } from './doadFoo/index.js';
 import { handleLeaveQuery } from './leaveFoo/index.js';
 
 // Re-export types for easier consumption
-export type { 
-	PolicyQueryInput, 
-	PolicyQueryOutput, 
-	PolicySet, 
+export type {
+	PolicyQueryInput,
+	PolicyQueryOutput,
+	PolicySet,
 	PolicyMessage,
-	PolicyFooError 
+	PolicyFooError
 } from './types.js';
 
 /**
@@ -40,7 +40,7 @@ export interface PolicyFooEnvironment {
 
 /**
  * Main service function to process policy queries
- * 
+ *
  * @param input - Query input with messages and policy set
  * @param env - Environment variables and bindings
  * @returns Promise with policy query response
@@ -52,7 +52,7 @@ export async function processPolicyQuery(
 	try {
 		// Validate input
 		validateInput(input);
-		
+
 		// Validate environment
 		validateEnvironment(env);
 
@@ -60,24 +60,24 @@ export async function processPolicyQuery(
 		switch (input.policy_set) {
 			case 'DOAD':
 				return await handleDOADQuery(input, env);
-			
+
 			case 'LEAVE':
 				return await handleLeaveQuery(input, env);
-			
+
 			default:
 				throw createError('INVALID_POLICY_SET', `Unsupported policy set: ${input.policy_set}`);
 		}
-
 	} catch (error) {
 		console.error('PolicyFoo service error:', error);
-		
+
 		if (error && typeof error === 'object' && 'code' in error) {
 			// Re-throw PolicyFooError as-is
 			throw error;
 		}
-		
+
 		// Wrap unexpected errors
-		throw createError('GENERAL_ERROR', 
+		throw createError(
+			'GENERAL_ERROR',
 			error instanceof Error ? error.message : 'Unknown error occurred',
 			{ originalError: error }
 		);
@@ -93,8 +93,10 @@ function validateInput(input: PolicyQueryInput): void {
 	}
 
 	if (!POLICY_SETS.includes(input.policy_set)) {
-		throw createError('INVALID_POLICY_SET', 
-			`Invalid policy set '${input.policy_set}'. Must be one of: ${POLICY_SETS.join(', ')}`);
+		throw createError(
+			'INVALID_POLICY_SET',
+			`Invalid policy set '${input.policy_set}'. Must be one of: ${POLICY_SETS.join(', ')}`
+		);
 	}
 
 	if (!Array.isArray(input.messages)) {
@@ -113,8 +115,10 @@ function validateInput(input: PolicyQueryInput): void {
 	// Check total conversation length
 	const totalLength = input.messages.reduce((sum, msg) => sum + msg.content.length, 0);
 	if (totalLength > LIMITS.MAX_TOTAL_CONVERSATION_LENGTH) {
-		throw createError('INVALID_MESSAGES', 
-			`Total conversation length (${totalLength}) exceeds maximum (${LIMITS.MAX_TOTAL_CONVERSATION_LENGTH})`);
+		throw createError(
+			'INVALID_MESSAGES',
+			`Total conversation length (${totalLength}) exceeds maximum (${LIMITS.MAX_TOTAL_CONVERSATION_LENGTH})`
+		);
 	}
 }
 
@@ -123,8 +127,10 @@ function validateInput(input: PolicyQueryInput): void {
  */
 function validateMessage(message: PolicyMessage): void {
 	if (!message.role || !['user', 'assistant', 'system'].includes(message.role)) {
-		throw createError('INVALID_MESSAGES', 
-			`Invalid message role '${message.role}'. Must be user, assistant, or system`);
+		throw createError(
+			'INVALID_MESSAGES',
+			`Invalid message role '${message.role}'. Must be user, assistant, or system`
+		);
 	}
 
 	if (typeof message.content !== 'string') {
@@ -136,8 +142,10 @@ function validateMessage(message: PolicyMessage): void {
 	}
 
 	if (message.content.length > LIMITS.MAX_MESSAGE_LENGTH) {
-		throw createError('INVALID_MESSAGES', 
-			`Message content length (${message.content.length}) exceeds maximum (${LIMITS.MAX_MESSAGE_LENGTH})`);
+		throw createError(
+			'INVALID_MESSAGES',
+			`Message content length (${message.content.length}) exceeds maximum (${LIMITS.MAX_MESSAGE_LENGTH})`
+		);
 	}
 }
 
@@ -146,7 +154,7 @@ function validateMessage(message: PolicyMessage): void {
  */
 function validateEnvironment(env: PolicyFooEnvironment): void {
 	const required = ['OPENROUTER_TOKEN', 'AI_GATEWAY_BASE_URL', 'CF_AIG_TOKEN'];
-	
+
 	for (const key of required) {
 		if (!env[key as keyof PolicyFooEnvironment]) {
 			throw createError('GENERAL_ERROR', `Missing required environment variable: ${key}`);
@@ -162,8 +170,8 @@ function validateEnvironment(env: PolicyFooEnvironment): void {
  * Create a standardized PolicyFoo error
  */
 function createError(
-	code: PolicyFooError['code'], 
-	message: string, 
+	code: PolicyFooError['code'],
+	message: string,
 	details?: Record<string, unknown>
 ): PolicyFooError {
 	return {

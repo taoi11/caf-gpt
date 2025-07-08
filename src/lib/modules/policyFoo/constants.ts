@@ -1,6 +1,6 @@
 /**
  * PolicyFoo Service Constants
- * 
+ *
  * Co-located constants for the PolicyFoo service module.
  */
 

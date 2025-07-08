@@ -1,6 +1,6 @@
 /**
  * AI Gateway Service
- * 
+ *
  * Shared service for LLM interactions using AI Gateway with OpenRouter provider.
  * Used across multiple modules for consistent AI integration.
  * Provides text generation, cost tracking, and error handling.
@@ -56,7 +56,7 @@ export class AIGatewayService {
 		const headers: Record<string, string> = {
 			'X-Title': 'caf-gpt'
 		};
-		
+
 		// Add CF AI Gateway authorization header if provided
 		if (cfAigToken) {
 			headers['cf-aig-authorization'] = `Bearer ${cfAigToken}`;
@@ -82,7 +82,7 @@ export class AIGatewayService {
 		try {
 			const completion = await this.openai.chat.completions.create({
 				model: finalConfig.model,
-				messages: messages.map(msg => ({
+				messages: messages.map((msg) => ({
 					role: msg.role,
 					content: msg.content
 				})),
@@ -100,13 +100,14 @@ export class AIGatewayService {
 
 			return {
 				response: responseText,
-				usage: usage ? {
-					total_tokens: usage.total_tokens,
-					prompt_tokens: usage.prompt_tokens,
-					completion_tokens: usage.completion_tokens
-				} : undefined
+				usage: usage
+					? {
+							total_tokens: usage.total_tokens,
+							prompt_tokens: usage.prompt_tokens,
+							completion_tokens: usage.completion_tokens
+						}
+					: undefined
 			};
-
 		} catch (error) {
 			throw this.handleError(error);
 		}
@@ -121,11 +122,11 @@ export class AIGatewayService {
 		config: Partial<AIGatewayConfig> = {}
 	): Promise<AIGatewayResponse> {
 		const messages: AIGatewayMessage[] = [];
-		
+
 		if (systemMessage) {
 			messages.push({ role: 'system', content: systemMessage });
 		}
-		
+
 		messages.push({ role: 'user', content: prompt });
 
 		return this.generateCompletion(messages, config);
@@ -162,7 +163,11 @@ export class AIGatewayService {
 				};
 			}
 
-			if (error.message.includes('API key') || error.message.includes('unauthorized') || error.message.includes('401')) {
+			if (
+				error.message.includes('API key') ||
+				error.message.includes('unauthorized') ||
+				error.message.includes('401')
+			) {
 				return {
 					code: 'UNAUTHORIZED',
 					message: 'Invalid API key or unauthorized access.',

@@ -1,4 +1,4 @@
-	// https://developers.cloudflare.com/workers/wrangler/configuration/
+// https://developers.cloudflare.com/workers/wrangler/configuration/
 {
 	"$schema": "node_modules/wrangler/config-schema.json",
 	"name": "caf-gpt",
@@ -8,7 +8,8 @@
 	},
 	"compatibility_date": "2025-05-23",
 	"compatibility_flags": ["nodejs_compat"],
-	"assets": {	// https://developers.cloudflare.com/workers/static-assets/binding/
+	"assets": {
+		// https://developers.cloudflare.com/workers/static-assets/binding/
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
 	},
@@ -21,16 +22,17 @@
 		"binding": "AI"
 	},
 	"r2_buckets": [
-    {
-      "binding": "POLICIES",
-      "bucket_name": "policies",
-      "preview_bucket_name": "policies"
-    }
-  ],
-	"vars": {	// https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
+		{
+			"binding": "POLICIES",
+			"bucket_name": "policies",
+			"preview_bucket_name": "policies"
+		}
+	],
+	"vars": {
+		// https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 		"FN_MODEL": "openai/gpt-4.1-mini",
 		"READER_MODEL": "anthropic/claude-3.5-haiku",
-		"MAIN_MODEL": "google/gemini-2.5-pro",
+		"MAIN_MODEL": "google/gemini-2.5-pro"
 	}
 	/**
 	 * Service Bindings (communicate between multiple Workers)

@@ -1,15 +1,11 @@
 /**
  * DOAD Policy Finder Agent
- * 
+ *
  * Stage 1 agent that identifies relevant DOAD policy numbers from user queries.
  * Uses a lighter LLM model optimized for policy identification tasks.
  */
 
-import type { 
-	PolicyFinderInput, 
-	PolicyFinderOutput, 
-	PolicyAIGatewayMessage
-} from '../types';
+import type { PolicyFinderInput, PolicyFinderOutput, PolicyAIGatewayMessage } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
 import { createPolicyAIGatewayService } from '../ai-gateway.util';
@@ -17,7 +13,7 @@ import { parsePolicyNumbers } from '$lib/server/r2.util';
 
 /**
  * Find relevant DOAD policies for a user query
- * 
+ *
  * @param input - Finder input with messages and prompts
  * @param env - Environment variables and bindings
  * @returns Promise with found policy numbers and usage statistics
@@ -48,15 +44,14 @@ export async function findDOADPolicies(
 			policyNumbers,
 			usage: response.usage
 		};
-
 	} catch (error) {
 		console.error('DOAD finder error:', error);
-		
+
 		if (error && typeof error === 'object' && 'code' in error) {
 			// Re-throw PolicyFooError as-is
 			throw error;
 		}
-		
+
 		// Wrap unexpected errors
 		throw {
 			code: 'AI_GATEWAY_ERROR' as const,

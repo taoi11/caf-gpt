@@ -18,9 +18,9 @@
 	 * Format timestamp for display
 	 */
 	function formatTime(timestamp: number): string {
-		return new Date(timestamp).toLocaleTimeString([], { 
-			hour: '2-digit', 
-			minute: '2-digit' 
+		return new Date(timestamp).toLocaleTimeString([], {
+			hour: '2-digit',
+			minute: '2-digit'
 		});
 	}
 
@@ -35,7 +35,10 @@
 	}
 </script>
 
-<div class="message-list flex-1 p-4 overflow-y-auto flex flex-col gap-6 min-h-screen max-h-full" bind:this={messagesContainer}>
+<div
+	class="message-list flex-1 p-4 overflow-y-auto flex flex-col gap-6 min-h-screen max-h-full"
+	bind:this={messagesContainer}
+>
 	{#each messages as message, index (message.timestamp)}
 		<div class="flex flex-col gap-2 animate-fade-in">
 			<div class="flex justify-between items-center text-sm text-gray-500">
@@ -58,17 +61,23 @@
 					<!-- User message: display as plain text -->
 					<div class="bg-blue-600 text-white rounded-xl rounded-br-sm p-4 ml-8 shadow-sm relative">
 						<p class="m-0 leading-relaxed">{message.content}</p>
-						<div class="absolute bottom-0 right-[-8px] w-0 h-0 border-l-8 border-l-blue-600 border-t-8 border-t-transparent"></div>
+						<div
+							class="absolute bottom-0 right-[-8px] w-0 h-0 border-l-8 border-l-blue-600 border-t-8 border-t-transparent"
+						></div>
 					</div>
 				{:else}
 					<!-- Assistant message: parse XML and render structured response -->
-					<div class="bg-gray-50 rounded-xl rounded-bl-sm p-4 mr-8 shadow-sm border border-gray-200 relative">
-						<ResponseParser 
-							xmlContent={message.content} 
+					<div
+						class="bg-gray-50 rounded-xl rounded-bl-sm p-4 mr-8 shadow-sm border border-gray-200 relative"
+					>
+						<ResponseParser
+							xmlContent={message.content}
 							{onFollowUpClick}
 							bind:parsed={message.parsed}
 						/>
-						<div class="absolute bottom-0 left-[-8px] w-0 h-0 border-r-8 border-r-gray-50 border-t-8 border-t-transparent"></div>
+						<div
+							class="absolute bottom-0 left-[-8px] w-0 h-0 border-r-8 border-r-gray-50 border-t-8 border-t-transparent"
+						></div>
 					</div>
 				{/if}
 			</div>

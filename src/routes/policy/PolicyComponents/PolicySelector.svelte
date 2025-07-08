@@ -23,7 +23,12 @@
 
 	<div class="grid grid-cols-1 md:grid-cols-2 gap-4">
 		{#each policySets as policySet}
-			<label class="flex items-start p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 hover:bg-gray-50 transition-colors duration-200 {selected === policySet ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200' : ''}">
+			<label
+				class="flex items-start p-4 border border-gray-200 rounded-lg cursor-pointer hover:border-blue-300 hover:bg-gray-50 transition-colors duration-200 {selected ===
+				policySet
+					? 'border-blue-500 bg-blue-50 ring-2 ring-blue-200'
+					: ''}"
+			>
 				<input
 					type="radio"
 					name="policy_set"
@@ -43,10 +48,10 @@
 	</div>
 
 	<div class="text-center p-4 bg-blue-50 border border-blue-200 rounded-lg">
-		<strong class="text-gray-900">Current Selection:</strong> <span class="text-blue-700">{selected}</span>
+		<strong class="text-gray-900">Current Selection:</strong>
+		<span class="text-blue-700">{selected}</span>
 		{#if policyDescriptions[selected]}
-			<br><small class="text-sm text-gray-600 opacity-80">{policyDescriptions[selected]}</small>
+			<br /><small class="text-sm text-gray-600 opacity-80">{policyDescriptions[selected]}</small>
 		{/if}
 	</div>
 </div>
-

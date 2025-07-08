@@ -1,15 +1,11 @@
 /**
  * Leave Policy Handler
- * 
+ *
  * Handles CAF Leave policy queries with a simplified single-stage workflow.
  * Retrieves the comprehensive leave policy document and generates responses.
  */
 
-import type { 
-	PolicyQueryInput, 
-	PolicyQueryOutput, 
-	PolicyHandlerConfig
-} from '../types';
+import type { PolicyQueryInput, PolicyQueryOutput, PolicyHandlerConfig } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, R2_CONFIG, ERROR_MESSAGES } from '../constants';
 import { readPolicyFileAsText } from '$lib/server/r2.util';
@@ -20,7 +16,7 @@ import mainPromptRaw from './prompts/main.md?raw';
 
 /**
  * Handle leave policy queries with single-stage workflow
- * 
+ *
  * @param input - Query input with messages and policy set
  * @param env - Environment variables and bindings
  * @returns Promise with policy query response
@@ -32,16 +28,19 @@ export async function handleLeaveQuery(
 	try {
 		// Load required configuration
 		const config = await loadLeaveConfig(env);
-		
+
 		// Retrieve leave policy document from R2
 		const leavePolicyContent = await retrieveLeavePolicyContent(config, env);
 
 		// Generate response using Main Agent
-		const mainResult = await generateLeaveResponse({
-			messages: input.messages,
-			mainPrompt: config.prompts.main,
-			policyContent: [leavePolicyContent]
-		}, env);
+		const mainResult = await generateLeaveResponse(
+			{
+				messages: input.messages,
+				mainPrompt: config.prompts.main,
+				policyContent: [leavePolicyContent]
+			},
+			env
+		);
 
 		return {
 			message: mainResult.response,
@@ -49,15 +48,14 @@ export async function handleLeaveQuery(
 				main: mainResult.usage
 			}
 		};
-
 	} catch (error) {
 		console.error('Leave handler error:', error);
-		
+
 		if (error && typeof error === 'object' && 'code' in error) {
 			// Re-throw PolicyFooError as-is
 			throw error;
 		}
-		
+
 		// Wrap unexpected errors
 		throw {
 			code: 'GENERAL_ERROR' as const,
@@ -73,7 +71,7 @@ export async function handleLeaveQuery(
 async function loadLeaveConfig(env: PolicyFooEnvironment): Promise<PolicyHandlerConfig> {
 	try {
 		const bucket = env.POLICIES!;
-		
+
 		// Use imported prompt file from local codebase
 		return {
 			readerModel: '', // Not used in leave policy handler
@@ -86,14 +84,13 @@ async function loadLeaveConfig(env: PolicyFooEnvironment): Promise<PolicyHandler
 			r2Bucket: bucket,
 			policyPathPrefix: R2_CONFIG.POLICY_PATHS.LEAVE
 		};
-
 	} catch (error) {
 		console.error('Leave config loading error:', error);
-			
+
 		if (error && typeof error === 'object' && 'code' in error) {
 			throw error;
 		}
-		
+
 		throw {
 			code: 'PROMPT_NOT_FOUND' as const,
 			message: `${ERROR_MESSAGES.PROMPT_NOT_FOUND}: ${error instanceof Error ? error.message : 'Unknown prompt loading error'}`,
@@ -115,32 +112,31 @@ async function retrieveLeavePolicyContent(
 
 		// Read the single leave policy document
 		const policyContent = await readPolicyFileAsText(bucket, leavePolicyPath);
-		
+
 		if (!policyContent || policyContent.trim().length === 0) {
 			throw {
 				code: 'POLICY_NOT_FOUND' as const,
 				message: `${ERROR_MESSAGES.POLICY_NOT_FOUND}: Leave policy document is empty`,
-				details: { 
+				details: {
 					policyPath: leavePolicyPath
 				}
 			};
 		}
 
 		return policyContent;
-
 	} catch (error) {
 		console.error('Leave policy content retrieval error:', error);
-		
+
 		if (error && typeof error === 'object' && 'code' in error) {
 			throw error;
 		}
-		
+
 		throw {
 			code: 'R2_ERROR' as const,
 			message: `${ERROR_MESSAGES.R2_ERROR}: ${error instanceof Error ? error.message : 'Unknown leave policy retrieval error'}`,
-			details: { 
+			details: {
 				policyPath: 'leave/leave_policy_2025.md',
-				originalError: error 
+				originalError: error
 			}
 		};
 	}

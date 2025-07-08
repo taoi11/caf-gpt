@@ -1,6 +1,6 @@
 /**
  * PaceNote Service Constants
- * 
+ *
  * Co-located constants for the PaceNote service module.
  */
 

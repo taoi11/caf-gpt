@@ -1,6 +1,6 @@
 /**
  * PaceNote Service Types
- * 
+ *
  * Co-located types for the PaceNote service module.
  */
 

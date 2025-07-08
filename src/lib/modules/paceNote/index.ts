@@ -1,6 +1,6 @@
 /**
  * PaceNote Service Module
- * 
+ *
  * Co-located exports for the PaceNote service.
  */
 

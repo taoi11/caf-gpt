@@ -9,6 +9,7 @@ Analyze the provided chunk metadata and select the most relevant chunks that wou
 ## Input Format
 
 You will receive:
+
 1. **User Query**: The question or request about DOAD policies
 2. **Chunk Metadata**: JSON array of chunk metadata objects containing:
    - `id`: Unique identifier for the chunk
@@ -17,6 +18,7 @@ You will receive:
 ## Selection Criteria
 
 Select chunks that are:
+
 1. **Directly Relevant**: Address the specific topic or policy area mentioned in the query
 2. **Contextually Important**: Provide necessary background or related information
 3. **Comprehensive**: Together provide a complete picture for answering the query

@@ -1,26 +1,26 @@
 /**
  * AI Gateway Service for PolicyFoo
- * 
+ *
  * Wrapper around the shared AI Gateway service for PolicyFoo module.
  * Maintains PolicyFoo-specific error handling and API compatibility.
  */
 
-import { 
-	AIGatewayService, 
+import {
+	AIGatewayService,
 	createAIGatewayService,
-	type AIGatewayConfig 
+	type AIGatewayConfig
 } from '$lib/server/ai-gateway.service.js';
-import type { 
-	PolicyAIGatewayConfig, 
-	PolicyAIGatewayMessage, 
-	PolicyAIGatewayResponse, 
-	PolicyFooError 
+import type {
+	PolicyAIGatewayConfig,
+	PolicyAIGatewayMessage,
+	PolicyAIGatewayResponse,
+	PolicyFooError
 } from './types.js';
 import { DEFAULT_AI_CONFIG, ERROR_MESSAGES } from './constants.js';
 
 /**
  * PolicyFoo AI Gateway Service
- * 
+ *
  * Wrapper around shared AI Gateway service with PolicyFoo-specific error handling.
  */
 export class PolicyAIGatewayService {
@@ -49,7 +49,7 @@ export class PolicyAIGatewayService {
 
 	/**
 	 * Generate text completion using the configured model
-	 * 
+	 *
 	 * @param messages - Array of messages for the conversation
 	 * @returns Promise with the response and usage statistics
 	 */
@@ -60,15 +60,17 @@ export class PolicyAIGatewayService {
 		} catch (error) {
 			// Convert AI Gateway errors to PolicyFoo errors
 			if (error && typeof error === 'object' && 'code' in error && 'message' in error) {
-				throw this.createError('AI_GATEWAY_ERROR', 
-					typeof error.message === 'string' ? error.message : 'AI Gateway error', 
+				throw this.createError(
+					'AI_GATEWAY_ERROR',
+					typeof error.message === 'string' ? error.message : 'AI Gateway error',
 					{ originalError: error }
 				);
 			}
-			
+
 			console.error('AI Gateway error:', error);
-			throw this.createError('AI_GATEWAY_ERROR', 
-				error instanceof Error ? error.message : 'Unknown AI Gateway error', 
+			throw this.createError(
+				'AI_GATEWAY_ERROR',
+				error instanceof Error ? error.message : 'Unknown AI Gateway error',
 				{ originalError: error }
 			);
 		}
@@ -77,7 +79,11 @@ export class PolicyAIGatewayService {
 	/**
 	 * Create a standardized error object
 	 */
-	private createError(code: PolicyFooError['code'], message: string, details?: Record<string, unknown>): PolicyFooError {
+	private createError(
+		code: PolicyFooError['code'],
+		message: string,
+		details?: Record<string, unknown>
+	): PolicyFooError {
 		return {
 			code,
 			message: `${ERROR_MESSAGES[code]}: ${message}`,
@@ -103,7 +109,9 @@ export class PolicyAIGatewayService {
 		};
 		// Note: The underlying AI Gateway service config cannot be updated dynamically
 		// This method maintains API compatibility but doesn't update the service
-		console.warn('PolicyAIGatewayService: updateConfig called but underlying service config cannot be updated');
+		console.warn(
+			'PolicyAIGatewayService: updateConfig called but underlying service config cannot be updated'
+		);
 	}
 }
 
@@ -122,10 +130,5 @@ export function createPolicyAIGatewayService(
 		...additionalConfig
 	};
 
-	return new PolicyAIGatewayService(
-		openrouterToken,
-		aiGatewayBaseUrl,
-		cafAigToken,
-		config
-	);
+	return new PolicyAIGatewayService(openrouterToken, aiGatewayBaseUrl, cafAigToken, config);
 }

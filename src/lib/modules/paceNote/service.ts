@@ -1,20 +1,30 @@
 /**
  * PaceNote Service
- * 
+ *
  * Handles generation of professional pace notes for CAF members using AI Gateway.
  * Integrates rank-specific competencies and structured feedback templates.
  */
 
-import { createAIGatewayService, type AIGatewayService, type AIGatewayResponse } from '$lib/server/ai-gateway.service.js';
+import {
+	createAIGatewayService,
+	type AIGatewayService,
+	type AIGatewayResponse
+} from '$lib/server/ai-gateway.service.js';
 import { readFileAsText } from '$lib/server/r2.util.js';
 import basePromptTemplate from './prompts/base.md?raw';
 import type { PaceNoteInput, PaceNoteOutput, PaceNoteRank, RankInfo } from './types.js';
-import { AVAILABLE_RANKS, VALID_RANKS, AI_GATEWAY_CONFIG, VALIDATION_LIMITS, R2_PATHS } from './constants.js';
+import {
+	AVAILABLE_RANKS,
+	VALID_RANKS,
+	AI_GATEWAY_CONFIG,
+	VALIDATION_LIMITS,
+	R2_PATHS
+} from './constants.js';
 
 export class PaceNoteService {
 	private aiService: AIGatewayService;
 	private policiesBucket: R2Bucket;
-	
+
 	constructor(
 		openrouterToken: string,
 		aiGatewayBaseURL: string,
@@ -23,8 +33,8 @@ export class PaceNoteService {
 		cfAigToken?: string
 	) {
 		this.aiService = createAIGatewayService(
-			openrouterToken, 
-			aiGatewayBaseURL, 
+			openrouterToken,
+			aiGatewayBaseURL,
 			{
 				...AI_GATEWAY_CONFIG,
 				model
@@ -41,7 +51,7 @@ export class PaceNoteService {
 		try {
 			// Validate input
 			this.validateInput(input);
-			
+
 			// Build the system prompt and user message
 			const systemPrompt = await this.buildSystemPrompt(input.rank, input.competencyFocus);
 			const userMessage = this.buildUserMessage(input.observations);
@@ -58,15 +68,14 @@ export class PaceNoteService {
 					cost: 0 // Simplified - no cost tracking
 				}
 			};
-
 		} catch (error) {
 			console.error('PaceNote generation error:', error);
-			
+
 			// Re-throw with context
 			if (error && typeof error === 'object' && 'code' in error) {
 				throw error; // WorkersAI error, pass through
 			}
-			
+
 			throw {
 				code: 'PACENOTE_ERROR',
 				message: 'Failed to generate pace note',
@@ -86,7 +95,10 @@ export class PaceNoteService {
 			};
 		}
 
-		if (!input.observations || input.observations.trim().length < VALIDATION_LIMITS.MIN_OBSERVATIONS_LENGTH) {
+		if (
+			!input.observations ||
+			input.observations.trim().length < VALIDATION_LIMITS.MIN_OBSERVATIONS_LENGTH
+		) {
 			throw {
 				code: 'INVALID_OBSERVATIONS',
 				message: `Observations must be at least ${VALIDATION_LIMITS.MIN_OBSERVATIONS_LENGTH} characters long`
@@ -108,12 +120,12 @@ export class PaceNoteService {
 	private async buildSystemPrompt(rank: PaceNoteRank, competencyFocus?: string[]): Promise<string> {
 		const competencies = await this.getCompetenciesForRank(rank);
 		const examples = await this.getExamples();
-		
+
 		// Replace the placeholder variables in the base template
 		let systemPrompt = basePromptTemplate
 			.replace('{{competency_list}}', competencies)
 			.replace('{{examples}}', examples);
-		
+
 		// Add specific competency focus if provided
 		if (competencyFocus && competencyFocus.length > 0) {
 			const focusAreas = competencyFocus.join(', ');
@@ -136,7 +148,7 @@ export class PaceNoteService {
 	private async getCompetenciesForRank(rank: PaceNoteRank): Promise<string> {
 		const filePath = R2_PATHS.COMPETENCIES(rank);
 		const competencyContent = await readFileAsText(this.policiesBucket, filePath);
-		
+
 		// Return the entire file content as-is
 		return competencyContent;
 	}
@@ -155,7 +167,7 @@ export class PaceNoteService {
 	getAvailableRanks(): RankInfo[] {
 		return [...AVAILABLE_RANKS];
 	}
-	
+
 	/**
 	 * Get current AI configuration
 	 */

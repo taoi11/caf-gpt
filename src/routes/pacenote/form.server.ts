@@ -1,6 +1,6 @@
 /**
  * Form Processing Utility
- * 
+ *
  * Handles form data parsing, validation, and error response formatting
  * for the PaceNote web interface.
  */
@@ -33,10 +33,10 @@ export interface ValidationError {
 export function parseFormData(data: FormData): ParsedFormData {
 	const rank = data.get('rank')?.toString() || '';
 	const observations = data.get('observations')?.toString() || '';
-	
+
 	// Parse competency focus (can be multiple values)
 	const competencyFocus: string[] = [];
-	data.getAll('competencyFocus').forEach(value => {
+	data.getAll('competencyFocus').forEach((value) => {
 		const strValue = value.toString();
 		if (strValue) competencyFocus.push(strValue);
 	});
@@ -59,7 +59,7 @@ export function validateFormData({ rank, observations, competencyFocus }: Parsed
 	}
 
 	// Validate rank
-	const validRanks = AVAILABLE_RANKS.map(r => r.value);
+	const validRanks = AVAILABLE_RANKS.map((r) => r.value);
 	if (!validRanks.includes(rank)) {
 		return fail(400, {
 			error: `Rank must be one of: ${validRanks.join(', ')}`,
@@ -96,7 +96,7 @@ export function validateFormData({ rank, observations, competencyFocus }: Parsed
  * Create error response for configuration issues
  */
 export function createConfigError(message: string, formData: ParsedFormData) {
-	return fail(500, { 
+	return fail(500, {
 		error: message,
 		...formData
 	});
