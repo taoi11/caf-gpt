@@ -33,6 +33,7 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 - **Selection**: Three-phase selection (DOAD numbers → metadata analysis → relevant chunks) for maximum precision
 - **Performance**: Connection pooling, indexed queries, and retry logic optimized for Cloudflare Workers
 - **Monitoring**: Slow query detection (>500ms) and performance logging for optimization
+- **LLM Formatting**: Enhanced chunk formatting with metadata integration for improved agent understanding
 
 ## Implementation Details
 

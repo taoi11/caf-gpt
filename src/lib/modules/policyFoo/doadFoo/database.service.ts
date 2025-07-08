@@ -85,8 +85,8 @@ export const getDOADChunksByIds = async (chunkIds: string[]): Promise<DOADChunk[
 };
 
 /**
- * Format chunks for LLM consumption with optimized serialization
- * Includes DOAD context and chunk organization
+ * Format chunks for LLM consumption with metadata and clear boundaries
+ * Includes DOAD context, metadata, and chunk organization for better agent understanding
  */
 export const formatChunksForLLM = (chunks: DOADChunk[]): string => {
   if (chunks.length === 0) return '';
@@ -99,10 +99,21 @@ export const formatChunksForLLM = (chunks: DOADChunk[]): string => {
     return acc;
   }, {} as Record<string, DOADChunk[]>);
   
-  // Format each DOAD section with clear boundaries
+  // Format each DOAD section with clear boundaries and metadata
   const formattedSections = Object.entries(groupedChunks).map(([doadNumber, doadChunks]) => {
     const chunkContent = doadChunks
-      .map((chunk, index) => `--- Chunk ${index + 1} ---\n${chunk.textChunk}`)
+      .map((chunk, index) => {
+        // Format metadata as JSON string, handling null/undefined cases
+        const metadataStr = chunk.metadata && Object.keys(chunk.metadata).length > 0 
+          ? JSON.stringify(chunk.metadata, null, 2)
+          : '{"content_type": "policy_text"}';
+        
+        return `--- Chunk ${index + 1} ---
+METADATA: ${metadataStr}
+CONTENT:
+${chunk.textChunk}
+-----------------------`;
+      })
       .join('\n\n');
       
     return `=== DOAD ${doadNumber} ===\n${chunkContent}`;
