@@ -1,5 +1,7 @@
 # DOAD PolicyFoo Handler
 
+> **Internal Developer/Agent Reference** - Database-driven DOAD policy handler
+
 ## Purpose
 
 LLM workflow for answering questions related to DOAD (Defence Administrative Orders and Directives) policies with authoritative citations. Implements a sophisticated database-driven architecture with metadata-based chunk selection for accurate policy identification and comprehensive response generation.
@@ -19,12 +21,12 @@ The DOAD handler processes policy queries through an enhanced three-stage databa
 ## Enhanced Workflow
 
 1. Receives a user message from `policyFoo` Router as init, or a continuation of a conversation (`user` + `assistant` message sequence)
-2. Routes the message or conversation to `src/lib/modules/policyFoo/doadFoo/finder.ts`
+2. Routes the message or conversation to `finder.ts`
 3. Receives the `assistant` message from finder.ts containing DOAD policy numbers relevant to the user question
 4. **Database Phase**: Retrieves metadata for identified DOADs from Neon Postgres using `database.service.ts`
 5. **Metadata Selection**: Routes metadata to `metadata-selector.ts` which uses LLM to intelligently select most relevant chunks
 6. **Content Retrieval**: Retrieves full content for selected chunks from database using optimized queries
-7. Sends the user message/conversation + selected chunk content to `src/lib/modules/policyFoo/doadFoo/main.ts`
+7. Sends the user message/conversation + selected chunk content to `main.ts`
 8. Receives the `assistant` message from `main.ts` with structured response and citations
 9. Sends the updated conversation to the `policyFoo` Router
 
@@ -44,7 +46,6 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 ### Core Components
 
 #### 1. Handler Orchestration (`index.ts`)
-
 - **Entry Point**: Main handler function `handleDOADQuery()`
 - **Configuration Loading**: Loads prompts and AI model settings
 - **Three-Stage Coordination**: Orchestrates finder → metadata selector → main agent workflow
@@ -52,7 +53,6 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 - **Database Integration**: Manages Postgres operations for policy content retrieval
 
 #### 2. Finder Agent (`finder.ts`)
-
 - **Purpose**: Identifies relevant DOAD policy numbers from user queries
 - **Model**: Uses `READER_MODEL` (lightweight, fast identification)
 - **Input**: User conversation + finder prompt + policy list table
@@ -60,14 +60,12 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 - **Parsing**: Handles various response formats and edge cases
 
 #### 3. Database Service (`database.service.ts`)
-
 - **Purpose**: Optimized database operations for chunk retrieval and metadata analysis
 - **Functions**: `getDOADChunksByNumbers()`, `getDOADMetadataByNumbers()`, `getDOADChunksByIds()`
 - **Performance**: Connection pooling, indexed queries, and efficient data transfer
 - **Error Handling**: Retry logic with exponential backoff for resilient operations
 
 #### 4. Metadata Selector (`metadata-selector.ts`)
-
 - **Purpose**: LLM-powered intelligent chunk selection based on metadata analysis
 - **Model**: Uses `READER_MODEL` (lightweight, efficient for selection tasks)
 - **Input**: User query + chunk metadata (optimized for LLM processing)
@@ -75,7 +73,6 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 - **Optimization**: Reduces database load and improves response relevance
 
 #### 5. Main Agent (`main.ts`)
-
 - **Purpose**: Synthesizes selected policy content and generates comprehensive responses
 - **Model**: Uses `MAIN_MODEL` (capable synthesis and reasoning)
 - **Input**: User conversation + main prompt + selected chunk content
@@ -85,7 +82,6 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 ### Configuration
 
 #### Models Used
-
 - **READER_MODEL**: `anthropic/claude-3-haiku` (default)
   - Optimized for quick policy identification
   - Cost-effective for simple extraction tasks
@@ -98,6 +94,68 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 ```
 doadFoo/
 ├── README.md                  # This documentation
+├── index.ts                   # Main orchestration handler
+├── finder.ts                  # Policy identification agent
+├── main.ts                    # Policy synthesis agent
+├── database.service.ts        # Database operations
+├── metadata-selector.ts       # Intelligent chunk selection
+├── types.ts                   # DOAD-specific types
+└── prompts/                   # LLM prompts
+    ├── main.md                # Main agent prompt
+    ├── finder.md              # Finder agent prompt
+    ├── metadata-selector.md   # Chunk selection prompt
+    └── DOAD-list-table.md     # Available policies reference
+```
+
+## Performance Characteristics
+
+- **Token Usage**: ~2500-4500 tokens per query
+- **Response Time**: ~5-12 seconds (depends on chunk count)
+- **Cost**: Higher than LEAVE handler due to multiple AI calls
+- **Accuracy**: Superior for complex policy queries due to metadata selection
+- **Database Load**: Optimized with connection pooling and selective retrieval
+
+## Development
+
+### Database Schema
+
+```sql
+CREATE TABLE public.doad (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    text_chunk TEXT NOT NULL,
+    metadata JSONB NOT NULL,
+    doad_number TEXT NOT NULL,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+CREATE INDEX idx_doad_number ON public.doad (doad_number);
+CREATE INDEX idx_doad_metadata ON public.doad USING GIN (metadata);
+```
+
+### Key Environment Variables
+
+```bash
+DATABASE_URL=postgres://user:password@host:port/db
+READER_MODEL=anthropic/claude-3-haiku  # Optional
+MAIN_MODEL=anthropic/claude-3-5-sonnet # Optional
+```
+
+### Usage Example
+
+```typescript
+import { handleDOADQuery } from './index.js';
+
+const result = await handleDOADQuery(
+    {
+        messages: [
+            { role: 'user', content: 'What are the requirements for leave approval?', timestamp: Date.now() }
+        ]
+    },
+    env
+);
+
+// Returns: { message: '<xml_response>', usage: { finder: {...}, metadata: {...}, main: {...} } }
+```
 ├── index.ts                   # Handler orchestration
 ├── finder.ts                  # Policy identification agent
 ├── main.ts                    # Policy synthesis agent
