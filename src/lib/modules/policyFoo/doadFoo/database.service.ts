@@ -85,11 +85,11 @@ export const getDOADChunksByIds = async (chunkIds: string[]): Promise<DOADChunk[
 };
 
 /**
- * Format chunks for LLM consumption with metadata and clear boundaries
- * Includes DOAD context, metadata, and chunk organization for better agent understanding
+ * Format chunks for LLM consumption with XML structure for better parsing
+ * Includes DOAD context, metadata, and chunk organization using XML tags
  */
 export const formatChunksForLLM = (chunks: DOADChunk[]): string => {
-	if (chunks.length === 0) return '';
+	if (chunks.length === 0) return '<policy_content></policy_content>';
 
 	// Group chunks by DOAD number for better organization
 	const groupedChunks = chunks.reduce(
@@ -102,30 +102,43 @@ export const formatChunksForLLM = (chunks: DOADChunk[]): string => {
 		{} as Record<string, DOADChunk[]>
 	);
 
-	// Format each DOAD section with clear boundaries and metadata
+	// Format each DOAD section with XML structure
 	const formattedSections = Object.entries(groupedChunks).map(([doadNumber, doadChunks]) => {
 		const chunkContent = doadChunks
 			.map((chunk, index) => {
-				// Format metadata as JSON string, handling null/undefined cases
-				const metadataStr =
+				// Format metadata as proper XML attributes and content
+				const metadataObj =
 					chunk.metadata && Object.keys(chunk.metadata).length > 0
-						? JSON.stringify(chunk.metadata, null, 2)
-						: '{"content_type": "policy_text"}';
+						? chunk.metadata
+						: { content_type: 'policy_text' };
 
-				return `--- Chunk ${index + 1} ---
-METADATA: ${metadataStr}
-CONTENT:
+				// Create XML attributes from metadata
+				const xmlAttributes = Object.entries(metadataObj)
+					.map(([key, value]) => `${key}="${String(value).replace(/"/g, '&quot;')}"`)
+					.join(' ');
+
+				return `<chunk id="${chunk.id}" index="${index + 1}" ${xmlAttributes}>
+<metadata>
+${Object.entries(metadataObj)
+	.map(([key, value]) => `<${key}>${String(value)}</${key}>`)
+	.join('\n')}
+</metadata>
+<content>
 ${chunk.textChunk}
------------------------`;
+</content>
+</chunk>`;
 			})
 			.join('\n\n');
 
-		return `=== DOAD ${doadNumber} ===\n${chunkContent}`;
+		return `<doad number="${doadNumber}">
+${chunkContent}
+</doad>`;
 	});
 
-	return formattedSections.join('\n\n');
+	return `<policy_content>
+${formattedSections.join('\n\n')}
+</policy_content>`;
 };
-
 /**
  * Batch operation to fetch both metadata and chunk counts for analytics
  * Uses single query for efficiency
