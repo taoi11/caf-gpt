@@ -16,7 +16,7 @@ src/
 │   ├── components/__tests__/    # Component unit tests
 │   └── server/
 │       ├── db/__tests__/        # Database layer tests
-│       ├── services/__tests__/  # Business logic tests
+│       ├── modules/__tests__/   # Business logic tests
 │       └── utils/__tests__/     # Utility function tests
 └── routes/
     ├── api/__tests__/          # API endpoint tests
@@ -26,16 +26,19 @@ src/
 ## Test Types
 
 ### Unit Tests
+
 - **Location**: `src/**/__tests__/` or `src/**/*.test.ts`
 - **Purpose**: Test individual functions, classes, and components in isolation
 - **Framework**: Vitest + Testing Library
 
 ### Integration Tests
+
 - **Location**: `tests/integration/`
 - **Purpose**: Test interactions between services, database operations, API flows
 - **Framework**: Vitest
 
 ### End-to-End Tests
+
 - **Location**: `tests/e2e/`
 - **Purpose**: Test complete user workflows
 - **Framework**: Playwright (when added)

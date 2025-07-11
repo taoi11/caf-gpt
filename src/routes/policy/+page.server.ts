@@ -1,6 +1,11 @@
 import type { Actions, PageServerLoad } from './$types';
 import { fail } from '@sveltejs/kit';
-import { processPolicyQuery, getSupportedPolicySets, type PolicyQueryInput, type PolicyFooError } from '$lib/services/policyFoo';
+import {
+	processPolicyQuery,
+	getSupportedPolicySets,
+	type PolicyQueryInput,
+	type PolicyFooError
+} from '$lib/modules/policyFoo';
 
 /**
  * Load function to provide initial data to the page
@@ -23,7 +28,7 @@ export const actions: Actions = {
 	query: async ({ request, platform }) => {
 		try {
 			const data = await request.formData();
-			
+
 			// Extract form data
 			const messagesJson = data.get('messages') as string;
 			const policySet = data.get('policy_set') as string;
@@ -87,7 +92,7 @@ export const actions: Actions = {
 				AI_GATEWAY_BASE_URL: env.AI_GATEWAY_BASE_URL,
 				CF_AIG_TOKEN: env.CF_AIG_TOKEN,
 				READER_MODEL: (env as any).READER_MODEL, // Optional env var
-				MAIN_MODEL: (env as any).MAIN_MODEL,     // Optional env var
+				MAIN_MODEL: (env as any).MAIN_MODEL, // Optional env var
 				POLICIES: env.POLICIES
 			});
 
@@ -98,10 +103,9 @@ export const actions: Actions = {
 				usage: result.usage,
 				timestamp: Date.now()
 			};
-
 		} catch (error) {
 			console.error('Policy query error:', error);
-			
+
 			// Handle PolicyFooError
 			if (error && typeof error === 'object' && 'code' in error) {
 				const policyError = error as PolicyFooError;

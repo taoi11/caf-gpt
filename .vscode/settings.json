@@ -1,10 +1,5 @@
 {
 	"editor.accessibilitySupport": "off",
-	"github.copilot.chat.codeGeneration.instructions": [
-		{
-			"file": ".ai/rules/base.md"
-		}
-	],
 	"extensions.ignoreRecommendations": true,
 	"github.copilot.chat.commitMessageGeneration.instructions": [
 		{

@@ -1,6 +1,6 @@
 /**
  * UI Utilities
- * 
+ *
  * Reusable UI helper functions for better user experience.
  */
 
@@ -34,5 +34,5 @@ export async function copyToClipboard(text: string): Promise<boolean> {
  * Small delay utility for DOM updates
  */
 export function delay(ms: number = 50): Promise<void> {
-	return new Promise(resolve => setTimeout(resolve, ms));
+	return new Promise((resolve) => setTimeout(resolve, ms));
 }

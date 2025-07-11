@@ -5,7 +5,7 @@
 	import PolicySelector from './PolicyComponents/PolicySelector.svelte';
 	import MessageList from './PolicyComponents/MessageList.svelte';
 	import ResponseParser from './PolicyComponents/ResponseParser.svelte';
-	
+
 	export let data: PageData;
 	export let form: ActionData;
 
@@ -40,7 +40,7 @@
 
 		// Clear the input
 		userMessage = '';
-		
+
 		// Reset form state
 		form = null;
 	}
@@ -56,9 +56,9 @@
 	 */
 	function handleSubmit() {
 		if (!userMessage.trim()) return;
-		
+
 		isLoading = true;
-		
+
 		// Add user message to conversation immediately for better UX
 		messages = [
 			...messages,
@@ -105,19 +105,18 @@
 	<main class="flex-1 flex flex-col gap-6">
 		<!-- Policy Selector -->
 		<div class="bg-white p-4 rounded-lg shadow-sm">
-			<PolicySelector 
-				policySets={data.policy_sets} 
-				bind:selected={selectedPolicySet} 
-			/>
+			<PolicySelector policySets={data.policy_sets} bind:selected={selectedPolicySet} />
 		</div>
 
 		<!-- Conversation Display -->
 		<div class="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
 			{#if messages.length > 0}
-				<div class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 p-4 border-b border-gray-200">
+				<div
+					class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 p-4 border-b border-gray-200"
+				>
 					<h2 class="text-xl font-semibold text-gray-800">Conversation</h2>
-					<button 
-						type="button" 
+					<button
+						type="button"
 						class="px-4 py-2 bg-red-100 text-red-700 rounded-lg hover:bg-red-200 transition-colors duration-200 font-medium"
 						on:click={clearConversation}
 					>
@@ -128,7 +127,9 @@
 			{:else}
 				<div class="p-8 text-center">
 					<h2 class="text-2xl font-semibold text-gray-800 mb-3">Ask a Policy Question</h2>
-					<p class="text-gray-600 mb-6">Select a policy set and ask your question to get started.</p>
+					<p class="text-gray-600 mb-6">
+						Select a policy set and ask your question to get started.
+					</p>
 					<div class="max-w-md mx-auto text-left bg-gray-50 p-4 rounded-lg">
 						<h3 class="font-semibold text-gray-700 mb-2">Example Questions:</h3>
 						<ul class="text-sm text-gray-600 space-y-1">
@@ -142,16 +143,16 @@
 		</div>
 
 		<!-- Query Form -->
-		<form 
+		<form
 			bind:this={formElement}
-			method="POST" 
+			method="POST"
 			action="?/query"
 			class="bg-white p-4 rounded-lg shadow-sm"
 			use:enhance={({ formElement, formData, action, cancel, submitter }) => {
 				// Add current messages to form data
 				formData.set('messages', JSON.stringify(messages));
 				formData.set('policy_set', selectedPolicySet);
-				
+
 				handleSubmit();
 
 				return async ({ result, update }) => {
@@ -173,13 +174,15 @@
 						required
 						class="flex-1 p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed resize-none"
 					></textarea>
-					<button 
-						type="submit" 
+					<button
+						type="submit"
 						class="md:self-end px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors duration-200 font-medium flex items-center justify-center gap-2"
 						disabled={isLoading || !userMessage.trim()}
 					>
 						{#if isLoading}
-							<div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+							<div
+								class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"
+							></div>
 							Processing...
 						{:else}
 							Ask
@@ -191,7 +194,8 @@
 			<!-- Error Display -->
 			{#if form?.error}
 				<div class="mt-4 bg-red-50 border border-red-200 rounded-lg p-4 text-red-800" role="alert">
-					<strong class="block mb-1">Error:</strong> {form.error}
+					<strong class="block mb-1">Error:</strong>
+					{form.error}
 					{#if 'errorCode' in form && form.errorCode}
 						<small class="text-sm opacity-80">(Code: {form.errorCode})</small>
 					{/if}

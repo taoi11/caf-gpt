@@ -34,7 +34,7 @@ export const GET: RequestHandler = async ({ platform }) => {
 		status.checks.storage = !!platform?.env?.POLICIES;
 
 		// Determine overall status
-		const allHealthy = Object.values(status.checks).every(check => check === true);
+		const allHealthy = Object.values(status.checks).every((check) => check === true);
 		status.status = allHealthy ? 'healthy' : 'degraded';
 
 		return json(status, {
@@ -44,20 +44,22 @@ export const GET: RequestHandler = async ({ platform }) => {
 				'Content-Type': 'application/json'
 			}
 		});
-
 	} catch (error) {
 		console.error('Health check error:', error);
-		
-		return json({
-			...status,
-			status: 'unhealthy',
-			error: 'Health check failed'
-		}, {
-			status: 503,
-			headers: {
-				'Cache-Control': 'no-cache, no-store, must-revalidate',
-				'Content-Type': 'application/json'
+
+		return json(
+			{
+				...status,
+				status: 'unhealthy',
+				error: 'Health check failed'
+			},
+			{
+				status: 503,
+				headers: {
+					'Cache-Control': 'no-cache, no-store, must-revalidate',
+					'Content-Type': 'application/json'
+				}
 			}
-		});
+		);
 	}
 };

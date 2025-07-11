@@ -3,11 +3,13 @@
 
 	export let xmlContent: string;
 	export let onFollowUpClick: (question: string) => void;
-	export let parsed: {
-		answer: string;
-		citations: string[];
-		follow_up?: string;
-	} | undefined = undefined;
+	export let parsed:
+		| {
+				answer: string;
+				citations: string[];
+				follow_up?: string;
+		  }
+		| undefined = undefined;
 
 	// Reactive parsing of XML content
 	$: if (xmlContent) {
@@ -25,7 +27,7 @@
 		if (typeof input !== 'string') {
 			const citationElements = input.querySelectorAll('citation');
 			if (citationElements.length > 0) {
-				citationElements.forEach(citation => {
+				citationElements.forEach((citation) => {
 					const text = citation.textContent?.trim();
 					if (text) {
 						citations.push(text);
@@ -34,9 +36,10 @@
 			} else {
 				const citationsText = input.textContent?.trim();
 				if (citationsText) {
-					const citationLines = citationsText.split('\n')
-						.map(line => line.trim())
-						.filter(line => line.length > 0);
+					const citationLines = citationsText
+						.split('\n')
+						.map((line) => line.trim())
+						.filter((line) => line.length > 0);
 					citations.push(...citationLines);
 				}
 			}
@@ -45,7 +48,7 @@
 			// First try to find individual <citation> tags
 			const citationMatches = input.match(/<citation>([\s\S]*?)<\/citation>/g);
 			if (citationMatches) {
-				citationMatches.forEach(match => {
+				citationMatches.forEach((match) => {
 					const citation = match.replace(/<\/?citation>/g, '').trim();
 					if (citation) {
 						citations.push(citation);
@@ -54,9 +57,10 @@
 			} else {
 				const citationsText = input.trim();
 				if (citationsText) {
-					const citationLines = citationsText.split('\n')
-						.map(line => line.trim())
-						.filter(line => line.length > 0);
+					const citationLines = citationsText
+						.split('\n')
+						.map((line) => line.trim())
+						.filter((line) => line.length > 0);
 					citations.push(...citationLines);
 				}
 			}
@@ -108,7 +112,6 @@
 				citations,
 				follow_up
 			};
-
 		} catch (error) {
 			console.error('Error parsing XML response:', error);
 			return parseTextFallback(xml);
@@ -185,8 +188,8 @@
 					<span class="text-base">💡</span>
 					<strong>Suggested follow-up:</strong>
 				</div>
-				<button 
-					type="button" 
+				<button
+					type="button"
 					class="w-full bg-gray-50 border-2 border-gray-200 rounded-lg p-3 cursor-pointer transition-all duration-200 text-sm leading-relaxed text-left text-gray-700 font-medium hover:bg-white hover:border-blue-500 hover:-translate-y-0.5 hover:shadow-md active:translate-y-0"
 					on:click={handleFollowUpClick}
 				>

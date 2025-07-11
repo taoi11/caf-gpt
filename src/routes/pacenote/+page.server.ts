@@ -1,14 +1,14 @@
 import type { PageServerLoad, Actions } from './$types';
-import { PaceNoteService } from '$lib/services/paceNote/service.js';
-import type { PaceNoteInput, PaceNoteRank } from '$lib/services/paceNote/types.js';
-import { AVAILABLE_RANKS } from '$lib/services/paceNote/constants.js';
+import { PaceNoteService } from '$lib/modules/paceNote/service.js';
+import type { PaceNoteInput, PaceNoteRank } from '$lib/modules/paceNote/types.js';
+import { AVAILABLE_RANKS } from '$lib/modules/paceNote/constants.js';
 import { hasRequiredConfig, validateEnvironmentConfig, validateR2Bucket } from './config.server.js';
-import { 
-	parseFormData, 
-	validateFormData, 
-	createConfigError, 
+import {
+	parseFormData,
+	validateFormData,
+	createConfigError,
 	createServiceError,
-	getFormLimits 
+	getFormLimits
 } from './form.server.js';
 
 // Load function - runs on server before page renders
@@ -44,7 +44,7 @@ export const actions: Actions = {
 		// Parse and validate form data
 		const data = await request.formData();
 		const formData = parseFormData(data);
-		
+
 		const validationError = validateFormData(formData);
 		if (validationError) {
 			return validationError;
@@ -52,7 +52,7 @@ export const actions: Actions = {
 
 		try {
 			const config = configResult.config!;
-			
+
 			// Create PaceNote service instance
 			const paceNoteService = new PaceNoteService(
 				config.openrouterToken,
@@ -82,7 +82,6 @@ export const actions: Actions = {
 				observations: formData.observations,
 				competencyFocus: formData.competencyFocus
 			};
-
 		} catch (error) {
 			console.error('PaceNote generation error:', error);
 			return createServiceError(error, formData);
