@@ -5,6 +5,8 @@
 	import PolicySelector from './PolicyComponents/PolicySelector.svelte';
 	import MessageList from './PolicyComponents/MessageList.svelte';
 	import ResponseParser from './PolicyComponents/ResponseParser.svelte';
+	import { progressMessage, isProcessing } from '$lib/stores/progress';
+	import { onDestroy } from 'svelte';
 
 	export let data: PageData;
 	export let form: ActionData;
@@ -25,6 +27,7 @@
 	let userMessage = '';
 	let isLoading = false;
 	let formElement: HTMLFormElement;
+	let progressTimeouts: ReturnType<typeof setTimeout>[] = [];
 
 	// Handle successful form submission
 	$: if (form?.success && form?.message) {
@@ -49,6 +52,40 @@
 	$: if (form?.error) {
 		// Errors are displayed in the template
 		isLoading = false;
+		clearProgress();
+	}
+
+	/**
+	 * Start progress simulation based on policy type
+	 */
+	function startProgressSimulation(policyType: string) {
+		clearProgress();
+		isProcessing.set(true);
+
+		if (policyType === 'DOAD') {
+			// DOAD has 3 stages: collecting → reading → reflecting
+			progressTimeouts.push(
+				setTimeout(() => progressMessage.set('Collecting DOAD policies'), 100),
+				setTimeout(() => progressMessage.set('Reading policies'), 3000),
+				setTimeout(() => progressMessage.set('Reflecting on the policies'), 8000)
+			);
+		} else if (policyType === 'LEAVE') {
+			// LEAVE has 2 stages: finding → reading
+			progressTimeouts.push(
+				setTimeout(() => progressMessage.set('Finding the right chapters to read'), 100),
+				setTimeout(() => progressMessage.set('Reading chapters'), 3000)
+			);
+		}
+	}
+
+	/**
+	 * Clear progress simulation
+	 */
+	function clearProgress() {
+		progressTimeouts.forEach(timeout => clearTimeout(timeout));
+		progressTimeouts = [];
+		progressMessage.set('');
+		isProcessing.set(false);
 	}
 
 	/**
@@ -58,6 +95,7 @@
 		if (!userMessage.trim()) return;
 
 		isLoading = true;
+		startProgressSimulation(selectedPolicySet);
 
 		// Add user message to conversation immediately for better UX
 		messages = [
@@ -89,6 +127,11 @@
 		userMessage = '';
 		form = null;
 	}
+
+	// Cleanup on component destroy
+	onDestroy(() => {
+		clearProgress();
+	});
 </script>
 
 <svelte:head>
@@ -157,6 +200,7 @@
 
 				return async ({ result, update }) => {
 					isLoading = false;
+					clearProgress();
 					await update();
 				};
 			}}
@@ -168,7 +212,7 @@
 						id="user_message"
 						name="user_message"
 						bind:value={userMessage}
-						placeholder="Ask a question about {selectedPolicySet} policies..."
+						placeholder={$isProcessing ? $progressMessage || 'Processing...' : `Ask a question about ${selectedPolicySet} policies...`}
 						rows="3"
 						disabled={isLoading}
 						required

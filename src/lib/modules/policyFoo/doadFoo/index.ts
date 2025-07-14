@@ -61,6 +61,7 @@ export async function handleDOADQuery(
 		stage = 'finder_agent';
 		const finderStart = Date.now();
 		// Stage 1: Find relevant policies using Finder Agent
+		// Progress: "Collecting DOAD policies"
 		const finderResult = await findDOADPolicies(
 			{
 				messages: input.messages,
@@ -88,6 +89,7 @@ export async function handleDOADQuery(
 		stage = 'database_chunks_retrieval';
 		const dbChunksStart = Date.now();
 		// Stage 2: Retrieve chunks from database for selected DOADs
+		// Progress: "Reading [numbers]"
 		const allChunks = await getDOADChunksByNumbers(finderResult.policyNumbers);
 		performanceMetrics.database_chunks = Date.now() - dbChunksStart;
 
@@ -150,6 +152,7 @@ export async function handleDOADQuery(
 		stage = 'main_agent';
 		const mainStart = Date.now();
 		// Stage 6: Generate response using Main Agent with selected chunks
+		// Progress: "Reflecting on the policies"
 		const formattedContent = formatChunksForLLM(selectedChunks);
 
 		const mainResult = await generateDOADResponse(

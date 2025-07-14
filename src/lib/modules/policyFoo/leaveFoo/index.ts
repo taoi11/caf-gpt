@@ -50,6 +50,7 @@ export async function handleLeaveQuery(
 		stage = 'finder_agent';
 		const finderStart = Date.now();
 		// Stage 1: Find relevant chapters using Finder Agent
+		// Progress: "Finding the right chapters to read"
 		const finderResult = await findLeaveChapters(
 			{
 				messages: input.messages,
@@ -96,6 +97,7 @@ export async function handleLeaveQuery(
 		stage = 'main_agent';
 		const mainStart = Date.now();
 		// Stage 3: Generate response using Main Agent
+		// Progress: "Reading chapters: [names]"
 		const mainResult = await generateLeaveResponse(
 			{
 				messages: input.messages,
