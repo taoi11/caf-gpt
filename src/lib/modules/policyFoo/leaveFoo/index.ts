@@ -50,7 +50,6 @@ export async function handleLeaveQuery(
 		stage = 'finder_agent';
 		const finderStart = Date.now();
 		// Stage 1: Find relevant chapters using Finder Agent
-		// Progress: "Finding the right chapters to read"
 		const finderResult = await findLeaveChapters(
 			{
 				messages: input.messages,
@@ -97,7 +96,6 @@ export async function handleLeaveQuery(
 		stage = 'main_agent';
 		const mainStart = Date.now();
 		// Stage 3: Generate response using Main Agent
-		// Progress: "Reading chapters: [names]"
 		const mainResult = await generateLeaveResponse(
 			{
 				messages: input.messages,
@@ -219,7 +217,8 @@ For immediate assistance with leave-related questions, I recommend:
 Could you please rephrase your question to be more specific about the type of leave or policy area you're interested in?</answer>
 <citations>
 </citations>
-<follow_up>Would you like me to help you with a specific type of leave, such as annual leave, sick leave, or compassionate leave?</follow_up>
+<follow_up>
+</follow_up>
 </response>`;
 }
 

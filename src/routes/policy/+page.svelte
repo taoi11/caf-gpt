@@ -27,7 +27,6 @@
 	let userMessage = '';
 	let isLoading = false;
 	let formElement: HTMLFormElement;
-	let progressTimeouts: ReturnType<typeof setTimeout>[] = [];
 
 	// Handle successful form submission
 	$: if (form?.success && form?.message) {
@@ -52,40 +51,8 @@
 	$: if (form?.error) {
 		// Errors are displayed in the template
 		isLoading = false;
-		clearProgress();
-	}
-
-	/**
-	 * Start progress simulation based on policy type
-	 */
-	function startProgressSimulation(policyType: string) {
-		clearProgress();
-		isProcessing.set(true);
-
-		if (policyType === 'DOAD') {
-			// DOAD has 3 stages: collecting → reading → reflecting
-			progressTimeouts.push(
-				setTimeout(() => progressMessage.set('Collecting DOAD policies'), 100),
-				setTimeout(() => progressMessage.set('Reading policies'), 3000),
-				setTimeout(() => progressMessage.set('Reflecting on the policies'), 8000)
-			);
-		} else if (policyType === 'LEAVE') {
-			// LEAVE has 2 stages: finding → reading
-			progressTimeouts.push(
-				setTimeout(() => progressMessage.set('Finding the right chapters to read'), 100),
-				setTimeout(() => progressMessage.set('Reading chapters'), 3000)
-			);
-		}
-	}
-
-	/**
-	 * Clear progress simulation
-	 */
-	function clearProgress() {
-		progressTimeouts.forEach(timeout => clearTimeout(timeout));
-		progressTimeouts = [];
-		progressMessage.set('');
 		isProcessing.set(false);
+		progressMessage.set('');
 	}
 
 	/**
@@ -95,7 +62,7 @@
 		if (!userMessage.trim()) return;
 
 		isLoading = true;
-		startProgressSimulation(selectedPolicySet);
+		isProcessing.set(true);
 
 		// Add user message to conversation immediately for better UX
 		messages = [
@@ -128,9 +95,10 @@
 		form = null;
 	}
 
-	// Cleanup on component destroy
+	// Clean up on component destroy
 	onDestroy(() => {
-		clearProgress();
+		isProcessing.set(false);
+		progressMessage.set('');
 	});
 </script>
 
@@ -200,7 +168,8 @@
 
 				return async ({ result, update }) => {
 					isLoading = false;
-					clearProgress();
+					isProcessing.set(false);
+					progressMessage.set('');
 					await update();
 				};
 			}}
