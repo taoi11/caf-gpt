@@ -60,12 +60,14 @@ policies/                  # R2 bucket name
 Unlike the DOAD handler's three-stage workflow, the LEAVE handler uses a simplified approach:
 
 #### 1. Handler Orchestration (`index.ts`)
+
 - **Entry Point**: `handleLeaveQuery()` function
 - **Single Flow**: User query → retrieve document → generate response
 - **Policy Retrieval**: Direct R2 operation for `leave/leave_policy_2025.md`
 - **Error Handling**: Graceful handling of missing document or AI failures
 
 #### 2. Main Agent (`main.ts`)
+
 - **Purpose**: Process leave policy content and generate comprehensive responses
 - **Model**: Uses `MAIN_MODEL` (consistent with DOAD main agent)
 - **Input**: User conversation + leave-specific prompt + policy document
@@ -73,15 +75,15 @@ Unlike the DOAD handler's three-stage workflow, the LEAVE handler uses a simplif
 
 ### Comparison with DOAD Handler
 
-| Aspect            | DOAD Handler           | LEAVE Handler                         |
-|-------------------|------------------------|---------------------------------------|
-| **Workflow**      | Three-stage            | Single-stage                          |
-| **Storage**       | Postgres database      | R2 bucket                             |
-| **Documents**     | Multiple chunked       | Single comprehensive                   |
-| **AI Calls**      | 3 per query           | 1 per query                           |
-| **Token Usage**   | ~2500-4500            | ~2000-3000                            |
-| **Response Time** | ~5-12 seconds         | ~3-7 seconds                          |
-| **Cost**          | Higher                | Lower (~40% savings)                  |
+| Aspect            | DOAD Handler      | LEAVE Handler        |
+| ----------------- | ----------------- | -------------------- |
+| **Workflow**      | Three-stage       | Single-stage         |
+| **Storage**       | Postgres database | R2 bucket            |
+| **Documents**     | Multiple chunked  | Single comprehensive |
+| **AI Calls**      | 3 per query       | 1 per query          |
+| **Token Usage**   | ~2500-4500        | ~2000-3000           |
+| **Response Time** | ~5-12 seconds     | ~3-7 seconds         |
+| **Cost**          | Higher            | Lower (~40% savings) |
 
 ## Performance Characteristics
 
@@ -105,12 +107,10 @@ MAIN_MODEL=anthropic/claude-3-5-sonnet # Optional
 import { handleLeaveQuery } from './index.js';
 
 const result = await handleLeaveQuery(
-    {
-        messages: [
-            { role: 'user', content: 'How much annual leave do I get?', timestamp: Date.now() }
-        ]
-    },
-    env
+	{
+		messages: [{ role: 'user', content: 'How much annual leave do I get?', timestamp: Date.now() }]
+	},
+	env
 );
 
 // Returns: { message: '<xml_response>', usage: { main: {...} } }
@@ -124,16 +124,19 @@ The leave policy document should be comprehensive and well-structured:
 # CAF Leave Policy 2025
 
 ## Annual Leave
+
 - Entitlement: 25 days per year
 - Accrual: 2.08 days per month
 - Carry-forward: Maximum 5 days
 
 ## Sick Leave
+
 - Entitlement: As required
 - Documentation: Medical certificate for >3 days
 - Notification: Within 24 hours
 
 ## Compassionate Leave
+
 - Entitlement: Up to 5 days
 - Authorization: Commanding Officer
 - Documentation: Supporting documentation required
@@ -154,13 +157,13 @@ The leave policy document should be comprehensive and well-structured:
 - **Policy Set Parameter**: `policy_set: 'LEAVE'` sent with each request
 - **Response Parsing**: Same XML parsing logic handles LEAVE responses
 - **Citation Rendering**: Leave policy citations rendered consistently with DOAD
-| ----------------- | ---------------------- | ------------------------------------- |
-| **Stages**        | Two (finder → main)    | One (main only)                       |
-| **Policy Files**  | Multiple (`doad/*.md`) | Single (`leave/leave_policy_2025.md`) |
-| **Token Usage**   | ~2500-4500 per query   | ~2000-3000 per query                  |
-| **Response Time** | ~5-12 seconds          | ~3-7 seconds                          |
-| **R2 Operations** | Multiple file reads    | Single file read                      |
-| **Models Used**   | READER + MAIN          | MAIN only                             |
+  | ----------------- | ---------------------- | ------------------------------------- |
+  | **Stages** | Two (finder → main) | One (main only) |
+  | **Policy Files** | Multiple (`doad/*.md`) | Single (`leave/leave_policy_2025.md`) |
+  | **Token Usage** | ~2500-4500 per query | ~2000-3000 per query |
+  | **Response Time** | ~5-12 seconds | ~3-7 seconds |
+  | **R2 Operations** | Multiple file reads | Single file read |
+  | **Models Used** | READER + MAIN | MAIN only |
 
 ### Configuration
 

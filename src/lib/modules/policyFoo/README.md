@@ -15,6 +15,7 @@ PolicyFoo implements a stateless, router-based architecture with specialized han
 - **Router** (`index.ts`) - Validates input and routes to appropriate handler
 
 **Key Design Principles:**
+
 - **Stateless**: No server-side conversation storage
 - **Context Passing**: Full conversation history sent with each request
 - **Scalable**: Each request is independent and can scale infinitely
@@ -22,20 +23,21 @@ PolicyFoo implements a stateless, router-based architecture with specialized han
 
 ## Handler Comparison
 
-| Feature              | DOAD Handler                                  | LEAVE Handler                              |
-| -------------------- | --------------------------------------------- | ------------------------------------------ |
-| **Workflow**         | Database-driven with metadata selection       | Database-driven with chapter identification |
+| Feature              | DOAD Handler                                  | LEAVE Handler                                 |
+| -------------------- | --------------------------------------------- | --------------------------------------------- |
+| **Workflow**         | Database-driven with metadata selection       | Database-driven with chapter identification   |
 | **Policy Storage**   | Postgres database with chunking               | Postgres database with chapter-based chunking |
-| **Models Used**      | READER_MODEL + Metadata Selector + MAIN_MODEL | READER_MODEL + MAIN_MODEL                   |
-| **Token Efficiency** | ~2500-4500 per query                          | ~2000-3000 per query                       |
-| **Response Time**    | ~5-12 seconds                                 | ~3-7 seconds                               |
-| **Cost**             | Higher (multiple AI calls)                    | Lower (~40% savings)                       |
+| **Models Used**      | READER_MODEL + Metadata Selector + MAIN_MODEL | READER_MODEL + MAIN_MODEL                     |
+| **Token Efficiency** | ~2500-4500 per query                          | ~2000-3000 per query                          |
+| **Response Time**    | ~5-12 seconds                                 | ~3-7 seconds                                  |
+| **Cost**             | Higher (multiple AI calls)                    | Lower (~40% savings)                          |
 
 ## Architecture
 
 **Route**: `/policy`
 
 **Shared Infrastructure:**
+
 - **AI Gateway Integration**: Uses shared AI Gateway service from `$lib/server/ai-gateway.service.js`
 - **Database**: Neon Postgres for all policy content with optimized indexing
 - **Error Handling**: Unified error types and handling patterns
@@ -44,15 +46,19 @@ PolicyFoo implements a stateless, router-based architecture with specialized han
 ## Policy Sets
 
 ### DOAD (Defence Administrative Orders and Directives)
+
 **Status**: ✅ Production Ready  
 **Documentation**: [DOAD Handler Details](./doadFoo/README.md)
+
 - Database-driven with intelligent chunk selection
 - Three-stage AI workflow for maximum accuracy
 - Postgres storage with metadata-based optimization
 
 ### LEAVE (Leave Policies)
+
 **Status**: ✅ Production Ready  
 **Documentation**: [LEAVE Handler Details](./leaveFoo/README.md)
+
 - Database-driven with chapter identification
 - Two-stage workflow with finder agent for chapter selection
 - Postgres storage with chapter-based chunking

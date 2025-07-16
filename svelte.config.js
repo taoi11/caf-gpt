@@ -3,7 +3,7 @@ import { vitePreprocess } from '@sveltejs/vite-plugin-svelte';
 
 const config = {
 	preprocess: vitePreprocess(),
-	kit: { 
+	kit: {
 		adapter: adapter({
 			// Enable automatic type generation from wrangler.jsonc
 			config: 'wrangler.jsonc'

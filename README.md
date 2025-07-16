@@ -7,10 +7,12 @@ AI-powered assistance tools for CAF troops with modular, maintainable architectu
 ## Overview
 
 **Domain Modules:**
+
 - **PaceNote**: Generate performance feedback notes based on observations and rank competencies
 - **PolicyFoo**: Answer policy questions with authoritative citations from CAF documents
 
 **Architecture Principles:**
+
 - **Co-located Components**: Route-specific UI components live with their routes
 - **Domain Services**: Business logic organized by functional domain
 - **Type-Safe**: End-to-end TypeScript with strict validation
@@ -19,12 +21,14 @@ AI-powered assistance tools for CAF troops with modular, maintainable architectu
 ## Modules
 
 ### PaceNote Service
+
 **Status**: ✅ Production Ready | **Route**: `/pacenote`  
 **Documentation**: [PaceNote README](src/lib/modules/paceNote/README.md)
 
 Generate professional feedback notes based on CAF rank competencies (Cpl, MCpl, Sgt, WO).
 
-### PolicyFoo Service  
+### PolicyFoo Service
+
 **Status**: ✅ Production Ready | **Route**: `/policy`  
 **Documentation**: [PolicyFoo README](src/lib/modules/policyFoo/README.md) | [DOAD Handler](src/lib/modules/policyFoo/doadFoo/README.md)
 
@@ -116,20 +120,33 @@ Configure in `wrangler.jsonc`:
 ### Available Scripts
 
 ```bash
-# Development
+# Development & Build
 npm run dev              # Local development with hot reload
+npm run dev:local        # Local development (explicit)
+npm run dev:remote       # Remote development
 npm run build            # Build for production
-npm run deploy           # Deploy to Cloudflare
+npm run preview          # Preview build locally
 
-# Database
-npm run db:push          # Push schema changes
-npm run db:studio        # Open database GUI
-npm run db:migrate       # Run migrations
+# Quality & Formatting
+npm run check            # TypeScript and Svelte checks
+npm run check:watch      # Watch mode for checks
+npm run format           # Format code with Prettier
+npm run lint             # Lint and format code
+npm run prepare          # Prepare environment (typegen + sync)
 
 # Testing
 npm run test             # Run all tests
+npm run test:unit        # Run unit tests only
+npm run test:client      # Run client-side tests
+npm run test:server      # Run server-side tests
 npm run test:integration # Run integration tests
-npm run check            # TypeScript and Svelte checks
+npm run test:watch       # Run tests in watch mode
+npm run test:coverage    # Run tests with coverage
+
+# Deployment
+npm run deploy           # Deploy to Cloudflare
+npm run deploy:versions  # Upload deployment versions
+npm run cf-typegen       # Generate Cloudflare types
 ```
 
 ### Quick Start

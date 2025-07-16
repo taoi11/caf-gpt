@@ -46,6 +46,7 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 ### Core Components
 
 #### 1. Handler Orchestration (`index.ts`)
+
 - **Entry Point**: Main handler function `handleDOADQuery()`
 - **Configuration Loading**: Loads prompts and AI model settings
 - **Three-Stage Coordination**: Orchestrates finder → metadata selector → main agent workflow
@@ -53,6 +54,7 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 - **Database Integration**: Manages Postgres operations for policy content retrieval
 
 #### 2. Finder Agent (`finder.ts`)
+
 - **Purpose**: Identifies relevant DOAD policy numbers from user queries
 - **Model**: Uses `READER_MODEL` (lightweight, fast identification)
 - **Input**: User conversation + finder prompt + policy list table
@@ -60,12 +62,14 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 - **Parsing**: Handles various response formats and edge cases
 
 #### 3. Database Service (`database.service.ts`)
+
 - **Purpose**: Optimized database operations for chunk retrieval and metadata analysis
 - **Functions**: `getDOADChunksByNumbers()`, `getDOADMetadataByNumbers()`, `getDOADChunksByIds()`
 - **Performance**: Connection pooling, indexed queries, and efficient data transfer
 - **Error Handling**: Retry logic with exponential backoff for resilient operations
 
 #### 4. Metadata Selector (`metadata-selector.ts`)
+
 - **Purpose**: LLM-powered intelligent chunk selection based on metadata analysis
 - **Model**: Uses `READER_MODEL` (lightweight, efficient for selection tasks)
 - **Input**: User query + chunk metadata (optimized for LLM processing)
@@ -73,6 +77,7 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 - **Optimization**: Reduces database load and improves response relevance
 
 #### 5. Main Agent (`main.ts`)
+
 - **Purpose**: Synthesizes selected policy content and generates comprehensive responses
 - **Model**: Uses `MAIN_MODEL` (capable synthesis and reasoning)
 - **Input**: User conversation + main prompt + selected chunk content
@@ -82,6 +87,7 @@ The DOAD handler uses a Neon Postgres database for high-performance content retr
 ### Configuration
 
 #### Models Used
+
 - **READER_MODEL**: `anthropic/claude-3-haiku` (default)
   - Optimized for quick policy identification
   - Cost-effective for simple extraction tasks
@@ -146,28 +152,34 @@ MAIN_MODEL=anthropic/claude-3-5-sonnet # Optional
 import { handleDOADQuery } from './index.js';
 
 const result = await handleDOADQuery(
-    {
-        messages: [
-            { role: 'user', content: 'What are the requirements for leave approval?', timestamp: Date.now() }
-        ]
-    },
-    env
+	{
+		messages: [
+			{
+				role: 'user',
+				content: 'What are the requirements for leave approval?',
+				timestamp: Date.now()
+			}
+		]
+	},
+	env
 );
 
 // Returns: { message: '<xml_response>', usage: { finder: {...}, metadata: {...}, main: {...} } }
 ```
-├── index.ts                   # Handler orchestration
-├── finder.ts                  # Policy identification agent
-├── main.ts                    # Policy synthesis agent
-├── database.service.ts        # Database operations and optimization
-├── metadata-selector.ts       # LLM-powered chunk selection
-├── types.ts                   # DOAD-specific type definitions
-└── prompts/                   # LLM prompts
-    ├── finder.md              # Finder agent instructions
-    ├── main.md                # Main agent instructions
-    ├── metadata-selector.md   # Metadata selector instructions
-    └── DOAD-list-table.md     # Available policies reference
-```
+
+├── index.ts # Handler orchestration
+├── finder.ts # Policy identification agent
+├── main.ts # Policy synthesis agent
+├── database.service.ts # Database operations and optimization
+├── metadata-selector.ts # LLM-powered chunk selection
+├── types.ts # DOAD-specific type definitions
+└── prompts/ # LLM prompts
+├── finder.md # Finder agent instructions
+├── main.md # Main agent instructions
+├── metadata-selector.md # Metadata selector instructions
+└── DOAD-list-table.md # Available policies reference
+
+````
 
 #### Database Schema
 
@@ -183,7 +195,7 @@ public.doad
 -- Indexes for performance
 CREATE INDEX idx_doad_number ON doad(doad_number);
 CREATE INDEX idx_doad_metadata ON doad USING GIN(metadata);
-```
+````
 
 ### Agent Prompts
 

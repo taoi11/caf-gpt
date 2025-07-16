@@ -9,7 +9,7 @@ This directory contains all SvelteKit route definitions, including UI, server lo
 - **pacenote/**: PaceNote domain UI and server logic
 - **policy/**: PolicyFoo domain UI and server logic
 - **api/**: API endpoints (e.g., health check)
-- **__tests__/**: Route-level tests
+- \***\*tests**/\*\*: Route-level tests
 
 ## Principles
 

@@ -10,10 +10,10 @@ import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
 import { generateLeaveResponse } from './main.js';
 import { findLeaveChapters } from './finder.js';
-import { 
-	getLeaveChunksByChapters, 
-	getAvailableChapters, 
-	formatChunksForLLM 
+import {
+	getLeaveChunksByChapters,
+	getAvailableChapters,
+	formatChunksForLLM
 } from './database.service.js';
 
 // Import prompt files directly from local codebase
@@ -136,17 +136,21 @@ export async function handleLeaveQuery(
 /**
  * Load leave policy configuration including prompts and chapter list
  */
-async function loadLeaveConfig(env: PolicyFooEnvironment): Promise<PolicyHandlerConfig & { chapterList: string }> {
+async function loadLeaveConfig(
+	env: PolicyFooEnvironment
+): Promise<PolicyHandlerConfig & { chapterList: string }> {
 	try {
 		// Get available chapters from database
 		const availableChapters = await getAvailableChapters();
-		
+
 		// Format chapter list for finder prompt
-		const chapterList = availableChapters.map(chapter => {
-			const chapterNum = parseInt(chapter);
-			const chapterName = getChapterName(chapterNum);
-			return `${chapter}: ${chapterName}`;
-		}).join('\n');
+		const chapterList = availableChapters
+			.map((chapter) => {
+				const chapterNum = parseInt(chapter);
+				const chapterName = getChapterName(chapterNum);
+				return `${chapter}: ${chapterName}`;
+			})
+			.join('\n');
 
 		return {
 			readerModel: env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
@@ -219,4 +223,3 @@ Could you please rephrase your question to be more specific about the type of le
 </follow_up>
 </response>`;
 }
-

@@ -48,16 +48,16 @@ pacenote/
 
 ```typescript
 class PaceNoteService {
-  constructor(
-    openrouterToken: string,
-    aiGatewayBaseURL: string, 
-    model: string,
-    policiesBucket: R2Bucket,
-    cfAigToken?: string
-  )
-  
-  async generatePaceNote(input: PaceNoteInput): Promise<PaceNoteOutput>
-  async validateInput(input: PaceNoteInput): Promise<void>
+	constructor(
+		openrouterToken: string,
+		aiGatewayBaseURL: string,
+		model: string,
+		policiesBucket: R2Bucket,
+		cfAigToken?: string
+	);
+
+	async generatePaceNote(input: PaceNoteInput): Promise<PaceNoteOutput>;
+	async validateInput(input: PaceNoteInput): Promise<void>;
 }
 ```
 
@@ -79,10 +79,10 @@ createPaceNoteService(
 
 ```typescript
 interface PaceNoteInput {
-  rank: PaceNoteRank;           // 'Cpl' | 'MCpl' | 'Sgt' | 'WO'
-  observations: string;         // Detailed observations
-  memberName?: string;          // Optional member name
-  reportingPeriod?: string;     // Optional reporting period
+	rank: PaceNoteRank; // 'Cpl' | 'MCpl' | 'Sgt' | 'WO'
+	observations: string; // Detailed observations
+	memberName?: string; // Optional member name
+	reportingPeriod?: string; // Optional reporting period
 }
 ```
 
@@ -90,18 +90,18 @@ interface PaceNoteInput {
 
 ```typescript
 interface PaceNoteOutput {
-  paceNote: string;            // Generated feedback content
-  usage: {
-    promptTokens: number;      // Input tokens used
-    completionTokens: number;  // Output tokens used
-    totalTokens: number;       // Total tokens
-    estimatedCost: number;     // Estimated cost in USD
-  };
-  metadata: {
-    rank: PaceNoteRank;        // Rank used for generation
-    timestamp: string;         // Generation timestamp
-    model: string;             // AI model used
-  };
+	paceNote: string; // Generated feedback content
+	usage: {
+		promptTokens: number; // Input tokens used
+		completionTokens: number; // Output tokens used
+		totalTokens: number; // Total tokens
+		estimatedCost: number; // Estimated cost in USD
+	};
+	metadata: {
+		rank: PaceNoteRank; // Rank used for generation
+		timestamp: string; // Generation timestamp
+		model: string; // AI model used
+	};
 }
 ```
 
@@ -120,15 +120,15 @@ Each rank has specific competency areas that influence feedback generation:
 
 ```typescript
 const AVAILABLE_RANKS = {
-  Cpl: { 
-    name: 'Corporal',
-    competencies: ['Technical Skills', 'Team Integration', 'Initiative']
-  },
-  MCpl: {
-    name: 'Master Corporal', 
-    competencies: ['Leadership', 'Mentoring', 'Decision Making']
-  },
-  // ... additional ranks
+	Cpl: {
+		name: 'Corporal',
+		competencies: ['Technical Skills', 'Team Integration', 'Initiative']
+	},
+	MCpl: {
+		name: 'Master Corporal',
+		competencies: ['Leadership', 'Mentoring', 'Decision Making']
+	}
+	// ... additional ranks
 } as const;
 ```
 
@@ -139,19 +139,19 @@ const AVAILABLE_RANKS = {
 ```typescript
 // Create service instance
 const paceNoteService = createPaceNoteService(
-  env.OPENROUTER_TOKEN,
-  env.AI_GATEWAY_BASE_URL,
-  env.FN_MODEL,
-  env.POLICIES,
-  env.CF_AIG_TOKEN
+	env.OPENROUTER_TOKEN,
+	env.AI_GATEWAY_BASE_URL,
+	env.FN_MODEL,
+	env.POLICIES,
+	env.CF_AIG_TOKEN
 );
 
 // Generate pace note
 const result = await paceNoteService.generatePaceNote({
-  rank: 'Sgt',
-  observations: 'Consistently demonstrates strong leadership...',
-  memberName: 'Cpl Smith',
-  reportingPeriod: 'Jan-Jun 2025'
+	rank: 'Sgt',
+	observations: 'Consistently demonstrates strong leadership...',
+	memberName: 'Cpl Smith',
+	reportingPeriod: 'Jan-Jun 2025'
 });
 
 console.log('Generated feedback:', result.paceNote);
@@ -165,18 +165,18 @@ console.log('Cost estimate:', result.usage.estimatedCost);
 import { createPaceNoteService } from '$lib/modules/paceNote';
 
 export const actions = {
-  generatePaceNote: async ({ request, platform }) => {
-    const formData = await request.formData();
-    const service = createPaceNoteService(/* ... */);
-    
-    const result = await service.generatePaceNote({
-      rank: formData.get('rank'),
-      observations: formData.get('observations'),
-      memberName: formData.get('memberName')
-    });
-    
-    return { success: true, result };
-  }
+	generatePaceNote: async ({ request, platform }) => {
+		const formData = await request.formData();
+		const service = createPaceNoteService(/* ... */);
+
+		const result = await service.generatePaceNote({
+			rank: formData.get('rank'),
+			observations: formData.get('observations'),
+			memberName: formData.get('memberName')
+		});
+
+		return { success: true, result };
+	}
 };
 ```
 
@@ -198,16 +198,16 @@ FN_MODEL=openai/gpt-4o-mini  # Default model
 
 ```typescript
 const VALIDATION_LIMITS = {
-  observations: {
-    minLength: 10,
-    maxLength: 2000
-  },
-  memberName: {
-    maxLength: 100
-  },
-  reportingPeriod: {
-    maxLength: 50
-  }
+	observations: {
+		minLength: 10,
+		maxLength: 2000
+	},
+	memberName: {
+		maxLength: 100
+	},
+	reportingPeriod: {
+		maxLength: 50
+	}
 } as const;
 ```
 
@@ -264,10 +264,10 @@ npm test -- src/routes/pacenote
 
 ```typescript
 const mockInput: PaceNoteInput = {
-  rank: 'Sgt',
-  observations: 'Demonstrates excellent leadership during training exercises...',
-  memberName: 'Cpl Johnson',
-  reportingPeriod: 'Q1 2025'
+	rank: 'Sgt',
+	observations: 'Demonstrates excellent leadership during training exercises...',
+	memberName: 'Cpl Johnson',
+	reportingPeriod: 'Q1 2025'
 };
 ```
 
@@ -277,8 +277,8 @@ const mockInput: PaceNoteInput = {
 
 ```typescript
 class PaceNoteValidationError extends Error {
-  field: string;
-  constraint: string;
+	field: string;
+	constraint: string;
 }
 ```
 
@@ -286,8 +286,8 @@ class PaceNoteValidationError extends Error {
 
 ```typescript
 class PaceNoteAIError extends Error {
-  code: string;
-  retryable: boolean;
+	code: string;
+	retryable: boolean;
 }
 ```
 

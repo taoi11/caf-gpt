@@ -181,7 +181,9 @@
 						id="user_message"
 						name="user_message"
 						bind:value={userMessage}
-						placeholder={$isProcessing ? $progressMessage || 'Processing...' : `Ask a question about ${selectedPolicySet} policies...`}
+						placeholder={$isProcessing
+							? $progressMessage || 'Processing...'
+							: `Ask a question about ${selectedPolicySet} policies...`}
 						rows="3"
 						disabled={isLoading}
 						required
