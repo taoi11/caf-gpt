@@ -71,7 +71,7 @@
 	<form method="POST" action="?/generate" use:enhance={handleSubmit}>
 		<!-- Rank Selection -->
 		<div class="mb-6">
-			<label for="rank" class="block text-sm font-medium text-gray-700 mb-2"> Rank * </label>
+			<label for="rank" class="block text-sm font-medium text-gray-700 mb-2">Rank *</label>
 			<select
 				id="rank"
 				name="rank"
