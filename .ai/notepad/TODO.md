@@ -5,7 +5,7 @@
 [ ] optimize web pages for tablet screens
 
 - planning needed
-  [x] llm research progress emiter for policyFoo web page
+  [x] llm research progress emiter for policyFoo web page - **REMOVED: SSE/streaming code stripped out**
 - Debug needed
 
 ## Code Organization & Refactoring

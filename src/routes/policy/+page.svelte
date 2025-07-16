@@ -5,8 +5,6 @@
 	import PolicySelector from './PolicyComponents/PolicySelector.svelte';
 	import MessageList from './PolicyComponents/MessageList.svelte';
 	import ResponseParser from './PolicyComponents/ResponseParser.svelte';
-	import { progressMessage, isProcessing } from '$lib/stores/progress';
-	import { onDestroy } from 'svelte';
 
 	export let data: PageData;
 	export let form: ActionData;
@@ -51,8 +49,6 @@
 	$: if (form?.error) {
 		// Errors are displayed in the template
 		isLoading = false;
-		isProcessing.set(false);
-		progressMessage.set('');
 	}
 
 	/**
@@ -62,7 +58,6 @@
 		if (!userMessage.trim()) return;
 
 		isLoading = true;
-		isProcessing.set(true);
 
 		// Add user message to conversation immediately for better UX
 		messages = [
@@ -94,12 +89,6 @@
 		userMessage = '';
 		form = null;
 	}
-
-	// Clean up on component destroy
-	onDestroy(() => {
-		isProcessing.set(false);
-		progressMessage.set('');
-	});
 </script>
 
 <svelte:head>
@@ -168,8 +157,6 @@
 
 				return async ({ result, update }) => {
 					isLoading = false;
-					isProcessing.set(false);
-					progressMessage.set('');
 					await update();
 				};
 			}}
@@ -181,8 +168,8 @@
 						id="user_message"
 						name="user_message"
 						bind:value={userMessage}
-						placeholder={$isProcessing
-							? $progressMessage || 'Processing...'
+						placeholder={isLoading
+							? 'Processing...'
 							: `Ask a question about ${selectedPolicySet} policies...`}
 						rows="3"
 						disabled={isLoading}
