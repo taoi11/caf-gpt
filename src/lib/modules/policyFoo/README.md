@@ -24,9 +24,9 @@ PolicyFoo implements a stateless, router-based architecture with specialized han
 
 | Feature              | DOAD Handler                                  | LEAVE Handler                              |
 | -------------------- | --------------------------------------------- | ------------------------------------------ |
-| **Workflow**         | Database-driven with metadata selection       | Single-stage (main only)                   |
-| **Policy Storage**   | Postgres database with chunking               | Single file (`leave/leave_policy_2025.md`) |
-| **Models Used**      | READER_MODEL + Metadata Selector + MAIN_MODEL | MAIN_MODEL only                            |
+| **Workflow**         | Database-driven with metadata selection       | Database-driven with chapter identification |
+| **Policy Storage**   | Postgres database with chunking               | Postgres database with chapter-based chunking |
+| **Models Used**      | READER_MODEL + Metadata Selector + MAIN_MODEL | READER_MODEL + MAIN_MODEL                   |
 | **Token Efficiency** | ~2500-4500 per query                          | ~2000-3000 per query                       |
 | **Response Time**    | ~5-12 seconds                                 | ~3-7 seconds                               |
 | **Cost**             | Higher (multiple AI calls)                    | Lower (~40% savings)                       |
@@ -37,8 +37,7 @@ PolicyFoo implements a stateless, router-based architecture with specialized han
 
 **Shared Infrastructure:**
 - **AI Gateway Integration**: Uses shared AI Gateway service from `$lib/server/ai-gateway.service.js`
-- **R2 Utilities**: Consolidated R2 utility functions in `$lib/server/r2.util.ts`
-- **Database**: Neon Postgres for DOAD policy chunks with optimized indexing
+- **Database**: Neon Postgres for all policy content with optimized indexing
 - **Error Handling**: Unified error types and handling patterns
 - **Response Format**: Both return identical XML structure for frontend parsing
 
@@ -54,9 +53,9 @@ PolicyFoo implements a stateless, router-based architecture with specialized han
 ### LEAVE (Leave Policies)
 **Status**: ✅ Production Ready  
 **Documentation**: [LEAVE Handler Details](./leaveFoo/README.md)
-- Single comprehensive policy document
-- Single-stage workflow for faster responses
-- R2 bucket storage for policy documents
+- Database-driven with chapter identification
+- Two-stage workflow with finder agent for chapter selection
+- Postgres storage with chapter-based chunking
 
 ## Implementation
 
@@ -118,7 +117,9 @@ policyFoo/
 └── leaveFoo/                   # Leave policy handler
     ├── README.md               # LEAVE-specific implementation details
     ├── index.ts                # LEAVE handler orchestration
+    ├── finder.ts               # Chapter identification agent
     ├── main.ts                 # Policy processing agent
+    ├── database.service.ts     # Database operations for chapter chunks
     ├── types.ts                # LEAVE-specific type definitions
     └── prompts/                # LLM prompts
 ```
@@ -134,9 +135,6 @@ MAIN_MODEL=anthropic/claude-3-5-sonnet # Optional
 DATABASE_URL=postgres://user:password@host:port/db # Neon Postgres connection
 ```
 
-**Cloudflare Bindings:**
-- **POLICIES** - R2 bucket containing policy documents
-
 ## Development
 
 ### Adding New Policy Sets
@@ -145,7 +143,7 @@ DATABASE_URL=postgres://user:password@host:port/db # Neon Postgres connection
 2. Implement handler following `PolicyQueryInput` → `PolicyQueryOutput` contract
 3. Add policy set to `POLICY_SETS` constant
 4. Update router switch statement in `index.ts`
-5. Add R2 bucket path configuration
+5. Add database schema and services for policy storage
 6. Update frontend policy selector
 
 ### Design Philosophy

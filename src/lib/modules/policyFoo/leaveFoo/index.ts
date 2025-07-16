@@ -156,8 +156,6 @@ async function loadLeaveConfig(env: PolicyFooEnvironment): Promise<PolicyHandler
 				main: mainPromptRaw,
 				policyList: '' // Not used in leave policy handler
 			},
-			r2Bucket: env.POLICIES!, // Keep for interface compatibility but not used
-			policyPathPrefix: '', // Not used anymore
 			chapterList
 		};
 	} catch (error) {
