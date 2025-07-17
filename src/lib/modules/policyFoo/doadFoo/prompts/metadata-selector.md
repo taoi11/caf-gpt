@@ -6,9 +6,10 @@
 <input_format>
 <user_query>The question or request about DOAD policies</user_query>
 <chunk_metadata>JSON array of chunk metadata objects containing:
+
 - id: Unique identifier for the chunk
 - metadata: Object with contextual information about the chunk content</chunk_metadata>
-</input_format>
+  </input_format>
 
 <selection_criteria>
 <criterion>Directly Relevant: Address the specific topic or policy area mentioned in the query</criterion>

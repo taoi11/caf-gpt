@@ -92,8 +92,7 @@ export const actions: Actions = {
 				AI_GATEWAY_BASE_URL: env.AI_GATEWAY_BASE_URL,
 				CF_AIG_TOKEN: env.CF_AIG_TOKEN,
 				READER_MODEL: (env as any).READER_MODEL, // Optional env var
-				MAIN_MODEL: (env as any).MAIN_MODEL, // Optional env var
-				POLICIES: env.POLICIES
+				MAIN_MODEL: (env as any).MAIN_MODEL // Optional env var
 			});
 
 			// Return success response

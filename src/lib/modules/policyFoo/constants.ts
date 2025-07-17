@@ -31,17 +31,6 @@ export const MODEL_CONFIG = {
 } as const;
 
 /**
- * R2 bucket configuration
- */
-export const R2_CONFIG = {
-	BUCKET_NAME: 'policies',
-	POLICY_PATHS: {
-		DOAD: 'doad/',
-		LEAVE: 'leave/'
-	}
-} as const;
-
-/**
  * Prompt file paths relative to policy handler directories
  */
 export const PROMPT_PATHS = {
@@ -58,10 +47,8 @@ export const ERROR_MESSAGES = {
 	INVALID_MESSAGES: 'Messages must be a non-empty array',
 	MESSAGES_EMPTY: 'Messages array cannot be empty',
 	POLICY_NOT_FOUND: 'Policy not found',
-	POLICY_FILE_NOT_FOUND: 'Policy file not found in R2 bucket',
 	PROMPT_NOT_FOUND: 'Prompt file not found',
 	AI_GATEWAY_ERROR: 'AI Gateway request failed',
-	R2_ERROR: 'R2 bucket operation failed',
 	PARSING_ERROR: 'Failed to parse response',
 	GENERAL_ERROR: 'An unexpected error occurred'
 } as const;

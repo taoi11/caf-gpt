@@ -35,7 +35,6 @@ export interface PolicyFooEnvironment {
 	CF_AIG_TOKEN: string;
 	READER_MODEL?: string;
 	MAIN_MODEL?: string;
-	POLICIES?: R2Bucket; // R2 bucket binding for policy documents
 }
 
 /**
@@ -159,10 +158,6 @@ function validateEnvironment(env: PolicyFooEnvironment): void {
 		if (!env[key as keyof PolicyFooEnvironment]) {
 			throw createError('GENERAL_ERROR', `Missing required environment variable: ${key}`);
 		}
-	}
-
-	if (!env.POLICIES) {
-		throw createError('GENERAL_ERROR', 'Missing POLICIES R2 bucket binding');
 	}
 }
 
