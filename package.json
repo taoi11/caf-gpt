@@ -14,7 +14,7 @@
 		"check": "svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
-		"lint": "prettier --check --write . && eslint .",
+		"lint": "prettier --check . && eslint .",
 		"test": "npm run test:unit -- --run",
 		"test:unit": "vitest",
 		"test:client": "vitest --project client",
