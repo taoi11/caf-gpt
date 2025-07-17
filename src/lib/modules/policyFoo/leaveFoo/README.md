@@ -1,5 +1,7 @@
 # LEAVE PolicyFoo Handler
 
+> **Internal Developer/Agent Reference** - Single-stage leave policy handler
+
 ## Purpose
 
 Simplified LLM workflow for answering questions related to CAF Leave policies. Optimized for single-document policy sets using a streamlined single-stage architecture.
@@ -12,7 +14,7 @@ The LEAVE handler processes policy queries through a streamlined single-stage wo
 
 1. **Single Stage**: Main Agent retrieves the leave policy document and generates structured responses
 2. **No Finder Needed**: All leave policies consolidated in one comprehensive document
-3. **Cost Optimized**: ~40% token reduction compared to two-stage handlers
+3. **Cost Optimized**: ~40% token reduction compared to multi-stage handlers
 
 ## Workflow
 
@@ -21,31 +23,6 @@ The LEAVE handler processes policy queries through a streamlined single-stage wo
 3. Sends user message/conversation + leave policy content to the main agent
 4. Receives structured XML response from main agent
 5. Returns response to `policyFoo` Router
-
-## PolicyFoo Web Integration
-
-### Seamless Policy Set Switching
-
-- **Single Interface**: Users interact through the same `/policy` web page
-- **Policy Set Selector**: Dropdown allows switching between `DOAD` and `LEAVE` policy sets
-- **Conversation Continuity**: Users can switch policy sets mid-conversation while maintaining context
-- **Stateless Design**: Each request includes full conversation history, enabling policy set changes
-
-### User Experience Flow
-
-1. User visits `/policy` page with unified interface
-2. Selects policy set from dropdown (`DOAD` or `LEAVE`)
-3. Asks policy questions - responses come from selected policy set
-4. Can switch policy sets at any time during conversation
-5. Previous conversation context maintained when switching
-6. Each message clearly indicates which policy set was used
-
-### Frontend Integration Points
-
-- **Same UI Components**: Reuses existing PolicyFoo frontend components
-- **Policy Set Parameter**: `policy_set: 'LEAVE'` sent with each request
-- **Response Parsing**: Same XML parsing logic handles LEAVE responses
-- **Citation Rendering**: Leave policy citations rendered consistently with DOAD
 
 ## Architecture Differences from DOAD
 
@@ -63,6 +40,7 @@ leaveFoo/
 ├── README.md              # This documentation
 ├── index.ts               # Handler orchestration (simplified)
 ├── main.ts                # Policy processing agent
+├── types.ts               # LEAVE-specific types
 └── prompts/               # LLM prompts
     └── main.md            # Main agent instructions
 ```
@@ -79,7 +57,7 @@ policies/                  # R2 bucket name
 
 ### Handler Architecture
 
-Unlike the DOAD handler's two-stage workflow, the LEAVE handler uses a simplified approach:
+Unlike the DOAD handler's three-stage workflow, the LEAVE handler uses a simplified approach:
 
 #### 1. Handler Orchestration (`index.ts`)
 
@@ -97,14 +75,95 @@ Unlike the DOAD handler's two-stage workflow, the LEAVE handler uses a simplifie
 
 ### Comparison with DOAD Handler
 
-| Aspect            | DOAD Handler           | LEAVE Handler                         |
-| ----------------- | ---------------------- | ------------------------------------- |
-| **Stages**        | Two (finder → main)    | One (main only)                       |
-| **Policy Files**  | Multiple (`doad/*.md`) | Single (`leave/leave_policy_2025.md`) |
-| **Token Usage**   | ~2500-4500 per query   | ~2000-3000 per query                  |
-| **Response Time** | ~5-12 seconds          | ~3-7 seconds                          |
-| **R2 Operations** | Multiple file reads    | Single file read                      |
-| **Models Used**   | READER + MAIN          | MAIN only                             |
+| Aspect            | DOAD Handler      | LEAVE Handler        |
+| ----------------- | ----------------- | -------------------- |
+| **Workflow**      | Three-stage       | Single-stage         |
+| **Storage**       | Postgres database | R2 bucket            |
+| **Documents**     | Multiple chunked  | Single comprehensive |
+| **AI Calls**      | 3 per query       | 1 per query          |
+| **Token Usage**   | ~2500-4500        | ~2000-3000           |
+| **Response Time** | ~5-12 seconds     | ~3-7 seconds         |
+| **Cost**          | Higher            | Lower (~40% savings) |
+
+## Performance Characteristics
+
+- **Token Usage**: ~2000-3000 tokens per query
+- **Response Time**: ~3-7 seconds
+- **Cost**: Lower than DOAD handler due to single AI call
+- **Accuracy**: Excellent for leave-specific queries due to comprehensive document
+- **Simplicity**: Easier to maintain and debug
+
+## Development
+
+### Key Environment Variables
+
+```bash
+MAIN_MODEL=anthropic/claude-3-5-sonnet # Optional
+```
+
+### Usage Example
+
+```typescript
+import { handleLeaveQuery } from './index.js';
+
+const result = await handleLeaveQuery(
+	{
+		messages: [{ role: 'user', content: 'How much annual leave do I get?', timestamp: Date.now() }]
+	},
+	env
+);
+
+// Returns: { message: '<xml_response>', usage: { main: {...} } }
+```
+
+### Policy Document Structure
+
+The leave policy document should be comprehensive and well-structured:
+
+```markdown
+# CAF Leave Policy 2025
+
+## Annual Leave
+
+- Entitlement: 25 days per year
+- Accrual: 2.08 days per month
+- Carry-forward: Maximum 5 days
+
+## Sick Leave
+
+- Entitlement: As required
+- Documentation: Medical certificate for >3 days
+- Notification: Within 24 hours
+
+## Compassionate Leave
+
+- Entitlement: Up to 5 days
+- Authorization: Commanding Officer
+- Documentation: Supporting documentation required
+```
+
+## Integration Notes
+
+### PolicyFoo Web Integration
+
+- **Single Interface**: Users interact through the same `/policy` web page
+- **Policy Set Selector**: Dropdown allows switching between `DOAD` and `LEAVE` policy sets
+- **Conversation Continuity**: Users can switch policy sets mid-conversation while maintaining context
+- **Stateless Design**: Each request includes full conversation history, enabling policy set changes
+
+### Frontend Integration Points
+
+- **Same UI Components**: Reuses existing PolicyFoo frontend components
+- **Policy Set Parameter**: `policy_set: 'LEAVE'` sent with each request
+- **Response Parsing**: Same XML parsing logic handles LEAVE responses
+- **Citation Rendering**: Leave policy citations rendered consistently with DOAD
+  | ----------------- | ---------------------- | ------------------------------------- |
+  | **Stages** | Two (finder → main) | One (main only) |
+  | **Policy Files** | Multiple (`doad/*.md`) | Single (`leave/leave_policy_2025.md`) |
+  | **Token Usage** | ~2500-4500 per query | ~2000-3000 per query |
+  | **Response Time** | ~5-12 seconds | ~3-7 seconds |
+  | **R2 Operations** | Multiple file reads | Single file read |
+  | **Models Used** | READER + MAIN | MAIN only |
 
 ### Configuration
 

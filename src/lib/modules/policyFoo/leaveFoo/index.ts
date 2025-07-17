@@ -10,10 +10,10 @@ import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
 import { generateLeaveResponse } from './main.js';
 import { findLeaveChapters } from './finder.js';
-import { 
-	getLeaveChunksByChapters, 
-	getAvailableChapters, 
-	formatChunksForLLM 
+import {
+	getLeaveChunksByChapters,
+	getAvailableChapters,
+	formatChunksForLLM
 } from './database.service.js';
 
 // Import prompt files directly from local codebase
@@ -136,17 +136,21 @@ export async function handleLeaveQuery(
 /**
  * Load leave policy configuration including prompts and chapter list
  */
-async function loadLeaveConfig(env: PolicyFooEnvironment): Promise<PolicyHandlerConfig & { chapterList: string }> {
+async function loadLeaveConfig(
+	env: PolicyFooEnvironment
+): Promise<PolicyHandlerConfig & { chapterList: string }> {
 	try {
 		// Get available chapters from database
 		const availableChapters = await getAvailableChapters();
-		
+
 		// Format chapter list for finder prompt
-		const chapterList = availableChapters.map(chapter => {
-			const chapterNum = parseInt(chapter);
-			const chapterName = getChapterName(chapterNum);
-			return `${chapter}: ${chapterName}`;
-		}).join('\n');
+		const chapterList = availableChapters
+			.map((chapter) => {
+				const chapterNum = parseInt(chapter);
+				const chapterName = getChapterName(chapterNum);
+				return `${chapter}: ${chapterName}`;
+			})
+			.join('\n');
 
 		return {
 			readerModel: env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
@@ -156,8 +160,6 @@ async function loadLeaveConfig(env: PolicyFooEnvironment): Promise<PolicyHandler
 				main: mainPromptRaw,
 				policyList: '' // Not used in leave policy handler
 			},
-			r2Bucket: env.POLICIES!, // Keep for interface compatibility but not used
-			policyPathPrefix: '', // Not used anymore
 			chapterList
 		};
 	} catch (error) {
@@ -217,7 +219,7 @@ For immediate assistance with leave-related questions, I recommend:
 Could you please rephrase your question to be more specific about the type of leave or policy area you're interested in?</answer>
 <citations>
 </citations>
-<follow_up>Would you like me to help you with a specific type of leave, such as annual leave, sick leave, or compassionate leave?</follow_up>
+<follow_up>
+</follow_up>
 </response>`;
 }
-

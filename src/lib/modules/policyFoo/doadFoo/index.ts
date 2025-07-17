@@ -12,7 +12,7 @@ import type {
 	PolicyMessage
 } from '../types';
 import type { PolicyFooEnvironment } from '../index';
-import { MODEL_CONFIG, R2_CONFIG, PROMPT_PATHS, ERROR_MESSAGES } from '../constants';
+import { MODEL_CONFIG, PROMPT_PATHS, ERROR_MESSAGES } from '../constants';
 import { findDOADPolicies } from './finder.js';
 import { generateDOADResponse } from './main.js';
 import { selectRelevantChunks } from './metadata-selector.js';
@@ -215,9 +215,7 @@ async function loadDOADConfig(env: PolicyFooEnvironment): Promise<PolicyHandlerC
 				finder: finderPromptRaw,
 				main: mainPromptRaw,
 				policyList: policyListTableRaw
-			},
-			r2Bucket: env.POLICIES!, // Keep for compatibility but not used in database approach
-			policyPathPrefix: R2_CONFIG.POLICY_PATHS.DOAD
+			}
 		};
 	} catch (error) {
 		console.error('DOAD config loading error:', error);

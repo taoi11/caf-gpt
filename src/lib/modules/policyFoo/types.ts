@@ -126,10 +126,8 @@ export interface PolicyFooError {
 		| 'INVALID_MESSAGES'
 		| 'MESSAGES_EMPTY'
 		| 'POLICY_NOT_FOUND'
-		| 'POLICY_FILE_NOT_FOUND'
 		| 'PROMPT_NOT_FOUND'
 		| 'AI_GATEWAY_ERROR'
-		| 'R2_ERROR'
 		| 'PARSING_ERROR'
 		| 'GENERAL_ERROR';
 	message: string;
@@ -147,8 +145,6 @@ export interface PolicyHandlerConfig {
 		main: string;
 		policyList: string;
 	};
-	r2Bucket: R2Bucket;
-	policyPathPrefix: string; // e.g., "doad/" for DOAD policies
 }
 
 /**
