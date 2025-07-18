@@ -97,8 +97,8 @@
 </svelte:head>
 
 <div class="max-w-6xl mx-auto p-4 min-h-screen flex flex-col">
-	<header class="{messages.length > 0 ? 'text-center mb-4 pb-2 border-b-2 border-blue-600' : 'text-center mb-8 pb-4 border-b-2 border-blue-600'}">
-		<h1 class="{messages.length > 0 ? 'text-2xl font-bold text-gray-700 mb-1' : 'text-4xl font-bold text-gray-700 mb-2'}">Policy Assistant</h1>
+	<header class="text-center border-b-2 border-blue-600 {messages.length > 0 ? 'mb-4 pb-2' : 'mb-8 pb-4'}">
+		<h1 class="font-bold text-gray-700 {messages.length > 0 ? 'text-2xl mb-1' : 'text-4xl mb-2'}">Policy Assistant</h1>
 		{#if messages.length === 0}
 			<p class="text-lg text-gray-600 opacity-80">{data.description}</p>
 		{:else}
