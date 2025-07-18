@@ -36,7 +36,7 @@
 </script>
 
 <div
-	class="message-list flex-1 p-4 overflow-y-auto flex flex-col gap-6 min-h-screen max-h-full"
+	class="message-list flex-1 p-4 overflow-y-auto flex flex-col gap-6 md:max-h-[50vh] lg:max-h-[60vh]"
 	bind:this={messagesContainer}
 >
 	{#each messages as message, index (message.timestamp)}
