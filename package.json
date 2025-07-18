@@ -10,7 +10,7 @@
 		"dev:remote": "wrangler dev --remote",
 		"build": "vite build",
 		"preview": "wrangler dev --local",
-		"prepare": "npm run cf-typegen && svelte-kit sync",
+		"prepare": "svelte-kit sync && npm run cf-typegen",
 		"check": "svelte-check --tsconfig ./tsconfig.json",
 		"check:watch": "svelte-check --tsconfig ./tsconfig.json --watch",
 		"format": "prettier --write .",
