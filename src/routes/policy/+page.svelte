@@ -97,8 +97,12 @@
 </svelte:head>
 
 <div class="max-w-6xl mx-auto p-4 min-h-screen flex flex-col">
-	<header class="text-center border-b-2 border-blue-600 {messages.length > 0 ? 'mb-4 pb-2' : 'mb-8 pb-4'}">
-		<h1 class="font-bold text-gray-700 {messages.length > 0 ? 'text-2xl mb-1' : 'text-4xl mb-2'}">Policy Assistant</h1>
+	<header
+		class="text-center border-b-2 border-blue-600 {messages.length > 0 ? 'mb-4 pb-2' : 'mb-8 pb-4'}"
+	>
+		<h1 class="font-bold text-gray-700 {messages.length > 0 ? 'text-2xl mb-1' : 'text-4xl mb-2'}">
+			Policy Assistant
+		</h1>
 		{#if messages.length === 0}
 			<p class="text-lg text-gray-600 opacity-80">{data.description}</p>
 		{:else}
@@ -108,12 +112,20 @@
 
 	<main class="flex-1 flex flex-col {messages.length > 0 ? 'gap-3' : 'gap-6'}">
 		<!-- Policy Selector -->
-		<div class="bg-white p-4 rounded-lg shadow-sm">
-			<PolicySelector policySets={data.policy_sets} bind:selected={selectedPolicySet} />
+		<div class="bg-white {messages.length > 0 ? 'p-3' : 'p-4'} rounded-lg shadow-sm">
+			<PolicySelector
+				policySets={data.policy_sets}
+				bind:selected={selectedPolicySet}
+				compact={messages.length > 0}
+			/>
 		</div>
 
 		<!-- Conversation Display -->
-		<div class="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
+		<div
+			class={messages.length > 0
+				? 'bg-white rounded-lg shadow-sm overflow-hidden max-h-[45vh]'
+				: 'flex-1 bg-white rounded-lg shadow-sm overflow-hidden'}
+		>
 			{#if messages.length > 0}
 				<div
 					class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 p-4 border-b border-gray-200"
