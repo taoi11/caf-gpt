@@ -98,7 +98,9 @@
 
 <div class="max-w-6xl mx-auto p-4 min-h-screen flex flex-col">
 	<header
-		class="text-center border-b-2 border-blue-600 {messages.length > 0 ? 'mb-4 pb-2' : 'mb-8 pb-4'}"
+		class="text-center border-b-2 border-blue-600 {messages.length > 0
+			? 'mb-4 pb-2 hidden xl:block'
+			: 'mb-8 pb-4'}"
 	>
 		<h1 class="font-bold text-gray-700 {messages.length > 0 ? 'text-2xl mb-1' : 'text-4xl mb-2'}">
 			Policy Assistant
