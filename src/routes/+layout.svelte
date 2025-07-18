@@ -1,11 +1,12 @@
 <script lang="ts">
 	import '../app.css';
 	import { page } from '$app/stores';
+	import { derived } from 'svelte/store';
 
 	let { children } = $props();
 
-	// Check if we're on policy page to conditionally hide footer
-	$: isPolicyPage = $page.route?.id === '/policy';
+	// Use derived store for runes mode compatibility
+	const isPolicyPage = derived(page, $page => $page.route?.id === '/policy');
 </script>
 
 <div class="min-h-screen bg-gray-50">
@@ -31,7 +32,7 @@
 		{@render children()}
 	</main>
 
-	<footer class="bg-white border-t mt-auto {isPolicyPage ? 'hidden xl:block' : ''}">
+	<footer class="bg-white border-t mt-auto {$isPolicyPage ? 'hidden xl:block' : ''}">
 		<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 			<div class="text-center text-gray-500 text-sm">
 				<p>CAF GPT - AI-Powered Tools</p>
