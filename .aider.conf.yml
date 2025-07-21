@@ -1,0 +1,21 @@
+architect: true
+watch-files: true
+max-chat-history-tokens: "16384"
+restore-chat-history: true
+file:
+  - .github/instructions/base.instructions.md
+  - .github/instructions/workflow.instructions.md
+  - README.md
+  - src/lib/modules/paceNote/README.md
+  - src/lib/modules/policyFoo/README.md
+  - src/lib/modules/policyFoo/doadFoo/README.md
+  - src/lib/modules/policyFoo/leaveFoo/README.md
+  - src/lib/server/README.md
+
+auto-commits: false
+attribute-commit-message-author: true
+
+map-tokens: "2048"
+map-refresh: always
+
+editor: neovim

@@ -1,13 +1,18 @@
 # TODO
 
 ## General
+[x] optimize web pages for tablet screens
+- mostly done
+- debug needed:
+  - [ ] headers and footers should collapse on first message sent
 
-[ ] optimize web pages for tablet screens
+[x] llm research progress emiter for policyFoo web page - **REMOVED: SSE/streaming code stripped out**
+- Unnecessary acomplexity
 
-- planning needed
-  [x] llm research progress emiter for policyFoo web page - **REMOVED: SSE/streaming code stripped out**
-- Debug needed
-
+[ ] Move from R2 to Postgres
+  - [x] PolicyFoo
+  - [ ] PaceNote
+    - Planning needed
 ## Code Organization & Refactoring
 
 [ ] Trim large source files (>150 lines) for better maintainability
@@ -20,5 +25,3 @@
   - [ ] `/src/lib/modules/paceNote/service.ts` (190 lines)
   - [ ] `/src/routes/pacenote/PaceNoteForm.svelte` (155 lines)
   - [ ] `/src/lib/modules/policyFoo/doadFoo/main.ts` (152 lines)
-- Strategy: Extract utilities, split responsibilities, create helper modules
-- Follow: Co-location principle, Single Responsibility, Module-level types
