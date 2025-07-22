@@ -3,8 +3,8 @@ watch-files: true
 max-chat-history-tokens: "8192"
 restore-chat-history: false
 read:
-  - .github/instructions/base.instructions.md
-  - .github/instructions/workflow.instructions.md
+  # - .github/instructions/base.instructions.md
+  # - .github/instructions/workflow.instructions.md
   - README.md
   - src/lib/modules/paceNote/README.md
   - src/lib/modules/policyFoo/README.md
