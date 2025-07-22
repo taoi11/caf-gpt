@@ -1,8 +1,8 @@
 architect: true
 watch-files: true
-max-chat-history-tokens: "16384"
+max-chat-history-tokens: "8192"
 restore-chat-history: false
-file:
+read:
   - .github/instructions/base.instructions.md
   - .github/instructions/workflow.instructions.md
   - README.md

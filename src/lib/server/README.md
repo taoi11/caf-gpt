@@ -1,26 +1,36 @@
-# Core Server Utilities (`src/lib/server`)
+# Core Server Utilities
 
-This directory contains shared server-side utilities and infrastructure for all domain modules. These are not domain-specific, but provide foundational services and helpers for the application.
+> **🤖 AI Agent Navigation** | **Domain**: Shared Infrastructure | **Usage**: Cross-Module
 
-## Contents
+## 🔍 Quick Reference
 
-- **ai-gateway.service.ts**  
-  Shared service for interacting with the Cloudflare AI Gateway. Handles request/response, error handling, and monitoring for all AI-powered features.
+**Key Services**: `ai-gateway.service.ts`, `r2.util.ts`, `db/client.ts`, `db/schema.ts`
+**Usage Pattern**: Import shared services into domain modules (`src/lib/modules/*`).
+**Dependencies**: Cloudflare Workers, Neon Postgres, R2 Storage.
 
-- **r2.util.ts**  
-  Utilities for interacting with Cloudflare R2 object storage. Used for reading/writing policy documents and other large assets.
+## Purpose
 
-- **db/**  
-  Database infrastructure for both D1 (SQLite) and Neon Postgres:
-  - `client.ts`: Connection pooling and client setup
-  - `schema.ts`: Drizzle ORM schema definitions
-  - `types.ts`: TypeScript types for database entities
+This directory contains shared, non-domain-specific server-side utilities for AI, Database, and Storage. These foundational services are designed to be imported and used by all domain modules.
 
-## Principles
+## Directory Structure
 
-- **Single Responsibility:** Each file provides a focused, reusable service.
-- **No Domain Logic:** Only generic infrastructure, not business rules.
-- **Type-Safe:** All exports are fully typed for use across modules.
+```
+server/
+├── README.md             # This documentation
+├── ai-gateway.service.ts # Centralized AI/LLM service
+├── r2.util.ts           # Cloudflare R2 storage utilities
+└── db/                  # Database infrastructure
+    ├── client.ts        # Neon Postgres connection pooling
+    ├── schema.ts        # Drizzle ORM schema definitions
+    └── types.ts         # Database type definitions
+```
+
+## Key Services
+
+- **`ai-gateway.service.ts`**: Centralized service for all LLM interactions via Cloudflare AI Gateway. Handles requests, errors, and monitoring.
+- **`r2.util.ts`**: Utilities for Cloudflare R2 object storage (read/write files).
+- **`db/client.ts`**: Manages the Neon Postgres connection pool.
+- **`db/schema.ts`**: Defines the Drizzle ORM database schema.
 
 ## Usage Example
 
@@ -30,4 +40,10 @@ import { db } from '$lib/server/db/client';
 import { readFileAsText } from '$lib/server/r2.util';
 ```
 
-> For domain-specific logic, see the corresponding module directories.
+## Principles & Development
+
+- **Single Responsibility**: Each file provides a focused, reusable service.
+- **No Domain Logic**: Only generic infrastructure, not business rules.
+- **Type-Safe**: All exports are fully typed for use across modules.
+- **Adding Services**: Create new files using a factory pattern (e.g., `createMyService()`).
+- **Schema Changes**: Modify `db/schema.ts` using Drizzle ORM patterns.
