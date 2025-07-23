@@ -25,11 +25,18 @@ npm run preview       # Build and preview locally
 
 ### Development Workflow
 
-The development setup uses SvelteKit's built-in Cloudflare adapter integration:
+The development setup is optimized to minimize build overhead:
 
-1. **Build First**: `vite build` generates optimized Cloudflare Workers-compatible output
-2. **Wrangler Dev**: `wrangler dev` serves the pre-built application with live bindings
-3. **No Double Builds**: Build happens once upfront, eliminating rebuild loops
+1. **Build First**: `npm run build` generates optimized Cloudflare Workers-compatible output
+2. **Wrangler Dev**: `wrangler dev` serves the application with live bindings
+3. **Smart Watching**: Only watches `src/` directory to avoid build loops
+4. **Production Ready**: Same configuration works for both development and deployment
+
+The custom build configuration ensures:
+- ✅ **Single Initial Build**: Build runs once on startup, then only on source changes
+- ✅ **Fast Rebuilds**: Only rebuilds when files in `src/` directory change  
+- ✅ **Production Compatibility**: Same build process for local dev and Cloudflare Pages deployment
+- ✅ **No File Conflicts**: Wrangler watches source files, not build outputs
 
 For rapid iteration during development:
 - Use `npm run dev:build-only` to rebuild SvelteKit changes
