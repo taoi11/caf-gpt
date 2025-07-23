@@ -1,26 +1,19 @@
-import { Pool } from '@neondatabase/serverless';
-import type { PoolClient } from '@neondatabase/serverless';
-
-// Connection pool configuration optimized for Cloudflare Workers
-const pool = new Pool({
-	connectionString: process.env.DATABASE_URL,
-	max: 10, // Maximum connections in pool
-	idleTimeoutMillis: 30000, // 30 seconds idle timeout
-	connectionTimeoutMillis: 5000 // 5 seconds connection timeout
-});
+import { Client } from '@neondatabase/serverless';
 
 /**
- * Execute a database query with connection pooling and retry logic
+ * Execute a database query using Neon's recommended approach for Cloudflare Workers
+ * Creates a new client instance per request to avoid I/O context violations
  */
 export const query = async (text: string, params?: any[], retries: number = 2): Promise<any[]> => {
 	let lastError: Error | null = null;
 
 	for (let attempt = 0; attempt <= retries; attempt++) {
-		let client: PoolClient | null = null;
+		let client: Client | null = null;
 
 		try {
-			// Get client from pool with timeout
-			client = await pool.connect();
+			// Create a new client for this request (Neon recommended pattern)
+			client = new Client(process.env.DATABASE_URL!);
+			await client.connect();
 
 			// Execute query with performance logging
 			const startTime = Date.now();
@@ -53,9 +46,9 @@ export const query = async (text: string, params?: any[], retries: number = 2): 
 				await new Promise((resolve) => setTimeout(resolve, 100 * Math.pow(2, attempt)));
 			}
 		} finally {
-			// Always release client back to pool
+			// Close the client connection
 			if (client) {
-				client.release();
+				await client.end();
 			}
 		}
 	}
@@ -84,5 +77,3 @@ export const healthCheck = async (): Promise<boolean> => {
 		return false;
 	}
 };
-
-export default pool;

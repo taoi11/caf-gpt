@@ -25,22 +25,39 @@
 	}
 
 	/**
-	 * Scroll to bottom when new messages arrive
+	 * Smart scroll behavior - only auto-scroll when appropriate
 	 */
 	let messagesContainer: HTMLElement;
-	$: if (messages.length && messagesContainer) {
+	let previousMessageCount = 0;
+	let isNearBottom = true;
+
+	// Track if user is near bottom of scroll
+	function handleScroll() {
+		if (!messagesContainer) return;
+
+		const { scrollTop, scrollHeight, clientHeight } = messagesContainer;
+		const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+		isNearBottom = distanceFromBottom < 50; // Within 50px of bottom
+	}
+
+	// Only auto-scroll when new message is added AND user is near bottom
+	$: if (messages.length > previousMessageCount && messagesContainer && isNearBottom) {
 		setTimeout(() => {
 			messagesContainer.scrollTop = messagesContainer.scrollHeight;
 		}, 100);
+		previousMessageCount = messages.length;
+	} else if (messages.length !== previousMessageCount) {
+		previousMessageCount = messages.length;
 	}
 </script>
 
 <div
-	class="message-list flex-1 p-4 overflow-y-auto flex flex-col gap-6 max-h-[calc(45vh-4rem)]"
+	class="message-list flex-1 p-2 overflow-y-auto flex flex-col gap-3 h-full"
 	bind:this={messagesContainer}
+	on:scroll={handleScroll}
 >
 	{#each messages as message, index (message.timestamp)}
-		<div class="flex flex-col gap-2 animate-fade-in">
+		<div class="flex flex-col gap-1 animate-fade-in">
 			<div class="flex justify-between items-center text-sm text-gray-500">
 				<div class="flex items-center gap-2 font-semibold">
 					{#if message.role === 'user'}
@@ -59,7 +76,7 @@
 			<div class="relative">
 				{#if message.role === 'user'}
 					<!-- User message: display as plain text -->
-					<div class="bg-blue-600 text-white rounded-xl rounded-br-sm p-4 ml-8 shadow-sm relative">
+					<div class="bg-blue-600 text-white rounded-xl rounded-br-sm p-3 ml-6 shadow-sm relative">
 						<p class="m-0 leading-relaxed">{message.content}</p>
 						<div
 							class="absolute bottom-0 right-[-8px] w-0 h-0 border-l-8 border-l-blue-600 border-t-8 border-t-transparent"
@@ -68,7 +85,7 @@
 				{:else}
 					<!-- Assistant message: parse XML and render structured response -->
 					<div
-						class="bg-gray-50 rounded-xl rounded-bl-sm p-4 mr-8 shadow-sm border border-gray-200 relative"
+						class="bg-gray-50 rounded-xl rounded-bl-sm p-3 mr-6 shadow-sm border border-gray-200 relative"
 					>
 						<ResponseParser
 							xmlContent={message.content}
@@ -85,7 +102,7 @@
 	{/each}
 
 	{#if messages.length === 0}
-		<div class="flex-1 flex items-center justify-center text-gray-500 italic">
+		<div class="flex items-center justify-center text-gray-500 italic min-h-[200px]">
 			<p class="m-0 text-center">No messages yet. Start a conversation!</p>
 		</div>
 	{/if}
