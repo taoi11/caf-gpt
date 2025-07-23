@@ -12,15 +12,6 @@ import type { PolicySet } from './types';
 export const POLICY_SETS: PolicySet[] = ['DOAD', 'LEAVE'];
 
 /**
- * Default AI Gateway configuration
- */
-export const DEFAULT_AI_CONFIG = {
-	temperature: 0.1,
-	maxTokens: 4000,
-	topP: 0.9
-} as const;
-
-/**
  * Model configuration for different agents
  */
 export const MODEL_CONFIG = {

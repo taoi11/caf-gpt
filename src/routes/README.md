@@ -10,8 +10,9 @@
 **Testing**: Route-level tests in `__tests__/` subdirectories
 
 **Files to Understand**:
+
 - `+layout.svelte` - App-wide layout and theming
-- `{domain}/+page.svelte` - Domain UI orchestration  
+- `{domain}/+page.svelte` - Domain UI orchestration
 - `{domain}/+page.server.ts` - Server-side logic and form actions
 - `{domain}/*.svelte` - Domain-specific UI components
 
@@ -46,18 +47,21 @@ routes/
 ## 🔄 Integration Points
 
 ### With Domain Modules (`$lib/modules/`)
+
 - **Business Logic Import**: Routes import services from corresponding modules
 - **Type Safety**: Full TypeScript integration with module type definitions
 - **Error Handling**: Unified error patterns from module layer
 - **Service Instantiation**: Server actions create and use domain services
 
 ### With SvelteKit Framework
+
 - **Server Actions**: Form processing and data handling via SvelteKit actions
 - **Progressive Enhancement**: UI works with and without JavaScript
 - **Type Safety**: End-to-end TypeScript from modules to UI
 - **Routing**: Standard SvelteKit file-based routing patterns
 
 ### Between Routes
+
 - **Shared Layout**: Common theming and navigation via `+layout.svelte`
 - **Shared Types**: Common UI patterns and type definitions
 - **Consistent Patterns**: Uniform server action and component patterns
@@ -66,18 +70,21 @@ routes/
 ## Key Features
 
 ### Domain Separation
+
 - **PaceNote Route**: Feedback generation with form-based UI
 - **Policy Route**: Chat-based interface with policy set selection
 - **API Routes**: System monitoring and external integrations
 - **Shared Layout**: Common navigation and theming across domains
 
 ### Co-location Architecture
+
 - **UI Components**: Domain-specific components live with their routes
 - **Server Logic**: Server actions co-located with UI for maintainability
 - **Testing**: Route-level tests adjacent to implementation
 - **Documentation**: Route-specific README files for domain details
 
 ### Development Patterns
+
 - **Module Integration**: Standard pattern for importing domain services
 - **Form Handling**: Consistent server action patterns across routes
 - **Error Boundaries**: Graceful error handling and user feedback
@@ -86,6 +93,7 @@ routes/
 ## Development
 
 ### Adding New Domain Route
+
 1. Create new subdirectory under `src/routes/`
 2. Add `+page.svelte` for main UI orchestration
 3. Add `+page.server.ts` for server actions and form handling
@@ -95,12 +103,14 @@ routes/
 7. Add route-level tests in `__tests__/` subdirectory
 
 ### Server Action Pattern
+
 - **Form Processing**: Parse and validate form data from UI
 - **Service Integration**: Import and instantiate domain services
 - **Error Handling**: Return structured errors for UI display
 - **Response Format**: Return data in format expected by UI components
 
 ### Component Organization
+
 - **Domain Components**: Components specific to a domain live in route subdirectory
 - **Shared Components**: Truly shared components go in `$lib/components/`
 - **Layout Components**: App-wide UI elements in layout files

@@ -1,18 +1,23 @@
 # TODO
 
 ## General
+
 [x] optimize web pages for tablet screens
+
 - mostly done
 - debug needed:
   - [ ] headers and footers should collapse on first message sent
 
 [x] llm research progress emiter for policyFoo web page - **REMOVED: SSE/streaming code stripped out**
+
 - Unnecessary acomplexity
 
 [ ] Move from R2 to Postgres
-  - [x] PolicyFoo
-  - [ ] PaceNote
-    - Planning needed
+
+- [x] PolicyFoo
+- [ ] PaceNote
+  - Planning needed
+
 ## Code Organization & Refactoring
 
 [ ] Trim large source files (>150 lines) for better maintainability

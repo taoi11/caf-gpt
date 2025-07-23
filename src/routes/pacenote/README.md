@@ -10,8 +10,9 @@
 **Key Components**: `PaceNoteForm.svelte`, `PaceNoteResults.svelte`, `PaceNoteTips.svelte`
 
 **Files to Understand**:
+
 1. `+page.svelte` - Main page orchestration and layout
-2. `+page.server.ts` - Server actions and form handling  
+2. `+page.server.ts` - Server actions and form handling
 3. `PaceNoteForm.svelte` - User input form with validation
 4. `PaceNoteResults.svelte` - Generated feedback display
 5. `form.server.ts` - Form validation logic
@@ -61,18 +62,21 @@ Navigate to `/pacenote` in the app to use the PaceNote feature.
 ## 🔄 Integration Points
 
 ### With PaceNote Module (`$lib/modules/paceNote`)
+
 - **Service Import**: `createPaceNoteService()` factory for service instantiation
 - **Type Integration**: Uses `PaceNoteInput`, `PaceNoteOutput`, and related types
 - **Validation**: Follows service-defined validation rules and input constraints
 - **Error Handling**: Unified error patterns from service layer
 
 ### With SvelteKit Framework
+
 - **Server Actions**: Form processing via `generatePaceNote` action
 - **Progressive Enhancement**: Works with and without JavaScript enabled
 - **Type Safety**: End-to-end TypeScript from service to UI components
 - **Form Handling**: Standard SvelteKit form action patterns
 
 ### With UI Components
+
 - **Form Flow**: User input → Validation → Service call → Results display
 - **State Management**: Svelte reactive statements for UI state
 - **Loading States**: Progressive enhancement with loading indicators
@@ -81,6 +85,7 @@ Navigate to `/pacenote` in the app to use the PaceNote feature.
 ## Key Features
 
 ### Form-Based Interface
+
 - **Input Validation**: Real-time validation with user feedback
 - **Rank Selection**: Dropdown for Cpl, MCpl, Sgt, WO ranks
 - **Observation Input**: Large text area for detailed observations
@@ -88,12 +93,14 @@ Navigate to `/pacenote` in the app to use the PaceNote feature.
 - **Accessibility**: Screen reader and keyboard navigation support
 
 ### Results Display
+
 - **Generated Feedback**: Professional military feedback display
 - **Usage Metrics**: Token consumption and cost estimates
 - **Copy to Clipboard**: One-click copying of generated content
 - **Error Handling**: Clear error messages and recovery suggestions
 
 ### User Experience
+
 - **Tips and Guidance**: Contextual help for effective usage
 - **Progressive Enhancement**: Core functionality without JavaScript
 - **Responsive Design**: Works across device sizes
@@ -102,24 +109,28 @@ Navigate to `/pacenote` in the app to use the PaceNote feature.
 ## Development
 
 ### Form Validation Enhancement
+
 - **Client-Side**: Add real-time validation feedback in form components
 - **Server-Side**: Extend validation rules in `form.server.ts`
 - **Error Display**: Improve error message presentation and recovery guidance
 - **Accessibility**: Ensure form validation works with screen readers
 
 ### UI Component Development
+
 - **Component Testing**: Add unit tests for individual UI components
 - **Responsive Design**: Optimize layout for mobile and tablet devices
 - **Loading States**: Enhanced loading indicators and progress feedback
 - **Results Enhancement**: Improve results display with formatting options
 
 ### Service Integration
+
 - **Error Recovery**: Enhanced error handling for service failures
 - **Performance**: Optimize service calls and response handling
 - **Usage Tracking**: Additional metrics and cost monitoring
 - **Caching**: Consider client-side caching for improved performance
 
 ### Route-Level Testing
+
 - **Integration Tests**: End-to-end testing of form submission flow
 - **Server Action Tests**: Validation of server-side form processing
 - **Component Tests**: UI component functionality and user interaction

@@ -140,16 +140,19 @@ Commands are available for development and build (local development with hot rel
 ## Common Error Patterns
 
 ### Environment Configuration
+
 - **Missing OPENROUTER_TOKEN**: Check `wrangler secret put OPENROUTER_TOKEN`
 - **Database Connection**: Verify `DATABASE_URL` format for Neon Postgres
 - **AI Gateway Issues**: Confirm `AI_GATEWAY_BASE_URL` and optional `CF_AIG_TOKEN`
 
 ### Module Integration
+
 - **Import Errors**: Check co-located exports in `index.ts` files
 - **Type Errors**: Verify module-level `types.ts` files are properly exported
 - **Service Dependencies**: Ensure shared services (`ai-gateway.service.ts`, `r2.util.ts`) are imported correctly
 
 ### Database Issues
+
 - **Connection Pooling**: See `src/lib/server/db/client.ts` for Neon configuration
 - **Schema Changes**: Update `src/lib/server/db/schema.ts` with Drizzle ORM
 - **Query Performance**: Check database service implementations for optimization patterns
@@ -157,18 +160,21 @@ Commands are available for development and build (local development with hot rel
 ## 📋 AI Agent Reference
 
 ### File Organization Patterns
+
 - **Services**: Each domain has a main service file containing the core business logic
 - **Types**: Each module has one types file with all TypeScript definitions
 - **Routes**: Each domain has its own UI directory with co-located components
 - **Shared**: Common utilities used across multiple domains
 
 ### Common Tasks
+
 - **Add New Module**: Use existing modules as templates for structure and patterns
 - **Add Route**: Create new domain directory with standard SvelteKit structure
 - **Database Operations**: Extend database schema and related service files
 - **AI Integration**: Use shared AI Gateway service for LLM functionality
 
 ### Testing Approach
+
 - **Unit Tests**: Tests live next to the code they test
 - **Integration**: Cross-module testing in dedicated test directory
 - **Coverage**: Comprehensive reporting available for quality assurance

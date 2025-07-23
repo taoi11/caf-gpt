@@ -97,16 +97,19 @@ npm run test:unit -- --coverage
 ## 🔄 Testing Integration Map
 
 ### Module Testing
+
 - **PaceNote**: Service unit tests, R2 integration tests
 - **PolicyFoo**: Handler tests, database integration tests, multi-agent workflow tests
 - **Shared Services**: AI Gateway tests, database connection tests
 
-### Route Testing  
+### Route Testing
+
 - **UI Components**: Component rendering and interaction tests
 - **Server Actions**: Form validation and service integration tests
 - **End-to-End**: Complete user workflows via integration tests
 
 ### Test Environment Configuration
+
 - **Client Tests**: Browser environment simulation
 - **Server Tests**: Node.js environment with mocked Cloudflare bindings
 - **Integration Tests**: Full stack testing with real service connections
@@ -114,12 +117,14 @@ npm run test:unit -- --coverage
 ## 🔍 Testing Patterns for AI Agents
 
 ### When Adding New Features
+
 1. **Unit Tests**: Test business logic in `*.test.ts` files
 2. **Integration Tests**: Test service interactions in `tests/integration/`
 3. **Component Tests**: Test UI behavior in component directories
 4. **Coverage Check**: Ensure `npm run test:coverage` meets standards
 
 ### Test Data Management
+
 - **Fixtures**: Reusable test data in `tests/fixtures/`
 - **Mocks**: Service mocks for isolated testing
 - **Environment**: Test-specific environment variable configuration

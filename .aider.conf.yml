@@ -1,6 +1,6 @@
 architect: true
 watch-files: true
-max-chat-history-tokens: "8192"
+max-chat-history-tokens: '8192'
 restore-chat-history: false
 read:
   # - .github/instructions/base.instructions.md
@@ -15,7 +15,7 @@ read:
 auto-commits: false
 attribute-commit-message-author: true
 
-map-tokens: "2048"
+map-tokens: '2048'
 map-refresh: always
 
 editor: neovim

@@ -10,7 +10,7 @@
 **Route Integration**: `src/routes/policy/` → Chat UI + server logic  
 **Dependencies**: AI Gateway, Neon Postgres, Multi-Agent LLM Workflow
 
-**Key Files**: `index.ts` (router), `doadFoo/README.md` (3-stage workflow), `leaveFoo/README.md` (2-stage workflow), `ai-gateway.util.ts` (AI wrapper)
+**Key Files**: `index.ts` (router), `doadFoo/README.md` (3-stage workflow), `leaveFoo/README.md` (2-stage workflow)
 
 **Related**: `src/routes/policy/+page.server.ts` (server integration)
 
@@ -26,7 +26,6 @@ policyFoo/
 ├── index.ts                     # Main router and entry point
 ├── types.ts                     # TypeScript type definitions
 ├── constants.ts                 # Configuration and constants
-├── ai-gateway.util.ts           # PolicyFoo wrapper for shared AI Gateway service
 ├── doadFoo/                     # DOAD policy handler
 │   ├── README.md               # DOAD-specific implementation details
 │   ├── index.ts                # DOAD handler orchestration
@@ -49,16 +48,19 @@ policyFoo/
 ## 🔄 Integration Points
 
 ### With Routes (`src/routes/policy/`)
+
 - **Message Handling**: Server actions process chat messages
 - **UI Components**: Chat interface and citation rendering
 - **Service Integration**: Imports router function from module
 
 ### With Shared Services
-- **AI Gateway**: Custom wrapper in `ai-gateway.util.ts`
+
+- **AI Gateway**: Direct use of shared AI Gateway service from `$lib/server/ai-gateway.service.js`
 - **Database**: Neon Postgres via shared database client
 - **Error Handling**: Unified error types and patterns
 
 ### Between Handlers
+
 - **Shared Types**: Common interfaces in `types.ts`
 - **Shared Infrastructure**: Database client, AI Gateway service
 - **Consistent Response**: Both return XML for frontend parsing
@@ -66,6 +68,7 @@ policyFoo/
 ## Key Features
 
 ### Router-Based Architecture
+
 - **Policy Set Detection**: Routes to appropriate handler (DOAD/LEAVE)
 - **Stateless Design**: No server-side conversation storage
 - **Independent Scaling**: Each request scales independently
@@ -73,21 +76,23 @@ policyFoo/
 
 ### Handler Comparison
 
-| Feature | DOAD Handler | LEAVE Handler |
-|---------|--------------|---------------|
-| **Workflow** | 3-stage (finder → selector → main) | 2-stage (finder → main) |
-| **Database** | Chunked content with metadata | Chapter-based structure |
-| **Token Usage** | ~2500-4500 per query | ~2000-3000 per query |
-| **Response Time** | ~5-12 seconds | ~3-7 seconds |
-| **Optimization** | Precision-focused | Speed-focused |
+| Feature           | DOAD Handler                       | LEAVE Handler           |
+| ----------------- | ---------------------------------- | ----------------------- |
+| **Workflow**      | 3-stage (finder → selector → main) | 2-stage (finder → main) |
+| **Database**      | Chunked content with metadata      | Chapter-based structure |
+| **Token Usage**   | ~2500-4500 per query               | ~2000-3000 per query    |
+| **Response Time** | ~5-12 seconds                      | ~3-7 seconds            |
+| **Optimization**  | Precision-focused                  | Speed-focused           |
 
 ### Policy Sets
+
 - **DOAD**: Production ready, 3-stage workflow, database-driven with intelligent chunk selection
 - **LEAVE**: Production ready, 2-stage workflow, chapter identification with simplified workflow
 
 ## Development
 
 ### Adding New Policy Sets
+
 1. Create new handler directory under `policyFoo/`
 2. Implement handler following input/output contracts
 3. Add policy set to router in `index.ts`
@@ -95,8 +100,8 @@ policyFoo/
 5. Add frontend policy selector option
 
 ### Router Integration
+
 - **Input Contract**: `PolicyQueryInput` with messages and policy set
 - **Output Contract**: `PolicyQueryOutput` with XML response and usage
 - **Error Handling**: Unified error patterns across handlers
 - **Extensibility**: Easy addition of new policy sets
-

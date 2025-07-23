@@ -5,11 +5,10 @@
  * Uses lightweight model for efficient chunk selection from database results.
  */
 
-import type { PolicyAIGatewayMessage } from '../types';
+import { createAIGatewayService, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
 import type { PolicyFooEnvironment } from '../index';
 import type { MetadataSelectorInput, MetadataSelectorOutput, DOADMetadata } from './types';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
-import { createPolicyAIGatewayService } from '../ai-gateway.util';
 
 // Import prompt file directly from local codebase
 import metadataSelectorPromptRaw from './prompts/metadata-selector.md?raw';
@@ -33,11 +32,14 @@ export async function selectRelevantChunks(
 		}
 
 		// Create AI Gateway service for metadata selector
-		const aiGateway = createPolicyAIGatewayService(
+		const aiGateway = createAIGatewayService(
 			env.OPENROUTER_TOKEN!,
 			env.AI_GATEWAY_BASE_URL!,
-			env.CF_AIG_TOKEN!,
-			env.READER_MODEL || MODEL_CONFIG.READER_MODEL
+			{
+				model: env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
+				temperature: 0.1
+			},
+			env.CF_AIG_TOKEN!
 		);
 
 		// Optimize metadata serialization for LLM processing
@@ -49,7 +51,7 @@ export async function selectRelevantChunks(
 			input.userQuery.length > 500 ? input.userQuery.substring(0, 500) + '...' : input.userQuery;
 
 		// Build messages for metadata selector
-		const messages: PolicyAIGatewayMessage[] = [
+		const messages: AIGatewayMessage[] = [
 			{
 				role: 'system',
 				content: metadataSelectorPromptRaw

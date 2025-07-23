@@ -39,16 +39,19 @@ doadFoo/
 ## 🔄 Integration Points
 
 ### With Parent Module
+
 - **Router**: Called when policy_set is "DOAD"
 - **Types**: Uses shared interfaces from `../types.ts`
 - **AI Gateway**: Uses PolicyFoo wrapper for service calls
 
 ### With Database
+
 - **Operations**: Retrieves metadata and content for identified policies
 - **Performance**: Connection pooling and indexed queries
 - **Schema**: `public.doad` table with chunked content and metadata
 
 ### With AI Models
+
 - **Reader Model**: Finder and metadata selector (lightweight tasks)
 - **Main Model**: Final response synthesis (complex reasoning)
 - **Optimization**: Metadata selection reduces content by ~70%
@@ -56,11 +59,13 @@ doadFoo/
 ## Key Features
 
 ### Three-Stage Workflow
+
 1. **Finder**: Identifies relevant DOAD policy numbers (max 5)
 2. **Metadata Selector**: Chooses most relevant content chunks via LLM
 3. **Main Agent**: Synthesizes selected content into comprehensive response
 
 ### Performance Characteristics
+
 - **Token Usage**: ~2500-4500 tokens per query
 - **Response Time**: ~5-12 seconds (varies by chunk count)
 - **Accuracy**: High precision via multi-stage filtering
@@ -69,6 +74,7 @@ doadFoo/
 ## Development
 
 ### Core Components
+
 - **`index.ts`**: Orchestrates 3-stage workflow with error handling
 - **`finder.ts`**: Policy number identification using READER_MODEL
 - **`metadata-selector.ts`**: LLM-powered chunk selection for relevance
@@ -76,16 +82,19 @@ doadFoo/
 - **`database.service.ts`**: Optimized Postgres operations with retry logic
 
 ### Database Schema
+
 ```sql
 public.doad: id (UUID), text_chunk (TEXT), metadata (JSONB), doad_number (TEXT)
 Indexes: doad_number, GIN on metadata
 ```
 
 ### Model Configuration
+
 - **READER_MODEL**: `anthropic/claude-3-haiku` (identification/selection)
 - **MAIN_MODEL**: `anthropic/claude-3-5-sonnet` (synthesis)
 
 ### Adding New Policies
+
 1. Process content into chunks with metadata
 2. Insert into database via `database.service.ts`
 3. Update `DOAD-list-table.md` reference

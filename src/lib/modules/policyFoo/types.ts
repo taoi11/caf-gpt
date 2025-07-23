@@ -5,12 +5,6 @@
  * Handles policy question answering with LLM-powered agents.
  */
 
-import type {
-	AIGatewayConfig,
-	AIGatewayMessage,
-	AIGatewayResponse
-} from '$lib/server/ai-gateway.service.js';
-
 /**
  * Supported policy sets for routing queries
  */
@@ -56,24 +50,6 @@ export interface PolicyQueryOutput {
 		};
 	};
 }
-
-/**
- * Configuration for AI Gateway service
- * Type alias for shared AI Gateway configuration
- */
-export type PolicyAIGatewayConfig = AIGatewayConfig;
-
-/**
- * Message format for AI Gateway
- * Type alias for shared AI Gateway message format
- */
-export type PolicyAIGatewayMessage = AIGatewayMessage;
-
-/**
- * Response from AI Gateway
- * Type alias for shared AI Gateway response format
- */
-export type PolicyAIGatewayResponse = AIGatewayResponse;
 
 /**
  * Policy finder agent input

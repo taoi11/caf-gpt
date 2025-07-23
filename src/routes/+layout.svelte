@@ -6,7 +6,7 @@
 	let { children } = $props();
 
 	// Use derived store for runes mode compatibility
-	const isPolicyPage = derived(page, $page => $page.route?.id === '/policy');
+	const isPolicyPage = derived(page, ($page) => $page.route?.id === '/policy');
 </script>
 
 <div class="min-h-screen bg-gray-50">

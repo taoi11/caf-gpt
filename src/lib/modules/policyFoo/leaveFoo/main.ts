@@ -5,10 +5,10 @@
  * Uses the main LLM model optimized for complex reasoning and citation generation.
  */
 
-import type { PolicyMainInput, PolicyMainOutput, PolicyAIGatewayMessage } from '../types';
+import { createAIGatewayService, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
+import type { PolicyMainInput, PolicyMainOutput } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
-import { createPolicyAIGatewayService } from '../ai-gateway.util';
 
 /**
  * Generate leave policy response with citations and analysis
@@ -26,11 +26,14 @@ export async function generateLeaveResponse(
 		validateMainInput(input);
 
 		// Create AI Gateway service for main agent
-		const aiService = createPolicyAIGatewayService(
+		const aiService = createAIGatewayService(
 			env.OPENROUTER_TOKEN,
 			env.AI_GATEWAY_BASE_URL,
-			env.CF_AIG_TOKEN,
-			env.MAIN_MODEL || MODEL_CONFIG.MAIN_MODEL
+			{
+				model: env.MAIN_MODEL || MODEL_CONFIG.MAIN_MODEL,
+				temperature: 0.1
+			},
+			env.CF_AIG_TOKEN
 		);
 
 		// Build messages for main agent
@@ -63,8 +66,8 @@ export async function generateLeaveResponse(
 /**
  * Build messages for the main agent
  */
-function buildMainMessages(input: PolicyMainInput): PolicyAIGatewayMessage[] {
-	const messages: PolicyAIGatewayMessage[] = [];
+function buildMainMessages(input: PolicyMainInput): AIGatewayMessage[] {
+	const messages: AIGatewayMessage[] = [];
 
 	// For leave policy, we expect only one policy document
 	const leavePolicy = input.policyContent[0];
