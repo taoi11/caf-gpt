@@ -6,7 +6,11 @@ const config = {
 	kit: {
 		adapter: adapter({
 			// Enable automatic type generation from wrangler.jsonc
-			config: 'wrangler.jsonc'
+			config: 'wrangler.jsonc',
+			// Optimize for faster builds and fewer file writes
+			routes: {
+				include: ['/*']
+			}
 		}),
 		// Fix 403 CSRF errors in development with Cloudflare Workers
 		csrf: {

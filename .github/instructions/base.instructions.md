@@ -56,5 +56,5 @@ applyTo: '**'
 ## Efficiency Guidelines
 
 - **Investigate Before Asking**: Use semantic_search, file_search, grep_search to understand the codebase before asking clarifying questions. Only ask the user for information that cannot be found through investigation.
-- **Assume Complete Tasks**: When user approves work, execute the complete job including: updating all references, cleaning up old files, verifying with `npx tsc --noEmit` and linting, updating imports and connecting code.
+- **Assume Complete Tasks**: When user approves work, execute the complete job including: updating all references, cleaning up old files, verifying with `npx tsc`, `npm run lint`, updating imports and connecting code.
 - **Batch Related Changes**: Group related edits together rather than asking for permission for each small step

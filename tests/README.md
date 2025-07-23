@@ -1,15 +1,30 @@
 # Testing Strategy
 
+> **🤖 AI Agent Navigation** | **Domain**: Quality Assurance | **Pattern**: Co-located Tests
+
+## 🔍 Quick Reference
+
+**Test Commands**: `npm run test` (all), `npm run test:unit`, `npm run test:integration`  
+**Coverage**: `npm run test:coverage` for comprehensive reporting  
+**Pattern**: Tests co-located with source files (`*.test.ts`)  
+**Environments**: Client-side, server-side, integration testing
+
+## Purpose
+
 This document outlines the testing structure and conventions for CAF GPT.
 
 ## Test Structure
 
+Tests are organized into fixtures for test data and mock responses, integration tests for cross-service testing, end-to-end tests for complete workflows, component unit tests, database layer tests, business logic tests, utility function tests, API endpoint tests, and route component tests.
+
+## Directory Structure
+
 ```
 tests/
-├── fixtures/           # Test data and mock responses
-├── integration/        # Cross-service integration tests
-├── e2e/               # End-to-end tests
-└── README.md          # This file
+├── README.md          # This file
+├── fixtures/          # Test data and mock responses
+├── integration/       # Cross-service integration tests
+└── e2e/              # End-to-end tests
 
 src/
 ├── lib/
@@ -78,3 +93,38 @@ npm run test:unit -- --coverage
 3. **Mock external dependencies**: Database, APIs, file system
 4. **Test edge cases**: Error conditions, boundary values
 5. **Use descriptive names**: Tests should read like documentation
+
+## 🔄 Testing Integration Map
+
+### Module Testing
+
+- **PaceNote**: Service unit tests, R2 integration tests
+- **PolicyFoo**: Handler tests, database integration tests, multi-agent workflow tests
+- **Shared Services**: AI Gateway tests, database connection tests
+
+### Route Testing
+
+- **UI Components**: Component rendering and interaction tests
+- **Server Actions**: Form validation and service integration tests
+- **End-to-End**: Complete user workflows via integration tests
+
+### Test Environment Configuration
+
+- **Client Tests**: Browser environment simulation
+- **Server Tests**: Node.js environment with mocked Cloudflare bindings
+- **Integration Tests**: Full stack testing with real service connections
+
+## 🔍 Testing Patterns for AI Agents
+
+### When Adding New Features
+
+1. **Unit Tests**: Test business logic in `*.test.ts` files
+2. **Integration Tests**: Test service interactions in `tests/integration/`
+3. **Component Tests**: Test UI behavior in component directories
+4. **Coverage Check**: Ensure `npm run test:coverage` meets standards
+
+### Test Data Management
+
+- **Fixtures**: Reusable test data in `tests/fixtures/`
+- **Mocks**: Service mocks for isolated testing
+- **Environment**: Test-specific environment variable configuration

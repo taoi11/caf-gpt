@@ -35,3 +35,7 @@ src/worker-configuration.d.ts
 
 .dev.vars*
 !.dev.vars.example
+
+# Aider
+.aider*
+!.aider.conf.yml

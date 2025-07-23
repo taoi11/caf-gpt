@@ -5,10 +5,10 @@
  * Uses a more capable LLM model optimized for complex reasoning and citation generation.
  */
 
-import type { PolicyMainInput, PolicyMainOutput, PolicyAIGatewayMessage } from '../types';
+import { generateAICompletion, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
+import type { PolicyMainInput, PolicyMainOutput } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
-import { createPolicyAIGatewayService } from '../ai-gateway.util';
 
 /**
  * Generate DOAD policy response with citations and analysis
@@ -25,19 +25,15 @@ export async function generateDOADResponse(
 		// Validate input
 		validateMainInput(input);
 
-		// Create AI Gateway service for main agent
-		const aiService = createPolicyAIGatewayService(
-			env.OPENROUTER_TOKEN,
-			env.AI_GATEWAY_BASE_URL,
-			env.CF_AIG_TOKEN,
-			env.MAIN_MODEL || MODEL_CONFIG.MAIN_MODEL
-		);
-
 		// Build messages for main agent
 		const messages = buildMainMessages(input);
 
-		// Get response from AI Gateway
-		const response = await aiService.generateCompletion(messages);
+		// Get response from AI Gateway using main model
+		const response = await generateAICompletion(
+			messages,
+			env.MAIN_MODEL || MODEL_CONFIG.MAIN_MODEL,
+			env
+		);
 
 		return {
 			response: response.response,
@@ -63,8 +59,8 @@ export async function generateDOADResponse(
 /**
  * Build messages for the main agent
  */
-function buildMainMessages(input: PolicyMainInput): PolicyAIGatewayMessage[] {
-	const messages: PolicyAIGatewayMessage[] = [];
+function buildMainMessages(input: PolicyMainInput): AIGatewayMessage[] {
+	const messages: AIGatewayMessage[] = [];
 
 	// Combine policy content into a single reference document
 	const policyReference = input.policyContent

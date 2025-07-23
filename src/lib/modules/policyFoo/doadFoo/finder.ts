@@ -5,10 +5,10 @@
  * Uses a lighter LLM model optimized for policy identification tasks.
  */
 
-import type { PolicyFinderInput, PolicyFinderOutput, PolicyAIGatewayMessage } from '../types';
+import { generateAICompletion, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
+import type { PolicyFinderInput, PolicyFinderOutput } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
-import { createPolicyAIGatewayService } from '../ai-gateway.util';
 import { parsePolicyNumbers } from '$lib/server/r2.util';
 
 /**
@@ -23,19 +23,15 @@ export async function findDOADPolicies(
 	env: PolicyFooEnvironment
 ): Promise<PolicyFinderOutput> {
 	try {
-		// Create AI Gateway service for finder agent
-		const aiService = createPolicyAIGatewayService(
-			env.OPENROUTER_TOKEN,
-			env.AI_GATEWAY_BASE_URL,
-			env.CF_AIG_TOKEN,
-			env.READER_MODEL || MODEL_CONFIG.READER_MODEL
-		);
-
 		// Build messages for finder agent
 		const messages = buildFinderMessages(input);
 
-		// Get response from AI Gateway
-		const response = await aiService.generateCompletion(messages);
+		// Get response from AI Gateway using reader model
+		const response = await generateAICompletion(
+			messages,
+			env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
+			env
+		);
 
 		// Parse policy numbers from response
 		const policyNumbers = parsePolicyNumbers(response.response);
@@ -64,8 +60,8 @@ export async function findDOADPolicies(
 /**
  * Build messages for the finder agent
  */
-function buildFinderMessages(input: PolicyFinderInput): PolicyAIGatewayMessage[] {
-	const messages: PolicyAIGatewayMessage[] = [];
+function buildFinderMessages(input: PolicyFinderInput): AIGatewayMessage[] {
+	const messages: AIGatewayMessage[] = [];
 
 	// Add system message with finder prompt and policy list
 	const systemContent = `${input.finderPrompt}

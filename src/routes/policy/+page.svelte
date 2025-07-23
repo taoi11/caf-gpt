@@ -97,22 +97,32 @@
 </svelte:head>
 
 <div class="max-w-6xl mx-auto p-4 min-h-screen flex flex-col">
-	<header class="text-center mb-8 pb-4 border-b-2 border-blue-600">
-		<h1 class="text-4xl font-bold text-gray-700 mb-2">Policy Assistant</h1>
-		<p class="text-lg text-gray-600 opacity-80">{data.description}</p>
-	</header>
+	{#if messages.length === 0}
+		<header class="text-center border-b-2 border-blue-600 mb-8 pb-4">
+			<h1 class="font-bold text-gray-700 text-4xl mb-2">Policy Assistant</h1>
+			<p class="text-lg text-gray-600 opacity-80">{data.description}</p>
+		</header>
+	{/if}
 
-	<main class="flex-1 flex flex-col gap-6">
+	<main class="flex-1 flex flex-col {messages.length > 0 ? 'gap-2' : 'gap-6'}">
 		<!-- Policy Selector -->
-		<div class="bg-white p-4 rounded-lg shadow-sm">
-			<PolicySelector policySets={data.policy_sets} bind:selected={selectedPolicySet} />
+		<div class="bg-white {messages.length > 0 ? 'p-2' : 'p-4'} rounded-lg shadow-sm">
+			<PolicySelector
+				policySets={data.policy_sets}
+				bind:selected={selectedPolicySet}
+				compact={messages.length > 0}
+			/>
 		</div>
 
 		<!-- Conversation Display -->
-		<div class="flex-1 bg-white rounded-lg shadow-sm overflow-hidden">
+		<div
+			class={messages.length > 0
+				? 'bg-white rounded-lg shadow-sm overflow-hidden max-h-[75vh] flex-1 flex flex-col'
+				: 'flex-1 bg-white rounded-lg shadow-sm overflow-hidden'}
+		>
 			{#if messages.length > 0}
 				<div
-					class="flex flex-col md:flex-row md:justify-between md:items-center gap-4 p-4 border-b border-gray-200"
+					class="flex flex-col md:flex-row md:justify-between md:items-center gap-2 p-3 border-b border-gray-200"
 				>
 					<h2 class="text-xl font-semibold text-gray-800">Conversation</h2>
 					<button
@@ -147,7 +157,7 @@
 			bind:this={formElement}
 			method="POST"
 			action="?/query"
-			class="bg-white p-4 rounded-lg shadow-sm"
+			class="bg-white {messages.length > 0 ? 'p-3' : 'p-4'} rounded-lg shadow-sm"
 			use:enhance={({ formElement, formData, action, cancel, submitter }) => {
 				// Add current messages to form data
 				formData.set('messages', JSON.stringify(messages));

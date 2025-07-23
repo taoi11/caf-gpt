@@ -5,11 +5,10 @@
  * Uses a lighter LLM model optimized for chapter identification tasks.
  */
 
+import { generateAICompletion, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
 import type { LeaveFinderInput, LeaveFinderOutput } from './types';
-import type { PolicyAIGatewayMessage } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
-import { createPolicyAIGatewayService } from '../ai-gateway.util';
 
 /**
  * Find relevant leave policy chapters for a user query
@@ -24,19 +23,15 @@ export async function findLeaveChapters(
 ): Promise<LeaveFinderOutput> {
 	validateFinderInput(input);
 	try {
-		// Create AI Gateway service for finder agent
-		const aiService = createPolicyAIGatewayService(
-			env.OPENROUTER_TOKEN,
-			env.AI_GATEWAY_BASE_URL,
-			env.CF_AIG_TOKEN,
-			env.READER_MODEL || MODEL_CONFIG.READER_MODEL
-		);
-
 		// Build messages for finder agent
 		const messages = buildFinderMessages(input);
 
-		// Get response from AI Gateway
-		const response = await aiService.generateCompletion(messages);
+		// Get response from AI Gateway using reader model
+		const response = await generateAICompletion(
+			messages,
+			env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
+			env
+		);
 
 		// Parse chapter numbers from response
 		const chapters = parseChapterNumbers(response.response);
@@ -65,8 +60,8 @@ export async function findLeaveChapters(
 /**
  * Build messages for the finder agent
  */
-function buildFinderMessages(input: LeaveFinderInput): PolicyAIGatewayMessage[] {
-	const messages: PolicyAIGatewayMessage[] = [];
+function buildFinderMessages(input: LeaveFinderInput): AIGatewayMessage[] {
+	const messages: AIGatewayMessage[] = [];
 
 	// Add system message with finder prompt and chapter list
 	const systemContent = `${input.finderPrompt}
