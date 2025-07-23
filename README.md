@@ -11,6 +11,30 @@ AI-powered assistance tools for CAF troops with modular, maintainable architectu
 **For Policy Updates**: See [PolicyFoo Service](#policyfoo-service) → [DOAD Handler](src/lib/modules/policyFoo/doadFoo/README.md)  
 **For Performance Issues**: Review [Testing Strategy](tests/README.md) → Module-specific performance sections
 
+## Development
+
+### Quick Commands
+
+```bash
+npm run dev           # Build once, then start wrangler dev (recommended)
+npm run dev:local     # Build once, then start wrangler dev locally
+npm run dev:remote    # Build once, then start wrangler dev with remote resources
+npm run build         # Build for production
+npm run preview       # Build and preview locally
+```
+
+### Development Workflow
+
+The development setup uses SvelteKit's built-in Cloudflare adapter integration:
+
+1. **Build First**: `vite build` generates optimized Cloudflare Workers-compatible output
+2. **Wrangler Dev**: `wrangler dev` serves the pre-built application with live bindings
+3. **No Double Builds**: Build happens once upfront, eliminating rebuild loops
+
+For rapid iteration during development:
+- Use `npm run dev:build-only` to rebuild SvelteKit changes
+- Use `npm run dev:wrangler-only` to restart just the Wrangler dev server
+
 ## Overview
 
 **Domain Modules:**
