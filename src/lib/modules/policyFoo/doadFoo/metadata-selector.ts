@@ -5,7 +5,7 @@
  * Uses lightweight model for efficient chunk selection from database results.
  */
 
-import { createAIGatewayService, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
+import { generateAICompletion, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
 import type { PolicyFooEnvironment } from '../index';
 import type { MetadataSelectorInput, MetadataSelectorOutput, DOADMetadata } from './types';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
@@ -31,17 +31,6 @@ export async function selectRelevantChunks(
 			return { selectedChunkIds: [], usage: undefined };
 		}
 
-		// Create AI Gateway service for metadata selector
-		const aiGateway = createAIGatewayService(
-			env.OPENROUTER_TOKEN!,
-			env.AI_GATEWAY_BASE_URL!,
-			{
-				model: env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
-				temperature: 0.1
-			},
-			env.CF_AIG_TOKEN!
-		);
-
 		// Optimize metadata serialization for LLM processing
 		const optimizedMetadata = optimizeMetadataForLLM(input.doadMetadata);
 		const metadataJson = JSON.stringify(optimizedMetadata, null, 2);
@@ -66,7 +55,11 @@ export async function selectRelevantChunks(
 		const startTime = Date.now();
 
 		// Call AI Gateway with READER_MODEL (lightweight, efficient)
-		const response = await aiGateway.generateCompletion(messages);
+		const response = await generateAICompletion(
+			messages,
+			env.READER_MODEL || MODEL_CONFIG.READER_MODEL,
+			env
+		);
 
 		const duration = Date.now() - startTime;
 		console.log(

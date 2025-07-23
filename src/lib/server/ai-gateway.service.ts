@@ -204,3 +204,29 @@ export function createAIGatewayService(
 ): AIGatewayService {
 	return new AIGatewayService(openrouterToken, aiGatewayBaseURL, config, cfAigToken);
 }
+
+/**
+ * Simple AI completion function - just messages + model name
+ * Everything else uses consistent defaults (temperature: 0.1)
+ */
+export async function generateAICompletion(
+	messages: AIGatewayMessage[],
+	model: string,
+	env: {
+		OPENROUTER_TOKEN: string;
+		AI_GATEWAY_BASE_URL: string;
+		CF_AIG_TOKEN?: string;
+	}
+): Promise<AIGatewayResponse> {
+	const aiService = createAIGatewayService(
+		env.OPENROUTER_TOKEN,
+		env.AI_GATEWAY_BASE_URL,
+		{
+			model,
+			temperature: 0.1
+		},
+		env.CF_AIG_TOKEN
+	);
+
+	return aiService.generateCompletion(messages);
+}

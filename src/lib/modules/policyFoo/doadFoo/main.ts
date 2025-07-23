@@ -5,7 +5,7 @@
  * Uses a more capable LLM model optimized for complex reasoning and citation generation.
  */
 
-import { createAIGatewayService, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
+import { generateAICompletion, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
 import type { PolicyMainInput, PolicyMainOutput } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
@@ -25,22 +25,15 @@ export async function generateDOADResponse(
 		// Validate input
 		validateMainInput(input);
 
-		// Create AI Gateway service for main agent
-		const aiService = createAIGatewayService(
-			env.OPENROUTER_TOKEN,
-			env.AI_GATEWAY_BASE_URL,
-			{
-				model: env.MAIN_MODEL || MODEL_CONFIG.MAIN_MODEL,
-				temperature: 0.1
-			},
-			env.CF_AIG_TOKEN
-		);
-
 		// Build messages for main agent
 		const messages = buildMainMessages(input);
 
-		// Get response from AI Gateway
-		const response = await aiService.generateCompletion(messages);
+		// Get response from AI Gateway using main model
+		const response = await generateAICompletion(
+			messages,
+			env.MAIN_MODEL || MODEL_CONFIG.MAIN_MODEL,
+			env
+		);
 
 		return {
 			response: response.response,
