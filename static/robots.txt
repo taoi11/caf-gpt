@@ -1,0 +1,38 @@
+# CAF GPT - Restricted Access Site
+# This site is for authorized Canadian Armed Forces personnel only
+# No public crawling or indexing permitted
+
+User-agent: *
+Disallow: /
+
+# Block all major search engines explicitly
+User-agent: Googlebot
+Disallow: /
+
+User-agent: Bingbot
+Disallow: /
+
+User-agent: Slurp
+Disallow: /
+
+User-agent: DuckDuckBot
+Disallow: /
+
+User-agent: Baiduspider
+Disallow: /
+
+User-agent: YandexBot
+Disallow: /
+
+User-agent: facebookexternalhit
+Disallow: /
+
+User-agent: Twitterbot
+Disallow: /
+
+User-agent: LinkedInBot
+Disallow: /
+
+# No sitemap provided
+# Crawl-delay: Maximum delay for any persistent crawlers
+Crawl-delay: 86400
