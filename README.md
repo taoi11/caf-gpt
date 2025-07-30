@@ -33,12 +33,14 @@ The development setup is optimized to minimize build overhead:
 4. **Production Ready**: Same configuration works for both development and deployment
 
 The custom build configuration ensures:
+
 - ✅ **Single Initial Build**: Build runs once on startup, then only on source changes
-- ✅ **Fast Rebuilds**: Only rebuilds when files in `src/` directory change  
+- ✅ **Fast Rebuilds**: Only rebuilds when files in `src/` directory change
 - ✅ **Production Compatibility**: Same build process for local dev and Cloudflare Pages deployment
 - ✅ **No File Conflicts**: Wrangler watches source files, not build outputs
 
 For rapid iteration during development:
+
 - Use `npm run dev:build-only` to rebuild SvelteKit changes
 - Use `npm run dev:wrangler-only` to restart just the Wrangler dev server
 
