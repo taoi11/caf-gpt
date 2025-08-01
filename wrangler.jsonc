@@ -22,13 +22,6 @@
 	"ai": {
 		"binding": "AI"
 	},
-	"r2_buckets": [
-		{
-			"binding": "POLICIES",
-			"bucket_name": "policies",
-			"preview_bucket_name": "policies"
-		}
-	],
 	"vars": {
 		// https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 		"FN_MODEL": "openai/gpt-4.1-mini",

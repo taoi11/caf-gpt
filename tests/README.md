@@ -98,7 +98,7 @@ npm run test:unit -- --coverage
 
 ### Module Testing
 
-- **PaceNote**: Service unit tests, R2 integration tests
+- **PaceNote**: Service unit tests, static import integration tests
 - **PolicyFoo**: Handler tests, database integration tests, multi-agent workflow tests
 - **Shared Services**: AI Gateway tests, database connection tests
 

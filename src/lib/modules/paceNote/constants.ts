@@ -50,9 +50,10 @@ export const VALIDATION_LIMITS = {
 } as const;
 
 /**
- * R2 file paths for external content
+ * Local file paths for competency content
  */
-export const R2_PATHS = {
-	EXAMPLES: 'paceNote/examples.md',
-	COMPETENCIES: (rank: string) => `paceNote/${rank.toLowerCase()}.md`
+export const LOCAL_PATHS = {
+	EXAMPLES: '$lib/modules/paceNote/prompts/competencies/examples.md',
+	COMPETENCIES: (rank: string) =>
+		`$lib/modules/paceNote/prompts/competencies/${rank.toLowerCase()}.md`
 } as const;

@@ -9,7 +9,24 @@ import { generateAICompletion, type AIGatewayMessage } from '$lib/server/ai-gate
 import type { PolicyFinderInput, PolicyFinderOutput } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
-import { parsePolicyNumbers } from '$lib/server/r2.util';
+
+/**
+ * Parse policy numbers from AI response
+ */
+function parsePolicyNumbers(response: string): string[] {
+	const cleaned = response.trim().toLowerCase();
+
+	if (cleaned === 'none' || cleaned === 'none found' || cleaned.includes('no relevant')) {
+		return [];
+	}
+
+	// Split by commas and clean up each policy number
+	return response
+		.split(',')
+		.map((num) => num.trim())
+		.filter((num) => num.length > 0 && num.toLowerCase() !== 'none')
+		.slice(0, 5); // Limit to max 5 policies as per constants
+}
 
 /**
  * Find relevant DOAD policies for a user query

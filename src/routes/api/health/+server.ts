@@ -30,9 +30,6 @@ export const GET: RequestHandler = async ({ platform }) => {
 			}
 		}
 
-		// Check R2 storage
-		status.checks.storage = !!platform?.env?.POLICIES;
-
 		// Determine overall status
 		const allHealthy = Object.values(status.checks).every((check) => check === true);
 		status.status = allHealthy ? 'healthy' : 'degraded';

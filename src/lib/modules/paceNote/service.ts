@@ -5,37 +5,29 @@
 // Imports
 import { createAIGatewayService } from '$lib/server/ai-gateway.service.js';
 import type { AIGatewayService, AIGatewayResponse } from '$lib/server/ai-gateway.service.js';
-import { readFileAsText } from '$lib/server/r2.util.js';
 import basePromptTemplate from './prompts/base.md?raw';
+import { getCompetenciesForRank, examples } from './prompts/competencies/index.js';
 import type { PaceNoteInput, PaceNoteOutput, PaceNoteRank, RankInfo } from './types.js';
-import {
-	AVAILABLE_RANKS,
-	VALID_RANKS,
-	AI_GATEWAY_CONFIG,
-	VALIDATION_LIMITS,
-	R2_PATHS
-} from './constants.js';
+import { AVAILABLE_RANKS, VALID_RANKS, AI_GATEWAY_CONFIG, VALIDATION_LIMITS } from './constants.js';
 
 // Factory function to create PaceNoteService instance
 export function createPaceNoteService(
 	openrouterToken: string,
 	aiGatewayBaseURL: string,
 	model: string,
-	policiesBucket: R2Bucket
+	cfAigToken?: string
 ): PaceNoteService {
-	return new PaceNoteService(openrouterToken, aiGatewayBaseURL, model, policiesBucket);
+	return new PaceNoteService(openrouterToken, aiGatewayBaseURL, model, cfAigToken);
 }
 
 // Main Service Class
 export class PaceNoteService {
 	private aiService: AIGatewayService;
-	private policiesBucket: R2Bucket;
 
 	constructor(
 		openrouterToken: string,
 		aiGatewayBaseURL: string,
 		model: string,
-		policiesBucket: R2Bucket,
 		cfAigToken?: string
 	) {
 		this.aiService = createAIGatewayService(
@@ -47,7 +39,6 @@ export class PaceNoteService {
 			},
 			cfAigToken
 		);
-		this.policiesBucket = policiesBucket;
 	}
 
 	// Input validation
@@ -78,13 +69,13 @@ export class PaceNoteService {
 	}
 
 	// Prompt building
-	private async buildSystemPrompt(rank: PaceNoteRank, competencyFocus?: string[]): Promise<string> {
-		const competencies = await this.getCompetenciesForRank(rank);
-		const examples = await this.getExamples();
+	private buildSystemPrompt(rank: PaceNoteRank, competencyFocus?: string[]): string {
+		const competencies = getCompetenciesForRank(rank);
+		const exampleContent = examples;
 
 		let systemPrompt = basePromptTemplate
 			.replace('{{competency_list}}', competencies)
-			.replace('{{examples}}', examples);
+			.replace('{{examples}}', exampleContent);
 
 		if (competencyFocus && competencyFocus.length > 0) {
 			const focusAreas = competencyFocus.join(', ');
@@ -98,23 +89,11 @@ export class PaceNoteService {
 		return observations.trim();
 	}
 
-	// R2 operations
-	private async getCompetenciesForRank(rank: PaceNoteRank): Promise<string> {
-		const filePath = R2_PATHS.COMPETENCIES(rank);
-		const competencyContent = await readFileAsText(this.policiesBucket, filePath);
-		return competencyContent;
-	}
-
-	private async getExamples(): Promise<string> {
-		const exampleContent = await readFileAsText(this.policiesBucket, R2_PATHS.EXAMPLES);
-		return exampleContent;
-	}
-
 	// Main generation
 	async generatePaceNote(input: PaceNoteInput): Promise<PaceNoteOutput> {
 		try {
 			this.validateInput(input);
-			const systemPrompt = await this.buildSystemPrompt(input.rank, input.competencyFocus);
+			const systemPrompt = this.buildSystemPrompt(input.rank, input.competencyFocus);
 			const userMessage = this.buildUserMessage(input.observations);
 			const response = await this.aiService.generateFromPrompt(userMessage, systemPrompt);
 			return {

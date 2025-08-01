@@ -19,11 +19,8 @@ export {
 	VALID_RANKS,
 	AI_GATEWAY_CONFIG,
 	VALIDATION_LIMITS,
-	R2_PATHS
+	LOCAL_PATHS
 } from './constants.js';
 
 // Export service class and factory
 export { PaceNoteService, createPaceNoteService } from './service.js';
-
-// Export R2 utilities (now centralized)
-export { readFileAsText } from '$lib/server/r2.util.js';

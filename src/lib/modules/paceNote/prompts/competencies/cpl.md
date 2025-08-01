@@ -1,0 +1,43 @@
+# Corporal / Sailor 1st Class
+
+| Competency | Facets | Behavioural Indicators |
+|------------|--------|------------------------|
+| Communication | Written Communication | Demonstrates basic written communications skills, Follows accepted military written communication guidelines as directed by chain of command (CoC) |
+| Communication | Oral Communication | Communicates their objectives verbally |
+| Communication | Tailored Communication | Uses appropriate means to communicate information and ideas (e.g., email, face-to-face) |
+| Communication | Attentiveness | Actively listens to others (e.g., paraphrases, asks questions, uses appropriate eye contact and body language) |
+| Communication | Confirmation | Seeks clarification to improve understanding when communicating, as appropriate |
+| Communication | Open Communication | Communicates openly with others |
+| Technical/Professional Proficiency | Technical Efficacy | Performs job tasks reliably, skillfully, and safely |
+| Technical/Professional Proficiency | Demonstrating Technical Knowledge | Acquires and applies technical capabilities relevant to employment |
+| Technical/Professional Proficiency | Technical Currency | Maintains technical currency in present job |
+| Technical/Professional Proficiency | Policy/Program Application | Applies technically relevant regulations, orders, directives, and standard operating procedures (SOPs) |
+| Action Orientation and Initiative | Initiative | Initiates actions required to complete their tasks |
+| Action Orientation and Initiative | Perseverance | Is determined and remains task-focused regardless of the working conditions |
+| Teamwork | Collaboration | Assists teammates with their tasks upon completion of own tasks, Accomplishes own share of assigned tasks |
+| Teamwork | Enabling Team Goals | Encourages teammates to accomplish team tasks |
+| Teamwork | Team Optimization | Integrates self into the team quickly |
+| Teamwork | Team Morale | Is aware of their influence on team morale and adjusts their behavior accordingly |
+| Teamwork | Team Communication | Keeps teammates informed to facilitate collaborative team efforts |
+| Interpersonal Relations | Developing Relationships | Makes a conscious effort to build rapport with others |
+| Interpersonal Relations | Trust | Fosters two-way trust in dealing with peers |
+| Interpersonal Relations | Concern for Others | Demonstrates genuine concern for peers |
+| Interpersonal Relations | Culture of Respect | Treats others with respect |
+| Credibility and Influence | Confidence | Demonstrates self-assurance when accomplishing assigned tasks, Inspires the confidence of peers |
+| Credibility and Influence | Responsibility | Accepts responsibility for own actions and decisions, Uses authority for the good of the CAF/DND rather than for personal gain |
+| Credibility and Influence | Reliable | Is reliable but also asks for assistance when needed |
+| Credibility and Influence | Art of Influence | Provides credible advice using facts and/or experience |
+| Credibility and Influence | Impact | Recognizes the impact of own actions |
+| Developing Self | Seeking Opportunities | Participates in the development of own individual learning plan, Seeks opportunities to hone leadership skills |
+| Improving Technical/Professional Knowledge | Expands their technical knowledge to include other roles in their occupation (i.e., outside of current position) |
+| Commitment to Military Ethos | Military Professionalism | Conforms to the culture of the military profession (e.g., good dress and deportment, adheres to military and occupational code of conduct), Demonstrates CAF military ethos on and off duty |
+| Commitment to Military Ethos | Military Customs, Values, Traditions | Displays CAF military values and is learning about CAF military customs and accepted traditions |
+| Commitment to Military Ethos | Duty before Self (People First, Mission Always) | Demonstrates familiarity with the professional precept of duty before self |
+| Commitment to Military Ethos | Openness | Demonstrates openness to new ideas |
+| Commitment to Military Ethos | Military Conduct | Obeys lawful orders and directives, Adheres to a clearly defined CoC and obeys the code of conduct |
+| Commitment to Military Ethos | Courage | Demonstrates courage, regardless of potential risk to self |
+| Commitment to Military Ethos | Change | Demonstrates a positive attitude when faced with change |
+| Commitment to Military Ethos | Change Communication | Provides feedback to the CoC on implemented changes, when requested, as appropriate |
+| Stress Management and Resiliency | Performance under Stress | Maintains composure when faced with stressful situations, Performs effectively in stressful situations |
+| Stress Management and Resiliency | Stress Management | Recognizes stress in self and takes steps to reduce it (e.g., seeks out assistance) |
+| Stress Management and Resiliency | Stress Education | Demonstrates basic knowledge of coping mechanisms and of the effects of stress on well-being |

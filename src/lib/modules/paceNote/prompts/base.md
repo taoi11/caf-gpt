@@ -12,6 +12,7 @@ Your job is to take the info from the user and write a **two paragraph** long fe
 <tone>Write this in a professional tone</tone>
 <reference>Use 'the member' to refer to the person that this feedback note is about</reference>
 <length>Keep it short and concise!</length>
+<specificity>Write specific content based on the user's input. Do NOT use generic phrases or copy content from the examples - the examples are only provided to show the structure and format of the response.</specificity>
 </guidelines>
 </instructions>
 
@@ -28,4 +29,8 @@ Your job is to take the info from the user and write a **two paragraph** long fe
 <examples>
 {{examples}}
 </examples>
+
+<important>
+The examples above are provided ONLY to demonstrate the proper structure and format. Do NOT copy or use generic content from these examples. Your response must be specific to the user's actual input and situation.
+</important>
 </data>

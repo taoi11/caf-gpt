@@ -7,10 +7,10 @@
 **Entry Point**: `service.ts` → `PaceNoteService` class  
 **Types**: `types.ts` → `PaceNoteInput`, `PaceNoteOutput`, `PaceNoteRank`  
 **Route Integration**: `src/routes/pacenote/` → UI + server logic  
-**Dependencies**: AI Gateway, R2 Storage  
+**Dependencies**: AI Gateway  
 **Performance**: Rank-specific feedback generation with competency mapping
 
-**Key Files**: `service.ts` (core logic), `constants.ts` (rank mappings), `types.ts` (type definitions), `prompts/base.md` (AI template)
+**Key Files**: `service.ts` (core logic), `constants.ts` (rank mappings), `types.ts` (type definitions), `prompts/base.md` (AI template), `prompts/competencies/` (rank competency files)
 
 **Related**: `src/routes/pacenote/+page.server.ts` (server integration)
 
@@ -28,7 +28,13 @@ paceNote/
 ├── types.ts            # TypeScript definitions
 ├── constants.ts        # Configuration and rank mappings
 └── prompts/
-    └── base.md         # AI prompt template
+    ├── base.md         # AI prompt template
+    └── competencies/   # Rank-specific competency files
+        ├── examples.md # Example feedback notes
+        ├── cpl.md      # Corporal competencies
+        ├── mcpl.md     # Master Corporal competencies
+        ├── sgt.md      # Sergeant competencies
+        └── wo.md       # Warrant Officer competencies
 ```
 
 ## 🔄 Integration Points
@@ -42,13 +48,13 @@ paceNote/
 ### With Shared Services
 
 - **AI Gateway**: Uses `createAIGatewayService()` for LLM calls
-- **R2 Storage**: Retrieves competency files via `readFileAsText()`
+- **Local Storage**: Competency files bundled with application as static imports
 - **Configuration**: Environment variables and validation constants
 
 ### External Dependencies
 
 - **LLM Provider**: OpenRouter via AI Gateway
-- **Storage**: Cloudflare R2 for competency files
+- **Storage**: Static competency files imported at build time
 - **Types**: Full TypeScript integration
 
 ## Key Features
@@ -70,9 +76,10 @@ paceNote/
 ### Adding New Ranks
 
 1. Update `AVAILABLE_RANKS` in `constants.ts`
-2. Add rank competency file to R2 storage
+2. Add rank competency file to `prompts/competencies/`
 3. Update `PaceNoteRank` type in `types.ts`
-4. Test with new rank input
+4. Add import for the new competency file in `prompts/competencies/index.ts`
+5. Update the competencies mapping in the index file
 
 ### Service Configuration
 

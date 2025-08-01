@@ -2,7 +2,7 @@ import type { PageServerLoad, Actions } from './$types';
 import { PaceNoteService } from '$lib/modules/paceNote/service.js';
 import type { PaceNoteInput, PaceNoteRank } from '$lib/modules/paceNote/types.js';
 import { AVAILABLE_RANKS } from '$lib/modules/paceNote/constants.js';
-import { hasRequiredConfig, validateEnvironmentConfig, validateR2Bucket } from './config.server.js';
+import { hasRequiredConfig, validateEnvironmentConfig } from './config.server.js';
 import {
 	parseFormData,
 	validateFormData,
@@ -33,14 +33,6 @@ export const actions: Actions = {
 			);
 		}
 
-		// Validate R2 bucket availability
-		if (!validateR2Bucket(platform)) {
-			return createConfigError(
-				'R2 bucket (POLICIES) is not available. Please check your Cloudflare bindings.',
-				{ rank: '', observations: '', competencyFocus: [] }
-			);
-		}
-
 		// Parse and validate form data
 		const data = await request.formData();
 		const formData = parseFormData(data);
@@ -58,7 +50,6 @@ export const actions: Actions = {
 				config.openrouterToken,
 				config.aiGatewayBaseUrl,
 				config.model,
-				config.policiesBucket!, // Validated above
 				config.cfAigToken
 			);
 

@@ -4,18 +4,12 @@
 
 AI-powered assistance tools for CAF troops with modular, maintainable architecture.
 
-## 🚀 Quick Start for AI Agents
-
-**For New Feature Development**: Start with [Project Structure](#project-structure) → Choose module type → Review [Development](#development)  
-**For Bug Fixes**: Check [Common Error Patterns](#common-error-patterns) → Review specific module README  
-**For Policy Updates**: See [PolicyFoo Service](#policyfoo-service) → [DOAD Handler](src/lib/modules/policyFoo/doadFoo/README.md)  
-**For Performance Issues**: Review [Testing Strategy](tests/README.md) → Module-specific performance sections
-
 ## Development
 
 ### Quick Commands
 
 ```bash
+npm run lint          # Run prettier formatting and linting
 npm run dev           # Build once, then start wrangler dev (recommended)
 npm run dev:local     # Build once, then start wrangler dev locally
 npm run dev:remote    # Build once, then start wrangler dev with remote resources
@@ -23,28 +17,7 @@ npm run build         # Build for production
 npm run preview       # Build and preview locally
 ```
 
-### Development Workflow
-
-The development setup is optimized to minimize build overhead:
-
-1. **Build First**: `npm run build` generates optimized Cloudflare Workers-compatible output
-2. **Wrangler Dev**: `wrangler dev` serves the application with live bindings
-3. **Smart Watching**: Only watches `src/` directory to avoid build loops
-4. **Production Ready**: Same configuration works for both development and deployment
-
-The custom build configuration ensures:
-
-- ✅ **Single Initial Build**: Build runs once on startup, then only on source changes
-- ✅ **Fast Rebuilds**: Only rebuilds when files in `src/` directory change
-- ✅ **Production Compatibility**: Same build process for local dev and Cloudflare Pages deployment
-- ✅ **No File Conflicts**: Wrangler watches source files, not build outputs
-
-For rapid iteration during development:
-
-- Use `npm run dev:build-only` to rebuild SvelteKit changes
-- Use `npm run dev:wrangler-only` to restart just the Wrangler dev server
-
-## Overview
+## Overview & Project Structure
 
 **Domain Modules:**
 
@@ -57,7 +30,7 @@ For rapid iteration during development:
 - **Domain Services**: Business logic organized by functional domain
 - **Type-Safe**: End-to-end TypeScript with strict validation
 - **Server-First**: Security and performance through server-side rendering
-- **Database-Driven**: Postgres for structured data and D1 for lightweight storage
+- **Local Storage**: Prompts and templates stored as static files for fast access
 
 ## Project Structure
 
@@ -65,55 +38,35 @@ For rapid iteration during development:
 src/
 ├── lib/
 │   ├── server/
-│   │   ├── ai-gateway.service.ts  # Shared AI Gateway service
-│   │   ├── r2.util.ts             # R2 utility functions
-│   │   └── db/                    # Database infrastructure
-│   │       ├── client.ts          # Neon Postgres connection pooling
-│   │       ├── schema.ts          # Drizzle ORM schema definitions
-│   │       └── types.ts           # Database type definitions
-│   └── modules/                   # Domain-specific business logic
-│       ├── paceNote/              # PaceNote service module
-│       │   ├── README.md          # PaceNote documentation
-│       │   ├── service.ts         # Service implementation
-│       │   ├── types.ts           # Type definitions
-│       │   └── constants.ts       # Configuration
-│       └── policyFoo/             # PolicyFoo service module
-│           ├── README.md          # PolicyFoo documentation
-│           ├── doadFoo/           # DOAD policy handler
-│           │   ├── README.md      # DOAD-specific docs
-│           │   └── *.ts           # Handler implementation
-│           └── leaveFoo/          # Leave policy handler
-└── routes/                        # SvelteKit routes
-    ├── pacenote/                  # PaceNote UI and server logic
-    │   ├── +page.svelte          # PaceNote interface
-    │   ├── +page.server.ts       # Server-side logic
-    │   └── *.svelte              # UI components
-    └── policy/                    # PolicyFoo UI and server logic
-        ├── +page.svelte          # Policy chat interface
-        ├── +page.server.ts       # Server-side logic
-        └── PolicyComponents/     # UI components
+│   │   └── db/
+│   └── modules/
+│       ├── paceNote/
+│       └── policyFoo/
+└── routes/
+  ├── pacenote/
+  └── policy/
 ```
 
 ## Modules
 
 ### PaceNote Service
 
-**Status**: ✅ Production Ready | **Route**: `/pacenote` | **Domain**: Performance Feedback  
-**Documentation**: [PaceNote README](src/lib/modules/paceNote/README.md) | **Route Implementation**: [PaceNote Route](src/routes/pacenote/README.md)
-
-Generate professional feedback notes based on CAF rank competencies (Cpl, MCpl, Sgt, WO).
-
-**Key Dependencies**: AI Gateway, R2 Storage  
+**Status**: ✅ Production Ready
+**Route**: `/pacenote`
+**Domain**: Performance Feedback
+**Documentation**: `src/lib/modules/paceNote/README.md`
+**Route Implementation**: `src/routes/pacenote/README.md`
+**Key Dependencies**: AI Gateway
 **Related Files**: `src/lib/modules/paceNote/` + `src/routes/pacenote/`
 
 ### PolicyFoo Service
 
-**Status**: ✅ Production Ready | **Route**: `/policy` | **Domain**: Policy Q&A  
-**Documentation**: [PolicyFoo README](src/lib/modules/policyFoo/README.md) | **Handlers**: [DOAD](src/lib/modules/policyFoo/doadFoo/README.md) | [LEAVE](src/lib/modules/policyFoo/leaveFoo/README.md)
-
-AI-powered policy question answering with three-stage workflow (finder → metadata selector → main agent). Supports DOAD and LEAVE policies via Neon Postgres database.
-
-**Key Dependencies**: AI Gateway, Neon Postgres, Advanced Multi-Agent Workflow  
+**Status**: ✅ Production Ready
+**Route**: `/policy`
+**Domain**: Policy Q&A
+**Documentation**: `src/lib/modules/policyFoo/README.md`
+**Handlers**: `src/lib/modules/policyFoo/doadFoo/README.md` + `src/lib/modules/policyFoo/leaveFoo/README.md`
+**Key Dependencies**: AI Gateway + Neon Postgres
 **Related Files**: `src/lib/modules/policyFoo/` + `src/routes/policy/`
 
 ## Architecture
@@ -122,11 +75,8 @@ AI-powered policy question answering with three-stage workflow (finder → metad
 
 - **Frontend**: SvelteKit with TypeScript
 - **Backend**: Cloudflare Workers
-- **Databases**:
-  - Drizzle ORM with Cloudflare D1 (SQLite) for application data
-  - Neon Postgres with Drizzle ORM for policy content storage
+- **Databases**: Neon Postgres with Drizzle ORM for policy content storage
 - **AI Integration**: AI Gateway with OpenRouter provider
-- **File Storage**: Cloudflare R2 Storage
 - **Authentication**: Server-side only, no API keys required
 - **Styling**: Tailwind CSS v4
 - **Testing**: Vitest with multiple test environments
@@ -139,36 +89,14 @@ AI-powered policy question answering with three-stage workflow (finder → metad
 - **Comprehensive Testing**: Unit, integration, and client-side test environments
 - **Developer Experience**: Hot reloading, type generation, database migrations
 
-## Project Structure
-
-The source code is organized into server utilities (AI Gateway service, R2 utilities, database infrastructure), domain-specific business logic modules (PaceNote service for feedback generation, PolicyFoo service for policy Q&A), and SvelteKit routes (PaceNote UI and server logic, PolicyFoo UI and server logic).
-
 ## Configuration
-
-### Required Environment Variables
-
-Core functionality requires OpenRouter token for AI services, AI Gateway base URL for routing, and database URL for Postgres connection. Optional variables include enhanced monitoring token and model selection.
 
 ### Cloudflare Bindings
 
 Configure in `wrangler.jsonc`:
 
-- **R2 Bucket**: `POLICIES` (for document storage)
 - **AI Gateway**: Configure with OpenRouter provider
 - **Environment Variables**: Model selection and database URL
-
-## Development
-
-### Available Scripts
-
-Commands are available for development and build (local development with hot reload, build for production, preview build), quality and formatting (TypeScript and Svelte checks, code formatting, linting), testing (run all tests, unit tests, integration tests, coverage), and deployment (deploy to Cloudflare, generate types).
-
-### Quick Start
-
-1. Install dependencies: `npm install`
-2. Configure secrets: `wrangler secret put OPENROUTER_TOKEN`
-3. Start development: `npm run dev`
-4. Deploy: `npm run deploy`
 
 ## Common Error Patterns
 
@@ -182,7 +110,7 @@ Commands are available for development and build (local development with hot rel
 
 - **Import Errors**: Check co-located exports in `index.ts` files
 - **Type Errors**: Verify module-level `types.ts` files are properly exported
-- **Service Dependencies**: Ensure shared services (`ai-gateway.service.ts`, `r2.util.ts`) are imported correctly
+- **Service Dependencies**: Ensure shared services (`ai-gateway.service.ts`) are imported correctly
 
 ### Database Issues
 
@@ -190,7 +118,7 @@ Commands are available for development and build (local development with hot rel
 - **Schema Changes**: Update `src/lib/server/db/schema.ts` with Drizzle ORM
 - **Query Performance**: Check database service implementations for optimization patterns
 
-## 📋 AI Agent Reference
+## 📋 AI Agent Guidelines
 
 ### File Organization Patterns
 
