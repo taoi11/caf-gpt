@@ -1,7 +1,5 @@
 # Core Server Utilities
 
-> **🤖 AI Agent Navigation** | **Domain**: Shared Infrastructure | **Usage**: Cross-Module
-
 ## 🔍 Quick Reference
 
 **Key Services**: `ai-gateway.service.ts`, `db/client.ts`, `db/schema.ts`
