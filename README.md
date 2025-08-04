@@ -114,8 +114,8 @@ Configure in `wrangler.jsonc`:
 
 ### Database Issues
 
-- **Connection Pooling**: See `src/lib/server/db/client.ts` for Neon configuration
-- **Schema Changes**: Update `src/lib/server/db/schema.ts` with Drizzle ORM
+- **Connection Pooling**: See `src/lib/core/db/client.ts` for Neon configuration
+- **Schema Changes**: Update `src/lib/core/db/schema.ts` with Drizzle ORM
 - **Query Performance**: Check database service implementations for optimization patterns
 
 ## 📋 AI Agent Guidelines

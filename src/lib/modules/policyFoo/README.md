@@ -55,7 +55,7 @@ policyFoo/
 
 ### With Shared Services
 
-- **AI Gateway**: Direct use of shared AI Gateway service from `$lib/server/ai-gateway.service.js`
+- **AI Gateway**: Direct use of shared AI Gateway service from `$lib/core/ai-gateway.service.js`
 - **Database**: Neon Postgres via shared database client
 - **Error Handling**: Unified error types and patterns
 

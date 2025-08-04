@@ -2,7 +2,7 @@
  * DOAD-specific types for database-driven policy handling
  */
 
-import type { DOADChunk, DOADMetadata } from '../../../server/db/types';
+import type { DOADChunk, DOADMetadata } from '../../../core/db/types';
 
 /**
  * Input for metadata selector agent
@@ -35,4 +35,4 @@ export interface ChunkBasedPolicyContent {
 /**
  * Re-export database types for convenience
  */
-export type { DOADChunk, DOADMetadata } from '../../../server/db/types';
+export type { DOADChunk, DOADMetadata } from '../../../core/db/types';

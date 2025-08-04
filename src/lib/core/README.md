@@ -31,8 +31,8 @@ server/
 ## Usage Example
 
 ```typescript
-import { createAIGatewayService } from '$lib/server/ai-gateway.service';
-import { db } from '$lib/server/db/client';
+import { createAIGatewayService } from '$lib/core/ai-gateway.service';
+import { db } from '$lib/core/db/client';
 ```
 
 ## Principles & Development

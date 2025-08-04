@@ -1,90 +1,90 @@
 # Master Corporal / Master Sailor Level
 
-| Competency | Facets | Behavioural Indicators |
-|------------|--------|------------------------|
-| Communication | Written Communication | Produces written documents with minimal errors |
-| Communication | Written Communication | Follows accepted military written communication guidelines as directed by chain of command (CoC) |
-| Communication | Oral Communication | Communicates verbally with clarity, conciseness, and accuracy |
-| Communication | Tailored Communication | Adapts communication style to the audience to facilitate understanding of the message |
-| Communication | Attentiveness | Attends to both verbal and non-verbal cues (e.g., body language) as appropriate, when interacting with others |
-| Communication | Confirmation | Uses active listening and appropriate questioning to confirm own understanding, as appropriate |
-| Communication | Open Communication | Keeps superiors, peers, and subordinates informed on progress and overall goals |
-| Teamwork | Collaboration | Supports the ideas of others and takes action, as appropriate |
-| Teamwork | Collaboration | Encourages team members to share the workload |
-| Teamwork | Enabling Team Goals | Ensures that all team members contribute to the completion of team tasks |
-| Teamwork | Team Optimization | Integrates new members into the team quickly |
-| Teamwork | Team Morale | Promotes team cohesion |
-| Teamwork | Team Communication | Encourages the sharing of ideas and information, and communicates frequently within the team by setting an example |
-| Credibility and Influence | Confidence | Demonstrates confidence but not arrogance when supervising subordinates |
-| Credibility and Influence | Confidence | Inspires the confidence of subordinates and peers |
-| Credibility and Influence | Responsibility | Is responsible for own duties and responsibilities, as well as the duties and responsibilities of their subordinates |
-| Credibility and Influence | Responsibility | Ensures subordinates use authority for the good of Canada, DND and the CAF rather than for personal gain |
-| Credibility and Influence | Reliable | Demonstrates reliability and dependability |
-| Credibility and Influence | Inspiration | Motivates and guides others to achieve goals |
-| Credibility and Influence | Art of Influence | Convinces subordinates and peers to support their initiatives |
-| Credibility and Influence | Impact | Takes actions within AOR that have positive results |
-| Commitment to Military Ethos | Military Professionalism | Displays the tenets of the culture of the military profession |
-| Commitment to Military Ethos | Military Professionalism | Demonstrates professionalism on and off duty, setting a positive example |
-| Commitment to Military Ethos | Military Customs, Values, and Traditions | Encourages others to follow CAF military customs and traditions and to act in keeping with CAF military and Canadian values |
-| Commitment to Military Ethos | Duty before Self (People First, Mission Always) | Takes actions and makes decisions that are in keeping with the professional precept of duty before self |
-| Commitment to Military Ethos | Military Conduct | Recognizes when orders must be carried out immediately |
-| Commitment to Military Ethos | Military Conduct | Adheres to a clearly defined CoC and obeys the code of conduct |
-| Commitment to Military Ethos | Courage | Demonstrates courage regardless of potential risk to self and others |
-| Personnel and Resource Management | Allocating Resources | Provides subordinates with recommendations for effective use of resources |
-| Personnel and Resource Management | Personnel/Team Allocation | Uses knowledge of subordinates (e.g., their strengths, weaknesses, personality) to develop effective teams |
-| Personnel and Resource Management | Personnel/Team Allocation | Strives to reduce negative impact of operational demands on subordinates, where possible |
-| Personnel and Resource Management | Managing Personnel | Identifies impediments, and sets priorities and courses of action (COAs) for subordinates to meet work-related goals |
-| Personnel and Resource Management | Delegation | Delegates appropriately and holds subordinates accountable for meeting team goals |
-| Personnel and Resource Management | Monitoring Progress | Monitors progress and quality of subordinates' work, making timely and appropriate adjustments as required |
-| Personnel and Resource Management | Recognition | Acknowledges subordinates for their contributions |
-| Planning and Organizing | Operational Planning | Develops and employs tactical/first line expertise in planning |
-| Planning and Organizing | Planning | Sets priorities and develops a plan of action to meet subordinates' goals |
-| Planning and Organizing | Planning | Identifies obstacles for own and subordinates' objectives and, when possible, overcomes them |
-| Planning and Organizing | Operational Planning Process (OPP) | Demonstrates awareness of and has had some exposure to OPP |
-| Technical/Professional Proficiency | Technical Efficacy | Performs tasks specific to AOR and occupation |
-| Technical/Professional Proficiency | Demonstrating Technical Knowledge | Refines and applies knowledge, skills, abilities, and qualifications relevant to employment and occupation |
-| Technical/Professional Proficiency | Technical Currency | Maintains currency in a range of occupational positions |
-| Technical/Professional Proficiency | Technical Advisor | Provides subordinates with technical advice |
-| Technical/Professional Proficiency | Policy/Program Application | Enforces relevant regulations, orders, policies, and directives |
-| Action Orientation and Initiative | Initiative | Undertakes tasks that go beyond routine demands without prompting |
-| Action Orientation and Initiative | Identifying Issues and Opportunities | Recognizes and advises CoC about problem areas |
-| Action Orientation and Initiative | Perseverance | Demonstrates the willpower and resolve to persevere |
-| Action Orientation and Initiative | Taking Action | Keeps CoC informed of the risks associated with a course of action |
-| Ethical Reasoning | Promoting Ethical Climate | Promotes transparent and honest behaviours in subordinates |
-| Ethical Reasoning | Promoting Ethical Climate | Ensures subordinates act with integrity at all times |
-| Ethical Reasoning | Moral Decisions | Provides subordinates with guidance and support when they are faced with ethical conflicts or collateral damage, and provides feedback on ethical decisions |
-| Ethical Reasoning | Ethical Risks Identification | Identifies unethical conduct and takes appropriate action and forwards concerns to superiors |
-| Interpersonal Relations | Developing Relationships | Encourages relationship building among subordinates |
-| Interpersonal Relations | Trust | Fosters two-way trust in dealing with subordinates |
-| Interpersonal Relations | Concern for Others | Demonstrates genuine concern for team members and their families |
-| Interpersonal Relations | Culture of Respect | Encourages respectful behaviour in subordinates that is free of harassment and discrimination |
-| Interpersonal Relations | Interaction Adaptiveness | Adapts interaction style to respond to a range of individuals with diverse backgrounds and perspectives |
-| Interpersonal Relations | Conflict Resolution | Applies basic conflict management principles to resolve conflicts |
-| Stress Management and Resiliency | Performance under Stress | Conveys positive outlook to others while maintaining composure in sustained periods of stress |
-| Stress Management and Resiliency | Performance under Stress | Maintains perspective on and juggles multiple objectives during periods of stress |
-| Stress Management and Resiliency | Stress Management | Applies effective coping strategies to prevent stress-related problems |
-| Stress Management and Resiliency | Environmental Stress Reduction | Recognizes stress in subordinates and attempts to reduce it |
-| Stress Management and Resiliency | Stress Education | Informs subordinates on ways to remain calm and focused in stressful situations |
-| Analytical Thinking | Applying Critical Thinking Skills | Demonstrates critical thinking and logical reasoning skills |
-| Analytical Thinking | Analysis | Identifies problems within AOR, and advances sound recommendations for solutions |
-| Analytical Thinking | Analysis | Establishes priorities, compares alternative solutions, and analyzes risks to achieve success |
-| Analytical Thinking | Decision-Making | Makes decisions based on training, experience, and analysis of risks |
-| Developing Others | Learning Environment | Integrates subordinates' learning into the working environment |
-| Developing Others | Learning Environment | Provides support for others to achieve their full potential |
-| Developing Others | Performance Feedback | Provides subordinates with constructive feedback based on objective criteria |
-| Developing Others | Coaching/Mentorship | Coaches subordinates on strengths and weaknesses for developmental purposes |
-| Developing Others | Career Progression | Encourages subordinates to look for opportunities to better serve the CAF |
-| Developing Self | Seeking Opportunities | Seeks a variety of opportunities to meet own developmental needs |
-| Developing Self | Seeking Opportunities | Seeks opportunities to hone leadership skills |
-| Developing Self | Improving Technical/Professional Knowledge | Refines knowledge, skills, abilities, and qualifications relevant to employment and occupation |
-| Developing Self | Receptiveness to Feedback | Recognizes and learns from their past successes and mistakes |
-| Developing Self | Career Goals | Creates clearly defined career objectives and strategies for their achievement |
-| Adaptability | Behavioural Flexibility | Adapts approaches to respond to a range of circumstances |
-| Adaptability | Openness | Demonstrates a willingness and ability to consider alternative perspectives when responding to issues and challenges |
-| Adaptability | Change | Implements change coming from the CoC and mitigates resistance |
-| Adaptability | Change Communication | Communicates change to subordinates, appropriately, and encourages them to look at change in a positive manner |
-| Adaptability | Productivity | Encourages subordinates to remain productive in rapidly changing environments |
-| Innovation | Openness to Innovation | Integrates creative and original ideas from others and contributes own ideas |
-| Innovation | Developing Innovative Solutions | Employs non-traditional and innovative alternatives to traditional tasks, where appropriate |
-| Innovation | Developing Innovative Solutions | Explores alternative solutions and approaches for accomplishing tasks when appropriate |
-| Innovation | Fostering Innovation | Encourages subordinates to make recommendations for new procedures or work methods to improve functionality, as appropriate |
+| Competency                         | Facets                                          | Behavioural Indicators                                                                                                                                      |
+| ---------------------------------- | ----------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Communication                      | Written Communication                           | Produces written documents with minimal errors                                                                                                              |
+| Communication                      | Written Communication                           | Follows accepted military written communication guidelines as directed by chain of command (CoC)                                                            |
+| Communication                      | Oral Communication                              | Communicates verbally with clarity, conciseness, and accuracy                                                                                               |
+| Communication                      | Tailored Communication                          | Adapts communication style to the audience to facilitate understanding of the message                                                                       |
+| Communication                      | Attentiveness                                   | Attends to both verbal and non-verbal cues (e.g., body language) as appropriate, when interacting with others                                               |
+| Communication                      | Confirmation                                    | Uses active listening and appropriate questioning to confirm own understanding, as appropriate                                                              |
+| Communication                      | Open Communication                              | Keeps superiors, peers, and subordinates informed on progress and overall goals                                                                             |
+| Teamwork                           | Collaboration                                   | Supports the ideas of others and takes action, as appropriate                                                                                               |
+| Teamwork                           | Collaboration                                   | Encourages team members to share the workload                                                                                                               |
+| Teamwork                           | Enabling Team Goals                             | Ensures that all team members contribute to the completion of team tasks                                                                                    |
+| Teamwork                           | Team Optimization                               | Integrates new members into the team quickly                                                                                                                |
+| Teamwork                           | Team Morale                                     | Promotes team cohesion                                                                                                                                      |
+| Teamwork                           | Team Communication                              | Encourages the sharing of ideas and information, and communicates frequently within the team by setting an example                                          |
+| Credibility and Influence          | Confidence                                      | Demonstrates confidence but not arrogance when supervising subordinates                                                                                     |
+| Credibility and Influence          | Confidence                                      | Inspires the confidence of subordinates and peers                                                                                                           |
+| Credibility and Influence          | Responsibility                                  | Is responsible for own duties and responsibilities, as well as the duties and responsibilities of their subordinates                                        |
+| Credibility and Influence          | Responsibility                                  | Ensures subordinates use authority for the good of Canada, DND and the CAF rather than for personal gain                                                    |
+| Credibility and Influence          | Reliable                                        | Demonstrates reliability and dependability                                                                                                                  |
+| Credibility and Influence          | Inspiration                                     | Motivates and guides others to achieve goals                                                                                                                |
+| Credibility and Influence          | Art of Influence                                | Convinces subordinates and peers to support their initiatives                                                                                               |
+| Credibility and Influence          | Impact                                          | Takes actions within AOR that have positive results                                                                                                         |
+| Commitment to Military Ethos       | Military Professionalism                        | Displays the tenets of the culture of the military profession                                                                                               |
+| Commitment to Military Ethos       | Military Professionalism                        | Demonstrates professionalism on and off duty, setting a positive example                                                                                    |
+| Commitment to Military Ethos       | Military Customs, Values, and Traditions        | Encourages others to follow CAF military customs and traditions and to act in keeping with CAF military and Canadian values                                 |
+| Commitment to Military Ethos       | Duty before Self (People First, Mission Always) | Takes actions and makes decisions that are in keeping with the professional precept of duty before self                                                     |
+| Commitment to Military Ethos       | Military Conduct                                | Recognizes when orders must be carried out immediately                                                                                                      |
+| Commitment to Military Ethos       | Military Conduct                                | Adheres to a clearly defined CoC and obeys the code of conduct                                                                                              |
+| Commitment to Military Ethos       | Courage                                         | Demonstrates courage regardless of potential risk to self and others                                                                                        |
+| Personnel and Resource Management  | Allocating Resources                            | Provides subordinates with recommendations for effective use of resources                                                                                   |
+| Personnel and Resource Management  | Personnel/Team Allocation                       | Uses knowledge of subordinates (e.g., their strengths, weaknesses, personality) to develop effective teams                                                  |
+| Personnel and Resource Management  | Personnel/Team Allocation                       | Strives to reduce negative impact of operational demands on subordinates, where possible                                                                    |
+| Personnel and Resource Management  | Managing Personnel                              | Identifies impediments, and sets priorities and courses of action (COAs) for subordinates to meet work-related goals                                        |
+| Personnel and Resource Management  | Delegation                                      | Delegates appropriately and holds subordinates accountable for meeting team goals                                                                           |
+| Personnel and Resource Management  | Monitoring Progress                             | Monitors progress and quality of subordinates' work, making timely and appropriate adjustments as required                                                  |
+| Personnel and Resource Management  | Recognition                                     | Acknowledges subordinates for their contributions                                                                                                           |
+| Planning and Organizing            | Operational Planning                            | Develops and employs tactical/first line expertise in planning                                                                                              |
+| Planning and Organizing            | Planning                                        | Sets priorities and develops a plan of action to meet subordinates' goals                                                                                   |
+| Planning and Organizing            | Planning                                        | Identifies obstacles for own and subordinates' objectives and, when possible, overcomes them                                                                |
+| Planning and Organizing            | Operational Planning Process (OPP)              | Demonstrates awareness of and has had some exposure to OPP                                                                                                  |
+| Technical/Professional Proficiency | Technical Efficacy                              | Performs tasks specific to AOR and occupation                                                                                                               |
+| Technical/Professional Proficiency | Demonstrating Technical Knowledge               | Refines and applies knowledge, skills, abilities, and qualifications relevant to employment and occupation                                                  |
+| Technical/Professional Proficiency | Technical Currency                              | Maintains currency in a range of occupational positions                                                                                                     |
+| Technical/Professional Proficiency | Technical Advisor                               | Provides subordinates with technical advice                                                                                                                 |
+| Technical/Professional Proficiency | Policy/Program Application                      | Enforces relevant regulations, orders, policies, and directives                                                                                             |
+| Action Orientation and Initiative  | Initiative                                      | Undertakes tasks that go beyond routine demands without prompting                                                                                           |
+| Action Orientation and Initiative  | Identifying Issues and Opportunities            | Recognizes and advises CoC about problem areas                                                                                                              |
+| Action Orientation and Initiative  | Perseverance                                    | Demonstrates the willpower and resolve to persevere                                                                                                         |
+| Action Orientation and Initiative  | Taking Action                                   | Keeps CoC informed of the risks associated with a course of action                                                                                          |
+| Ethical Reasoning                  | Promoting Ethical Climate                       | Promotes transparent and honest behaviours in subordinates                                                                                                  |
+| Ethical Reasoning                  | Promoting Ethical Climate                       | Ensures subordinates act with integrity at all times                                                                                                        |
+| Ethical Reasoning                  | Moral Decisions                                 | Provides subordinates with guidance and support when they are faced with ethical conflicts or collateral damage, and provides feedback on ethical decisions |
+| Ethical Reasoning                  | Ethical Risks Identification                    | Identifies unethical conduct and takes appropriate action and forwards concerns to superiors                                                                |
+| Interpersonal Relations            | Developing Relationships                        | Encourages relationship building among subordinates                                                                                                         |
+| Interpersonal Relations            | Trust                                           | Fosters two-way trust in dealing with subordinates                                                                                                          |
+| Interpersonal Relations            | Concern for Others                              | Demonstrates genuine concern for team members and their families                                                                                            |
+| Interpersonal Relations            | Culture of Respect                              | Encourages respectful behaviour in subordinates that is free of harassment and discrimination                                                               |
+| Interpersonal Relations            | Interaction Adaptiveness                        | Adapts interaction style to respond to a range of individuals with diverse backgrounds and perspectives                                                     |
+| Interpersonal Relations            | Conflict Resolution                             | Applies basic conflict management principles to resolve conflicts                                                                                           |
+| Stress Management and Resiliency   | Performance under Stress                        | Conveys positive outlook to others while maintaining composure in sustained periods of stress                                                               |
+| Stress Management and Resiliency   | Performance under Stress                        | Maintains perspective on and juggles multiple objectives during periods of stress                                                                           |
+| Stress Management and Resiliency   | Stress Management                               | Applies effective coping strategies to prevent stress-related problems                                                                                      |
+| Stress Management and Resiliency   | Environmental Stress Reduction                  | Recognizes stress in subordinates and attempts to reduce it                                                                                                 |
+| Stress Management and Resiliency   | Stress Education                                | Informs subordinates on ways to remain calm and focused in stressful situations                                                                             |
+| Analytical Thinking                | Applying Critical Thinking Skills               | Demonstrates critical thinking and logical reasoning skills                                                                                                 |
+| Analytical Thinking                | Analysis                                        | Identifies problems within AOR, and advances sound recommendations for solutions                                                                            |
+| Analytical Thinking                | Analysis                                        | Establishes priorities, compares alternative solutions, and analyzes risks to achieve success                                                               |
+| Analytical Thinking                | Decision-Making                                 | Makes decisions based on training, experience, and analysis of risks                                                                                        |
+| Developing Others                  | Learning Environment                            | Integrates subordinates' learning into the working environment                                                                                              |
+| Developing Others                  | Learning Environment                            | Provides support for others to achieve their full potential                                                                                                 |
+| Developing Others                  | Performance Feedback                            | Provides subordinates with constructive feedback based on objective criteria                                                                                |
+| Developing Others                  | Coaching/Mentorship                             | Coaches subordinates on strengths and weaknesses for developmental purposes                                                                                 |
+| Developing Others                  | Career Progression                              | Encourages subordinates to look for opportunities to better serve the CAF                                                                                   |
+| Developing Self                    | Seeking Opportunities                           | Seeks a variety of opportunities to meet own developmental needs                                                                                            |
+| Developing Self                    | Seeking Opportunities                           | Seeks opportunities to hone leadership skills                                                                                                               |
+| Developing Self                    | Improving Technical/Professional Knowledge      | Refines knowledge, skills, abilities, and qualifications relevant to employment and occupation                                                              |
+| Developing Self                    | Receptiveness to Feedback                       | Recognizes and learns from their past successes and mistakes                                                                                                |
+| Developing Self                    | Career Goals                                    | Creates clearly defined career objectives and strategies for their achievement                                                                              |
+| Adaptability                       | Behavioural Flexibility                         | Adapts approaches to respond to a range of circumstances                                                                                                    |
+| Adaptability                       | Openness                                        | Demonstrates a willingness and ability to consider alternative perspectives when responding to issues and challenges                                        |
+| Adaptability                       | Change                                          | Implements change coming from the CoC and mitigates resistance                                                                                              |
+| Adaptability                       | Change Communication                            | Communicates change to subordinates, appropriately, and encourages them to look at change in a positive manner                                              |
+| Adaptability                       | Productivity                                    | Encourages subordinates to remain productive in rapidly changing environments                                                                               |
+| Innovation                         | Openness to Innovation                          | Integrates creative and original ideas from others and contributes own ideas                                                                                |
+| Innovation                         | Developing Innovative Solutions                 | Employs non-traditional and innovative alternatives to traditional tasks, where appropriate                                                                 |
+| Innovation                         | Developing Innovative Solutions                 | Explores alternative solutions and approaches for accomplishing tasks when appropriate                                                                      |
+| Innovation                         | Fostering Innovation                            | Encourages subordinates to make recommendations for new procedures or work methods to improve functionality, as appropriate                                 |

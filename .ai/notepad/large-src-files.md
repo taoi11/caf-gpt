@@ -5,6 +5,6 @@
 - /src/lib/modules/policyFoo/doadFoo/database.service.ts (200 lines)
 - /src/lib/modules/policyFoo/doadFoo/main.ts (152 lines)
 - /src/lib/modules/policyFoo/leaveFoo/database.service.ts (215 lines)
-- /src/lib/server/ai-gateway.service.ts (207 lines)
+- /src/lib/core/ai-gateway.service.ts (207 lines)
 
 These files may benefit from review for maintainability, modularity, or splitting if they grow further.

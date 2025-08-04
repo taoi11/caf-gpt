@@ -5,7 +5,7 @@
  * Uses a more capable LLM model optimized for complex reasoning and citation generation.
  */
 
-import { generateAICompletion, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
+import { generateAICompletion, type AIGatewayMessage } from '$lib/core/ai-gateway.service.js';
 import type { PolicyMainInput, PolicyMainOutput } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';

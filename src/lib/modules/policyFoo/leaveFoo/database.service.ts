@@ -1,4 +1,4 @@
-import { query } from '../../../server/db/client';
+import { query } from '../../../core/db/client';
 import type { LeaveChunk, LeaveMetadata } from './types';
 
 /**

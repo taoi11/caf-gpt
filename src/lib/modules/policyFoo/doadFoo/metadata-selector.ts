@@ -5,7 +5,7 @@
  * Uses lightweight model for efficient chunk selection from database results.
  */
 
-import { generateAICompletion, type AIGatewayMessage } from '$lib/server/ai-gateway.service.js';
+import { generateAICompletion, type AIGatewayMessage } from '$lib/core/ai-gateway.service.js';
 import type { PolicyFooEnvironment } from '../index';
 import type { MetadataSelectorInput, MetadataSelectorOutput, DOADMetadata } from './types';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';

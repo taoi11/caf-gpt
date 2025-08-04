@@ -10,7 +10,7 @@ read:
   - src/lib/modules/policyFoo/README.md
   - src/lib/modules/policyFoo/doadFoo/README.md
   - src/lib/modules/policyFoo/leaveFoo/README.md
-  - src/lib/server/README.md
+  - src/lib/core/README.md
 
 auto-commits: false
 attribute-commit-message-author: true

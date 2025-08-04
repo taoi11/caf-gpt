@@ -19,7 +19,7 @@ export default defineConfig({
 						'src/routes/__tests__/**/*.test.{js,ts}',
 						'src/lib/components/**/*.test.{js,ts}'
 					],
-					exclude: ['src/lib/server/**'],
+					exclude: ['src/lib/core/**'],
 					setupFiles: ['./vitest-setup-client.ts']
 				}
 			},
@@ -28,7 +28,7 @@ export default defineConfig({
 					name: 'server',
 					environment: 'node',
 					globals: true,
-					include: ['src/lib/server/**/*.{test,spec}.{js,ts}', 'src/routes/api/**/*.test.{js,ts}'],
+					include: ['src/lib/core/**/*.{test,spec}.{js,ts}', 'src/routes/api/**/*.test.{js,ts}'],
 					exclude: ['src/**/*.svelte.{test,spec}.{js,ts}']
 				}
 			},
