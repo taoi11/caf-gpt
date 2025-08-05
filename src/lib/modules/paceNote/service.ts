@@ -4,7 +4,8 @@
 
 // Imports
 import { createAIGatewayService } from '$lib/core/ai-gateway.service.js';
-import type { AIGatewayService, AIGatewayResponse } from '$lib/core/ai-gateway.service.js';
+import type { AIGatewayService } from '$lib/core/ai-gateway.service.js';
+import type { AIGatewayResponse } from '$lib/core/common.types.js';
 import basePromptTemplate from './prompts/base.md?raw';
 import { getCompetenciesForRank, examples } from './prompts/competencies/index.js';
 import type { PaceNoteInput, PaceNoteOutput, PaceNoteRank, RankInfo } from './types.js';

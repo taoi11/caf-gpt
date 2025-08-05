@@ -5,7 +5,8 @@
  * Uses a lighter LLM model optimized for policy identification tasks.
  */
 
-import { generateAICompletion, type AIGatewayMessage } from '$lib/core/ai-gateway.service.js';
+import { generateAICompletion } from '$lib/core/ai-gateway.service.js';
+import type { AIGatewayMessage } from '$lib/core/common.types.js';
 import type { PolicyFinderInput, PolicyFinderOutput } from '../types';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';

@@ -5,6 +5,8 @@
  * Handles policy question answering with LLM-powered agents.
  */
 
+import type { DOADChunk, DOADMetadata, LeaveChunk, LeaveMetadata } from '../../core/types.js';
+
 /**
  * Supported policy sets for routing queries
  */
@@ -142,12 +144,61 @@ export interface PolicyHandlerResponse {
 	};
 }
 
+// =============================================================================
+// DOAD-Specific Types
+// =============================================================================
+
 /**
- * Re-export DOAD-specific types for convenience
+ * Input for metadata selector agent
  */
-export type {
-	DOADChunk,
-	DOADMetadata,
-	MetadataSelectorInput,
-	MetadataSelectorOutput
-} from './doadFoo/types';
+export interface MetadataSelectorInput {
+	userQuery: string;
+	doadMetadata: DOADMetadata[];
+}
+
+/**
+ * Output from metadata selector agent
+ */
+export interface MetadataSelectorOutput {
+	selectedChunkIds: string[];
+	usage?: {
+		prompt_tokens?: number;
+		completion_tokens?: number;
+		total_tokens?: number;
+	};
+}
+
+/**
+ * Enhanced policy content with chunk-based structure
+ */
+export interface ChunkBasedPolicyContent {
+	chunks: DOADChunk[];
+	doadNumbers: string[];
+}
+
+// =============================================================================
+// Leave-Specific Types  
+// =============================================================================
+
+/**
+ * Input for leave policy finder agent
+ */
+export interface LeaveFinderInput {
+	messages: Array<{ role: string; content: string }>;
+	finderPrompt: string;
+	chapterList: string;
+}
+
+/**
+ * Output from leave policy finder agent
+ */
+export interface LeaveFinderOutput {
+	chapters: string[];
+	usage: any;
+}
+
+// =============================================================================
+// Re-export Core Database Types for convenience
+// =============================================================================
+
+export type { DOADChunk, DOADMetadata, LeaveChunk, LeaveMetadata } from '../../core/types.js';

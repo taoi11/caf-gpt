@@ -1,3 +1,12 @@
+/**
+ * Core Types
+ *
+ * Local and internal types specific to the core module.
+ * These are infrastructure types used within the core module.
+ */
+
+// Database Types
+
 export interface DOADChunk {
 	id: string;
 	textChunk: string;

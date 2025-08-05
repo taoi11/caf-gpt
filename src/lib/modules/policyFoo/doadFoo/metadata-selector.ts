@@ -5,9 +5,10 @@
  * Uses lightweight model for efficient chunk selection from database results.
  */
 
-import { generateAICompletion, type AIGatewayMessage } from '$lib/core/ai-gateway.service.js';
+import { generateAICompletion } from '$lib/core/ai-gateway.service.js';
+import type { AIGatewayMessage } from '$lib/core/common.types.js';
 import type { PolicyFooEnvironment } from '../index';
-import type { MetadataSelectorInput, MetadataSelectorOutput, DOADMetadata } from './types';
+import type { MetadataSelectorInput, MetadataSelectorOutput, DOADMetadata } from '../types.js';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
 
 // Import prompt file directly from local codebase

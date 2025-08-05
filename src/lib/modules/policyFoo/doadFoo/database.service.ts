@@ -1,5 +1,5 @@
 import { query } from '../../../core/db/client';
-import type { DOADChunk, DOADMetadata } from '../../../core/db/types';
+import type { DOADChunk, DOADMetadata } from '../types.js';
 
 /**
  * Fetch all chunks for specified DOAD numbers with optimized query

@@ -5,8 +5,9 @@
  * Uses a lighter LLM model optimized for chapter identification tasks.
  */
 
-import { generateAICompletion, type AIGatewayMessage } from '$lib/core/ai-gateway.service.js';
-import type { LeaveFinderInput, LeaveFinderOutput } from './types';
+import { generateAICompletion } from '$lib/core/ai-gateway.service.js';
+import type { AIGatewayMessage } from '$lib/core/common.types.js';
+import type { LeaveFinderInput, LeaveFinderOutput } from '../types.js';
 import type { PolicyFooEnvironment } from '../index';
 import { MODEL_CONFIG, ERROR_MESSAGES } from '../constants';
 

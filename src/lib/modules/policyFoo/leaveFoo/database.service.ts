@@ -1,5 +1,5 @@
 import { query } from '../../../core/db/client';
-import type { LeaveChunk, LeaveMetadata } from './types';
+import type { LeaveChunk, LeaveMetadata } from '../types.js';
 
 /**
  * Fetch all chunks for specified chapters with optimized query
