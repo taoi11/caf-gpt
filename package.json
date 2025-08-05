@@ -9,13 +9,15 @@
 		"dev:local": "npm run build && wrangler dev --local",
 		"dev:remote": "npm run build && wrangler dev --remote",
 		"build": "vite build",
-		"prepare": "svelte-kit sync && npm run cf-typegen",
+		"prepare": "svelte-kit sync && npm run cf-typegen:safe",
+		"postinstall": "npm run cf-typegen:safe",
 		"check": "svelte-check --tsconfig ./tsconfig.json",
 		"lint": "prettier --write . && eslint .",
 		"test": "npm run test:unit -- --run",
 		"test:coverage": "vitest --coverage",
 		"deploy": "wrangler deploy",
-		"cf-typegen": "wrangler types"
+		"cf-typegen": "wrangler types",
+		"cf-typegen:safe": "wrangler types || echo 'Type generation skipped - using committed types'"
 	},
 	"devDependencies": {
 		"@eslint/compat": "^1.1.1",
