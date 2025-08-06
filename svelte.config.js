@@ -14,7 +14,13 @@ const config = {
 		}),
 		// Fix 403 CSRF errors in development with Cloudflare Workers
 		csrf: {
-			checkOrigin: process.env.NODE_ENV === 'production'
+			checkOrigin: process.env.NODE_ENV === 'production',
+			// Allow custom domain
+			...(process.env.NODE_ENV === 'production' && {
+				origin: [
+					'https://caf-gpt.com'
+				]
+			})
 		}
 	}
 };
