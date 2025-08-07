@@ -6,7 +6,7 @@
 
 **Entry Point**: `index.ts` → `handleDOADQuery()` orchestration function  
 **Workflow**: Finder Agent → Metadata Selector → Main Agent → Response  
-**Database**: Neon Postgres with intelligent chunking and metadata  
+**Database**: Neon Postgres via Hyperdrive with intelligent chunking and metadata  
 **Models**: Reader Model (Haiku) + Main Model (Sonnet)  
 **Performance**: ~3-5 seconds, ~2500-4500 tokens per query
 

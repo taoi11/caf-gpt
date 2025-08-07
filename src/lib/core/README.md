@@ -1,38 +1,47 @@
-# Core Server Utilities
+# Core Services
 
 ## 🔍 Quick Reference
 
-**Key Services**: `ai-gateway.service.ts`, `db/client.ts`, `db/schema.ts`
+**Key Services**: `ai-gateway.service.ts`, `db/client.ts`, `db/service.ts`
 **Usage Pattern**: Import shared services into domain modules (`src/lib/modules/*`).
-**Dependencies**: Cloudflare Workers, Neon Postgres.
+**Dependencies**: Cloudflare Workers, Hyperdrive, Neon Postgres.
 
 ## Purpose
 
-This directory contains shared, non-domain-specific server-side utilities for AI, Database, and Storage. These foundational services are designed to be imported and used by all domain modules.
+This directory contains shared, non-domain-specific services for AI, Database, and Storage. These foundational services are designed to be imported and used by all domain modules.
 
 ## Directory Structure
 
 ```
-server/
+core/
 ├── README.md             # This documentation
 ├── ai-gateway.service.ts # Centralized AI/LLM service
+├── types.ts             # Core type definitions
 └── db/                  # Database infrastructure
-    ├── client.ts        # Neon Postgres connection pooling
-    ├── schema.ts        # Drizzle ORM schema definitions
+    ├── client.ts        # Hyperdrive connection management
+    ├── service.ts       # Common database service patterns
     └── types.ts         # Database type definitions
 ```
 
 ## Key Services
 
 - **`ai-gateway.service.ts`**: Centralized service for all LLM interactions via Cloudflare AI Gateway. Handles requests, errors, and monitoring.
-- **`db/client.ts`**: Manages the Neon Postgres connection pool.
-- **`db/schema.ts`**: Defines the Drizzle ORM database schema.
+- **`db/client.ts`**: Manages Hyperdrive connection pooling for optimal CF Workers performance.
+- **`db/service.ts`**: Common database service patterns to reduce code duplication across modules.
+- **`db/types.ts` & `types.ts`**: Shared type definitions for database operations and core functionality.
 
 ## Usage Example
 
 ```typescript
 import { createAIGatewayService } from '$lib/core/ai-gateway.service';
-import { db } from '$lib/core/db/client';
+import { BasePolicyDatabaseService } from '$lib/core/db/service';
+
+// Example domain service extending common patterns
+class MyService extends BasePolicyDatabaseService {
+  constructor(hyperdrive: Hyperdrive) {
+    super(hyperdrive);
+  }
+}
 ```
 
 ## Principles & Development
@@ -40,5 +49,5 @@ import { db } from '$lib/core/db/client';
 - **Single Responsibility**: Each file provides a focused, reusable service.
 - **No Domain Logic**: Only generic infrastructure, not business rules.
 - **Type-Safe**: All exports are fully typed for use across modules.
-- **Adding Services**: Create new files using a factory pattern (e.g., `createMyService()`).
-- **Schema Changes**: Modify `db/schema.ts` using Drizzle ORM patterns.
+- **Adding Services**: Create new files using common service patterns extending `BasePolicyDatabaseService`.
+- **Database Changes**: Update type definitions and extend existing service classes.

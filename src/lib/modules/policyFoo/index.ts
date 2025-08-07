@@ -32,9 +32,10 @@ export type {
 export interface PolicyFooEnvironment {
 	OPENROUTER_TOKEN: string;
 	AI_GATEWAY_BASE_URL: string;
-	CF_AIG_TOKEN: string;
+	CF_AIG_TOKEN?: string; // Optional - AI Gateway token
 	READER_MODEL?: string;
 	MAIN_MODEL?: string;
+	HYPERDRIVE: Hyperdrive; // Cloudflare Hyperdrive binding for database access
 }
 
 /**

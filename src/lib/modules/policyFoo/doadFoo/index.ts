@@ -88,7 +88,7 @@ export async function handleDOADQuery(
 		stage = 'database_chunks_retrieval';
 		const dbChunksStart = Date.now();
 		// Stage 2: Retrieve chunks from database for selected DOADs
-		const allChunks = await getDOADChunksByNumbers(finderResult.policyNumbers);
+		const allChunks = await getDOADChunksByNumbers(finderResult.policyNumbers, env.HYPERDRIVE);
 		performanceMetrics.database_chunks = Date.now() - dbChunksStart;
 
 		if (allChunks.length === 0) {
@@ -107,7 +107,7 @@ export async function handleDOADQuery(
 		stage = 'database_metadata_retrieval';
 		const dbMetadataStart = Date.now();
 		// Stage 3: Get metadata for chunk selection
-		const chunkMetadata = await getDOADMetadataByNumbers(finderResult.policyNumbers);
+		const chunkMetadata = await getDOADMetadataByNumbers(finderResult.policyNumbers, env.HYPERDRIVE);
 		performanceMetrics.database_metadata = Date.now() - dbMetadataStart;
 
 		// Extract user query from messages
@@ -128,7 +128,7 @@ export async function handleDOADQuery(
 		stage = 'database_selected_retrieval';
 		const dbSelectedStart = Date.now();
 		// Stage 5: Retrieve full content for selected chunks
-		const selectedChunks = await getDOADChunksByIds(selectorResult.selectedChunkIds);
+		const selectedChunks = await getDOADChunksByIds(selectorResult.selectedChunkIds, env.HYPERDRIVE);
 		performanceMetrics.database_selected = Date.now() - dbSelectedStart;
 
 		if (selectedChunks.length === 0) {

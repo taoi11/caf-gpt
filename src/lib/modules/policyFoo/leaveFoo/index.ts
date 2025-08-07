@@ -77,7 +77,7 @@ export async function handleLeaveQuery(
 		stage = 'database_retrieval';
 		const dbStart = Date.now();
 		// Stage 2: Retrieve chunks from database for selected chapters
-		const chunks = await getLeaveChunksByChapters(finderResult.chapters);
+		const chunks = await getLeaveChunksByChapters(finderResult.chapters, env.HYPERDRIVE);
 		performanceMetrics.database = Date.now() - dbStart;
 
 		if (chunks.length === 0) {
@@ -141,7 +141,7 @@ async function loadLeaveConfig(
 ): Promise<PolicyHandlerConfig & { chapterList: string }> {
 	try {
 		// Get available chapters from database
-		const availableChapters = await getAvailableChapters();
+		const availableChapters = await getAvailableChapters(env.HYPERDRIVE);
 
 		// Format chapter list for finder prompt
 		const chapterList = availableChapters

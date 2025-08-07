@@ -37,7 +37,7 @@ npm run preview       # Build and preview locally
 ```
 src/
 ├── lib/
-│   ├── server/
+│   ├── core/
 │   │   └── db/
 │   └── modules/
 │       ├── paceNote/
@@ -66,7 +66,7 @@ src/
 **Domain**: Policy Q&A
 **Documentation**: `src/lib/modules/policyFoo/README.md`
 **Handlers**: `src/lib/modules/policyFoo/doadFoo/README.md` + `src/lib/modules/policyFoo/leaveFoo/README.md`
-**Key Dependencies**: AI Gateway + Neon Postgres
+**Key Dependencies**: AI Gateway + Cloudflare Hyperdrive + Neon Postgres
 **Related Files**: `src/lib/modules/policyFoo/` + `src/routes/policy/`
 
 ## Architecture
@@ -75,7 +75,7 @@ src/
 
 - **Frontend**: SvelteKit with TypeScript
 - **Backend**: Cloudflare Workers
-- **Databases**: Neon Postgres with Drizzle ORM for policy content storage
+- **Databases**: Neon Postgres via Cloudflare Hyperdrive connection pooling
 - **AI Integration**: AI Gateway with OpenRouter provider
 - **Authentication**: Server-side only, no API keys required
 - **Styling**: Tailwind CSS v4
@@ -96,14 +96,15 @@ src/
 Configure in `wrangler.jsonc`:
 
 - **AI Gateway**: Configure with OpenRouter provider
-- **Environment Variables**: Model selection and database URL
+- **Hyperdrive**: Database connection pooling for Neon Postgres
+- **Environment Variables**: Model selection and secret management
 
 ## Common Error Patterns
 
 ### Environment Configuration
 
 - **Missing OPENROUTER_TOKEN**: Check `wrangler secret put OPENROUTER_TOKEN`
-- **Database Connection**: Verify `DATABASE_URL` format for Neon Postgres
+- **Database Connection**: Configured via Hyperdrive binding, not direct connection
 - **AI Gateway Issues**: Confirm `AI_GATEWAY_BASE_URL` and optional `CF_AIG_TOKEN`
 
 ### Module Integration
@@ -114,9 +115,9 @@ Configure in `wrangler.jsonc`:
 
 ### Database Issues
 
-- **Connection Pooling**: See `src/lib/core/db/client.ts` for Neon configuration
-- **Schema Changes**: Update `src/lib/core/db/schema.ts` with Drizzle ORM
-- **Query Performance**: Check database service implementations for optimization patterns
+- **Connection Pooling**: Handled automatically by Hyperdrive binding
+- **Schema Changes**: Update `src/lib/core/db/types.ts` and service classes
+- **Query Performance**: Check consolidated database service patterns in `src/lib/core/db/service.ts`
 
 ## 📋 AI Agent Guidelines
 

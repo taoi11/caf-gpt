@@ -8,7 +8,7 @@
 **Handlers**: `doadFoo/` (DOAD policies), `leaveFoo/` (Leave policies)  
 **Types**: `types.ts` → Shared policy types and interfaces  
 **Route Integration**: `src/routes/policy/` → Chat UI + server logic  
-**Dependencies**: AI Gateway, Neon Postgres, Multi-Agent LLM Workflow
+**Dependencies**: AI Gateway, Cloudflare Hyperdrive, Neon Postgres, Multi-Agent LLM Workflow
 
 **Key Files**: `index.ts` (router), `doadFoo/README.md` (3-stage workflow), `leaveFoo/README.md` (2-stage workflow)
 
@@ -56,7 +56,7 @@ policyFoo/
 ### With Shared Services
 
 - **AI Gateway**: Direct use of shared AI Gateway service from `$lib/core/ai-gateway.service.js`
-- **Database**: Neon Postgres via shared database client
+- **Database**: Neon Postgres via Hyperdrive connection pooling and shared service patterns
 - **Error Handling**: Unified error types and patterns
 
 ### Between Handlers
