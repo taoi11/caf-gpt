@@ -46,7 +46,7 @@ export class LeaveDatabaseService extends BasePolicyDatabaseService {
 		);
 
 		// Create a map from chapter to metadata item for correct assignment
-		const metadataMap = new Map<string, typeof metadata[number]>();
+		const metadataMap = new Map<string, (typeof metadata)[number]>();
 		for (const item of metadata) {
 			const chapterKey = String(item[this.IDENTIFIER_COLUMN] ?? item.chapter ?? '');
 			metadataMap.set(chapterKey, item);
@@ -58,11 +58,11 @@ export class LeaveDatabaseService extends BasePolicyDatabaseService {
 				? {
 						id: item.id,
 						metadata: enhanceMetadataForLLM(item.metadata, chapter)
-				  }
+					}
 				: {
 						id: '',
 						metadata: enhanceMetadataForLLM({}, chapter)
-				  };
+					};
 		});
 	}
 
@@ -91,17 +91,26 @@ export class LeaveDatabaseService extends BasePolicyDatabaseService {
 }
 
 // Legacy function exports for backwards compatibility during migration
-export const getLeaveChunksByChapters = async (chapters: string[], hyperdrive: Hyperdrive): Promise<LeaveChunk[]> => {
+export const getLeaveChunksByChapters = async (
+	chapters: string[],
+	hyperdrive: Hyperdrive
+): Promise<LeaveChunk[]> => {
 	const service = new LeaveDatabaseService(hyperdrive);
 	return service.getLeaveChunksByChapters(chapters);
 };
 
-export const getLeaveMetadataByChapters = async (chapters: string[], hyperdrive: Hyperdrive): Promise<LeaveMetadata[]> => {
+export const getLeaveMetadataByChapters = async (
+	chapters: string[],
+	hyperdrive: Hyperdrive
+): Promise<LeaveMetadata[]> => {
 	const service = new LeaveDatabaseService(hyperdrive);
 	return service.getLeaveMetadataByChapters(chapters);
 };
 
-export const getLeaveChunksByIds = async (chunkIds: string[], hyperdrive: Hyperdrive): Promise<LeaveChunk[]> => {
+export const getLeaveChunksByIds = async (
+	chunkIds: string[],
+	hyperdrive: Hyperdrive
+): Promise<LeaveChunk[]> => {
 	const service = new LeaveDatabaseService(hyperdrive);
 	return service.getLeaveChunksByIds(chunkIds);
 };
@@ -114,7 +123,10 @@ export const getAvailableChapters = async (hyperdrive: Hyperdrive): Promise<stri
 /**
  * Enhance metadata with Leave-specific context for LLM processing
  */
-function enhanceMetadataForLLM(metadata: Record<string, any>, chapter: string): Record<string, any> {
+function enhanceMetadataForLLM(
+	metadata: Record<string, any>,
+	chapter: string
+): Record<string, any> {
 	const enhanced = formatMetadataForLLM(metadata, chapter, 'leave');
 
 	// Add chapter-specific enhancements
@@ -151,7 +163,9 @@ export const formatChunksForLLM = (chunks: LeaveChunk[]): string => {
 		.map(([chapter, leaveChunks]) => {
 			const chunksXml = leaveChunks
 				.map((chunk) => {
-					const metadata = chunk.metadata ? `<metadata>${JSON.stringify(chunk.metadata)}</metadata>` : '';
+					const metadata = chunk.metadata
+						? `<metadata>${JSON.stringify(chunk.metadata)}</metadata>`
+						: '';
 					return `<chunk id="${chunk.id}">${metadata}<content>${chunk.textChunk}</content></chunk>`;
 				})
 				.join('\n');

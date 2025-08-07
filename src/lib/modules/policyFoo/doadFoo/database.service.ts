@@ -45,7 +45,7 @@ export class DOADDatabaseService extends BasePolicyDatabaseService {
 		);
 
 		// Create a map from DOAD number to metadata item for correct assignment
-		const metadataMap = new Map<string, typeof metadata[number]>();
+		const metadataMap = new Map<string, (typeof metadata)[number]>();
 		for (const item of metadata) {
 			const doadKey = String(item[this.IDENTIFIER_COLUMN] ?? item.doad_number ?? '');
 			metadataMap.set(doadKey, item);
@@ -57,11 +57,11 @@ export class DOADDatabaseService extends BasePolicyDatabaseService {
 				? {
 						id: item.id,
 						metadata: enhanceMetadataForLLM(item.metadata, doadNumber)
-				  }
+					}
 				: {
 						id: '',
 						metadata: enhanceMetadataForLLM({}, doadNumber)
-				  };
+					};
 		});
 	}
 
@@ -90,17 +90,26 @@ export class DOADDatabaseService extends BasePolicyDatabaseService {
 }
 
 // Legacy function exports for backwards compatibility during migration
-export const getDOADChunksByNumbers = async (doadNumbers: string[], hyperdrive: Hyperdrive): Promise<DOADChunk[]> => {
+export const getDOADChunksByNumbers = async (
+	doadNumbers: string[],
+	hyperdrive: Hyperdrive
+): Promise<DOADChunk[]> => {
 	const service = new DOADDatabaseService(hyperdrive);
 	return service.getDOADChunksByNumbers(doadNumbers);
 };
 
-export const getDOADMetadataByNumbers = async (doadNumbers: string[], hyperdrive: Hyperdrive): Promise<DOADMetadata[]> => {
+export const getDOADMetadataByNumbers = async (
+	doadNumbers: string[],
+	hyperdrive: Hyperdrive
+): Promise<DOADMetadata[]> => {
 	const service = new DOADDatabaseService(hyperdrive);
 	return service.getDOADMetadataByNumbers(doadNumbers);
 };
 
-export const getDOADChunksByIds = async (chunkIds: string[], hyperdrive: Hyperdrive): Promise<DOADChunk[]> => {
+export const getDOADChunksByIds = async (
+	chunkIds: string[],
+	hyperdrive: Hyperdrive
+): Promise<DOADChunk[]> => {
 	const service = new DOADDatabaseService(hyperdrive);
 	return service.getDOADChunksByIds(chunkIds);
 };
@@ -113,7 +122,10 @@ export const getAvailableDOADNumbers = async (hyperdrive: Hyperdrive): Promise<s
 /**
  * Enhance metadata with DOAD-specific context for LLM processing
  */
-function enhanceMetadataForLLM(metadata: Record<string, any>, doadNumber: string): Record<string, any> {
+function enhanceMetadataForLLM(
+	metadata: Record<string, any>,
+	doadNumber: string
+): Record<string, any> {
 	return formatMetadataForLLM(metadata, doadNumber, 'doad');
 }
 
@@ -139,7 +151,9 @@ export const formatChunksForLLM = (chunks: DOADChunk[]): string => {
 		.map(([doadNumber, doadChunks]) => {
 			const chunksXml = doadChunks
 				.map((chunk) => {
-					const metadata = chunk.metadata ? `<metadata>${JSON.stringify(chunk.metadata)}</metadata>` : '';
+					const metadata = chunk.metadata
+						? `<metadata>${JSON.stringify(chunk.metadata)}</metadata>`
+						: '';
 					return `<chunk id="${chunk.id}">${metadata}<content>${chunk.textChunk}</content></chunk>`;
 				})
 				.join('\n');

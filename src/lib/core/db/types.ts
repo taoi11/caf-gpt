@@ -34,7 +34,6 @@ export interface DatabaseQueryResult<T> {
  * Common database operation options
  */
 export interface QueryOptions {
-	retries?: number;
 	timeout?: number;
 	logSlowQueries?: boolean;
 }

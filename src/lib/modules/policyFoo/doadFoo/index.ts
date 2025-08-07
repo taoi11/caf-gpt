@@ -107,7 +107,10 @@ export async function handleDOADQuery(
 		stage = 'database_metadata_retrieval';
 		const dbMetadataStart = Date.now();
 		// Stage 3: Get metadata for chunk selection
-		const chunkMetadata = await getDOADMetadataByNumbers(finderResult.policyNumbers, env.HYPERDRIVE);
+		const chunkMetadata = await getDOADMetadataByNumbers(
+			finderResult.policyNumbers,
+			env.HYPERDRIVE
+		);
 		performanceMetrics.database_metadata = Date.now() - dbMetadataStart;
 
 		// Extract user query from messages
@@ -128,7 +131,10 @@ export async function handleDOADQuery(
 		stage = 'database_selected_retrieval';
 		const dbSelectedStart = Date.now();
 		// Stage 5: Retrieve full content for selected chunks
-		const selectedChunks = await getDOADChunksByIds(selectorResult.selectedChunkIds, env.HYPERDRIVE);
+		const selectedChunks = await getDOADChunksByIds(
+			selectorResult.selectedChunkIds,
+			env.HYPERDRIVE
+		);
 		performanceMetrics.database_selected = Date.now() - dbSelectedStart;
 
 		if (selectedChunks.length === 0) {
