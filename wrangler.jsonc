@@ -10,7 +10,6 @@
 	"compatibility_date": "2025-05-23",
 	"compatibility_flags": ["nodejs_compat"],
 	"assets": {
-		// https://developers.cloudflare.com/workers/static-assets/binding/
 		"binding": "ASSETS",
 		"directory": ".svelte-kit/cloudflare"
 	},
@@ -18,18 +17,14 @@
 		"enabled": true
 	},
 	"placement": { "mode": "smart" },
-	// Bindings https://developers.cloudflare.com/workers/runtime-apis/bindings/
 	"ai": {
 		"binding": "AI"
 	},
 	"vars": {
-		// https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 		"FN_MODEL": "openai/gpt-4.1-mini",
 		"READER_MODEL": "google/gemini-2.5-flash",
 		"MAIN_MODEL": "google/gemini-2.5-pro"
 	},
-	// Hyperdrive for PostgreSQL connection pooling
-	// https://developers.cloudflare.com/hyperdrive/
 	"hyperdrive": [
 		{
 			"binding": "HYPERDRIVE",

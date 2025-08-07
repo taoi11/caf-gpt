@@ -1,106 +1,136 @@
-import { query } from '../../../core/db/client';
+import { BasePolicyDatabaseService, formatMetadataForLLM } from '../../../core/db/service.js';
 import type { LeaveChunk, LeaveMetadata } from '../types.js';
 
 /**
- * Fetch all chunks for specified chapters with optimized query
- * Uses indexed lookup and only selects required columns for performance
+ * Leave Database Service - extends common patterns with Leave-specific logic
  */
-export const getLeaveChunksByChapters = async (chapters: string[]): Promise<LeaveChunk[]> => {
-	if (chapters.length === 0) return [];
+export class LeaveDatabaseService extends BasePolicyDatabaseService {
+	private readonly TABLE_NAME = 'leave_2025';
+	private readonly IDENTIFIER_COLUMN = 'chapter';
 
-	const placeholders = chapters.map((_, i) => `$${i + 1}`).join(', ');
+	/**
+	 * Fetch all chunks for specified chapters with optimized query
+	 */
+	async getLeaveChunksByChapters(chapters: string[]): Promise<LeaveChunk[]> {
+		if (chapters.length === 0) return [];
 
-	// Optimized query: only select needed columns, use index on chapter
-	const sql = `
-    SELECT id, chapter, text_chunk, created_at, metadata
-    FROM leave_2025 
-    WHERE chapter IN (${placeholders})
-    ORDER BY chapter, created_at
-  `;
+		const placeholders = chapters.map((_, i) => `$${i + 1}`).join(', ');
 
-	const rows = await query(sql, chapters);
+		const sql = `
+			SELECT id, chapter, text_chunk, created_at, metadata
+			FROM ${this.TABLE_NAME} 
+			WHERE ${this.IDENTIFIER_COLUMN} IN (${placeholders})
+			ORDER BY ${this.IDENTIFIER_COLUMN}, created_at
+		`;
 
-	// Type-safe mapping with proper date handling
-	return rows.map((row) => ({
-		id: row.id,
-		textChunk: row.text_chunk,
-		metadata: row.metadata || {},
-		createdAt: row.created_at?.toISOString() || new Date().toISOString(),
-		chapter: row.chapter || ''
-	}));
+		const result = await this.executeQuery(sql, chapters);
+
+		return result.data.map((row) => ({
+			id: row.id,
+			textChunk: row.text_chunk,
+			metadata: row.metadata || {},
+			createdAt: row.created_at?.toISOString() || new Date().toISOString(),
+			chapter: row.chapter || ''
+		}));
+	}
+
+	/**
+	 * Fetch metadata only for specified chapters (optimized for LLM selection)
+	 */
+	async getLeaveMetadataByChapters(chapters: string[]): Promise<LeaveMetadata[]> {
+		const metadata = await this.getMetadataByIdentifiers(
+			this.TABLE_NAME,
+			chapters,
+			this.IDENTIFIER_COLUMN,
+			'CAST(chapter AS INTEGER)'
+		);
+
+		// Create a map from chapter to metadata item for correct assignment
+		const metadataMap = new Map<string, typeof metadata[number]>();
+		for (const item of metadata) {
+			const chapterKey = String(item[this.IDENTIFIER_COLUMN] ?? item.chapter ?? '');
+			metadataMap.set(chapterKey, item);
+		}
+
+		return chapters.map((chapter) => {
+			const item = metadataMap.get(String(chapter));
+			return item
+				? {
+						id: item.id,
+						metadata: enhanceMetadataForLLM(item.metadata, chapter)
+				  }
+				: {
+						id: '',
+						metadata: enhanceMetadataForLLM({}, chapter)
+				  };
+		});
+	}
+
+	/**
+	 * Fetch specific chunks by IDs (used after metadata selection)
+	 */
+	async getLeaveChunksByIds(chunkIds: string[]): Promise<LeaveChunk[]> {
+		const chunks = await this.getChunksByIds(this.TABLE_NAME, chunkIds);
+
+		return chunks.map((chunk) => ({
+			...chunk,
+			chapter: chunk.metadata?.chapter || ''
+		})) as LeaveChunk[];
+	}
+
+	/**
+	 * Get all available chapters for finder agent
+	 */
+	async getAvailableChapters(): Promise<string[]> {
+		return this.getAvailableIdentifiers(
+			this.TABLE_NAME,
+			this.IDENTIFIER_COLUMN,
+			this.IDENTIFIER_COLUMN
+		);
+	}
+}
+
+// Legacy function exports for backwards compatibility during migration
+export const getLeaveChunksByChapters = async (chapters: string[], hyperdrive: Hyperdrive): Promise<LeaveChunk[]> => {
+	const service = new LeaveDatabaseService(hyperdrive);
+	return service.getLeaveChunksByChapters(chapters);
+};
+
+export const getLeaveMetadataByChapters = async (chapters: string[], hyperdrive: Hyperdrive): Promise<LeaveMetadata[]> => {
+	const service = new LeaveDatabaseService(hyperdrive);
+	return service.getLeaveMetadataByChapters(chapters);
+};
+
+export const getLeaveChunksByIds = async (chunkIds: string[], hyperdrive: Hyperdrive): Promise<LeaveChunk[]> => {
+	const service = new LeaveDatabaseService(hyperdrive);
+	return service.getLeaveChunksByIds(chunkIds);
+};
+
+export const getAvailableChapters = async (hyperdrive: Hyperdrive): Promise<string[]> => {
+	const service = new LeaveDatabaseService(hyperdrive);
+	return service.getAvailableChapters();
 };
 
 /**
- * Fetch metadata only for specified chapters (optimized for LLM selection)
- * Uses efficient query that excludes large text_chunk field
+ * Enhance metadata with Leave-specific context for LLM processing
  */
-export const getLeaveMetadataByChapters = async (chapters: string[]): Promise<LeaveMetadata[]> => {
-	if (chapters.length === 0) return [];
+function enhanceMetadataForLLM(metadata: Record<string, any>, chapter: string): Record<string, any> {
+	const enhanced = formatMetadataForLLM(metadata, chapter, 'leave');
 
-	const placeholders = chapters.map((_, i) => `$${i + 1}`).join(', ');
+	// Add chapter-specific enhancements
+	if (metadata.section || metadata.topic) {
+		enhanced.leave_section = metadata.section || metadata.topic;
+	}
 
-	// Metadata-only query for faster transfer and processing
-	const sql = `
-    SELECT id, metadata, chapter
-    FROM leave_2025 
-    WHERE chapter IN (${placeholders}) 
-      AND metadata IS NOT NULL
-	ORDER BY CAST(chapter AS INTEGER)
-  `;
+	// Add chapter context
+	enhanced.chapter_number = chapter;
 
-	const rows = await query(sql, chapters);
-
-	return rows.map((row) => ({
-		id: row.id,
-		metadata: enhanceMetadataForLLM(row.metadata, row.chapter)
-	}));
-};
-
-/**
- * Fetch specific chunks by IDs (used after metadata selection)
- * Optimized for final content retrieval
- */
-export const getLeaveChunksByIds = async (chunkIds: string[]): Promise<LeaveChunk[]> => {
-	if (chunkIds.length === 0) return [];
-
-	const placeholders = chunkIds.map((_, i) => `$${i + 1}`).join(', ');
-
-	// Direct ID lookup using primary key index (fastest possible query)
-	const sql = `
-    SELECT id, chapter, text_chunk, created_at, metadata
-    FROM leave_2025 
-    WHERE id IN (${placeholders})
-    ORDER BY chapter, created_at
-  `;
-
-	const rows = await query(sql, chunkIds);
-
-	return rows.map((row) => ({
-		id: row.id,
-		textChunk: row.text_chunk,
-		metadata: row.metadata || {},
-		createdAt: row.created_at?.toISOString() || new Date().toISOString(),
-		chapter: row.chapter || ''
-	}));
-};
-
-/**
- * Get all available chapters for finder agent
- */
-export const getAvailableChapters = async (): Promise<string[]> => {
-	const sql = `
-    SELECT DISTINCT chapter 
-    FROM leave_2025 
-    ORDER BY chapter
-  `;
-
-	const rows = await query(sql);
-	return rows.map((row) => row.chapter);
-};
+	return enhanced;
+}
 
 /**
  * Format chunks for LLM consumption with XML structure for better parsing
- * Includes chapter context, metadata, and chunk organization using XML tags
+ * Includes Leave context, metadata, and chunk organization using XML tags
  */
 export const formatChunksForLLM = (chunks: LeaveChunk[]): string => {
 	if (chunks.length === 0) return '<policy_content></policy_content>';
@@ -108,107 +138,27 @@ export const formatChunksForLLM = (chunks: LeaveChunk[]): string => {
 	// Group chunks by chapter for better organization
 	const groupedChunks = chunks.reduce(
 		(acc, chunk) => {
-			const chapterNum = chunk.chapter || 'Unknown';
-			if (!acc[chapterNum]) acc[chapterNum] = [];
-			acc[chapterNum].push(chunk);
+			const chapter = chunk.chapter || 'Unknown';
+			if (!acc[chapter]) acc[chapter] = [];
+			acc[chapter].push(chunk);
 			return acc;
 		},
 		{} as Record<string, LeaveChunk[]>
 	);
 
-	// Format each chapter section with XML structure
-	const formattedSections = Object.entries(groupedChunks).map(([chapter, chapterChunks]) => {
-		const chunkContent = chapterChunks
-			.map((chunk, index) => {
-				// Format metadata as proper XML attributes and content
-				const metadataObj =
-					chunk.metadata && Object.keys(chunk.metadata).length > 0
-						? chunk.metadata
-						: { content_type: 'leave_policy' };
+	const content = Object.entries(groupedChunks)
+		.sort(([a], [b]) => parseInt(a) - parseInt(b)) // Sort chapters numerically
+		.map(([chapter, leaveChunks]) => {
+			const chunksXml = leaveChunks
+				.map((chunk) => {
+					const metadata = chunk.metadata ? `<metadata>${JSON.stringify(chunk.metadata)}</metadata>` : '';
+					return `<chunk id="${chunk.id}">${metadata}<content>${chunk.textChunk}</content></chunk>`;
+				})
+				.join('\n');
 
-				// Create XML attributes from metadata
-				const xmlAttributes = Object.entries(metadataObj)
-					.map(([key, value]) => `${key}="${String(value).replace(/"/g, '&quot;')}"`)
-					.join(' ');
+			return `<chapter number="${chapter}">\n${chunksXml}\n</chapter>`;
+		})
+		.join('\n');
 
-				return `<chunk id="${chunk.id}" index="${index + 1}" ${xmlAttributes}>
-<metadata>
-${Object.entries(metadataObj)
-	.map(([key, value]) => `<${key}>${String(value)}</${key}>`)
-	.join('\n')}
-</metadata>
-<content>
-${chunk.textChunk}
-</content>
-</chunk>`;
-			})
-			.join('\n\n');
-
-		return `<chapter number="${chapter}">
-${chunkContent}
-</chapter>`;
-	});
-
-	return `<policy_content>
-${formattedSections.join('\n\n')}
-</policy_content>`;
+	return `<policy_content>\n${content}\n</policy_content>`;
 };
-
-/**
- * Batch operation to fetch both metadata and chunk counts for analytics
- * Uses single query for efficiency
- */
-export const getLeaveStatsByChapters = async (
-	chapters: string[]
-): Promise<
-	Array<{
-		chapter: string;
-		chunkCount: number;
-		hasMetadata: boolean;
-	}>
-> => {
-	if (chapters.length === 0) return [];
-
-	const placeholders = chapters.map((_, i) => `$${i + 1}`).join(', ');
-
-	// Aggregated query for analytics - pushes computation to database
-	const sql = `
-    SELECT 
-      chapter,
-      COUNT(*) as chunk_count,
-      COUNT(metadata) > 0 as has_metadata
-    FROM leave_2025 
-    WHERE chapter IN (${placeholders})
-	GROUP BY chapter
-	ORDER BY CAST(chapter AS INTEGER)
-  `;
-
-	const rows = await query(sql, chapters);
-
-	return rows.map((row) => ({
-		chapter: row.chapter,
-		chunkCount: parseInt(row.chunk_count, 10),
-		hasMetadata: Boolean(row.has_metadata)
-	}));
-};
-
-/**
- * Enhanced metadata formatting for LLM processing
- * Adds contextual information and standardizes format
- */
-function enhanceMetadataForLLM(metadata: any, chapter: string): Record<string, any> {
-	if (!metadata || typeof metadata !== 'object') {
-		return { chapter: chapter, content_type: 'leave_policy' };
-	}
-
-	// Ensure metadata includes chapter context and standardized fields
-	return {
-		...metadata,
-		chapter: chapter,
-		content_type: metadata.content_type || 'leave_policy',
-		// Add any additional standardized fields for LLM processing
-		...(metadata.section && { section: metadata.section }),
-		...(metadata.section_title && { section_title: metadata.section_title }),
-		...(metadata.chapter_title && { chapter_title: metadata.chapter_title })
-	};
-}

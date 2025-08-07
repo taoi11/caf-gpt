@@ -1,88 +1,121 @@
-import { query } from '../../../core/db/client';
+import { BasePolicyDatabaseService, formatMetadataForLLM } from '../../../core/db/service.js';
 import type { DOADChunk, DOADMetadata } from '../types.js';
 
 /**
- * Fetch all chunks for specified DOAD numbers with optimized query
- * Uses indexed lookup and only selects required columns for performance
+ * DOAD Database Service - extends common patterns with DOAD-specific logic
  */
-export const getDOADChunksByNumbers = async (doadNumbers: string[]): Promise<DOADChunk[]> => {
-	if (doadNumbers.length === 0) return [];
+export class DOADDatabaseService extends BasePolicyDatabaseService {
+	private readonly TABLE_NAME = 'doad';
+	private readonly IDENTIFIER_COLUMN = 'doad_number';
 
-	const placeholders = doadNumbers.map((_, i) => `$${i + 1}`).join(', ');
+	/**
+	 * Fetch all chunks for specified DOAD numbers with optimized query
+	 */
+	async getDOADChunksByNumbers(doadNumbers: string[]): Promise<DOADChunk[]> {
+		if (doadNumbers.length === 0) return [];
 
-	// Optimized query: only select needed columns, use index on doad_number
-	const sql = `
-    SELECT id, doad_number, text_chunk, created_at, metadata
-    FROM doad 
-    WHERE doad_number IN (${placeholders})
-    ORDER BY doad_number, created_at
-  `;
+		const placeholders = doadNumbers.map((_, i) => `$${i + 1}`).join(', ');
 
-	const rows = await query(sql, doadNumbers);
+		const sql = `
+			SELECT id, doad_number, text_chunk, created_at, metadata
+			FROM ${this.TABLE_NAME} 
+			WHERE ${this.IDENTIFIER_COLUMN} IN (${placeholders})
+			ORDER BY ${this.IDENTIFIER_COLUMN}, created_at
+		`;
 
-	// Type-safe mapping with proper date handling
-	return rows.map((row) => ({
-		id: row.id,
-		textChunk: row.text_chunk,
-		metadata: row.metadata || {},
-		createdAt: row.created_at?.toISOString() || new Date().toISOString(),
-		doadNumber: row.doad_number || ''
-	}));
+		const result = await this.executeQuery(sql, doadNumbers);
+
+		return result.data.map((row) => ({
+			id: row.id,
+			textChunk: row.text_chunk,
+			metadata: row.metadata || {},
+			createdAt: row.created_at?.toISOString() || new Date().toISOString(),
+			doadNumber: row.doad_number || ''
+		}));
+	}
+
+	/**
+	 * Fetch metadata only for specified DOAD numbers (optimized for LLM selection)
+	 */
+	async getDOADMetadataByNumbers(doadNumbers: string[]): Promise<DOADMetadata[]> {
+		const metadata = await this.getMetadataByIdentifiers(
+			this.TABLE_NAME,
+			doadNumbers,
+			this.IDENTIFIER_COLUMN
+		);
+
+		// Create a map from DOAD number to metadata item for correct assignment
+		const metadataMap = new Map<string, typeof metadata[number]>();
+		for (const item of metadata) {
+			const doadKey = String(item[this.IDENTIFIER_COLUMN] ?? item.doad_number ?? '');
+			metadataMap.set(doadKey, item);
+		}
+
+		return doadNumbers.map((doadNumber) => {
+			const item = metadataMap.get(String(doadNumber));
+			return item
+				? {
+						id: item.id,
+						metadata: enhanceMetadataForLLM(item.metadata, doadNumber)
+				  }
+				: {
+						id: '',
+						metadata: enhanceMetadataForLLM({}, doadNumber)
+				  };
+		});
+	}
+
+	/**
+	 * Fetch specific chunks by IDs (used after metadata selection)
+	 */
+	async getDOADChunksByIds(chunkIds: string[]): Promise<DOADChunk[]> {
+		const chunks = await this.getChunksByIds(this.TABLE_NAME, chunkIds);
+
+		return chunks.map((chunk) => ({
+			...chunk,
+			doadNumber: chunk.metadata?.doad_number || ''
+		})) as DOADChunk[];
+	}
+
+	/**
+	 * Get all available DOAD numbers
+	 */
+	async getAvailableDOADNumbers(): Promise<string[]> {
+		return this.getAvailableIdentifiers(
+			this.TABLE_NAME,
+			this.IDENTIFIER_COLUMN,
+			`CASE WHEN ${this.IDENTIFIER_COLUMN} ~ '^[0-9]+' THEN LPAD(SPLIT_PART(${this.IDENTIFIER_COLUMN}, '-', 1), 10, '0') ELSE ${this.IDENTIFIER_COLUMN} END`
+		);
+	}
+}
+
+// Legacy function exports for backwards compatibility during migration
+export const getDOADChunksByNumbers = async (doadNumbers: string[], hyperdrive: Hyperdrive): Promise<DOADChunk[]> => {
+	const service = new DOADDatabaseService(hyperdrive);
+	return service.getDOADChunksByNumbers(doadNumbers);
+};
+
+export const getDOADMetadataByNumbers = async (doadNumbers: string[], hyperdrive: Hyperdrive): Promise<DOADMetadata[]> => {
+	const service = new DOADDatabaseService(hyperdrive);
+	return service.getDOADMetadataByNumbers(doadNumbers);
+};
+
+export const getDOADChunksByIds = async (chunkIds: string[], hyperdrive: Hyperdrive): Promise<DOADChunk[]> => {
+	const service = new DOADDatabaseService(hyperdrive);
+	return service.getDOADChunksByIds(chunkIds);
+};
+
+export const getAvailableDOADNumbers = async (hyperdrive: Hyperdrive): Promise<string[]> => {
+	const service = new DOADDatabaseService(hyperdrive);
+	return service.getAvailableDOADNumbers();
 };
 
 /**
- * Fetch metadata only for specified DOAD numbers (optimized for LLM selection)
- * Uses efficient query that excludes large text_chunk field
+ * Enhance metadata with DOAD-specific context for LLM processing
  */
-export const getDOADMetadataByNumbers = async (doadNumbers: string[]): Promise<DOADMetadata[]> => {
-	if (doadNumbers.length === 0) return [];
-
-	const placeholders = doadNumbers.map((_, i) => `$${i + 1}`).join(', ');
-
-	// Metadata-only query for faster transfer and processing
-	const sql = `
-    SELECT id, metadata, doad_number
-    FROM doad 
-    WHERE doad_number IN (${placeholders}) 
-      AND metadata IS NOT NULL
-    ORDER BY doad_number
-  `;
-
-	const rows = await query(sql, doadNumbers);
-
-	return rows.map((row) => ({
-		id: row.id,
-		metadata: enhanceMetadataForLLM(row.metadata, row.doad_number)
-	}));
-};
-
-/**
- * Fetch specific chunks by IDs (used after metadata selection)
- * Optimized for final content retrieval
- */
-export const getDOADChunksByIds = async (chunkIds: string[]): Promise<DOADChunk[]> => {
-	if (chunkIds.length === 0) return [];
-
-	const placeholders = chunkIds.map((_, i) => `$${i + 1}`).join(', ');
-
-	// Direct ID lookup using primary key index (fastest possible query)
-	const sql = `
-    SELECT id, doad_number, text_chunk, created_at, metadata
-    FROM doad 
-    WHERE id IN (${placeholders})
-    ORDER BY doad_number, created_at
-  `;
-
-	const rows = await query(sql, chunkIds);
-
-	return rows.map((row) => ({
-		id: row.id,
-		textChunk: row.text_chunk,
-		metadata: row.metadata || {},
-		createdAt: row.created_at?.toISOString() || new Date().toISOString(),
-		doadNumber: row.doad_number || ''
-	}));
-};
+function enhanceMetadataForLLM(metadata: Record<string, any>, doadNumber: string): Record<string, any> {
+	return formatMetadataForLLM(metadata, doadNumber, 'doad');
+}
 
 /**
  * Format chunks for LLM consumption with XML structure for better parsing
@@ -102,98 +135,18 @@ export const formatChunksForLLM = (chunks: DOADChunk[]): string => {
 		{} as Record<string, DOADChunk[]>
 	);
 
-	// Format each DOAD section with XML structure
-	const formattedSections = Object.entries(groupedChunks).map(([doadNumber, doadChunks]) => {
-		const chunkContent = doadChunks
-			.map((chunk, index) => {
-				// Format metadata as proper XML attributes and content
-				const metadataObj =
-					chunk.metadata && Object.keys(chunk.metadata).length > 0
-						? chunk.metadata
-						: { content_type: 'policy_text' };
+	const content = Object.entries(groupedChunks)
+		.map(([doadNumber, doadChunks]) => {
+			const chunksXml = doadChunks
+				.map((chunk) => {
+					const metadata = chunk.metadata ? `<metadata>${JSON.stringify(chunk.metadata)}</metadata>` : '';
+					return `<chunk id="${chunk.id}">${metadata}<content>${chunk.textChunk}</content></chunk>`;
+				})
+				.join('\n');
 
-				// Create XML attributes from metadata
-				const xmlAttributes = Object.entries(metadataObj)
-					.map(([key, value]) => `${key}="${String(value).replace(/"/g, '&quot;')}"`)
-					.join(' ');
+			return `<doad number="${doadNumber}">\n${chunksXml}\n</doad>`;
+		})
+		.join('\n');
 
-				return `<chunk id="${chunk.id}" index="${index + 1}" ${xmlAttributes}>
-<metadata>
-${Object.entries(metadataObj)
-	.map(([key, value]) => `<${key}>${String(value)}</${key}>`)
-	.join('\n')}
-</metadata>
-<content>
-${chunk.textChunk}
-</content>
-</chunk>`;
-			})
-			.join('\n\n');
-
-		return `<doad number="${doadNumber}">
-${chunkContent}
-</doad>`;
-	});
-
-	return `<policy_content>
-${formattedSections.join('\n\n')}
-</policy_content>`;
+	return `<policy_content>\n${content}\n</policy_content>`;
 };
-/**
- * Batch operation to fetch both metadata and chunk counts for analytics
- * Uses single query for efficiency
- */
-export const getDOADStatsByNumbers = async (
-	doadNumbers: string[]
-): Promise<
-	Array<{
-		doadNumber: string;
-		chunkCount: number;
-		hasMetadata: boolean;
-	}>
-> => {
-	if (doadNumbers.length === 0) return [];
-
-	const placeholders = doadNumbers.map((_, i) => `$${i + 1}`).join(', ');
-
-	// Aggregated query for analytics - pushes computation to database
-	const sql = `
-    SELECT 
-      doad_number,
-      COUNT(*) as chunk_count,
-      COUNT(metadata) > 0 as has_metadata
-    FROM doad 
-    WHERE doad_number IN (${placeholders})
-    GROUP BY doad_number
-    ORDER BY doad_number
-  `;
-
-	const rows = await query(sql, doadNumbers);
-
-	return rows.map((row) => ({
-		doadNumber: row.doad_number,
-		chunkCount: parseInt(row.chunk_count, 10),
-		hasMetadata: Boolean(row.has_metadata)
-	}));
-};
-
-/**
- * Enhanced metadata formatting for LLM processing
- * Adds contextual information and standardizes format
- */
-function enhanceMetadataForLLM(metadata: any, doadNumber: string): Record<string, any> {
-	if (!metadata || typeof metadata !== 'object') {
-		return { doad_number: doadNumber, content_type: 'policy_text' };
-	}
-
-	// Ensure metadata includes DOAD context and standardized fields
-	return {
-		...metadata,
-		doad_number: doadNumber,
-		content_type: metadata.content_type || 'policy_text',
-		// Add any additional standardized fields for LLM processing
-		...(metadata.section && { section: metadata.section }),
-		...(metadata.topic && { topic: metadata.topic }),
-		...(metadata.keywords && { keywords: metadata.keywords })
-	};
-}

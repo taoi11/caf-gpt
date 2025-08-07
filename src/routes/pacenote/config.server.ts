@@ -1,9 +1,8 @@
 /**
- * Environment Configuration Utility
- *
- * Handles environment variable validation and configuration setup
- * for the PaceNote server functionality.
+ * Configuration validation for PaceNote route server-side operations
  */
+
+import '$lib/core/types.js'; // Import for environment type extensions
 
 interface PaceNoteConfig {
 	openrouterToken: string;
@@ -46,7 +45,7 @@ export function validateEnvironmentConfig(platform?: App.Platform): ConfigValida
 			openrouterToken: env.OPENROUTER_TOKEN!,
 			aiGatewayBaseUrl: env.AI_GATEWAY_BASE_URL!,
 			model: env.FN_MODEL!,
-			cfAigToken: env.CF_AIG_TOKEN
+			cfAigToken: env.CF_AIG_TOKEN || undefined
 		}
 	};
 }

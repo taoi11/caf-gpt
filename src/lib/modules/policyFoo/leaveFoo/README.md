@@ -6,7 +6,7 @@
 
 **Entry Point**: `index.ts` → `handleLEAVEQuery()` function  
 **Workflow**: Finder Agent → Main Agent → Response (simplified vs DOAD)  
-**Database**: Neon Postgres with chapter-based structure  
+**Database**: Neon Postgres via Hyperdrive with chapter-based structure  
 **Models**: Reader Model (Haiku) + Main Model (Sonnet)  
 **Performance**: ~3-7 seconds, ~2000-3000 tokens per query
 

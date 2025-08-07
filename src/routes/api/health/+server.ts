@@ -30,6 +30,17 @@ export const GET: RequestHandler = async ({ platform }) => {
 			}
 		}
 
+		// Check database connection via Hyperdrive
+		if (platform?.env?.HYPERDRIVE) {
+			try {
+				const { healthCheck } = await import('$lib/core/db/client');
+				status.checks.storage = await healthCheck(platform.env.HYPERDRIVE);
+			} catch (error) {
+				console.warn('Database health check failed:', error);
+				status.checks.storage = false;
+			}
+		}
+
 		// Determine overall status
 		const allHealthy = Object.values(status.checks).every((check) => check === true);
 		status.status = allHealthy ? 'healthy' : 'degraded';

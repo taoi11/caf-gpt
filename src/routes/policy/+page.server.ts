@@ -6,6 +6,7 @@ import {
 	type PolicyQueryInput,
 	type PolicyFooError
 } from '$lib/modules/policyFoo';
+import '$lib/core/types.js'; // Import for environment type extensions
 
 /**
  * Load function to provide initial data to the page
@@ -86,13 +87,31 @@ export const actions: Actions = {
 				});
 			}
 
-			// Call policy service
+			// Validate required environment variables
+			if (!env.OPENROUTER_TOKEN) {
+				console.error('OPENROUTER_TOKEN not configured');
+				return fail(500, {
+					error: 'Service configuration error - please check environment variables',
+					field: 'general'
+				});
+			}
+
+			if (!env.AI_GATEWAY_BASE_URL) {
+				console.error('AI_GATEWAY_BASE_URL not configured');
+				return fail(500, {
+					error: 'Service configuration error - please check environment variables',
+					field: 'general'
+				});
+			}
+
+			// Call policy service with Hyperdrive binding
 			const result = await processPolicyQuery(input, {
 				OPENROUTER_TOKEN: env.OPENROUTER_TOKEN,
 				AI_GATEWAY_BASE_URL: env.AI_GATEWAY_BASE_URL,
-				CF_AIG_TOKEN: env.CF_AIG_TOKEN,
-				READER_MODEL: (env as any).READER_MODEL, // Optional env var
-				MAIN_MODEL: (env as any).MAIN_MODEL // Optional env var
+				CF_AIG_TOKEN: env.CF_AIG_TOKEN || undefined,
+				READER_MODEL: env.READER_MODEL,
+				MAIN_MODEL: env.MAIN_MODEL,
+				HYPERDRIVE: env.HYPERDRIVE // Pass Hyperdrive binding
 			});
 
 			// Return success response
