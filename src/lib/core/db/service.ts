@@ -3,7 +3,13 @@
  * Provides shared functionality across DOAD and Leave modules
  */
 import { query } from './client.js';
-import type { PolicyChunk, PolicyMetadata, DatabaseQueryResult, QueryOptions, DatabaseStats } from './types.js';
+import type {
+	PolicyChunk,
+	PolicyMetadata,
+	DatabaseQueryResult,
+	QueryOptions,
+	DatabaseStats
+} from './types.js';
 
 /**
  * Base database service class with common patterns
@@ -24,10 +30,9 @@ export abstract class BasePolicyDatabaseService {
 		options: QueryOptions = {}
 	): Promise<DatabaseQueryResult<T>> {
 		const startTime = Date.now();
-		const retries = options.retries ?? 2;
 
 		try {
-			const data = await query(sql, this.hyperdrive, params, retries);
+			const data = await query(sql, this.hyperdrive, params);
 			const executionTime = Date.now() - startTime;
 
 			return {
@@ -179,19 +184,20 @@ export function formatMetadataForLLM(
 /**
  * Common database statistics aggregator
  */
-export async function getDatabaseStats(hyperdrive: Hyperdrive, tables: string[]): Promise<DatabaseStats> {
+export async function getDatabaseStats(
+	hyperdrive: Hyperdrive,
+	tables: string[]
+): Promise<DatabaseStats> {
 	const service = new (class extends BasePolicyDatabaseService {
 		async getStats() {
-			const tablesInfo = await Promise.all(
-				tables.map(table => this.getTableStats(table))
-			);
+			const tablesInfo = await Promise.all(tables.map((table) => this.getTableStats(table)));
 
 			const totalChunks = tablesInfo.reduce((sum, table) => sum + table.rowCount, 0);
 
 			// Get last updated timestamp
 			const lastUpdatedQuery = `
 				SELECT MAX(created_at) as last_updated
-				FROM (${tables.map(table => `SELECT created_at FROM ${table}`).join(' UNION ALL ')}) as all_tables
+				FROM (${tables.map((table) => `SELECT created_at FROM ${table}`).join(' UNION ALL ')}) as all_tables
 			`;
 
 			const result = await this.executeQuery(lastUpdatedQuery);

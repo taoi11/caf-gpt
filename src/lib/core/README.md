@@ -38,9 +38,9 @@ import { BasePolicyDatabaseService } from '$lib/core/db/service';
 
 // Example domain service extending common patterns
 class MyService extends BasePolicyDatabaseService {
-  constructor(hyperdrive: Hyperdrive) {
-    super(hyperdrive);
-  }
+	constructor(hyperdrive: Hyperdrive) {
+		super(hyperdrive);
+	}
 }
 ```
 
