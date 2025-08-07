@@ -76,6 +76,11 @@
 		citations: string[];
 		follow_up?: string;
 	} {
+		// Check for DOCTYPE or HTML content - fallback to text parsing
+		if (xml.trim().startsWith('<!DOCTYPE')) {
+			return parseTextFallback(xml);
+		}
+
 		try {
 			// Create a DOMParser to parse the XML
 			const parser = new DOMParser();
@@ -126,6 +131,15 @@
 		citations: string[];
 		follow_up?: string;
 	} {
+		// Handle DOCTYPE or HTML content
+		if (text.trim().startsWith('<!DOCTYPE')) {
+			return {
+				answer: 'Service temporarily unavailable. Please try again.',
+				citations: [],
+				follow_up: undefined
+			};
+		}
+
 		// Try to extract content using regex patterns
 		const answerMatch = text.match(/<answer>([\s\S]*?)<\/answer>/);
 		const citationsMatch = text.match(/<citations>([\s\S]*?)<\/citations>/);
