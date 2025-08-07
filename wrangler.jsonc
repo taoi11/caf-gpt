@@ -27,7 +27,15 @@
 		"FN_MODEL": "openai/gpt-4.1-mini",
 		"READER_MODEL": "google/gemini-2.5-flash",
 		"MAIN_MODEL": "google/gemini-2.5-pro"
-	}
+	},
+	// Hyperdrive for PostgreSQL connection pooling
+	// https://developers.cloudflare.com/hyperdrive/
+	"hyperdrive": [
+		{
+			"binding": "HYPERDRIVE",
+			"id": "8f4a1a7c06c447de94d199b2d66a1b8a"
+		}
+	]
 	/**
 	 * Service Bindings (communicate between multiple Workers)
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#service-bindings
