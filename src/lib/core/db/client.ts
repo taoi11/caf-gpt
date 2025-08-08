@@ -1,8 +1,9 @@
 /**
  * Database client using Cloudflare Hyperdrive for optimized connection pooling
- * Hyperdrive provides connection pooling and caching for better CF Workers performance
+ * Using node-postgres (pg) driver as recommended by Cloudflare for Hyperdrive + Neon
+ * This avoids WebSocket issues that occur with @neondatabase/serverless during compute suspension
  */
-import { Client } from '@neondatabase/serverless';
+import { Client } from 'pg';
 
 /**
  * Execute a database query using Hyperdrive connection pooling
@@ -17,7 +18,10 @@ export const query = async (
 
 	try {
 		// Create a new client using Hyperdrive connection string
-		client = new Client(hyperdrive.connectionString);
+		// node-postgres (pg) works better with Hyperdrive than @neondatabase/serverless
+		client = new Client({
+			connectionString: hyperdrive.connectionString
+		});
 		await client.connect();
 
 		// Execute query with performance logging
@@ -36,13 +40,24 @@ export const query = async (
 
 		return res.rows;
 	} catch (error) {
-		const dbError = error instanceof Error ? error : new Error(String(error));
-
+		let dbError: Error;
+		
+		// Handle database connection and query errors
+		if (error instanceof Error) {
+			dbError = error;
+		} else if (error && typeof error === 'object' && 'message' in error) {
+			dbError = new Error(String(error.message));
+		} else {
+			dbError = new Error(String(error));
+		}
+		
 		console.error('Database query failed:', {
 			error: dbError.message,
-			sql: text.substring(0, 50) + '...'
+			errorType: error?.constructor?.name || typeof error,
+			sql: text.substring(0, 50) + '...',
+			timestamp: new Date().toISOString()
 		});
-
+		
 		throw dbError;
 	} finally {
 		// Close the client connection
