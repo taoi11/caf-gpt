@@ -1,9 +1,8 @@
 /**
  * Database client using Cloudflare Hyperdrive for optimized connection pooling
- * Using node-postgres (pg) driver as recommended by Cloudflare for Hyperdrive + Neon
- * This avoids WebSocket issues that occur with @neondatabase/serverless during compute suspension
+ * Hyperdrive provides connection pooling and caching for better CF Workers performance
  */
-import { Client } from 'pg';
+import { Client } from '@neondatabase/serverless';
 
 /**
  * Execute a database query using Hyperdrive connection pooling
@@ -18,15 +17,19 @@ export const query = async (
 
 	try {
 		// Create a new client using Hyperdrive connection string
-		// node-postgres (pg) works better with Hyperdrive than @neondatabase/serverless
-		client = new Client({
-			connectionString: hyperdrive.connectionString
-		});
+		client = new Client(hyperdrive.connectionString);
 		await client.connect();
 
-		// Execute query with performance logging
+		// Execute query with performance logging and timeout
 		const startTime = Date.now();
-		const res = await client.query(text, params);
+		
+		// Set up a timeout to prevent hanging queries in serverless environment
+		const queryPromise = client.query(text, params);
+		const timeoutPromise = new Promise((_, reject) => {
+			setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000);
+		});
+		
+		const res = await Promise.race([queryPromise, timeoutPromise]) as any;
 		const duration = Date.now() - startTime;
 
 		// Log slow queries (>500ms) for monitoring
@@ -42,11 +45,20 @@ export const query = async (
 	} catch (error) {
 		let dbError: Error;
 		
-		// Handle database connection and query errors
-		if (error instanceof Error) {
+		// Handle specific connection errors
+		if (error && typeof error === 'object' && 'message' in error) {
+			const errorMessage = String(error.message || error);
+			
+			// Check for WebSocket connection failures (common with Neon)
+			if (errorMessage.includes('WebSocket connection') || errorMessage.includes('530')) {
+				dbError = new Error(`Database connection failed: ${errorMessage}. This may be a temporary connectivity issue.`);
+			} else if (errorMessage.includes('ErrorEvent')) {
+				dbError = new Error(`Database connection error: Please check your database configuration.`);
+			} else {
+				dbError = new Error(errorMessage);
+			}
+		} else if (error instanceof Error) {
 			dbError = error;
-		} else if (error && typeof error === 'object' && 'message' in error) {
-			dbError = new Error(String(error.message));
 		} else {
 			dbError = new Error(String(error));
 		}
