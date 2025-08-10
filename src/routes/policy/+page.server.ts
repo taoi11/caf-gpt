@@ -6,16 +6,18 @@ import {
 	type PolicyQueryInput,
 	type PolicyFooError
 } from '$lib/modules/policyFoo';
+import { hasRequiredConfig, validateEnvironmentConfig } from './config.server.js';
 import '$lib/core/types.js'; // Import for environment type extensions
 
 /**
  * Load function to provide initial data to the page
  */
-export const load: PageServerLoad = async () => {
+export const load: PageServerLoad = async ({ platform }) => {
 	return {
 		policy_sets: getSupportedPolicySets(),
 		title: 'Policy Assistant',
-		description: 'Ask questions about CAF policies and get authoritative answers with citations.'
+		description: 'Ask questions about CAF policies and get authoritative answers with citations.',
+		isConfigured: hasRequiredConfig(platform)
 	};
 };
 
@@ -28,6 +30,16 @@ export const actions: Actions = {
 	 */
 	query: async ({ request, platform }) => {
 		try {
+			// Validate environment configuration
+			const configResult = validateEnvironmentConfig(platform);
+			if (!configResult.isValid) {
+				const missingVars = configResult.missingVars!.join(', ');
+				return fail(500, {
+					error: `Missing required environment variables: ${missingVars}. Please check your environment setup.`,
+					field: 'general'
+				});
+			}
+
 			const data = await request.formData();
 
 			// Extract form data
@@ -77,41 +89,16 @@ export const actions: Actions = {
 				policy_set: policySet as any
 			};
 
-			// Get environment from platform (Cloudflare Workers)
-			const env = platform?.env;
-			if (!env) {
-				console.error('Platform environment not available');
-				return fail(500, {
-					error: 'Service temporarily unavailable',
-					field: 'general'
-				});
-			}
+			const config = configResult.config!;
 
-			// Validate required environment variables
-			if (!env.OPENROUTER_TOKEN) {
-				console.error('OPENROUTER_TOKEN not configured');
-				return fail(500, {
-					error: 'Service configuration error - please check environment variables',
-					field: 'general'
-				});
-			}
-
-			if (!env.AI_GATEWAY_BASE_URL) {
-				console.error('AI_GATEWAY_BASE_URL not configured');
-				return fail(500, {
-					error: 'Service configuration error - please check environment variables',
-					field: 'general'
-				});
-			}
-
-			// Call policy service with Hyperdrive binding
+			// Call policy service with environment config
 			const result = await processPolicyQuery(input, {
-				OPENROUTER_TOKEN: env.OPENROUTER_TOKEN,
-				AI_GATEWAY_BASE_URL: env.AI_GATEWAY_BASE_URL,
-				CF_AIG_TOKEN: env.CF_AIG_TOKEN || undefined,
-				READER_MODEL: env.READER_MODEL,
-				MAIN_MODEL: env.MAIN_MODEL,
-				HYPERDRIVE: env.HYPERDRIVE // Pass Hyperdrive binding
+				OPENROUTER_TOKEN: config.openrouterToken,
+				AI_GATEWAY_BASE_URL: config.aiGatewayBaseUrl,
+				CF_AIG_TOKEN: config.cfAigToken,
+				READER_MODEL: config.readerModel,
+				MAIN_MODEL: config.mainModel,
+				HYPERDRIVE: config.hyperdrive
 			});
 
 			// Return success response

@@ -15,6 +15,7 @@ import {
 	getAvailableChapters,
 	formatChunksForLLM
 } from './database.service.js';
+import { healthCheck } from '../../../core/db/client.js';
 
 // Import prompt files directly from local codebase
 import mainPromptRaw from './prompts/main.md?raw';
@@ -46,6 +47,13 @@ export async function handleLeaveQuery(
 		stage = 'config_loading';
 		// Load required configuration
 		const config = await loadLeaveConfig(env);
+
+		stage = 'database_health_check';
+		// Check database connectivity before proceeding
+		const isDatabaseHealthy = await healthCheck(env.HYPERDRIVE);
+		if (!isDatabaseHealthy) {
+			throw new Error('Database service is currently unavailable. Please try again later.');
+		}
 
 		stage = 'finder_agent';
 		const finderStart = Date.now();

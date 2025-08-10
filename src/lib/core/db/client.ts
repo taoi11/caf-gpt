@@ -2,7 +2,7 @@
  * Database client using Cloudflare Hyperdrive for optimized connection pooling
  * Hyperdrive provides connection pooling and caching for better CF Workers performance
  */
-import { Client } from '@neondatabase/serverless';
+import { Client } from 'pg';
 
 /**
  * Execute a database query using Hyperdrive connection pooling
@@ -17,7 +17,7 @@ export const query = async (
 
 	try {
 		// Create a new client using Hyperdrive connection string
-		client = new Client(hyperdrive.connectionString);
+		client = new Client({ connectionString: hyperdrive.connectionString });
 		await client.connect();
 
 		// Execute query with performance logging and timeout
@@ -45,27 +45,18 @@ export const query = async (
 	} catch (error) {
 		let dbError: Error;
 		
-		// Handle specific connection errors
-		if (error && typeof error === 'object' && 'message' in error) {
-			const errorMessage = String(error.message || error);
-			
-			// Check for WebSocket connection failures (common with Neon)
-			if (errorMessage.includes('WebSocket connection') || errorMessage.includes('530')) {
-				dbError = new Error(`Database connection failed: ${errorMessage}. This may be a temporary connectivity issue.`);
-			} else if (errorMessage.includes('ErrorEvent')) {
-				dbError = new Error(`Database connection error: Please check your database configuration.`);
-			} else {
-				dbError = new Error(errorMessage);
-			}
-		} else if (error instanceof Error) {
+		// Normalize error
+		if (error instanceof Error) {
 			dbError = error;
+		} else if (error && typeof error === 'object' && 'message' in error) {
+			dbError = new Error(String((error as any).message));
 		} else {
 			dbError = new Error(String(error));
 		}
 		
 		console.error('Database query failed:', {
 			error: dbError.message,
-			errorType: error?.constructor?.name || typeof error,
+			errorType: (error as any)?.constructor?.name || typeof error,
 			sql: text.substring(0, 50) + '...',
 			timestamp: new Date().toISOString()
 		});
@@ -85,7 +76,7 @@ export const query = async (
 export const healthCheck = async (hyperdrive: Hyperdrive): Promise<boolean> => {
 	try {
 		const result = await query('SELECT 1 as health', hyperdrive);
-		return result.length > 0 && result[0].health === 1;
+		return result.length > 0 && Number(result[0].health) === 1;
 	} catch (error) {
 		console.error('Database health check failed:', error);
 		return false;

@@ -40,10 +40,10 @@ export interface LeaveMetadata {
 declare global {
 	namespace Cloudflare {
 		interface Env {
-			// Secret environment variables (not in wrangler.jsonc vars for security)
-			OPENROUTER_TOKEN?: string;
-			AI_GATEWAY_BASE_URL?: string;
-			CF_AIG_TOKEN?: string;
+			// Secret environment variables (must be present at runtime in prod/dev)
+			OPENROUTER_TOKEN: string;
+			AI_GATEWAY_BASE_URL: string;
+			CF_AIG_TOKEN: string;
 		}
 	}
 }
