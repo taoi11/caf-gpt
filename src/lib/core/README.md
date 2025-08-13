@@ -4,7 +4,7 @@
 
 **Key Services**: `ai-gateway.service.ts`, `db/client.ts`, `db/service.ts`
 **Usage Pattern**: Import shared services into domain modules (`src/lib/modules/*`).
-**Dependencies**: Cloudflare Workers, Hyperdrive, Neon Postgres.
+**Dependencies**: Cloudflare Workers, Hyperdrive, Postgres (pg).
 
 ## Purpose
 
@@ -18,7 +18,7 @@ core/
 ├── ai-gateway.service.ts # Centralized AI/LLM service
 ├── types.ts             # Core type definitions
 └── db/                  # Database infrastructure
-    ├── client.ts        # Hyperdrive connection management
+    ├── client.ts        # Hyperdrive connection management (node-postgres)
     ├── service.ts       # Common database service patterns
     └── types.ts         # Database type definitions
 ```
@@ -26,7 +26,7 @@ core/
 ## Key Services
 
 - **`ai-gateway.service.ts`**: Centralized service for all LLM interactions via Cloudflare AI Gateway. Handles requests, errors, and monitoring.
-- **`db/client.ts`**: Manages Hyperdrive connection pooling for optimal CF Workers performance.
+- **`db/client.ts`**: Manages Hyperdrive connection with node-postgres (pg) for optimal CF Workers performance.
 - **`db/service.ts`**: Common database service patterns to reduce code duplication across modules.
 - **`db/types.ts` & `types.ts`**: Shared type definitions for database operations and core functionality.
 

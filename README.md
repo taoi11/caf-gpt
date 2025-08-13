@@ -10,9 +10,7 @@ AI-powered assistance tools for CAF troops with modular, maintainable architectu
 
 ```bash
 npm run lint          # Run prettier formatting and linting
-npm run dev           # Build once, then start wrangler dev (recommended)
-npm run dev:local     # Build once, then start wrangler dev locally
-npm run dev:remote    # Build once, then start wrangler dev with remote resources
+npm run dev           # Build once, then start wrangler dev with remote resources (default)
 npm run build         # Build for production
 npm run preview       # Build and preview locally
 ```
@@ -66,7 +64,7 @@ src/
 **Domain**: Policy Q&A
 **Documentation**: `src/lib/modules/policyFoo/README.md`
 **Handlers**: `src/lib/modules/policyFoo/doadFoo/README.md` + `src/lib/modules/policyFoo/leaveFoo/README.md`
-**Key Dependencies**: AI Gateway + Cloudflare Hyperdrive + Neon Postgres
+**Key Dependencies**: AI Gateway + Cloudflare Hyperdrive + Postgres (pg)
 **Related Files**: `src/lib/modules/policyFoo/` + `src/routes/policy/`
 
 ## Architecture
@@ -75,7 +73,7 @@ src/
 
 - **Frontend**: SvelteKit with TypeScript
 - **Backend**: Cloudflare Workers
-- **Databases**: Neon Postgres via Cloudflare Hyperdrive connection pooling
+- **Databases**: Postgres via Cloudflare Hyperdrive connection pooling (node-postgres driver)
 - **AI Integration**: AI Gateway with OpenRouter provider
 - **Authentication**: Server-side only, no API keys required
 - **Styling**: Tailwind CSS v4
@@ -96,7 +94,7 @@ src/
 Configure in `wrangler.jsonc`:
 
 - **AI Gateway**: Configure with OpenRouter provider
-- **Hyperdrive**: Database connection pooling for Neon Postgres
+- **Hyperdrive**: Database connection pooling for Postgres
 - **Environment Variables**: Model selection and secret management
 
 ## Common Error Patterns

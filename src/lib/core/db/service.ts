@@ -75,7 +75,7 @@ export abstract class BasePolicyDatabaseService {
 			id: row.id,
 			textChunk: row.text_chunk,
 			metadata: row.metadata || {},
-			createdAt: row.created_at?.toISOString() || new Date().toISOString()
+			createdAt: row.created_at ? new Date(row.created_at).toISOString() : new Date().toISOString()
 		}));
 	}
 
@@ -88,7 +88,7 @@ export abstract class BasePolicyDatabaseService {
 		identifiers: string[],
 		identifierColumn: string,
 		orderBy: string = identifierColumn
-	): Promise<PolicyMetadata[]> {
+	): Promise<(PolicyMetadata & Record<string, any>)[]> {
 		if (identifiers.length === 0) return [];
 
 		const placeholders = identifiers.map((_, i) => `$${i + 1}`).join(', ');
@@ -105,7 +105,8 @@ export abstract class BasePolicyDatabaseService {
 
 		return result.data.map((row) => ({
 			id: row.id,
-			metadata: row.metadata || {}
+			metadata: row.metadata || {},
+			[identifierColumn]: row[identifierColumn]
 		}));
 	}
 
@@ -201,7 +202,9 @@ export async function getDatabaseStats(
 			`;
 
 			const result = await this.executeQuery(lastUpdatedQuery);
-			const lastUpdated = result.data[0]?.last_updated?.toISOString() || new Date().toISOString();
+			const lastUpdated = result.data[0]?.last_updated
+				? new Date(result.data[0].last_updated).toISOString()
+				: new Date().toISOString();
 
 			return {
 				totalChunks,

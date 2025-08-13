@@ -22,6 +22,7 @@ import {
 	getDOADChunksByIds,
 	formatChunksForLLM
 } from './database.service.js';
+import { healthCheck } from '../../../core/db/client.js';
 
 // Import prompt files directly from local codebase
 import finderPromptRaw from './prompts/finder.md?raw';
@@ -57,6 +58,13 @@ export async function handleDOADQuery(
 		stage = 'config_loading';
 		// Load required prompts
 		const config = await loadDOADConfig(env);
+
+		stage = 'database_health_check';
+		// Check database connectivity before proceeding
+		const isDatabaseHealthy = await healthCheck(env.HYPERDRIVE);
+		if (!isDatabaseHealthy) {
+			throw new Error('Database service is currently unavailable. Please try again later.');
+		}
 
 		stage = 'finder_agent';
 		const finderStart = Date.now();

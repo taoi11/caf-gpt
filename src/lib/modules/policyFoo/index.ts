@@ -68,20 +68,35 @@ export async function processPolicyQuery(
 				throw createError('INVALID_POLICY_SET', `Unsupported policy set: ${input.policy_set}`);
 		}
 	} catch (error) {
-		console.error('PolicyFoo service error:', error);
+			console.error('PolicyFoo service error:', error);
 
-		if (error && typeof error === 'object' && 'code' in error) {
-			// Re-throw PolicyFooError as-is
-			throw error;
+			// Handle database-related errors specifically
+			if (error && typeof error === 'object' && 'message' in error) {
+				const errorMessage = String(error.message || error);
+				if (errorMessage.includes('Database connection failed') || 
+				    errorMessage.includes('Query timeout') ||
+				    errorMessage.includes('WebSocket connection')) {
+					throw createError(
+						'GENERAL_ERROR',
+						'Database service is currently unavailable. Please try again later.',
+						{ originalError: errorMessage }
+					);
+				}
+			}
+
+			// Handle PolicyFooError
+			if (error && typeof error === 'object' && 'code' in error) {
+				// Re-throw PolicyFooError as-is
+				throw error;
+			}
+
+			// Wrap unexpected errors
+			throw createError(
+				'GENERAL_ERROR',
+				error instanceof Error ? error.message : 'Unknown error occurred',
+				{ originalError: error }
+			);
 		}
-
-		// Wrap unexpected errors
-		throw createError(
-			'GENERAL_ERROR',
-			error instanceof Error ? error.message : 'Unknown error occurred',
-			{ originalError: error }
-		);
-	}
 }
 
 /**
@@ -153,12 +168,17 @@ function validateMessage(message: PolicyMessage): void {
  * Validate environment variables
  */
 function validateEnvironment(env: PolicyFooEnvironment): void {
-	const required = ['OPENROUTER_TOKEN', 'AI_GATEWAY_BASE_URL', 'CF_AIG_TOKEN'];
+	const required = ['OPENROUTER_TOKEN', 'AI_GATEWAY_BASE_URL'];
 
 	for (const key of required) {
 		if (!env[key as keyof PolicyFooEnvironment]) {
 			throw createError('GENERAL_ERROR', `Missing required environment variable: ${key}`);
 		}
+	}
+
+	// Check for required bindings
+	if (!env.HYPERDRIVE) {
+		throw createError('GENERAL_ERROR', 'Missing required Hyperdrive binding');
 	}
 }
 

@@ -9,6 +9,6 @@
 
 ## Code Organization & Refactoring
 
-[ ] Trim large source files (>150 lines) for better maintainability
+[ ] Trim large source files (>200 lines) for better maintainability
 
 - [ ] Create a list of long files
