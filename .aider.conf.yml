@@ -5,6 +5,7 @@ restore-chat-history: false
 read:
   - .github/instructions/base.instructions.md
   - README.md
+  - docs/ai/Conventions.md
   - docs/ai/core.md
   - docs/ai/index.md
   - docs/ai/module.paceNote.md

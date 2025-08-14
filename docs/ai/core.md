@@ -63,15 +63,6 @@ Mission: Centralize Workers/D1/KV/DO/Hyperdrive and security guidance for this p
 
 ---
 
-## Conventions
-
-Mission: Keep code consistent and simple for a Workers-first SvelteKit app.
-
-- Structure: SvelteKit defaults; routes co-locate UI + server; domain modules in `src/lib/modules/*`; shared infra in `src/lib/core/*`; one `types.ts` per module
-- Naming & Style: camelCase; strict TS; minimal deps; no native/FFI; comment non-obvious logic
-- Architecture: service layer owns business logic; prefer DB work over Worker compute; use SvelteKit builtins
-- Security: server-only LLM calls; validate input at boundaries; prefer SSR and form actions
-
 ## Dependency Graph
 
 > Placeholder - Implementation planned
