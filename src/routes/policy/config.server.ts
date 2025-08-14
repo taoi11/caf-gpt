@@ -69,9 +69,5 @@ export function validateEnvironmentConfig(platform?: App.Platform): ConfigValida
 export function hasRequiredConfig(platform?: App.Platform): boolean {
 	const env = platform?.env || process.env;
 
-	return Boolean(
-		env?.OPENROUTER_TOKEN && 
-		env?.AI_GATEWAY_BASE_URL && 
-		platform?.env?.HYPERDRIVE
-	);
+	return Boolean(env?.OPENROUTER_TOKEN && env?.AI_GATEWAY_BASE_URL && platform?.env?.HYPERDRIVE);
 }

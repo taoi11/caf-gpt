@@ -33,7 +33,6 @@ policyFoo/
 │   ├── main.ts                 # Policy synthesis agent
 │   ├── database.service.ts     # Database operations for policy chunks
 │   ├── metadata-selector.ts    # Intelligent chunk selection
-│   ├── types.ts                # DOAD-specific type definitions
 │   └── prompts/                # LLM prompts
 └── leaveFoo/                   # Leave policy handler
     ├── README.md               # LEAVE-specific implementation details
@@ -41,7 +40,6 @@ policyFoo/
     ├── finder.ts               # Chapter identification agent
     ├── main.ts                 # Policy processing agent
     ├── database.service.ts     # Database operations for chapter chunks
-    ├── types.ts                # LEAVE-specific type definitions
     └── prompts/                # LLM prompts
 ```
 
@@ -76,13 +74,13 @@ policyFoo/
 
 ### Handler Comparison
 
-| Feature           | DOAD Handler                       | LEAVE Handler           |
-| ----------------- | ---------------------------------- | ----------------------- |
-| **Workflow**      | 3-stage (finder → selector → main) | 2-stage (finder → main) |
-| **Database**      | Chunked content with metadata      | Chapter-based structure |
-| **Token Usage**   | ~2500-4500 per query               | ~2000-3000 per query    |
-| **Response Time** | ~5-12 seconds                      | ~3-7 seconds            |
-| **Optimization**  | Precision-focused                  | Speed-focused           |
+| Feature           | DOAD Handler                                                                  | LEAVE Handler           |
+| ----------------- | ----------------------------------------------------------------------------- | ----------------------- |
+| **Workflow**      | Multi-stage: finder → DB (chunks, metadata) → selector → DB (selected) → main | 2-stage (finder → main) |
+| **Database**      | Chunked content with metadata                                                 | Chapter-based structure |
+| **Token Usage**   | ~2500-4500 per query                                                          | ~2000-3000 per query    |
+| **Response Time** | ~5-12 seconds                                                                 | ~3-7 seconds            |
+| **Optimization**  | Precision-focused                                                             | Speed-focused           |
 
 ### Policy Sets
 

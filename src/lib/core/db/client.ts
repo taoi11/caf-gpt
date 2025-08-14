@@ -22,14 +22,14 @@ export const query = async (
 
 		// Execute query with performance logging and timeout
 		const startTime = Date.now();
-		
+
 		// Set up a timeout to prevent hanging queries in serverless environment
 		const queryPromise = client.query(text, params);
 		const timeoutPromise = new Promise((_, reject) => {
 			setTimeout(() => reject(new Error('Query timeout after 10 seconds')), 10000);
 		});
-		
-		const res = await Promise.race([queryPromise, timeoutPromise]) as any;
+
+		const res = (await Promise.race([queryPromise, timeoutPromise])) as any;
 		const duration = Date.now() - startTime;
 
 		// Log slow queries (>500ms) for monitoring
@@ -44,7 +44,7 @@ export const query = async (
 		return res.rows;
 	} catch (error) {
 		let dbError: Error;
-		
+
 		// Normalize error
 		if (error instanceof Error) {
 			dbError = error;
@@ -53,14 +53,14 @@ export const query = async (
 		} else {
 			dbError = new Error(String(error));
 		}
-		
+
 		console.error('Database query failed:', {
 			error: dbError.message,
 			errorType: (error as any)?.constructor?.name || typeof error,
 			sql: text.substring(0, 50) + '...',
 			timestamp: new Date().toISOString()
 		});
-		
+
 		throw dbError;
 	} finally {
 		// Close the client connection

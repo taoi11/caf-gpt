@@ -95,7 +95,7 @@ Navigate to `/pacenote` in the app to use the PaceNote feature.
 ### Results Display
 
 - **Generated Feedback**: Professional military feedback display
-- **Usage Metrics**: Token consumption and cost estimates
+- **Usage Metrics**: Token consumption (no cost calculation)
 - **Copy to Clipboard**: One-click copying of generated content
 - **Error Handling**: Clear error messages and recovery suggestions
 
@@ -126,7 +126,7 @@ Navigate to `/pacenote` in the app to use the PaceNote feature.
 
 - **Error Recovery**: Enhanced error handling for service failures
 - **Performance**: Optimize service calls and response handling
-- **Usage Tracking**: Additional metrics and cost monitoring
+- **Usage Tracking**: Additional metrics (no cost calculation)
 - **Caching**: Consider client-side caching for improved performance
 
 ### Route-Level Testing

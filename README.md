@@ -83,7 +83,7 @@ src/
 
 - **Security-First**: Server-side rendering with built-in CSRF protection
 - **Type-Safe Database**: Drizzle ORM with TypeScript schema validation
-- **Modern AI Integration**: Cloudflare AI Gateway with cost tracking and monitoring
+- **Modern AI Integration**: Cloudflare AI Gateway with usage tracking and monitoring
 - **Comprehensive Testing**: Unit, integration, and client-side test environments
 - **Developer Experience**: Hot reloading, type generation, database migrations
 

@@ -68,35 +68,37 @@ export async function processPolicyQuery(
 				throw createError('INVALID_POLICY_SET', `Unsupported policy set: ${input.policy_set}`);
 		}
 	} catch (error) {
-			console.error('PolicyFoo service error:', error);
+		console.error('PolicyFoo service error:', error);
 
-			// Handle database-related errors specifically
-			if (error && typeof error === 'object' && 'message' in error) {
-				const errorMessage = String(error.message || error);
-				if (errorMessage.includes('Database connection failed') || 
-				    errorMessage.includes('Query timeout') ||
-				    errorMessage.includes('WebSocket connection')) {
-					throw createError(
-						'GENERAL_ERROR',
-						'Database service is currently unavailable. Please try again later.',
-						{ originalError: errorMessage }
-					);
-				}
+		// Handle database-related errors specifically
+		if (error && typeof error === 'object' && 'message' in error) {
+			const errorMessage = String(error.message || error);
+			if (
+				errorMessage.includes('Database connection failed') ||
+				errorMessage.includes('Query timeout') ||
+				errorMessage.includes('WebSocket connection')
+			) {
+				throw createError(
+					'GENERAL_ERROR',
+					'Database service is currently unavailable. Please try again later.',
+					{ originalError: errorMessage }
+				);
 			}
-
-			// Handle PolicyFooError
-			if (error && typeof error === 'object' && 'code' in error) {
-				// Re-throw PolicyFooError as-is
-				throw error;
-			}
-
-			// Wrap unexpected errors
-			throw createError(
-				'GENERAL_ERROR',
-				error instanceof Error ? error.message : 'Unknown error occurred',
-				{ originalError: error }
-			);
 		}
+
+		// Handle PolicyFooError
+		if (error && typeof error === 'object' && 'code' in error) {
+			// Re-throw PolicyFooError as-is
+			throw error;
+		}
+
+		// Wrap unexpected errors
+		throw createError(
+			'GENERAL_ERROR',
+			error instanceof Error ? error.message : 'Unknown error occurred',
+			{ originalError: error }
+		);
+	}
 }
 
 /**

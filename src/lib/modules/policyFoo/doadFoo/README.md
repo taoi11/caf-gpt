@@ -5,7 +5,7 @@
 ## 🔍 Quick Reference
 
 **Entry Point**: `index.ts` → `handleDOADQuery()` orchestration function  
-**Workflow**: Finder Agent → Metadata Selector → Main Agent → Response  
+**Workflow**: Finder Agent → DB (chunks, metadata) → Metadata Selector → DB (selected) → Main Agent → Response  
 **Database**: Neon Postgres via Hyperdrive with intelligent chunking and metadata  
 **Models**: Reader Model (Haiku) + Main Model (Sonnet)  
 **Performance**: ~3-5 seconds, ~2500-4500 tokens per query
@@ -28,7 +28,6 @@ doadFoo/
 ├── main.ts                    # Policy synthesis agent
 ├── database.service.ts        # Database operations
 ├── metadata-selector.ts       # Intelligent chunk selection
-├── types.ts                   # DOAD-specific types
 └── prompts/                   # LLM prompts
     ├── main.md                # Main agent prompt
     ├── finder.md              # Finder agent prompt

@@ -4,7 +4,7 @@
 
 ## 🔍 Quick Reference
 
-**Entry Point**: `index.ts` → `handleLEAVEQuery()` function  
+**Entry Point**: `index.ts` → `handleLeaveQuery()` function  
 **Workflow**: Finder Agent → Main Agent → Response (simplified vs DOAD)  
 **Database**: Neon Postgres via Hyperdrive with chapter-based structure  
 **Models**: Reader Model (Haiku) + Main Model (Sonnet)  
@@ -27,7 +27,6 @@ leaveFoo/
 ├── finder.ts              # Chapter identification agent
 ├── main.ts                # Policy processing agent
 ├── database.service.ts    # Database operations for chapter chunks
-├── types.ts               # LEAVE-specific types
 └── prompts/               # LLM prompts
     ├── finder.md          # Finder agent instructions
     └── main.md            # Main agent instructions

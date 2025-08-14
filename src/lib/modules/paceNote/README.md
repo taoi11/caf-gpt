@@ -69,7 +69,7 @@ paceNote/
 
 - **Professional Language**: Military feedback terminology
 - **Contextual Feedback**: Incorporates observations with competencies
-- **Usage Tracking**: Cost monitoring and performance metrics
+- **Usage Tracking**: Returns token usage (cost calculation not implemented)
 
 ## Development
 
