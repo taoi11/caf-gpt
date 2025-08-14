@@ -68,6 +68,7 @@ Mission: Centralize Workers/D1/KV/DO/Hyperdrive and security guidance for this p
 > Placeholder - Implementation planned
 
 This section will eventually contain:
+
 - Visual representation of module dependencies
 - Core infrastructure dependency mapping
 - Data flow between components
@@ -125,6 +126,7 @@ Patterns
 > Future implementation note
 
 A minimal performance metrics endpoint will be added to the health check system to track:
+
 - Typical token usage ranges per module
 - Expected latency under normal conditions
 - Model-specific performance characteristics

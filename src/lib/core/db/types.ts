@@ -3,9 +3,7 @@
  * Shared across DOAD and Leave policy modules
  */
 
-/**
- * Base interface for all policy chunks
- */
+// Base interface for all policy chunks
 export interface PolicyChunk {
 	id: string;
 	textChunk: string;
@@ -13,34 +11,26 @@ export interface PolicyChunk {
 	createdAt: string;
 }
 
-/**
- * Base interface for policy metadata (used for LLM selection)
- */
+// Base interface for policy metadata (used for LLM selection)
 export interface PolicyMetadata {
 	id: string;
 	metadata: Record<string, any>;
 }
 
-/**
- * Database query result wrapper
- */
+// Database query result wrapper
 export interface DatabaseQueryResult<T> {
 	data: T[];
 	count: number;
 	executionTime: number;
 }
 
-/**
- * Common database operation options
- */
+// Common database operation options
 export interface QueryOptions {
 	timeout?: number;
 	logSlowQueries?: boolean;
 }
 
-/**
- * Statistics query result
- */
+// Statistics query result
 export interface DatabaseStats {
 	totalChunks: number;
 	lastUpdated: string;

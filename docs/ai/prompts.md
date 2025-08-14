@@ -16,7 +16,7 @@ Document prompt management practices and constraints for the project.
 - **Human-authored only**: All prompts are written and maintained exclusively by human developers
 - **AI read-only access**: LLM code agents may read prompts but must NEVER modify or generate prompt content
 - **Versioning**: Prompt changes tracked via Git commits with clear rationale
-- **Structure**: 
+- **Structure**:
   - Base templates in `base.md` where applicable
   - Module-specific prompts organized by agent/function
   - Comments for version history and purpose

@@ -1,6 +1,5 @@
 /**
  * PolicyFoo Service Router
- *
  * Main entry point for PolicyFoo service.
  * Routes queries to appropriate policy-specific handlers based on policy_set.
  * Supports stateless request processing with conversation context.
@@ -27,21 +26,13 @@ export type {
 	PolicyFooError
 } from './types.js';
 
-/**
- * Environment variables required for PolicyFoo service
- * Extends AppEnvironment with policy-specific bindings
- */
+// Environment variables required for PolicyFoo service
+// Extends AppEnvironment with policy-specific bindings
 export interface PolicyFooEnvironment extends AppEnvironment {
 	HYPERDRIVE: Hyperdrive; // Cloudflare Hyperdrive binding for database access
 }
 
-/**
- * Main service function to process policy queries
- *
- * @param input - Query input with messages and policy set
- * @param env - Environment variables and bindings
- * @returns Promise with policy query response
- */
+// Main service function to process policy queries
 export async function processPolicyQuery(
 	input: PolicyQueryInput,
 	env: PolicyFooEnvironment
@@ -98,9 +89,7 @@ export async function processPolicyQuery(
 	}
 }
 
-/**
- * Validate input parameters
- */
+// Validate input parameters
 function validateInput(input: PolicyQueryInput): void {
 	if (!input.policy_set) {
 		throw createError('INVALID_POLICY_SET', 'policy_set is required');
@@ -136,9 +125,7 @@ function validateInput(input: PolicyQueryInput): void {
 	}
 }
 
-/**
- * Validate individual message
- */
+// Validate individual message
 function validateMessage(message: PolicyMessage): void {
 	if (!message.role || !['user', 'assistant', 'system'].includes(message.role)) {
 		throw createError(
@@ -163,9 +150,7 @@ function validateMessage(message: PolicyMessage): void {
 	}
 }
 
-/**
- * Validate environment variables
- */
+// Validate environment variables
 function validateEnvironment(env: PolicyFooEnvironment): void {
 	const required = ['OPENROUTER_TOKEN', 'AI_GATEWAY_BASE_URL'];
 
@@ -181,9 +166,7 @@ function validateEnvironment(env: PolicyFooEnvironment): void {
 	}
 }
 
-/**
- * Create a standardized PolicyFoo error
- */
+// Create a standardized PolicyFoo error
 function createError(
 	code: PolicyFooError['code'],
 	message: string,
@@ -196,16 +179,12 @@ function createError(
 	};
 }
 
-/**
- * Get list of supported policy sets
- */
+// Get list of supported policy sets
 export function getSupportedPolicySets(): PolicySet[] {
 	return [...POLICY_SETS];
 }
 
-/**
- * Check if a policy set is supported
- */
+// Check if a policy set is supported
 export function isPolicySetSupported(policySet: string): policySet is PolicySet {
 	return POLICY_SETS.includes(policySet as PolicySet);
 }

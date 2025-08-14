@@ -7,11 +7,13 @@ Use this page to jump to focused docs. Each doc follows an agent-friendly struct
 ## Documentation Map
 
 ### Core Infrastructure
+
 - [Core Handbook](./core.md) - AI Gateway, DB patterns, Workers constraints
 - [Testing Guide](./testing.md) - Commands, structure, patterns
 - [Setup Guide](./core.md#setup) - Quick start commands and environment
 
 ### Domain Modules
+
 - [Modules Handbook](./modules.md) - Complete reference for all domain modules
   - [PaceNote Module](./module.paceNote.md) - Performance feedback generation
   - [PolicyFoo Module](./module.policyFoo.md) - Policy Q&A system
@@ -19,11 +21,13 @@ Use this page to jump to focused docs. Each doc follows an agent-friendly struct
     - [LEAVE Handler](./module.policyFoo.leaveFoo.md) - Two-stage Leave policy workflow
 
 ### Application Routes
+
 - [Routes Handbook](./routes.md) - Complete reference for all application routes
   - [Pacenote Route](./routes.md#pacenote-route) - Form-based feedback UI
   - [Policy Route](./routes.md#policy-route) - Chat UI for policy queries
 
 ### Development Resources
+
 - [AI Agent Guidelines](./index.md#ai-agent-guidelines-short) - Best practices for LLM collaboration
 - [Common Error Patterns](./index.md#common-error-patterns) - Troubleshooting guide
 
@@ -73,6 +77,7 @@ See: ./modules.md and ./routes.md
 For complete module documentation, see the [Modules Handbook](./modules.md).
 
 ### Key Modules
+
 - **PaceNote**: Generate performance feedback notes based on observations and rank competencies
 - **PolicyFoo**: Answer policy questions with authoritative citations from CAF documents
 
@@ -127,6 +132,7 @@ Database
 ## 📎 AI Agent Guidelines
 
 When working with this codebase:
+
 - Always start at [docs/ai/index.md](./index.md) for documentation navigation
 - Refer to specific module docs using the Documentation Map above
 - When creating new documentation, follow the standard template structure

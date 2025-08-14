@@ -1,4 +1,3 @@
-
 ## Mission
 
 Two-stage LLM workflow to answer Leave policy questions with citations.

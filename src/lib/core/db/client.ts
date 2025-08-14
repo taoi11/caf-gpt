@@ -4,10 +4,8 @@
  */
 import { Client } from 'pg';
 
-/**
- * Execute a database query using Hyperdrive connection pooling
- * Hyperdrive handles connection management automatically for CF Workers
- */
+// Execute a database query using Hyperdrive connection pooling
+// Hyperdrive handles connection management automatically for CF Workers
 export const query = async (
 	text: string,
 	hyperdrive: Hyperdrive,
@@ -70,9 +68,7 @@ export const query = async (
 	}
 };
 
-/**
- * Check database connection health
- */
+// Check database connection health
 export const healthCheck = async (hyperdrive: Hyperdrive): Promise<boolean> => {
 	try {
 		const result = await query('SELECT 1 as health', hyperdrive);

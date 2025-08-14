@@ -11,9 +11,7 @@ import type {
 	DatabaseStats
 } from './types.js';
 
-/**
- * Base database service class with common patterns
- */
+// Base database service class with common patterns
 export abstract class BasePolicyDatabaseService {
 	protected hyperdrive: Hyperdrive;
 
@@ -21,9 +19,7 @@ export abstract class BasePolicyDatabaseService {
 		this.hyperdrive = hyperdrive;
 	}
 
-	/**
-	 * Execute query with standard error handling and performance monitoring
-	 */
+	// Execute query with standard error handling and performance monitoring
 	protected async executeQuery<T = any>(
 		sql: string,
 		params?: any[],
@@ -49,10 +45,8 @@ export abstract class BasePolicyDatabaseService {
 		}
 	}
 
-	/**
-	 * Get chunks by IDs (optimized for final content retrieval)
-	 * Common pattern across all policy modules
-	 */
+	// Get chunks by IDs (optimized for final content retrieval)
+	// Common pattern across all policy modules
 	protected async getChunksByIds(
 		tableName: string,
 		chunkIds: string[],
@@ -79,10 +73,8 @@ export abstract class BasePolicyDatabaseService {
 		}));
 	}
 
-	/**
-	 * Get metadata only for selection purposes (optimized for LLM processing)
-	 * Common pattern for finder agents
-	 */
+	// Get metadata only for selection purposes (optimized for LLM processing)
+	// Common pattern for finder agents
 	protected async getMetadataByIdentifiers(
 		tableName: string,
 		identifiers: string[],
@@ -110,10 +102,8 @@ export abstract class BasePolicyDatabaseService {
 		}));
 	}
 
-	/**
-	 * Get all available identifiers for a policy type
-	 * Used by finder agents to know what's available
-	 */
+	// Get all available identifiers for a policy type
+	// Used by finder agents to know what's available
 	protected async getAvailableIdentifiers(
 		tableName: string,
 		identifierColumn: string,
@@ -131,9 +121,7 @@ export abstract class BasePolicyDatabaseService {
 		return result.data.map((row) => row[identifierColumn]);
 	}
 
-	/**
-	 * Get database statistics for monitoring
-	 */
+	// Get database statistics for monitoring
 	protected async getTableStats(tableName: string): Promise<DatabaseStats['tablesInfo'][0]> {
 		const sql = `
 			SELECT 
@@ -154,10 +142,8 @@ export abstract class BasePolicyDatabaseService {
 	}
 }
 
-/**
- * Format metadata for LLM consumption
- * Enhances raw metadata with user-friendly descriptions
- */
+// Format metadata for LLM consumption
+// Enhances raw metadata with user-friendly descriptions
 export function formatMetadataForLLM(
 	metadata: Record<string, any>,
 	identifier: string,
@@ -182,9 +168,7 @@ export function formatMetadataForLLM(
 	return enhanced;
 }
 
-/**
- * Common database statistics aggregator
- */
+// Common database statistics aggregator
 export async function getDatabaseStats(
 	hyperdrive: Hyperdrive,
 	tables: string[]

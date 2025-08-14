@@ -15,9 +15,7 @@ import type {
 	AppEnvironment
 } from './common.types.js';
 
-/**
- * Default configuration for AI Gateway
- */
+// Default configuration for AI Gateway
 const DEFAULT_CONFIG: Partial<AIGatewayConfig> = {
 	temperature: 0.1
 };
@@ -50,9 +48,7 @@ export class AIGatewayService {
 		this.config = { ...DEFAULT_CONFIG, ...config };
 	}
 
-	/**
-	 * Generate text completion using AI Gateway + OpenRouter
-	 */
+	// Generate text completion using AI Gateway + OpenRouter
 	async generateCompletion(
 		messages: AIGatewayMessage[],
 		config: Partial<AIGatewayConfig> = {}
@@ -93,9 +89,7 @@ export class AIGatewayService {
 		}
 	}
 
-	/**
-	 * Generate completion from a single prompt (convenience method)
-	 */
+	// Generate completion from a single prompt (convenience method)
 	async generateFromPrompt(
 		prompt: string,
 		systemMessage?: string,
@@ -112,16 +106,12 @@ export class AIGatewayService {
 		return this.generateCompletion(messages, config);
 	}
 
-	/**
-	 * Get current configuration
-	 */
+	// Get current configuration
 	getConfig(): AIGatewayConfig {
 		return { ...this.config };
 	}
 
-	/**
-	 * Handle and standardize errors
-	 */
+	// Handle and standardize errors
 	private handleError(error: unknown): AIGatewayError {
 		console.error('AI Gateway Service Error:', error);
 
@@ -173,9 +163,7 @@ export class AIGatewayService {
 	}
 }
 
-/**
- * Factory function to create AI Gateway service instance
- */
+// Factory function to create AI Gateway service instance
 export function createAIGatewayService(
 	openrouterToken: string,
 	aiGatewayBaseURL: string,
@@ -185,10 +173,7 @@ export function createAIGatewayService(
 	return new AIGatewayService(openrouterToken, aiGatewayBaseURL, config, cfAigToken);
 }
 
-/**
- * Simple AI completion function - just messages + model name
- * Everything else uses consistent defaults (temperature: 0.1)
- */
+//Simple AI completion function - just messages + model name
 export async function generateAICompletion(
 	messages: AIGatewayMessage[],
 	model: string,

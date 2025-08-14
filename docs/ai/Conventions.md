@@ -13,6 +13,7 @@ Coding standards, naming conventions, and architectural patterns for consistent 
 ## Code Organization
 
 ### Structure
+
 - Follow SvelteKit defaults
 - Co-locate routes with UI + server logic
 - Domain modules in `src/lib/modules/*`
@@ -20,6 +21,7 @@ Coding standards, naming conventions, and architectural patterns for consistent 
 - One main `types.ts` at the top of each module
 
 ### File Principles
+
 - Single Responsibility: Each file should have one clear purpose
 - Minimal Files: Prefer consolidating small, related files over proliferation
 - Co-location: Group related functionality together
