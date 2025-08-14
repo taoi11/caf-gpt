@@ -50,7 +50,7 @@ applyTo: '**'
 2. Update All References: Settings, imports, documentation, etc.
 3. Clean Up: Remove old files, unused imports.
 4. Verify: Run npm / wrangler checks, test imports, look for errors.
-5. Document: Update README.md and any relevant documentation
+5. Document: Update README.md and any relevant documentation in `docs/ai/`
 
 ## Efficiency Guidelines
 

@@ -7,7 +7,6 @@ import {
 	type PolicyFooError
 } from '$lib/modules/policyFoo';
 import { hasRequiredConfig, validateEnvironmentConfig } from './config.server.js';
-import '$lib/core/types.js'; // Import for environment type extensions
 
 /**
  * Load function to provide initial data to the page
@@ -93,12 +92,12 @@ export const actions: Actions = {
 
 			// Call policy service with environment config
 			const result = await processPolicyQuery(input, {
-				OPENROUTER_TOKEN: config.openrouterToken,
-				AI_GATEWAY_BASE_URL: config.aiGatewayBaseUrl,
-				CF_AIG_TOKEN: config.cfAigToken,
-				READER_MODEL: config.readerModel,
-				MAIN_MODEL: config.mainModel,
-				HYPERDRIVE: config.hyperdrive
+				OPENROUTER_TOKEN: config.OPENROUTER_TOKEN,
+				AI_GATEWAY_BASE_URL: config.AI_GATEWAY_BASE_URL,
+				CF_AIG_TOKEN: config.CF_AIG_TOKEN,
+				READER_MODEL: config.READER_MODEL,
+				MAIN_MODEL: config.MAIN_MODEL,
+				HYPERDRIVE: config.HYPERDRIVE
 			});
 
 			// Return success response

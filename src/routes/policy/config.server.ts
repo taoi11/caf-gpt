@@ -2,72 +2,69 @@
  * Configuration validation for Policy route server-side operations
  */
 
-import '$lib/core/types.js'; // Import for environment type extensions
+import { getEnv, validateRequiredEnv, hasRequiredEnv } from '$lib/core/env.js';
+import type { EnvValidationResult } from '$lib/core/env.js';
 
 interface PolicyConfig {
-	openrouterToken: string;
-	aiGatewayBaseUrl: string;
-	readerModel?: string;
-	mainModel?: string;
-	cfAigToken?: string;
-	hyperdrive: Hyperdrive;
-}
-
-interface ConfigValidationResult {
-	isValid: boolean;
-	config?: PolicyConfig;
-	missingVars?: string[];
+	OPENROUTER_TOKEN: string;
+	AI_GATEWAY_BASE_URL: string;
+	READER_MODEL?: string;
+	MAIN_MODEL?: string;
+	CF_AIG_TOKEN?: string;
+	HYPERDRIVE: Hyperdrive;
 }
 
 /**
  * Validate and extract environment configuration
  */
-export function validateEnvironmentConfig(platform?: App.Platform): ConfigValidationResult {
-	// Get environment variables from either Cloudflare Workers or Node.js
-	const env = platform?.env || process.env;
+export function validateEnvironmentConfig(
+	platform?: App.Platform
+): EnvValidationResult<PolicyConfig> {
+	const env = getEnv(platform);
 
 	const requiredVars = [
-		{ key: 'OPENROUTER_TOKEN', value: env?.OPENROUTER_TOKEN },
-		{ key: 'AI_GATEWAY_BASE_URL', value: env?.AI_GATEWAY_BASE_URL }
+		{ key: 'OPENROUTER_TOKEN' as const, value: env.OPENROUTER_TOKEN },
+		{ key: 'AI_GATEWAY_BASE_URL' as const, value: env.AI_GATEWAY_BASE_URL }
 	];
 
-	const missingVars = requiredVars.filter(({ value }) => !value).map(({ key }) => key);
+	const result = validateRequiredEnv<Partial<PolicyConfig>>(env, requiredVars);
 
 	// Check for required bindings (only available in Cloudflare Workers)
 	if (platform?.env) {
 		if (!platform.env.HYPERDRIVE) {
-			missingVars.push('HYPERDRIVE');
+			result.missingVars = result.missingVars || [];
+			result.missingVars.push('HYPERDRIVE');
+			result.isValid = false;
 		}
 	} else {
 		// In non-Cloudflare environments, HYPERDRIVE binding won't be available
-		missingVars.push('HYPERDRIVE');
+		result.missingVars = result.missingVars || [];
+		result.missingVars.push('HYPERDRIVE');
+		result.isValid = false;
 	}
 
-	if (missingVars.length > 0) {
-		return {
-			isValid: false,
-			missingVars
+	if (result.isValid && result.config && platform?.env?.HYPERDRIVE) {
+		// Build PolicyConfig object explicitly to ensure type safety
+		const config: PolicyConfig = {
+			OPENROUTER_TOKEN: env.OPENROUTER_TOKEN as string,
+			AI_GATEWAY_BASE_URL: env.AI_GATEWAY_BASE_URL as string,
+			READER_MODEL: env.READER_MODEL,
+			MAIN_MODEL: env.MAIN_MODEL,
+			CF_AIG_TOKEN: env.CF_AIG_TOKEN,
+			HYPERDRIVE: platform.env.HYPERDRIVE
 		};
+		result.config = config;
 	}
 
-	return {
-		isValid: true,
-		config: {
-			openrouterToken: env!.OPENROUTER_TOKEN!,
-			aiGatewayBaseUrl: env!.AI_GATEWAY_BASE_URL!,
-			readerModel: env!.READER_MODEL,
-			mainModel: env!.MAIN_MODEL,
-			cfAigToken: env!.CF_AIG_TOKEN,
-			hyperdrive: platform?.env?.HYPERDRIVE as Hyperdrive
-		}
-	};
+	return result as EnvValidationResult<PolicyConfig>;
 }
 
 /**
  * Check if all required services are configured
  */
 export function hasRequiredConfig(platform?: App.Platform): boolean {
-	const env = platform?.env || process.env;
-
-	return Boolean(env?.OPENROUTER_TOKEN && env?.AI_GATEWAY_BASE_URL && platform?.env?.HYPERDRIVE);
+	return (
+		hasRequiredEnv(platform, ['OPENROUTER_TOKEN', 'AI_GATEWAY_BASE_URL']) &&
+		Boolean(platform?.env?.HYPERDRIVE)
+	);
 }

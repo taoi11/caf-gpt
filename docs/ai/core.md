@@ -36,15 +36,19 @@ Mission: Pooled DB access patterns used by modules via core DB services.
 ## Platform Constraints
 
 ### WORKERS_SAFE_LIBS
+
 Only use libraries compatible with Cloudflare Workers. Never use libraries with FFI/native/C bindings.
 
 ### ENVIRONMENT_SETUP
+
 All secrets must be configured via `wrangler secret put`. Never hardcode secrets.
 
 ### DB_ACCESS_PATTERN
+
 Use Hyperdrive binding through core DB service patterns. Never connect directly to database.
 
 ### AI_GATEWAY_PATTERN
+
 All LLM calls must go through AI Gateway service. Never call LLM APIs directly.
 
 ## Cloudflare Workers

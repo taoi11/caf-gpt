@@ -13,6 +13,7 @@ import type {
 	PolicyMessage,
 	PolicyFooError
 } from './types.js';
+import type { AppEnvironment } from '../../core/common.types.js';
 import { POLICY_SETS, ERROR_MESSAGES, LIMITS } from './constants.js';
 import { handleDOADQuery } from './doadFoo/index.js';
 import { handleLeaveQuery } from './leaveFoo/index.js';
@@ -28,13 +29,9 @@ export type {
 
 /**
  * Environment variables required for PolicyFoo service
+ * Extends AppEnvironment with policy-specific bindings
  */
-export interface PolicyFooEnvironment {
-	OPENROUTER_TOKEN: string;
-	AI_GATEWAY_BASE_URL: string;
-	CF_AIG_TOKEN?: string; // Optional - AI Gateway token
-	READER_MODEL?: string;
-	MAIN_MODEL?: string;
+export interface PolicyFooEnvironment extends AppEnvironment {
 	HYPERDRIVE: Hyperdrive; // Cloudflare Hyperdrive binding for database access
 }
 

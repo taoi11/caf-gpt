@@ -47,10 +47,10 @@ export const actions: Actions = {
 
 			// Create PaceNote service instance
 			const paceNoteService = new PaceNoteService(
-				config.openrouterToken,
-				config.aiGatewayBaseUrl,
-				config.model,
-				config.cfAigToken
+				config.OPENROUTER_TOKEN,
+				config.AI_GATEWAY_BASE_URL,
+				config.FN_MODEL,
+				config.CF_AIG_TOKEN
 			);
 
 			// Prepare input for pace note generation

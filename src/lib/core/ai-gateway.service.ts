@@ -11,7 +11,8 @@ import type {
 	AIGatewayConfig,
 	AIGatewayMessage,
 	AIGatewayResponse,
-	AIGatewayError
+	AIGatewayError,
+	AppEnvironment
 } from './common.types.js';
 
 /**
@@ -191,11 +192,7 @@ export function createAIGatewayService(
 export async function generateAICompletion(
 	messages: AIGatewayMessage[],
 	model: string,
-	env: {
-		OPENROUTER_TOKEN: string;
-		AI_GATEWAY_BASE_URL: string;
-		CF_AIG_TOKEN?: string;
-	}
+	env: AppEnvironment
 ): Promise<AIGatewayResponse> {
 	const aiService = createAIGatewayService(
 		env.OPENROUTER_TOKEN,
