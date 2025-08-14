@@ -25,6 +25,26 @@
 	let userMessage = '';
 	let isLoading = false;
 	let formElement: HTMLFormElement;
+	let turnstileSiteKey: string = (data as any).turnstileSiteKey || '';
+
+	// Turnstile callbacks
+	import { onMount } from 'svelte';
+	onMount(() => {
+		(window as any).onTurnstilePolicy = () => {
+			try {
+				formElement?.requestSubmit();
+			} catch (e) {
+				console.error('Turnstile submit error:', e);
+			}
+		};
+		(window as any).onTurnstilePolicyError = () => {
+			isLoading = false;
+			form = {
+				...(form || {}),
+				error: 'Verification failed. Please try again.'
+			};
+		};
+	});
 
 	// Handle successful form submission
 	$: if (form?.success && form?.message) {
@@ -94,6 +114,7 @@
 <svelte:head>
 	<title>{data.title}</title>
 	<meta name="description" content={data.description} />
+	<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
 </svelte:head>
 
 <div class="max-w-6xl mx-auto p-4 min-h-screen flex flex-col">
@@ -172,6 +193,17 @@
 			}}
 		>
 			<div class="space-y-4">
+				{#if turnstileSiteKey}
+					<div
+						class="cf-turnstile"
+						data-sitekey={turnstileSiteKey}
+						data-size="invisible"
+						data-retry="auto"
+						data-retry-interval="800"
+						data-callback="onTurnstilePolicy"
+						data-error-callback="onTurnstilePolicyError"
+					></div>
+				{/if}
 				<label for="user_message" class="sr-only">Your question</label>
 				<div class="flex flex-col md:flex-row gap-3">
 					<textarea

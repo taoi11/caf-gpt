@@ -12,6 +12,7 @@
 	// Reactive state based on server data
 	$: availableRanks = data.availableRanks;
 	$: isConfigured = data.isConfigured;
+	$: turnstileSiteKey = data.turnstileSiteKey;
 
 	// Form state - preserve user input independently of server response
 	let selectedRank = '';
@@ -54,6 +55,7 @@
 		name="description"
 		content="Generate professional pace notes using AI with rank-specific competency frameworks."
 	/>
+	<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
 </svelte:head>
 
 <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
@@ -70,6 +72,7 @@
 			{availableRanks}
 			{isConfigured}
 			{isGenerating}
+			{turnstileSiteKey}
 			bind:selectedRank
 			bind:observations
 			bind:competencyFocus

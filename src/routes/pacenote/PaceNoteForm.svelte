@@ -8,6 +8,23 @@
 	export let isGenerating: boolean;
 	export let onSubmitStart: () => void;
 	export let onSubmitComplete: (result: any) => Promise<void>;
+	export let turnstileSiteKey: string = '';
+	import { onMount } from 'svelte';
+	let formEl: HTMLFormElement;
+	onMount(() => {
+		// Expose unique callback names on window for Turnstile
+		(window as any).onTurnstilePaceNote = () => {
+			try {
+				formEl?.requestSubmit();
+			} catch (e) {
+				console.error('Turnstile submit error:', e);
+			}
+		};
+		(window as any).onTurnstilePaceNoteError = () => {
+			isGenerating = false;
+			alert('Verification failed. Please try again.');
+		};
+	});
 
 	// Form state
 	export let selectedRank: string = '';
@@ -68,7 +85,7 @@
 		</div>
 	{/if}
 
-	<form method="POST" action="?/generate" use:enhance={handleSubmit}>
+	<form method="POST" action="?/generate" bind:this={formEl} use:enhance={handleSubmit}>
 		<!-- Rank Selection -->
 		<div class="mb-6">
 			<label for="rank" class="block text-sm font-medium text-gray-700 mb-2"> Rank * </label>
@@ -115,6 +132,18 @@
 
 		<!-- Actions -->
 		<div class="flex gap-3">
+			<!-- Invisible Turnstile widget -->
+			{#if turnstileSiteKey}
+				<div
+					class="cf-turnstile"
+					data-sitekey={turnstileSiteKey}
+					data-size="invisible"
+					data-retry="auto"
+					data-retry-interval="800"
+					data-callback="onTurnstilePaceNote"
+					data-error-callback="onTurnstilePaceNoteError"
+				></div>
+			{/if}
 			<button
 				type="submit"
 				disabled={isGenerating || !selectedRank || !observations.trim()}

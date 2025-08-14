@@ -3,6 +3,7 @@ import { PaceNoteService } from '$lib/modules/paceNote/service.js';
 import type { PaceNoteInput, PaceNoteRank } from '$lib/modules/paceNote/types.js';
 import { AVAILABLE_RANKS } from '$lib/modules/paceNote/constants.js';
 import { hasRequiredConfig, validateEnvironmentConfig } from './config.server.js';
+import { getEnv } from '$lib/core/env.js';
 import {
 	parseFormData,
 	validateFormData,
@@ -13,16 +14,18 @@ import {
 
 // Load function - runs on server before page renders
 export const load: PageServerLoad = async ({ platform }) => {
+	const env = getEnv(platform);
 	return {
 		availableRanks: AVAILABLE_RANKS,
 		limits: getFormLimits(),
-		isConfigured: hasRequiredConfig(platform)
+		isConfigured: hasRequiredConfig(platform),
+		turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? ''
 	};
 };
 
 // Form actions - handle POST requests securely on server
 export const actions: Actions = {
-	generate: async ({ request, platform }) => {
+	generate: async ({ request, platform, getClientAddress }) => {
 		// Validate environment configuration
 		const configResult = validateEnvironmentConfig(platform);
 		if (!configResult.isValid) {
@@ -33,9 +36,26 @@ export const actions: Actions = {
 			);
 		}
 
-		// Parse and validate form data
+		// Parse form data first so we can preserve inputs on errors
 		const data = await request.formData();
 		const formData = parseFormData(data);
+
+		// Turnstile invisible token verification
+		const token = (data.get('cf-turnstile-response') as string) || '';
+		const env = getEnv(platform);
+		const secret = env.TURNSTILE_SECRET_KEY;
+		if (!secret) {
+			return createConfigError(
+				'Human verification is not configured. Please contact the administrator.',
+				formData
+			);
+		}
+		const remoteIp = typeof getClientAddress === 'function' ? getClientAddress() : undefined;
+		const { verifyTurnstile } = await import('$lib/core/turnstile');
+		const ok = token ? await verifyTurnstile(token, secret, remoteIp) : false;
+		if (!ok) {
+			return createServiceError('Human verification failed. Please retry.', formData);
+		}
 
 		const validationError = validateFormData(formData);
 		if (validationError) {

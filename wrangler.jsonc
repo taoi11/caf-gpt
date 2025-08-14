@@ -23,7 +23,8 @@
 	"vars": {
 		"FN_MODEL": "openai/gpt-5-mini",
 		"READER_MODEL": "google/gemini-2.5-flash",
-		"MAIN_MODEL": "google/gemini-2.5-pro"
+		"MAIN_MODEL": "google/gemini-2.5-pro",
+		"TURNSTILE_SITE_KEY": "0x4AAAAAABrw4iUcnqVS_x7o"
 	},
 	"hyperdrive": [
 		{

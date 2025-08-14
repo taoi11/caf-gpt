@@ -7,16 +7,20 @@ import {
 	type PolicyFooError
 } from '$lib/modules/policyFoo';
 import { hasRequiredConfig, validateEnvironmentConfig } from './config.server.js';
+import { getEnv } from '$lib/core/env.js';
+import { verifyTurnstile } from '$lib/core/turnstile';
 
 /**
  * Load function to provide initial data to the page
  */
 export const load: PageServerLoad = async ({ platform }) => {
+	const env = getEnv(platform);
 	return {
 		policy_sets: getSupportedPolicySets(),
 		title: 'Policy Assistant',
 		description: 'Ask questions about CAF policies and get authoritative answers with citations.',
-		isConfigured: hasRequiredConfig(platform)
+		isConfigured: hasRequiredConfig(platform),
+		turnstileSiteKey: env.TURNSTILE_SITE_KEY ?? ''
 	};
 };
 
@@ -41,6 +45,24 @@ export const actions: Actions = {
 
 			const data = await request.formData();
 
+			// Turnstile invisible token verification
+			const token = (data.get('cf-turnstile-response') as string) || '';
+			const env = getEnv(platform);
+			const secret = env.TURNSTILE_SECRET_KEY;
+			if (!secret) {
+				return fail(500, {
+					error: 'Human verification is not configured. Please contact the administrator.',
+					field: 'general'
+				});
+			}
+			const ok = token ? await verifyTurnstile(token, secret) : false;
+			if (!ok) {
+				return fail(400, {
+					error: 'Human verification failed. Please retry.',
+					field: 'general'
+				});
+			}
+
 			// Extract form data
 			const messagesJson = data.get('messages') as string;
 			const policySet = data.get('policy_set') as string;
@@ -62,7 +84,7 @@ export const actions: Actions = {
 			}
 
 			// Parse existing messages
-			let messages = [];
+			let messages = [] as any[];
 			if (messagesJson) {
 				try {
 					messages = JSON.parse(messagesJson);
