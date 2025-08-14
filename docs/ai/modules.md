@@ -33,6 +33,7 @@
 - Mission: Three-stage workflow (finder → metadata selector → main) to answer DOAD queries with citations.
 - Context: `src/lib/modules/policyFoo/doadFoo/` (finder.ts, metadata-selector.ts, main.ts, database.service.ts)
 - Performance (typical): tokens ~2.5k–4.5k, latency ~5–12s
+- Constraints: Token budget exceeded; no relevant policy content found
 - Links: Parent → `#policyfoo`, Route → `./routes.md#policy-route`
 
 ### LEAVE Handler
@@ -40,4 +41,5 @@
 - Mission: Two-stage workflow (finder → main) to answer Leave policy queries with citations.
 - Context: `src/lib/modules/policyFoo/leaveFoo/` (finder.ts, main.ts, database.service.ts)
 - Performance (typical): tokens ~2k–3k, latency ~3–7s
+- Constraints: Token budget exceeded; no relevant policy content found
 - Links: Parent → `#policyfoo`, Route → `./routes.md#policy-route`

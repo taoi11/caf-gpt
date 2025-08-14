@@ -25,11 +25,6 @@ Two-stage LLM workflow to answer Leave policy questions with citations.
 - Adheres to all [Core Platform Constraints](./core.md#platform-constraints)
 - Reader model vs main model separation
 
-## Edge Cases
-
-- No relevant policy content found
-- Token budget exceeded
-
 ## Validation
 
 - Unit tests per agent; integration through handler

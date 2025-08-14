@@ -74,3 +74,7 @@ Coding standards, naming conventions, and architectural patterns for consistent 
 - Core: [Core Handbook](./core.md)
 - Modules: [Modules Handbook](./modules.md)
 - Testing: [Testing Guide](./testing.md)
+
+## Documentation Guidelines
+
+- Generic edge cases are documented in core infrastructure; module-specific exceptional behavior should be noted in Workflow or Constraints sections

@@ -27,10 +27,6 @@
 - [Module-specific constraints]
 - [References to core constraints]
 
-## Edge Cases
-
-- [List]
-
 ## Validation
 
 - [Testing approach]
