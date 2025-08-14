@@ -72,6 +72,18 @@ Mission: Keep code consistent and simple for a Workers-first SvelteKit app.
 - Architecture: service layer owns business logic; prefer DB work over Worker compute; use SvelteKit builtins
 - Security: server-only LLM calls; validate input at boundaries; prefer SSR and form actions
 
+## Dependency Graph
+
+> Placeholder - Implementation planned
+
+This section will eventually contain:
+- Visual representation of module dependencies
+- Core infrastructure dependency mapping
+- Data flow between components
+- Circular dependency prevention strategies
+
+Will be built out as a proper graph in future documentation updates.
+
 ---
 
 ## Setup
@@ -117,6 +129,17 @@ Patterns
 
 - Arrange, Act, Assert; mock external deps (DB, network); cover edge/error paths.
 
+## Performance Monitoring
+
+> Future implementation note
+
+A minimal performance metrics endpoint will be added to the health check system to track:
+- Typical token usage ranges per module
+- Expected latency under normal conditions
+- Model-specific performance characteristics
+
+This will provide runtime metrics to complement the documentation.
+
 ---
 
 ## Prompts
@@ -130,3 +153,4 @@ Conventions
 
 - Keep base templates in `base.md` where applicable.
 - Favor small, composable prompts; version via comments/commits.
+- **HUMAN-AUTHORED ONLY**: All prompts are written by humans; AI agents may read but never modify prompts

@@ -5,14 +5,16 @@ restore-chat-history: false
 read:
   - .github/instructions/base.instructions.md
   - README.md
-  - docs/ai/index.md
   - docs/ai/core.md
-  - docs/ai/modules.md
-  - docs/ai/routes.md
+  - docs/ai/index.md
   - docs/ai/module.paceNote.md
-  - docs/ai/module.policyFoo.md
   - docs/ai/module.policyFoo.doadFoo.md
   - docs/ai/module.policyFoo.leaveFoo.md
+  - docs/ai/module.policyFoo.md
+  - docs/ai/modules.md
+  - docs/ai/prompts.md
+  - docs/ai/routes.md
+  - docs/ai/TEMPLATE.md
   - docs/ai/testing.md
 
 auto-commits: false

@@ -4,15 +4,28 @@
 
 Use this page to jump to focused docs. Each doc follows an agent-friendly structure (Mission, Context, Contracts, Constraints, Steps, Edge cases, Validation, Don’ts, Links).
 
-## Quick Links
+## Documentation Map
 
-- Setup: ./core.md
-- Testing: ./testing.md
-- Core Handbook (AI, DB, Workers, Conventions): ./core.md
-- Modules handbook: ./modules.md
-- Routes handbook: ./routes.md
-- PaceNote module: ./module.paceNote.md
-- PolicyFoo module: ./module.policyFoo.md (with ./module.policyFoo.doadFoo.md and ./module.policyFoo.leaveFoo.md)
+### Core Infrastructure
+- [Core Handbook](./core.md) - AI Gateway, DB patterns, Workers constraints
+- [Testing Guide](./testing.md) - Commands, structure, patterns
+- [Setup Guide](./core.md#setup) - Quick start commands and environment
+
+### Domain Modules
+- [Modules Handbook](./modules.md) - Complete reference for all domain modules
+  - [PaceNote Module](./module.paceNote.md) - Performance feedback generation
+  - [PolicyFoo Module](./module.policyFoo.md) - Policy Q&A system
+    - [DOAD Handler](./module.policyFoo.doadFoo.md) - Three-stage DOAD policy workflow
+    - [LEAVE Handler](./module.policyFoo.leaveFoo.md) - Two-stage Leave policy workflow
+
+### Application Routes
+- [Routes Handbook](./routes.md) - Complete reference for all application routes
+  - [Pacenote Route](./routes.md#pacenote-route) - Form-based feedback UI
+  - [Policy Route](./routes.md#policy-route) - Chat UI for policy queries
+
+### Development Resources
+- [AI Agent Guidelines](./index.md#ai-agent-guidelines-short) - Best practices for LLM collaboration
+- [Common Error Patterns](./index.md#common-error-patterns) - Troubleshooting guide
 
 ## Development — Quick Commands
 
@@ -55,24 +68,13 @@ src/
 
 See: ./modules.md and ./routes.md
 
-## Modules (jump-start)
+## Modules Overview
 
-### PaceNote Service
+For complete module documentation, see the [Modules Handbook](./modules.md).
 
-- Status: ✅ Production Ready
-- Route: /pacenote
-- Domain: Performance Feedback
-- Docs: ./module.paceNote.md
-- Route Docs: ./routes.md#pacenote-route
-
-### PolicyFoo Service
-
-- Status: ✅ Production Ready
-- Route: /policy
-- Domain: Policy Q&A
-- Docs: ./module.policyFoo.md
-- Handler Docs: ./module.policyFoo.doadFoo.md, ./module.policyFoo.leaveFoo.md
-- Route Docs: ./routes.md#policy-route
+### Key Modules
+- **PaceNote**: Generate performance feedback notes based on observations and rank competencies
+- **PolicyFoo**: Answer policy questions with authoritative citations from CAF documents
 
 ## Architecture
 
@@ -122,19 +124,9 @@ Database
 - Schema edits → update $lib/core/db/types.ts and services
 - Query perf → follow $lib/core/db/service.ts patterns
 
-## 📎 AI Agent Guidelines (short)
+## 📎 AI Agent Guidelines
 
-File organization
-
-- Services per domain; shared infra in $lib/core
-- One types.ts per module
-- Routes co-locate UI + server logic
-
-Common tasks
-
-- New module → copy structure from PaceNote/PolicyFoo
-- New route → standard SvelteKit structure
-- DB ops → core/db service patterns
-- LLM → AI Gateway service
-
-Testing approach: see ./testing.md
+When working with this codebase:
+- Always start at [docs/ai/index.md](./index.md) for documentation navigation
+- Refer to specific module docs using the Documentation Map above
+- When creating new documentation, follow the standard template structure

@@ -1,6 +1,3 @@
-## Parent Module
-
-[PolicyFoo](./module.policyFoo.md)
 
 ## Mission
 
@@ -26,9 +23,7 @@ Three-stage LLM workflow to answer DOAD policy questions with citations.
 
 ## Constraints
 
-- Adheres to [WORKERS_SAFE_LIBS](./core.md#workers_safe_libs)
-- Follows [ENVIRONMENT_SETUP](./core.md#environment_setup)
-- Uses [DB_ACCESS_PATTERN](./core.md#db_access_pattern)
+- Adheres to all [Core Platform Constraints](./core.md#platform-constraints)
 - Reader model vs main model separation
 
 ## Edge Cases

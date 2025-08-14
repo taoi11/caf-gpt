@@ -26,9 +26,7 @@ Generate rank-aware performance feedback notes from observations using competenc
 
 ## Constraints
 
-- Adheres to [WORKERS_SAFE_LIBS](./core.md#workers_safe_libs)
-- Follows [ENVIRONMENT_SETUP](./core.md#environment_setup)
-- Uses [DB_ACCESS_PATTERN](./core.md#db_access_pattern)
+- Adheres to all [Core Platform Constraints](./core.md#platform-constraints)
 - Prompt assets bundled statically
 
 ## Edge Cases
