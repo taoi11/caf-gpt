@@ -8,11 +8,9 @@ Answer policy/regulation questions with authoritative citations via router-based
 
 ## Context
 
-- Module: `src/lib/modules/policyFoo/`
-- Router: `index.ts` delegates to handlers
-- Handlers: `doadFoo/` (DOAD), `leaveFoo/` (LEAVE)
-- Types: `types.ts`
-- Route: `src/routes/policy/`
+- Location: `src/lib/modules/policyFoo/`
+- Entry: `index.ts` → `router`
+- Related: `types.ts`, `handlers/`
 
 ## Contracts
 
@@ -20,18 +18,20 @@ Answer policy/regulation questions with authoritative citations via router-based
 - Output: `PolicyQueryOutput` (XML response, usage)
 - Side effects: DB reads via Hyperdrive; multiple LLM calls (multi-stage)
 
-## Constraints
-
-- Workers-safe libraries
-- Use shared AI Gateway service and DB service patterns
-
-## Steps
+## Workflow
 
 1. Receive chat message in route action and validate
 2. Route to handler based on `policy_set`
 3. Return XML response for UI parsing
 
-## Edge cases
+## Constraints
+
+- Adheres to [WORKERS_SAFE_LIBS](./core.md#workers_safe_libs)
+- Follows [ENVIRONMENT_SETUP](./core.md#environment_setup)
+- Uses [DB_ACCESS_PATTERN](./core.md#db_access_pattern)
+- [Module-specific constraint]
+
+## Edge Cases
 
 - Unrecognized policy set
 - No relevant policy content found
@@ -42,9 +42,10 @@ Answer policy/regulation questions with authoritative citations via router-based
 - Handler unit tests and integration tests
 - UI XML parsing tests
 
-## Don’ts
+## Related
 
-- Don’t duplicate setup/testing → see `./core.md`, `./testing.md`
+- Parent: [PolicyFoo](./module.policyFoo.md)
+- Route: [Policy Route](./routes.md#policy-route)
 
 ## Links
 

@@ -1,6 +1,5 @@
-# DOAD PolicyFoo Handler
-
-> AI Agent Navigation | Status: Production Ready | Complexity: High (3-stage)
+## Parent Module
+[PolicyFoo](./module.policyFoo.md)
 
 ## Mission
 
@@ -8,11 +7,15 @@ Three-stage LLM workflow to answer DOAD policy questions with citations.
 
 ## Context
 
-- Directory: `src/lib/modules/policyFoo/doadFoo/`
+- Location: `src/lib/modules/policyFoo/doadFoo/`
 - Entry: `index.ts` → `handleDOADQuery()`
-- Agents: `finder.ts`, `metadata-selector.ts`, `main.ts`
-- DB: `database.service.ts`
-- Prompts: `prompts/*`
+- Related: `finder.ts`, `metadata-selector.ts`, `main.ts`, `database.service.ts`, `prompts/`
+
+## Contracts
+
+- Input: messages, policy_set="DOAD"
+- Output: XML with citations + usage
+- Side effects: DB reads via Hyperdrive; multiple LLM calls
 
 ## Workflow
 
@@ -20,26 +23,23 @@ Three-stage LLM workflow to answer DOAD policy questions with citations.
 2. Metadata selector: choose relevant chunks
 3. Main agent: synthesize final XML response
 
-## Contracts
-
-- Input: messages, policy_set="DOAD"
-- Output: XML with citations + usage
-
 ## Constraints
 
+- Adheres to [WORKERS_SAFE_LIBS](./core.md#workers_safe_libs)
+- Follows [ENVIRONMENT_SETUP](./core.md#environment_setup)
+- Uses [DB_ACCESS_PATTERN](./core.md#db_access_pattern)
 - Reader model vs main model separation
-- DB via Hyperdrive
 
-## Performance
+## Edge Cases
 
-- Tokens: ~2500-4500
-- Latency: ~5-12s
+- No relevant policy content found
+- Token budget exceeded
 
 ## Validation
 
 - Unit tests per agent; integration through handler
 
-## Links
+## Related
 
-- Parent module: `./module.policyFoo.md`
-- Route doc: `./routes.md#policy-route`
+- Parent: [PolicyFoo](./module.policyFoo.md)
+- Route: [Policy Route](./routes.md#policy-route)

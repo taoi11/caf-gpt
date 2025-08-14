@@ -1,6 +1,6 @@
 # PaceNote Module
 
-> AI Agent Navigation | Status: Production Ready | Domain: Performance Feedback
+> Domain: Performance Feedback | Status: Production Ready | Complexity: Medium
 
 ## Mission
 
@@ -8,31 +8,30 @@ Generate rank-aware performance feedback notes from observations using competenc
 
 ## Context
 
-- Module: `src/lib/modules/paceNote/`
+- Location: `src/lib/modules/paceNote/`
 - Entry: `service.ts` → `PaceNoteService`
-- Types: `types.ts` → `PaceNoteInput`, `PaceNoteOutput`, `PaceNoteRank`
-- Prompts: `prompts/base.md`, `prompts/competencies/*`
-- Route: `src/routes/pacenote/`
-- Key files: `service.ts`, `constants.ts`, `types.ts`, `prompts/base.md`, `prompts/competencies/*`
+- Related: `types.ts`, `constants.ts`, `prompts/`
 
 ## Contracts
 
-- Input: observation text, rank (Cpl, MCpl, Sgt, WO), optional member and period
-- Output: feedback note text and usage metrics
+- Input: `PaceNoteInput` (observation text, rank, optional member/period)
+- Output: `PaceNoteOutput` (feedback note text, usage metrics)
 - Side effects: LLM call via AI Gateway; static prompt imports
 
-## Constraints
-
-- Workers-safe libs only; no native/FFI
-- Prompt assets bundled statically
-
-## Steps
+## Workflow
 
 1. Validate inputs in route action (`form.server.ts`)
 2. Call `PaceNoteService` with validated input
 3. Render results; show usage metrics
 
-## Edge cases
+## Constraints
+
+- Adheres to [WORKERS_SAFE_LIBS](./core.md#workers_safe_libs)
+- Follows [ENVIRONMENT_SETUP](./core.md#environment_setup)
+- Uses [DB_ACCESS_PATTERN](./core.md#db_access_pattern)
+- Prompt assets bundled statically
+
+## Edge Cases
 
 - Empty/short observations
 - Unsupported rank
@@ -42,12 +41,7 @@ Generate rank-aware performance feedback notes from observations using competenc
 
 - Unit tests for service; integration test via route form
 
-## Don’ts
+## Related
 
-- Don’t duplicate setup here → see `./core.md`
-- Don’t inline prompt text in docs → link to files
-
-## Links
-
-- Module: `src/lib/modules/paceNote/`
-- Route doc: `./routes.md#pacenote-route`
+- Parent: [PaceNote](./module.paceNote.md)
+- Route: [Pacenote Route](./routes.md#pacenote-route)
