@@ -43,4 +43,5 @@ export interface AppEnvironment {
 	READER_MODEL?: string;
 	MAIN_MODEL?: string;
 	FN_MODEL?: string;
+	TURNSTILE_SECRET_KEY?: string;
 }

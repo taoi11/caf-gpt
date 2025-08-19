@@ -10,6 +10,7 @@ import {
 	createServiceError,
 	getFormLimits
 } from './form.server.js';
+import { validateTurnstileToken } from '$lib/core/turnstile.service.js';
 
 // Load function - runs on server before page renders
 export const load: PageServerLoad = async ({ platform }) => {
@@ -36,6 +37,21 @@ export const actions: Actions = {
 		// Parse and validate form data
 		const data = await request.formData();
 		const formData = parseFormData(data);
+
+		// Validate Turnstile token (if secret key is configured)
+		const config = configResult.config!;
+		if (config.TURNSTILE_SECRET_KEY) {
+			const token = data.get('cf-turnstile-response')?.toString();
+			const remoteIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || undefined;
+			
+			const turnstileResult = await validateTurnstileToken(token || '', config.TURNSTILE_SECRET_KEY, remoteIp);
+			if (!turnstileResult.success) {
+				return createConfigError(
+					'Security verification failed. Please try again.',
+					formData
+				);
+			}
+		}
 
 		const validationError = validateFormData(formData);
 		if (validationError) {

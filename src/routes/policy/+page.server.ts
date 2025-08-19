@@ -7,6 +7,7 @@ import {
 	type PolicyFooError
 } from '$lib/modules/policyFoo';
 import { hasRequiredConfig, validateEnvironmentConfig } from './config.server.js';
+import { validateTurnstileToken } from '$lib/core/turnstile.service.js';
 
 /**
  * Load function to provide initial data to the page
@@ -40,6 +41,21 @@ export const actions: Actions = {
 			}
 
 			const data = await request.formData();
+
+			// Validate Turnstile token (if secret key is configured)
+			const envConfig = configResult.config!;
+			if (envConfig.TURNSTILE_SECRET_KEY) {
+				const token = data.get('cf-turnstile-response')?.toString();
+				const remoteIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || undefined;
+				
+				const turnstileResult = await validateTurnstileToken(token || '', envConfig.TURNSTILE_SECRET_KEY, remoteIp);
+				if (!turnstileResult.success) {
+					return fail(400, {
+						error: 'Security verification failed. Please try again.',
+						field: 'general'
+					});
+				}
+			}
 
 			// Extract form data
 			const messagesJson = data.get('messages') as string;

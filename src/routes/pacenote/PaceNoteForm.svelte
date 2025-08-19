@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { enhance, applyAction } from '$app/forms';
 	import type { RankInfo } from '$lib/modules/paceNote/types.js';
+	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
 
 	// Props
 	export let availableRanks: RankInfo[];
@@ -112,6 +113,9 @@
 		{#each competencyFocus as focus}
 			<input type="hidden" name="competencyFocus" value={focus} />
 		{/each}
+
+		<!-- Turnstile Widget -->
+		<TurnstileWidget />
 
 		<!-- Actions -->
 		<div class="flex gap-3">

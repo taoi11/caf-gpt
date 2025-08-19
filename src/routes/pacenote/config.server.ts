@@ -10,6 +10,7 @@ interface PaceNoteConfig {
 	AI_GATEWAY_BASE_URL: string;
 	FN_MODEL: string;
 	CF_AIG_TOKEN?: string;
+	TURNSTILE_SECRET_KEY?: string;
 }
 
 /**
@@ -29,8 +30,9 @@ export function validateEnvironmentConfig(
 	const result = validateRequiredEnv<PaceNoteConfig>(env, requiredVars);
 
 	if (result.isValid && result.config) {
-		// Add optional CF_AIG_TOKEN
+		// Add optional tokens
 		result.config.CF_AIG_TOKEN = env.CF_AIG_TOKEN;
+		result.config.TURNSTILE_SECRET_KEY = env.TURNSTILE_SECRET_KEY;
 	}
 
 	return result;
