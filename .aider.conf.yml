@@ -3,14 +3,20 @@ watch-files: true
 max-chat-history-tokens: '8192'
 restore-chat-history: false
 read:
-  # - .github/instructions/base.instructions.md
-  # - .github/instructions/workflow.instructions.md
+  - .github/instructions/base.instructions.md
   - README.md
-  - src/lib/modules/paceNote/README.md
-  - src/lib/modules/policyFoo/README.md
-  - src/lib/modules/policyFoo/doadFoo/README.md
-  - src/lib/modules/policyFoo/leaveFoo/README.md
-  - src/lib/core/README.md
+  - docs/ai/Conventions.md
+  - docs/ai/core.md
+  - docs/ai/index.md
+  - docs/ai/module.paceNote.md
+  - docs/ai/module.policyFoo.doadFoo.md
+  - docs/ai/module.policyFoo.leaveFoo.md
+  - docs/ai/module.policyFoo.md
+  - docs/ai/modules.md
+  - docs/ai/prompts.md
+  - docs/ai/routes.md
+  - docs/ai/TEMPLATE.md
+  - docs/ai/testing.md
 
 auto-commits: false
 attribute-commit-message-author: true

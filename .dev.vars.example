@@ -7,5 +7,5 @@ AI_GATEWAY_BASE_URL=https://gateway.ai.cloudflare.com/v1/YOUR_ACCOUNT_ID/YOUR_GA
 # Cloudflare AI Gateway Token (optional)
 CF_AIG_TOKEN=your-cf-aig-token-here
 
-# Database connection now handled via Hyperdrive binding in wrangler.jsonc
-# No DATABASE_URL needed - Hyperdrive provides the connection
+# Cloudflare Turnstile Configuration
+TURNSTILE_SECRET_KEY=your-turnstile-secret-key-here

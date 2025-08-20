@@ -7,17 +7,20 @@ import {
 	type PolicyFooError
 } from '$lib/modules/policyFoo';
 import { hasRequiredConfig, validateEnvironmentConfig } from './config.server.js';
-import '$lib/core/types.js'; // Import for environment type extensions
+import { validateTurnstileToken } from '$lib/core/turnstile.service.js';
 
 /**
  * Load function to provide initial data to the page
  */
 export const load: PageServerLoad = async ({ platform }) => {
+	const configResult = validateEnvironmentConfig(platform);
+
 	return {
 		policy_sets: getSupportedPolicySets(),
 		title: 'Policy Assistant',
 		description: 'Ask questions about CAF policies and get authoritative answers with citations.',
-		isConfigured: hasRequiredConfig(platform)
+		isConfigured: hasRequiredConfig(platform),
+	turnstileSiteKey: configResult.config?.TURNSTILE_SITE_KEY
 	};
 };
 
@@ -41,6 +44,29 @@ export const actions: Actions = {
 			}
 
 			const data = await request.formData();
+
+			// Validate Turnstile token (if secret key is configured)
+			const envConfig = configResult.config!;
+			if (envConfig.TURNSTILE_SECRET_KEY) {
+				const token = data.get('cf-turnstile-response')?.toString();
+				const remoteIp =
+					request.headers.get('CF-Connecting-IP') ||
+					request.headers.get('X-Forwarded-For') ||
+					undefined;
+
+				const turnstileResult = await validateTurnstileToken(
+					token || '',
+					envConfig.TURNSTILE_SECRET_KEY,
+					remoteIp
+				);
+
+				if (!turnstileResult.success) {
+					return fail(400, {
+						error: 'Security verification failed. Please try again.',
+						field: 'general'
+					});
+				}
+			}
 
 			// Extract form data
 			const messagesJson = data.get('messages') as string;
@@ -93,12 +119,12 @@ export const actions: Actions = {
 
 			// Call policy service with environment config
 			const result = await processPolicyQuery(input, {
-				OPENROUTER_TOKEN: config.openrouterToken,
-				AI_GATEWAY_BASE_URL: config.aiGatewayBaseUrl,
-				CF_AIG_TOKEN: config.cfAigToken,
-				READER_MODEL: config.readerModel,
-				MAIN_MODEL: config.mainModel,
-				HYPERDRIVE: config.hyperdrive
+				OPENROUTER_TOKEN: config.OPENROUTER_TOKEN,
+				AI_GATEWAY_BASE_URL: config.AI_GATEWAY_BASE_URL,
+				CF_AIG_TOKEN: config.CF_AIG_TOKEN,
+				READER_MODEL: config.READER_MODEL,
+				MAIN_MODEL: config.MAIN_MODEL,
+				HYPERDRIVE: config.HYPERDRIVE
 			});
 
 			// Return success response

@@ -1,6 +1,5 @@
 /**
  * PolicyFoo Service Router
- *
  * Main entry point for PolicyFoo service.
  * Routes queries to appropriate policy-specific handlers based on policy_set.
  * Supports stateless request processing with conversation context.
@@ -13,6 +12,7 @@ import type {
 	PolicyMessage,
 	PolicyFooError
 } from './types.js';
+import type { AppEnvironment } from '../../core/common.types.js';
 import { POLICY_SETS, ERROR_MESSAGES, LIMITS } from './constants.js';
 import { handleDOADQuery } from './doadFoo/index.js';
 import { handleLeaveQuery } from './leaveFoo/index.js';
@@ -26,25 +26,13 @@ export type {
 	PolicyFooError
 } from './types.js';
 
-/**
- * Environment variables required for PolicyFoo service
- */
-export interface PolicyFooEnvironment {
-	OPENROUTER_TOKEN: string;
-	AI_GATEWAY_BASE_URL: string;
-	CF_AIG_TOKEN?: string; // Optional - AI Gateway token
-	READER_MODEL?: string;
-	MAIN_MODEL?: string;
+// Environment variables required for PolicyFoo service
+// Extends AppEnvironment with policy-specific bindings
+export interface PolicyFooEnvironment extends AppEnvironment {
 	HYPERDRIVE: Hyperdrive; // Cloudflare Hyperdrive binding for database access
 }
 
-/**
- * Main service function to process policy queries
- *
- * @param input - Query input with messages and policy set
- * @param env - Environment variables and bindings
- * @returns Promise with policy query response
- */
+// Main service function to process policy queries
 export async function processPolicyQuery(
 	input: PolicyQueryInput,
 	env: PolicyFooEnvironment
@@ -68,40 +56,40 @@ export async function processPolicyQuery(
 				throw createError('INVALID_POLICY_SET', `Unsupported policy set: ${input.policy_set}`);
 		}
 	} catch (error) {
-			console.error('PolicyFoo service error:', error);
+		console.error('PolicyFoo service error:', error);
 
-			// Handle database-related errors specifically
-			if (error && typeof error === 'object' && 'message' in error) {
-				const errorMessage = String(error.message || error);
-				if (errorMessage.includes('Database connection failed') || 
-				    errorMessage.includes('Query timeout') ||
-				    errorMessage.includes('WebSocket connection')) {
-					throw createError(
-						'GENERAL_ERROR',
-						'Database service is currently unavailable. Please try again later.',
-						{ originalError: errorMessage }
-					);
-				}
+		// Handle database-related errors specifically
+		if (error && typeof error === 'object' && 'message' in error) {
+			const errorMessage = String(error.message || error);
+			if (
+				errorMessage.includes('Database connection failed') ||
+				errorMessage.includes('Query timeout') ||
+				errorMessage.includes('WebSocket connection')
+			) {
+				throw createError(
+					'GENERAL_ERROR',
+					'Database service is currently unavailable. Please try again later.',
+					{ originalError: errorMessage }
+				);
 			}
-
-			// Handle PolicyFooError
-			if (error && typeof error === 'object' && 'code' in error) {
-				// Re-throw PolicyFooError as-is
-				throw error;
-			}
-
-			// Wrap unexpected errors
-			throw createError(
-				'GENERAL_ERROR',
-				error instanceof Error ? error.message : 'Unknown error occurred',
-				{ originalError: error }
-			);
 		}
+
+		// Handle PolicyFooError
+		if (error && typeof error === 'object' && 'code' in error) {
+			// Re-throw PolicyFooError as-is
+			throw error;
+		}
+
+		// Wrap unexpected errors
+		throw createError(
+			'GENERAL_ERROR',
+			error instanceof Error ? error.message : 'Unknown error occurred',
+			{ originalError: error }
+		);
+	}
 }
 
-/**
- * Validate input parameters
- */
+// Validate input parameters
 function validateInput(input: PolicyQueryInput): void {
 	if (!input.policy_set) {
 		throw createError('INVALID_POLICY_SET', 'policy_set is required');
@@ -137,9 +125,7 @@ function validateInput(input: PolicyQueryInput): void {
 	}
 }
 
-/**
- * Validate individual message
- */
+// Validate individual message
 function validateMessage(message: PolicyMessage): void {
 	if (!message.role || !['user', 'assistant', 'system'].includes(message.role)) {
 		throw createError(
@@ -164,9 +150,7 @@ function validateMessage(message: PolicyMessage): void {
 	}
 }
 
-/**
- * Validate environment variables
- */
+// Validate environment variables
 function validateEnvironment(env: PolicyFooEnvironment): void {
 	const required = ['OPENROUTER_TOKEN', 'AI_GATEWAY_BASE_URL'];
 
@@ -182,9 +166,7 @@ function validateEnvironment(env: PolicyFooEnvironment): void {
 	}
 }
 
-/**
- * Create a standardized PolicyFoo error
- */
+// Create a standardized PolicyFoo error
 function createError(
 	code: PolicyFooError['code'],
 	message: string,
@@ -197,16 +179,12 @@ function createError(
 	};
 }
 
-/**
- * Get list of supported policy sets
- */
+// Get list of supported policy sets
 export function getSupportedPolicySets(): PolicySet[] {
 	return [...POLICY_SETS];
 }
 
-/**
- * Check if a policy set is supported
- */
+// Check if a policy set is supported
 export function isPolicySetSupported(policySet: string): policySet is PolicySet {
 	return POLICY_SETS.includes(policySet as PolicySet);
 }

@@ -33,3 +33,16 @@ export interface AIGatewayError {
 	message: string;
 	details?: Record<string, unknown>;
 }
+
+// App Environment Types
+
+export interface AppEnvironment {
+	OPENROUTER_TOKEN: string;
+	AI_GATEWAY_BASE_URL: string;
+	CF_AIG_TOKEN?: string;
+	READER_MODEL?: string;
+	MAIN_MODEL?: string;
+	FN_MODEL?: string;
+	TURNSTILE_SECRET_KEY?: string;
+	TURNSTILE_SITE_KEY?: string;
+}

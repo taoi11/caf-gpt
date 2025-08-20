@@ -1,140 +1,21 @@
-# CAF GPT - Cloudflare Serverless Edition
+## CAF GPT - Cloudflare Serverless Edition
 
-> **🤖 AI Agent Navigation Guide** - Internal Developer/Agent Reference
+This README is now a minimal index. Full project docs live in docs/ai/.
 
-AI-powered assistance tools for CAF troops with modular, maintainable architecture.
+Quick links
 
-## Development
+- Project index: docs/ai/index.md
+- Setup: docs/ai/core.md
+- Testing: docs/ai/testing.md
+- Core Handbook: docs/ai/core.md
+- Modules handbook: docs/ai/modules.md
+- Routes handbook: docs/ai/routes.md
 
-### Quick Commands
+Modules
 
-```bash
-npm run lint          # Run prettier formatting and linting
-npm run dev           # Build once, then start wrangler dev with remote resources (default)
-npm run build         # Build for production
-npm run preview       # Build and preview locally
-```
+- PaceNote: docs/ai/module.paceNote.md
+- PolicyFoo: docs/ai/module.policyFoo.md (handlers: docs/ai/module.policyFoo.doadFoo.md, docs/ai/module.policyFoo.leaveFoo.md)
 
-## Overview & Project Structure
+Notes
 
-**Domain Modules:**
-
-- **PaceNote**: Generate performance feedback notes based on observations and rank competencies
-- **PolicyFoo**: Answer policy questions with authoritative citations from CAF documents
-
-**Architecture Principles:**
-
-- **Co-located Components**: Route-specific UI components live with their routes
-- **Domain Services**: Business logic organized by functional domain
-- **Type-Safe**: End-to-end TypeScript with strict validation
-- **Server-First**: Security and performance through server-side rendering
-- **Local Storage**: Prompts and templates stored as static files for fast access
-
-## Project Structure
-
-```
-src/
-├── lib/
-│   ├── core/
-│   │   └── db/
-│   └── modules/
-│       ├── paceNote/
-│       └── policyFoo/
-└── routes/
-  ├── pacenote/
-  └── policy/
-```
-
-## Modules
-
-### PaceNote Service
-
-**Status**: ✅ Production Ready
-**Route**: `/pacenote`
-**Domain**: Performance Feedback
-**Documentation**: `src/lib/modules/paceNote/README.md`
-**Route Implementation**: `src/routes/pacenote/README.md`
-**Key Dependencies**: AI Gateway
-**Related Files**: `src/lib/modules/paceNote/` + `src/routes/pacenote/`
-
-### PolicyFoo Service
-
-**Status**: ✅ Production Ready
-**Route**: `/policy`
-**Domain**: Policy Q&A
-**Documentation**: `src/lib/modules/policyFoo/README.md`
-**Handlers**: `src/lib/modules/policyFoo/doadFoo/README.md` + `src/lib/modules/policyFoo/leaveFoo/README.md`
-**Key Dependencies**: AI Gateway + Cloudflare Hyperdrive + Postgres (pg)
-**Related Files**: `src/lib/modules/policyFoo/` + `src/routes/policy/`
-
-## Architecture
-
-**Modern Serverless Stack:**
-
-- **Frontend**: SvelteKit with TypeScript
-- **Backend**: Cloudflare Workers
-- **Databases**: Postgres via Cloudflare Hyperdrive connection pooling (node-postgres driver)
-- **AI Integration**: AI Gateway with OpenRouter provider
-- **Authentication**: Server-side only, no API keys required
-- **Styling**: Tailwind CSS v4
-- **Testing**: Vitest with multiple test environments
-
-**Key Features:**
-
-- **Security-First**: Server-side rendering with built-in CSRF protection
-- **Type-Safe Database**: Drizzle ORM with TypeScript schema validation
-- **Modern AI Integration**: Cloudflare AI Gateway with cost tracking and monitoring
-- **Comprehensive Testing**: Unit, integration, and client-side test environments
-- **Developer Experience**: Hot reloading, type generation, database migrations
-
-## Configuration
-
-### Cloudflare Bindings
-
-Configure in `wrangler.jsonc`:
-
-- **AI Gateway**: Configure with OpenRouter provider
-- **Hyperdrive**: Database connection pooling for Postgres
-- **Environment Variables**: Model selection and secret management
-
-## Common Error Patterns
-
-### Environment Configuration
-
-- **Missing OPENROUTER_TOKEN**: Check `wrangler secret put OPENROUTER_TOKEN`
-- **Database Connection**: Configured via Hyperdrive binding, not direct connection
-- **AI Gateway Issues**: Confirm `AI_GATEWAY_BASE_URL` and optional `CF_AIG_TOKEN`
-
-### Module Integration
-
-- **Import Errors**: Check co-located exports in `index.ts` files
-- **Type Errors**: Verify module-level `types.ts` files are properly exported
-- **Service Dependencies**: Ensure shared services (`ai-gateway.service.ts`) are imported correctly
-
-### Database Issues
-
-- **Connection Pooling**: Handled automatically by Hyperdrive binding
-- **Schema Changes**: Update `src/lib/core/db/types.ts` and service classes
-- **Query Performance**: Check consolidated database service patterns in `src/lib/core/db/service.ts`
-
-## 📋 AI Agent Guidelines
-
-### File Organization Patterns
-
-- **Services**: Each domain has a main service file containing the core business logic
-- **Types**: Each module has one types file with all TypeScript definitions
-- **Routes**: Each domain has its own UI directory with co-located components
-- **Shared**: Common utilities used across multiple domains
-
-### Common Tasks
-
-- **Add New Module**: Use existing modules as templates for structure and patterns
-- **Add Route**: Create new domain directory with standard SvelteKit structure
-- **Database Operations**: Extend database schema and related service files
-- **AI Integration**: Use shared AI Gateway service for LLM functionality
-
-### Testing Approach
-
-- **Unit Tests**: Tests live next to the code they test
-- **Integration**: Cross-module testing in dedicated test directory
-- **Coverage**: Comprehensive reporting available for quality assurance
+- Original README content has been moved to the docs/ai pages above to avoid duplication and keep guidance LLM-friendly.

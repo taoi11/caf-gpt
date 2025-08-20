@@ -12,6 +12,7 @@
 	// Reactive state based on server data
 	$: availableRanks = data.availableRanks;
 	$: isConfigured = data.isConfigured;
+	$: turnstileSiteKey = data.turnstileSiteKey;
 
 	// Form state - preserve user input independently of server response
 	let selectedRank = '';
@@ -70,6 +71,7 @@
 			{availableRanks}
 			{isConfigured}
 			{isGenerating}
+			{turnstileSiteKey}
 			bind:selectedRank
 			bind:observations
 			bind:competencyFocus

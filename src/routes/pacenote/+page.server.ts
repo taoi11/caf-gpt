@@ -10,13 +10,17 @@ import {
 	createServiceError,
 	getFormLimits
 } from './form.server.js';
+import { validateTurnstileToken } from '$lib/core/turnstile.service.js';
 
 // Load function - runs on server before page renders
 export const load: PageServerLoad = async ({ platform }) => {
+	const configResult = validateEnvironmentConfig(platform);
+
 	return {
 		availableRanks: AVAILABLE_RANKS,
 		limits: getFormLimits(),
-		isConfigured: hasRequiredConfig(platform)
+		isConfigured: hasRequiredConfig(platform),
+	turnstileSiteKey: configResult.config?.TURNSTILE_SITE_KEY
 	};
 };
 
@@ -37,6 +41,26 @@ export const actions: Actions = {
 		const data = await request.formData();
 		const formData = parseFormData(data);
 
+		// Validate Turnstile token (if secret key is configured)
+		const config = configResult.config!;
+		if (config.TURNSTILE_SECRET_KEY) {
+			const token = data.get('cf-turnstile-response')?.toString();
+			const remoteIp =
+				request.headers.get('CF-Connecting-IP') ||
+				request.headers.get('X-Forwarded-For') ||
+				undefined;
+
+			const turnstileResult = await validateTurnstileToken(
+				token || '',
+				config.TURNSTILE_SECRET_KEY,
+				remoteIp
+			);
+
+			if (!turnstileResult.success) {
+				return createConfigError('Security verification failed. Please try again.', formData);
+			}
+		}
+
 		const validationError = validateFormData(formData);
 		if (validationError) {
 			return validationError;
@@ -47,10 +71,10 @@ export const actions: Actions = {
 
 			// Create PaceNote service instance
 			const paceNoteService = new PaceNoteService(
-				config.openrouterToken,
-				config.aiGatewayBaseUrl,
-				config.model,
-				config.cfAigToken
+				config.OPENROUTER_TOKEN,
+				config.AI_GATEWAY_BASE_URL,
+				config.FN_MODEL,
+				config.CF_AIG_TOKEN
 			);
 
 			// Prepare input for pace note generation

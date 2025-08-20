@@ -6,9 +6,7 @@
 
 import type { RankInfo } from './types.js';
 
-/**
- * Available ranks with their display information
- */
+// Available ranks with their display information
 export const AVAILABLE_RANKS: RankInfo[] = [
 	{
 		value: 'Cpl',
@@ -28,30 +26,22 @@ export const AVAILABLE_RANKS: RankInfo[] = [
 	}
 ];
 
-/**
- * Valid rank values for validation
- */
+// Valid rank values for validation
 export const VALID_RANKS = ['Cpl', 'MCpl', 'Sgt', 'WO'] as const;
 
-/**
- * AI Gateway configuration for pace note generation
- * Note: model is configured via FN_MODEL environment variable
- */
+// AI Gateway configuration for pace note generation
+// Note: model is configured via FN_MODEL environment variable
 export const AI_GATEWAY_CONFIG = {
 	temperature: 0.1
 } as const;
 
-/**
- * Validation limits
- */
+// Validation limits
 export const VALIDATION_LIMITS = {
 	MIN_OBSERVATIONS_LENGTH: 20,
 	MAX_OBSERVATIONS_LENGTH: 2000
 } as const;
 
-/**
- * Local file paths for competency content
- */
+// Local file paths for competency content
 export const LOCAL_PATHS = {
 	EXAMPLES: '$lib/modules/paceNote/prompts/competencies/examples.md',
 	COMPETENCIES: (rank: string) =>

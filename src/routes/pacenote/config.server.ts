@@ -2,59 +2,47 @@
  * Configuration validation for PaceNote route server-side operations
  */
 
-import '$lib/core/types.js'; // Import for environment type extensions
+import { getEnv, validateRequiredEnv, hasRequiredEnv } from '$lib/core/env.js';
+import type { EnvValidationResult } from '$lib/core/env.js';
 
 interface PaceNoteConfig {
-	openrouterToken: string;
-	aiGatewayBaseUrl: string;
-	model: string;
-	cfAigToken?: string;
-}
-
-interface ConfigValidationResult {
-	isValid: boolean;
-	config?: PaceNoteConfig;
-	missingVars?: string[];
+	OPENROUTER_TOKEN: string;
+	AI_GATEWAY_BASE_URL: string;
+	FN_MODEL: string;
+	CF_AIG_TOKEN?: string;
+	TURNSTILE_SECRET_KEY?: string;
+	TURNSTILE_SITE_KEY?: string;
 }
 
 /**
  * Validate and extract environment configuration
  */
-export function validateEnvironmentConfig(platform?: App.Platform): ConfigValidationResult {
-	// Get environment variables from either Cloudflare Workers or Node.js
-	const env = platform?.env || process.env;
+export function validateEnvironmentConfig(
+	platform?: App.Platform
+): EnvValidationResult<PaceNoteConfig> {
+	const env = getEnv(platform);
 
 	const requiredVars = [
-		{ key: 'OPENROUTER_TOKEN', value: env?.OPENROUTER_TOKEN },
-		{ key: 'AI_GATEWAY_BASE_URL', value: env?.AI_GATEWAY_BASE_URL },
-		{ key: 'FN_MODEL', value: env?.FN_MODEL }
+		{ key: 'OPENROUTER_TOKEN' as const, value: env.OPENROUTER_TOKEN },
+		{ key: 'AI_GATEWAY_BASE_URL' as const, value: env.AI_GATEWAY_BASE_URL },
+		{ key: 'FN_MODEL' as const, value: env.FN_MODEL }
 	];
 
-	const missingVars = requiredVars.filter(({ value }) => !value).map(({ key }) => key);
+	const result = validateRequiredEnv<PaceNoteConfig>(env, requiredVars);
 
-	if (missingVars.length > 0) {
-		return {
-			isValid: false,
-			missingVars
-		};
+	if (result.isValid && result.config) {
+		// Add optional tokens
+		result.config.CF_AIG_TOKEN = env.CF_AIG_TOKEN;
+		result.config.TURNSTILE_SECRET_KEY = env.TURNSTILE_SECRET_KEY;
+		result.config.TURNSTILE_SITE_KEY = env.TURNSTILE_SITE_KEY;
 	}
 
-	return {
-		isValid: true,
-		config: {
-			openrouterToken: env.OPENROUTER_TOKEN!,
-			aiGatewayBaseUrl: env.AI_GATEWAY_BASE_URL!,
-			model: env.FN_MODEL!,
-			cfAigToken: env.CF_AIG_TOKEN || undefined
-		}
-	};
+	return result;
 }
 
 /**
  * Check if all required services are configured
  */
 export function hasRequiredConfig(platform?: App.Platform): boolean {
-	const env = platform?.env || process.env;
-
-	return Boolean(env?.OPENROUTER_TOKEN && env?.AI_GATEWAY_BASE_URL && env?.FN_MODEL);
+	return hasRequiredEnv(platform, ['OPENROUTER_TOKEN', 'AI_GATEWAY_BASE_URL', 'FN_MODEL']);
 }

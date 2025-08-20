@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { enhance, applyAction } from '$app/forms';
 	import type { RankInfo } from '$lib/modules/paceNote/types.js';
+	import TurnstileWidget from '$lib/components/TurnstileWidget.svelte';
 
 	// Props
 	export let availableRanks: RankInfo[];
 	export let isConfigured: boolean;
 	export let isGenerating: boolean;
+	export let turnstileSiteKey: string | undefined;
 	export let onSubmitStart: () => void;
 	export let onSubmitComplete: (result: any) => Promise<void>;
 
@@ -113,6 +115,10 @@
 			<input type="hidden" name="competencyFocus" value={focus} />
 		{/each}
 
+		<!-- Turnstile Widget -->
+		{#if turnstileSiteKey}
+			<TurnstileWidget siteKey={turnstileSiteKey} />
+		{/if}
 		<!-- Actions -->
 		<div class="flex gap-3">
 			<button
