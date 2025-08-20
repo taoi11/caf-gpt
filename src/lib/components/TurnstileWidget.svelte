@@ -30,8 +30,6 @@
 
 		// Check if script is already loaded
 		if (window.turnstile) {
-			// DEV LOG: Turnstile already present (remove when done debugging)
-			console.info('[DEV] Turnstile: global already available');
 			scriptLoaded = true;
 			renderWidget();
 			return;
@@ -43,14 +41,11 @@
 		script.async = true;
 		script.defer = true;
 		script.onload = () => {
-			// DEV LOG: Script loaded (remove when done debugging)
-			console.info('[DEV] Turnstile: API script loaded (explicit)');
 			scriptLoaded = true;
 			renderWidget();
 		};
 		script.onerror = (e) => {
-			// DEV LOG: Script error (remove when done debugging)
-			console.error('[DEV] Turnstile: failed to load API script', e);
+			console.error('Failed to load Turnstile API script', e);
 		};
 		document.head.appendChild(script);
 
@@ -59,8 +54,6 @@
 			if (widgetId && window.turnstile) {
 				try {
 					window.turnstile.remove(widgetId);
-					// DEV LOG: Widget removed (remove when done debugging)
-					console.info('[DEV] Turnstile: widget removed on destroy');
 				} catch (e) {
 					// Ignore errors during cleanup
 				}
@@ -92,9 +85,6 @@
 			// Ensure token field exists (explicit render fallback)
 			tokenInput = ensureTokenField();
 
-			// DEV LOG: Render start (remove when done debugging)
-			console.info('[DEV] Turnstile: rendering widget', { siteKey });
-
 			widgetId = window.turnstile.render(widget, {
 				sitekey: siteKey,
 				theme,
@@ -105,20 +95,14 @@
 					// Update hidden field value
 					if (!tokenInput) tokenInput = ensureTokenField();
 					if (tokenInput) tokenInput.value = token;
-					// DEV LOG: Token received (remove when done debugging)
-					console.info('[DEV] Turnstile: token issued', { length: token?.length ?? 0 });
 				},
 				'error-callback': (error: string) => {
 					console.warn('Turnstile error:', error);
 					if (tokenInput) tokenInput.value = '';
-					// DEV LOG: Error callback (remove when done debugging)
-					console.warn('[DEV] Turnstile: error-callback', error);
 				}
 			});
 		} catch (error) {
 			console.error('Failed to render Turnstile widget:', error);
-			// DEV LOG: Render failure (remove when done debugging)
-			console.info('[DEV] Turnstile: render failed with site key', { siteKey });
 		}
 	}
 

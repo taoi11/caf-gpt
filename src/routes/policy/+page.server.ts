@@ -60,24 +60,6 @@ export const actions: Actions = {
 					remoteIp
 				);
 
-				// DEV LOGS START: Remove these logs after verifying Turnstile end-to-end
-				try {
-					console.log(
-						'[DEV] Turnstile (policy): token present?',
-						Boolean(token),
-						'len:',
-						token?.length ?? 0
-					);
-					console.log(
-						'[DEV] Turnstile (policy): verify success?',
-						turnstileResult.success,
-						'errors:',
-						turnstileResult['error-codes']
-					);
-					if (turnstileResult.hostname)
-						console.log('[DEV] Turnstile (policy): hostname', turnstileResult.hostname);
-				} catch {}
-				// DEV LOGS END
 				if (!turnstileResult.success) {
 					return fail(400, {
 						error: 'Security verification failed. Please try again.',
