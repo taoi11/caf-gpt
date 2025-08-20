@@ -15,7 +15,7 @@ import { validateTurnstileToken } from '$lib/core/turnstile.service.js';
 // Load function - runs on server before page renders
 export const load: PageServerLoad = async ({ platform }) => {
 	const configResult = validateEnvironmentConfig(platform);
-	
+
 	return {
 		availableRanks: AVAILABLE_RANKS,
 		limits: getFormLimits(),
@@ -45,14 +45,37 @@ export const actions: Actions = {
 		const config = configResult.config!;
 		if (config.TURNSTILE_SECRET_KEY) {
 			const token = data.get('cf-turnstile-response')?.toString();
-			const remoteIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || undefined;
-			
-			const turnstileResult = await validateTurnstileToken(token || '', config.TURNSTILE_SECRET_KEY, remoteIp);
-			if (!turnstileResult.success) {
-				return createConfigError(
-					'Security verification failed. Please try again.',
-					formData
+			const remoteIp =
+				request.headers.get('CF-Connecting-IP') ||
+				request.headers.get('X-Forwarded-For') ||
+				undefined;
+
+			const turnstileResult = await validateTurnstileToken(
+				token || '',
+				config.TURNSTILE_SECRET_KEY,
+				remoteIp
+			);
+
+			// DEV LOGS START: Remove these logs after verifying Turnstile end-to-end
+			try {
+				console.log(
+					'[DEV] Turnstile (pacenote): token present?',
+					Boolean(token),
+					'len:',
+					token?.length ?? 0
 				);
+				console.log(
+					'[DEV] Turnstile (pacenote): verify success?',
+					turnstileResult.success,
+					'errors:',
+					turnstileResult['error-codes']
+				);
+				if (turnstileResult.hostname)
+					console.log('[DEV] Turnstile (pacenote): hostname', turnstileResult.hostname);
+			} catch {}
+			// DEV LOGS END
+			if (!turnstileResult.success) {
+				return createConfigError('Security verification failed. Please try again.', formData);
 			}
 		}
 

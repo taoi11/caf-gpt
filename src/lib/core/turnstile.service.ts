@@ -32,7 +32,7 @@ export async function validateTurnstileToken(
 		const formData = new FormData();
 		formData.append('secret', secretKey);
 		formData.append('response', token);
-		
+
 		if (remoteIp) {
 			formData.append('remoteip', remoteIp);
 		}
@@ -49,7 +49,7 @@ export async function validateTurnstileToken(
 			};
 		}
 
-		const result = await response.json() as TurnstileValidationResult;
+		const result = (await response.json()) as TurnstileValidationResult;
 		return result;
 	} catch (error) {
 		console.error('Turnstile validation error:', error);

@@ -14,7 +14,7 @@ import { validateTurnstileToken } from '$lib/core/turnstile.service.js';
  */
 export const load: PageServerLoad = async ({ platform }) => {
 	const configResult = validateEnvironmentConfig(platform);
-	
+
 	return {
 		policy_sets: getSupportedPolicySets(),
 		title: 'Policy Assistant',
@@ -49,9 +49,35 @@ export const actions: Actions = {
 			const envConfig = configResult.config!;
 			if (envConfig.TURNSTILE_SECRET_KEY) {
 				const token = data.get('cf-turnstile-response')?.toString();
-				const remoteIp = request.headers.get('CF-Connecting-IP') || request.headers.get('X-Forwarded-For') || undefined;
-				
-				const turnstileResult = await validateTurnstileToken(token || '', envConfig.TURNSTILE_SECRET_KEY, remoteIp);
+				const remoteIp =
+					request.headers.get('CF-Connecting-IP') ||
+					request.headers.get('X-Forwarded-For') ||
+					undefined;
+
+				const turnstileResult = await validateTurnstileToken(
+					token || '',
+					envConfig.TURNSTILE_SECRET_KEY,
+					remoteIp
+				);
+
+				// DEV LOGS START: Remove these logs after verifying Turnstile end-to-end
+				try {
+					console.log(
+						'[DEV] Turnstile (policy): token present?',
+						Boolean(token),
+						'len:',
+						token?.length ?? 0
+					);
+					console.log(
+						'[DEV] Turnstile (policy): verify success?',
+						turnstileResult.success,
+						'errors:',
+						turnstileResult['error-codes']
+					);
+					if (turnstileResult.hostname)
+						console.log('[DEV] Turnstile (policy): hostname', turnstileResult.hostname);
+				} catch {}
+				// DEV LOGS END
 				if (!turnstileResult.success) {
 					return fail(400, {
 						error: 'Security verification failed. Please try again.',

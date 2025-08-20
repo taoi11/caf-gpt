@@ -116,7 +116,8 @@
 		{/each}
 
 		<!-- Turnstile Widget -->
-		<TurnstileWidget siteKey={turnstileSiteKey} />		<!-- Actions -->
+		<TurnstileWidget siteKey={turnstileSiteKey} />
+		<!-- Actions -->
 		<div class="flex gap-3">
 			<button
 				type="submit"

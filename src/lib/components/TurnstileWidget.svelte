@@ -1,3 +1,16 @@
+<script context="module" lang="ts">
+	// Type declaration for global turnstile object
+	declare global {
+		interface Window {
+			turnstile?: {
+				render: (element: HTMLElement, options: any) => string;
+				reset: (widgetId: string) => void;
+				remove: (widgetId: string) => void;
+			};
+		}
+	}
+</script>
+
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
@@ -17,19 +30,27 @@
 
 		// Check if script is already loaded
 		if (window.turnstile) {
+			// DEV LOG: Turnstile already present (remove when done debugging)
+			console.info('[DEV] Turnstile: global already available');
 			scriptLoaded = true;
 			renderWidget();
 			return;
 		}
 
-		// Load Turnstile script
+		// Load Turnstile script (explicit render mode to prevent auto-scanning)
 		const script = document.createElement('script');
-		script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
+		script.src = 'https://challenges.cloudflare.com/turnstile/v0/api.js?render=explicit';
 		script.async = true;
 		script.defer = true;
 		script.onload = () => {
+			// DEV LOG: Script loaded (remove when done debugging)
+			console.info('[DEV] Turnstile: API script loaded (explicit)');
 			scriptLoaded = true;
 			renderWidget();
+		};
+		script.onerror = (e) => {
+			// DEV LOG: Script error (remove when done debugging)
+			console.error('[DEV] Turnstile: failed to load API script', e);
 		};
 		document.head.appendChild(script);
 
@@ -38,6 +59,8 @@
 			if (widgetId && window.turnstile) {
 				try {
 					window.turnstile.remove(widgetId);
+					// DEV LOG: Widget removed (remove when done debugging)
+					console.info('[DEV] Turnstile: widget removed on destroy');
 				} catch (e) {
 					// Ignore errors during cleanup
 				}
@@ -49,7 +72,9 @@
 		// Try to find Turnstile's injected hidden input first
 		const formEl = widget?.closest('form') as HTMLFormElement | null;
 		if (!formEl) return null;
-		const existing = formEl.querySelector('input[name="cf-turnstile-response"]') as HTMLInputElement | null;
+		const existing = formEl.querySelector(
+			'input[name="cf-turnstile-response"]'
+		) as HTMLInputElement | null;
 		if (existing) return existing;
 
 		// Create our own as a fallback
@@ -67,6 +92,9 @@
 			// Ensure token field exists (explicit render fallback)
 			tokenInput = ensureTokenField();
 
+			// DEV LOG: Render start (remove when done debugging)
+			console.info('[DEV] Turnstile: rendering widget', { siteKey });
+
 			widgetId = window.turnstile.render(widget, {
 				sitekey: siteKey,
 				theme,
@@ -77,15 +105,20 @@
 					// Update hidden field value
 					if (!tokenInput) tokenInput = ensureTokenField();
 					if (tokenInput) tokenInput.value = token;
+					// DEV LOG: Token received (remove when done debugging)
+					console.info('[DEV] Turnstile: token issued', { length: token?.length ?? 0 });
 				},
 				'error-callback': (error: string) => {
 					console.warn('Turnstile error:', error);
 					if (tokenInput) tokenInput.value = '';
+					// DEV LOG: Error callback (remove when done debugging)
+					console.warn('[DEV] Turnstile: error-callback', error);
 				}
 			});
 		} catch (error) {
 			console.error('Failed to render Turnstile widget:', error);
-			console.info('Using site key:', siteKey);
+			// DEV LOG: Render failure (remove when done debugging)
+			console.info('[DEV] Turnstile: render failed with site key', { siteKey });
 		}
 	}
 
@@ -106,19 +139,6 @@
 
 <!-- Global type declaration for Turnstile -->
 <svelte:window on:load={renderWidget} />
-
-<script context="module" lang="ts">
-	// Type declaration for global turnstile object
-	declare global {
-		interface Window {
-			turnstile?: {
-				render: (element: HTMLElement, options: any) => string;
-				reset: (widgetId: string) => void;
-				remove: (widgetId: string) => void;
-			};
-		}
-	}
-</script>
 
 <style>
 	.turnstile-widget {
