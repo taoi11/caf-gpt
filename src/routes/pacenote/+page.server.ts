@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ platform }) => {
 		availableRanks: AVAILABLE_RANKS,
 		limits: getFormLimits(),
 		isConfigured: hasRequiredConfig(platform),
-		turnstileSiteKey: configResult.config?.TURNSTILE_SITE_KEY || '0x4AAAAAABrw4iUcnqVS_x7o' // fallback to test key
+	turnstileSiteKey: configResult.config?.TURNSTILE_SITE_KEY
 	};
 };
 

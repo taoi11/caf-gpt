@@ -16,8 +16,13 @@
 	import { browser } from '$app/environment';
 
 	// Props
-	export let siteKey: string = '0x4AAAAAABrw4iUcnqVS_x7o'; // Testing site key as fallback
+	// Site key must be provided by the parent; no hard-coded fallback
+	export let siteKey: string;
 	export let theme: 'auto' | 'light' | 'dark' = 'auto';
+
+	if (!siteKey) {
+		throw new Error('TurnstileWidget: siteKey prop is required.');
+	}
 
 	let widget: HTMLDivElement;
 	let widgetId: string | undefined;
@@ -82,6 +87,10 @@
 		if (!scriptLoaded || !widget || !window.turnstile) return;
 
 		try {
+			if (!siteKey) {
+				// No site key provided; skip rendering
+				return;
+			}
 			// Ensure token field exists (explicit render fallback)
 			tokenInput = ensureTokenField();
 

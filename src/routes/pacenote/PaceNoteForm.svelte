@@ -7,7 +7,7 @@
 	export let availableRanks: RankInfo[];
 	export let isConfigured: boolean;
 	export let isGenerating: boolean;
-	export let turnstileSiteKey: string;
+	export let turnstileSiteKey: string | undefined;
 	export let onSubmitStart: () => void;
 	export let onSubmitComplete: (result: any) => Promise<void>;
 
@@ -116,7 +116,9 @@
 		{/each}
 
 		<!-- Turnstile Widget -->
-		<TurnstileWidget siteKey={turnstileSiteKey} />
+		{#if turnstileSiteKey}
+			<TurnstileWidget siteKey={turnstileSiteKey} />
+		{/if}
 		<!-- Actions -->
 		<div class="flex gap-3">
 			<button

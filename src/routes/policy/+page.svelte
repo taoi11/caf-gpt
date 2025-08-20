@@ -192,7 +192,9 @@
 					></textarea>
 
 					<!-- Turnstile Widget -->
-					<TurnstileWidget siteKey={turnstileSiteKey} />
+					{#if turnstileSiteKey}
+						<TurnstileWidget siteKey={turnstileSiteKey} />
+					{/if}
 
 					<button
 						type="submit"

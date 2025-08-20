@@ -20,7 +20,7 @@ export const load: PageServerLoad = async ({ platform }) => {
 		title: 'Policy Assistant',
 		description: 'Ask questions about CAF policies and get authoritative answers with citations.',
 		isConfigured: hasRequiredConfig(platform),
-		turnstileSiteKey: configResult.config?.TURNSTILE_SITE_KEY || '0x4AAAAAABrw4iUcnqVS_x7o' // fallback to test key
+	turnstileSiteKey: configResult.config?.TURNSTILE_SITE_KEY
 	};
 };
 
