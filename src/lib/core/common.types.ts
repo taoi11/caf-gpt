@@ -44,4 +44,5 @@ export interface AppEnvironment {
 	MAIN_MODEL?: string;
 	FN_MODEL?: string;
 	TURNSTILE_SECRET_KEY?: string;
+	TURNSTILE_SITE_KEY?: string;
 }

@@ -12,6 +12,7 @@ interface PolicyConfig {
 	MAIN_MODEL?: string;
 	CF_AIG_TOKEN?: string;
 	TURNSTILE_SECRET_KEY?: string;
+	TURNSTILE_SITE_KEY?: string;
 	HYPERDRIVE: Hyperdrive;
 }
 
@@ -53,6 +54,7 @@ export function validateEnvironmentConfig(
 			MAIN_MODEL: env.MAIN_MODEL,
 			CF_AIG_TOKEN: env.CF_AIG_TOKEN,
 			TURNSTILE_SECRET_KEY: env.TURNSTILE_SECRET_KEY,
+			TURNSTILE_SITE_KEY: env.TURNSTILE_SITE_KEY,
 			HYPERDRIVE: platform.env.HYPERDRIVE
 		};
 		result.config = config;

@@ -10,6 +10,9 @@
 	export let data: PageData;
 	export let form: ActionData;
 
+	// Extract turnstile site key from server data
+	$: turnstileSiteKey = data.turnstileSiteKey;
+
 	// Client-side conversation state
 	let messages: Array<{
 		role: 'user' | 'assistant';
@@ -189,7 +192,7 @@
 					></textarea>
 					
 					<!-- Turnstile Widget -->
-					<TurnstileWidget />
+					<TurnstileWidget siteKey={turnstileSiteKey} />
 					
 					<button
 						type="submit"

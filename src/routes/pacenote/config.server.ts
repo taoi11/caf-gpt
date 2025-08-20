@@ -11,6 +11,7 @@ interface PaceNoteConfig {
 	FN_MODEL: string;
 	CF_AIG_TOKEN?: string;
 	TURNSTILE_SECRET_KEY?: string;
+	TURNSTILE_SITE_KEY?: string;
 }
 
 /**
@@ -33,6 +34,7 @@ export function validateEnvironmentConfig(
 		// Add optional tokens
 		result.config.CF_AIG_TOKEN = env.CF_AIG_TOKEN;
 		result.config.TURNSTILE_SECRET_KEY = env.TURNSTILE_SECRET_KEY;
+		result.config.TURNSTILE_SITE_KEY = env.TURNSTILE_SITE_KEY;
 	}
 
 	return result;

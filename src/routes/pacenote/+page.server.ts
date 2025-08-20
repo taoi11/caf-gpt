@@ -14,10 +14,13 @@ import { validateTurnstileToken } from '$lib/core/turnstile.service.js';
 
 // Load function - runs on server before page renders
 export const load: PageServerLoad = async ({ platform }) => {
+	const configResult = validateEnvironmentConfig(platform);
+	
 	return {
 		availableRanks: AVAILABLE_RANKS,
 		limits: getFormLimits(),
-		isConfigured: hasRequiredConfig(platform)
+		isConfigured: hasRequiredConfig(platform),
+		turnstileSiteKey: configResult.config?.TURNSTILE_SITE_KEY || '0x4AAAAAABrw4iUcnqVS_x7o' // fallback to test key
 	};
 };
 

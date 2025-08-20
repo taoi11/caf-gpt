@@ -13,11 +13,14 @@ import { validateTurnstileToken } from '$lib/core/turnstile.service.js';
  * Load function to provide initial data to the page
  */
 export const load: PageServerLoad = async ({ platform }) => {
+	const configResult = validateEnvironmentConfig(platform);
+	
 	return {
 		policy_sets: getSupportedPolicySets(),
 		title: 'Policy Assistant',
 		description: 'Ask questions about CAF policies and get authoritative answers with citations.',
-		isConfigured: hasRequiredConfig(platform)
+		isConfigured: hasRequiredConfig(platform),
+		turnstileSiteKey: configResult.config?.TURNSTILE_SITE_KEY || '0x4AAAAAABrw4iUcnqVS_x7o' // fallback to test key
 	};
 };
 

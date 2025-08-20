@@ -3,7 +3,7 @@
 	import { browser } from '$app/environment';
 
 	// Props
-	export let siteKey: string = '0x4AAAAAABrw4iUcnqVS_x7o'; // Testing site key
+	export let siteKey: string = '0x4AAAAAABrw4iUcnqVS_x7o'; // Testing site key as fallback
 	export let theme: 'auto' | 'light' | 'dark' = 'auto';
 
 	let widget: HTMLDivElement;
@@ -78,12 +78,14 @@
 					if (!tokenInput) tokenInput = ensureTokenField();
 					if (tokenInput) tokenInput.value = token;
 				},
-				'error-callback': () => {
+				'error-callback': (error: string) => {
+					console.warn('Turnstile error:', error);
 					if (tokenInput) tokenInput.value = '';
 				}
 			});
 		} catch (error) {
 			console.error('Failed to render Turnstile widget:', error);
+			console.info('Using site key:', siteKey);
 		}
 	}
 
