@@ -8,7 +8,7 @@
  * - createResearchTool: Helper to create a single research tool from an agent
  */
 
-import { tool } from "langchain";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import type { ResearchRequest } from "../../types";
 import type { DoadFooAgent, LeaveFooAgent, QroFooAgent } from "../sub-agents";

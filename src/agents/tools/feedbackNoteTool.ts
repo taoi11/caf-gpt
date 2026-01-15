@@ -7,7 +7,7 @@
  * - createFeedbackNoteTool: Creates feedback note generation tool from PaceFooAgent
  */
 
-import { tool } from "langchain";
+import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import type { PaceFooAgent } from "../sub-agents";
 
