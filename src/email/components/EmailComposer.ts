@@ -18,9 +18,9 @@ export class EmailComposer {
       return "";
     }
 
-    // Create attribution line
+    // Create attribution line with RFC 5322 format for Outlook compatibility
     const fromAddress = originalMessage.from;
-    const date = originalMessage.date ? originalMessage.date.toLocaleString() : "Unknown date";
+    const date = originalMessage.date ? originalMessage.date.toUTCString() : "Unknown date";
     const attribution = `On ${date}, ${fromAddress} wrote:`;
 
     // Format the quoted content with proper indentation
