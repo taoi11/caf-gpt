@@ -314,6 +314,7 @@ describe("SimpleEmailHandler - Integration", () => {
         config,
         undefined,
         undefined,
+        undefined,
         mockEmailSender as never
       );
 
@@ -342,6 +343,7 @@ describe("SimpleEmailHandler - Integration", () => {
         config,
         undefined,
         undefined,
+        undefined,
         mockEmailSender as never
       );
 
@@ -359,7 +361,8 @@ describe("SimpleEmailHandler - Integration", () => {
         message,
         expect.stringContaining("AI response"),
         expect.any(Object),
-        true
+        true,
+        expect.any(String)
       );
     });
 
@@ -381,6 +384,7 @@ describe("SimpleEmailHandler - Integration", () => {
         config,
         undefined,
         mockEmailComposer as never,
+        undefined,
         mockEmailSender as never
       );
 
@@ -406,6 +410,7 @@ describe("SimpleEmailHandler - Integration", () => {
       const customHandler = new SimpleEmailHandler(
         mockEnv,
         config,
+        undefined,
         undefined,
         undefined,
         mockEmailSender as never
@@ -439,6 +444,7 @@ describe("SimpleEmailHandler - Integration", () => {
       const customHandler = new SimpleEmailHandler(
         mockEnv,
         config,
+        undefined,
         undefined,
         undefined,
         mockEmailSender as never
