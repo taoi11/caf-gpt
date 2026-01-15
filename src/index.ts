@@ -33,6 +33,11 @@ async function fetch(request: Request, env: Env, ctx: ExecutionContext): Promise
       return new Response("OK", { status: 200 });
     }
 
+    // Prevent 404 for favicon requests
+    if (url.pathname === "/favicon.ico") {
+      return new Response(null, { status: 204 });
+    }
+
     if (url.pathname === config.email.webhookPath && request.method === "POST") {
       const webhookHandler = new ResendWebhookHandler(
         env,
