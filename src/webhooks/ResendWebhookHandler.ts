@@ -122,7 +122,6 @@ export class ResendWebhookHandler {
       return new Response(
         JSON.stringify({
           error: "Webhook processing failed",
-          message,
         }),
         {
           status: 500,

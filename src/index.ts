@@ -62,7 +62,6 @@ async function fetch(request: Request, env: Env, ctx: ExecutionContext): Promise
     return new Response(
       JSON.stringify({
         error: "Internal server error",
-        message,
       }),
       {
         status: 500,
