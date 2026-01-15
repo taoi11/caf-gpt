@@ -14,21 +14,25 @@ import type { ParsedEmailData } from "../types";
 export class EmailComposer {
   // Format quoted content with attribution
   formatQuotedContent(originalMessage: ParsedEmailData): string {
-    if (!originalMessage.body) {
-      return "";
+    // Create Outlook-style header block
+    const separator = "________________________________";
+    const from = `From: ${originalMessage.from}`;
+    // Use UTC string for now as requested
+    const sent = `Sent: ${originalMessage.date ? originalMessage.date.toUTCString() : "Unknown date"}`;
+    const to = `To: ${originalMessage.to.join("; ")}`;
+    const subject = `Subject: ${originalMessage.subject}`;
+
+    let headers = `${separator}\n${from}\n${sent}\n${to}`;
+
+    if (originalMessage.cc && originalMessage.cc.length > 0) {
+      headers += `\nCc: ${originalMessage.cc.join("; ")}`;
     }
 
-    // Create attribution line with RFC 5322 format for Outlook compatibility
-    const fromAddress = originalMessage.from;
-    const date = originalMessage.date ? originalMessage.date.toUTCString() : "Unknown date";
-    const attribution = `On ${date}, ${fromAddress} wrote:`;
+    headers += `\n${subject}\n`;
 
-    // Format the quoted content with proper indentation
-    const quotedLines = originalMessage.body
-      .split("\n")
-      .map((line) => `> ${line}`)
-      .join("\n");
+    // Append original body without '>' quoting
+    const body = originalMessage.body || "";
 
-    return `\n\n${attribution}\n${quotedLines}`;
+    return `\n\n${headers}\n${body}`;
   }
 }
