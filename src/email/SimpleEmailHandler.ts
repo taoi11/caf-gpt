@@ -31,6 +31,7 @@ import {
 import { formatError, Logger } from "../Logger";
 import { MemoryRepository } from "../storage/MemoryRepository";
 import { EmailComposer, EmailThreadManager } from "./components";
+import { HtmlEmailComposer } from "./components/HtmlEmailComposer";
 import { ResendEmailSender } from "./ResendEmailSender";
 import type { ParsedEmailData } from "./types";
 import { normalizeEmailAddress } from "./utils/EmailNormalizer";
@@ -42,6 +43,7 @@ const agentCache = new Map<string, AgentCoordinator>();
 export class SimpleEmailHandler {
   private readonly emailThreadManager: EmailThreadManager;
   private readonly emailComposer: EmailComposer;
+  private readonly htmlEmailComposer: HtmlEmailComposer;
   private readonly emailSender: ResendEmailSender;
   private readonly config: AppConfig;
   private readonly logger: Logger;
@@ -51,6 +53,7 @@ export class SimpleEmailHandler {
     config: AppConfig,
     emailThreadManager?: EmailThreadManager,
     emailComposer?: EmailComposer,
+    htmlEmailComposer?: HtmlEmailComposer,
     emailSender?: ResendEmailSender
   ) {
     this.config = config;
@@ -58,6 +61,7 @@ export class SimpleEmailHandler {
 
     this.emailThreadManager = emailThreadManager || new EmailThreadManager();
     this.emailComposer = emailComposer || new EmailComposer();
+    this.htmlEmailComposer = htmlEmailComposer || new HtmlEmailComposer();
     this.emailSender =
       emailSender || new ResendEmailSender(env.RESEND_API_KEY, config.email.agentFromEmail);
   }
@@ -281,8 +285,17 @@ ${parsedEmail.body}`;
       // 3. Build complete reply content with quoted text
       const fullContent = content.trim() + quotedContent;
 
-      // 4. Send via Resend with full CC support
-      await this.emailSender.sendReply(parsedEmail, fullContent, threadingHeaders, true);
+      // 4. Generate HTML content
+      const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content);
+
+      // 5. Send via Resend with full CC support
+      await this.emailSender.sendReply(
+        parsedEmail,
+        fullContent,
+        threadingHeaders,
+        true,
+        htmlContent
+      );
 
       this.logger.info("Reply sent successfully via Resend", {
         to: parsedEmail.from,

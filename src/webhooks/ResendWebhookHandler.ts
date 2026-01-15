@@ -202,6 +202,7 @@ export class ResendWebhookHandler {
       cc: email.cc,
       subject: email.subject,
       body: bodyText,
+      html: email.html || undefined,
       messageId: email.message_id,
       inReplyTo: email.headers["in-reply-to"],
       references: email.headers.references,

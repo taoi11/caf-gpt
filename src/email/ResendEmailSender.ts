@@ -88,7 +88,8 @@ export class ResendEmailSender {
     originalEmail: ParsedEmailData,
     content: string,
     threadingHeaders: ThreadingHeaders,
-    includeCC = true
+    includeCC = true,
+    htmlBody?: string
   ): Promise<{ id: string }> {
     try {
       const ccRecipients = includeCC ? this.buildCCList(originalEmail) : [];
@@ -104,6 +105,7 @@ export class ResendEmailSender {
           cc: ccRecipients.length > 0 ? ccRecipients : undefined,
           subject,
           text: content,
+          html: htmlBody,
           headers: {
             ...(threadingHeaders.inReplyTo && {
               "In-Reply-To": threadingHeaders.inReplyTo,

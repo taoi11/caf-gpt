@@ -14,6 +14,7 @@ export interface ParsedEmailData {
   cc: string[];
   subject: string;
   body: string;
+  html?: string;
   messageId?: string;
   inReplyTo?: string;
   references?: string;
