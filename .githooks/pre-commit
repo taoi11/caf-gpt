@@ -1,0 +1,15 @@
+#!/bin/sh
+# Pre-commit hook: Run Biome lint check before committing
+
+echo "Running lint check..."
+
+npm run lint
+
+if [ $? -ne 0 ]; then
+  echo ""
+  echo "Lint check failed. Please fix errors before committing."
+  echo "Run 'npm run lint:fix' to auto-fix issues."
+  exit 1
+fi
+
+echo "Lint check passed!"

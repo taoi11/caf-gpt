@@ -1,0 +1,7 @@
+# Typos configuration
+# Add words that should not be flagged as typos
+
+[default.extend-words]
+# Project name abbreviation
+caf = "caf"
+CAF = "CAF"

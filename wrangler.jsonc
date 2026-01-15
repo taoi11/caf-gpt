@@ -1,0 +1,55 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ *
+ * Required secrets (set with: wrangler secret put <NAME>):
+ * - OPENROUTER_TOKEN: OpenRouter API key for LLM access
+ * - AUTHORIZED_SENDERS: Comma-separated list of authorized email domains/addresses
+ * - RESEND_API_KEY: Resend API key (format: re_xxxxxxxxx)
+ * - RESEND_WEBHOOK_SECRET: Resend webhook secret for signature verification (format: whsec_xxxxxxxxx)
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "caf-gpt-email",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-10-31",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "binding": "ASSETS",
+    "directory": "./public",
+    "html_handling": "auto-trailing-slash"
+  },
+  "observability": {
+    "logs": {
+      "enabled": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": true,
+      "persist": true
+    }
+  },
+  "r2_buckets": [
+    {
+      "binding": "R2_BUCKET",
+      "bucket_name": "policies"
+    }
+  ],
+  /**
+   * AI Gateway binding for routing LLM requests through Cloudflare
+   * Provides analytics, rate limiting, and caching capabilities
+   */
+  "ai": {
+    "binding": "AI"
+  },
+  /**
+   * Hyperdrive binding for PostgreSQL connection pooling
+   * Used for user memory storage
+   */
+  "hyperdrive": [
+    {
+      "binding": "HYPERDRIVE",
+      "id": "4b95a1c93ad2441a85e5d9353ae16f20"
+    }
+  ]
+}
