@@ -87,5 +87,3 @@ npm run lint        # Check for issues
 npm run lint:fix    # Auto-fix issues
 npm run format      # Format all files
 ```
-
-Biome handles both linting and formatting. Files are automatically formatted on save in VS Code.
