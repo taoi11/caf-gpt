@@ -93,8 +93,13 @@ ${memory}
       const lastMessage = result.messages[result.messages.length - 1];
       const content = lastMessage.text;
 
-      const signature =
-        "\n\nCAF-GPT\n[Source Code](https://github.com/taoi11/caf-gpt)\nHow to use CAF-GPT: [Documentation](https://caf-gpt.com)";
+      const signature = `
+<div class="MsoNormal">
+<br><br>
+CAF-GPT<br>
+<a href="https://github.com/taoi11/caf-gpt">Source Code</a><br>
+How to use CAF-GPT: <a href="https://caf-gpt.com">Documentation</a>
+</div>`;
       const finalContent = content ? content + signature : "";
 
       this.logger.performance("prime_foo processing", startTime);
