@@ -16,7 +16,6 @@ export class HtmlEmailComposer {
    */
   composeHtmlReply(originalEmail: ParsedEmailData, newContent: string): string {
     const formattedContent = this.formatNewContent(newContent);
-    const signature = this.getSignature();
     const replyHeader = this.getReplyHeader(originalEmail);
     const originalBody = originalEmail.html || this.wrapPlainTextAsHtml(originalEmail.body);
 
@@ -67,8 +66,6 @@ div.WordSection1
 <div class=WordSection1>
 ${formattedContent}
 <p class=MsoNormal><span style='font-size:12.0pt'><o:p>&nbsp;</o:p></span></p>
-${signature}
-<p class=MsoNormal><span style='font-size:12.0pt'><o:p>&nbsp;</o:p></span></p>
 <div>
 <div style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>
 ${replyHeader}
@@ -82,33 +79,8 @@ ${originalBody}
   }
 
   private formatNewContent(content: string): string {
-    // Split by newlines and wrap in <p class=MsoNormal>
-    // Convert double newlines to separate paragraphs, single newlines to <br> if needed,
-    // but typically LLM paragraphs are separated by blank lines.
-    return content
-      .split(/\n\n+/)
-      .map((paragraph) => {
-        const trimmed = paragraph.trim();
-        if (!trimmed) return "";
-        // Convert single newlines within a paragraph to <br>
-        const withBreaks = trimmed.replace(/\n/g, "<br>");
-        return `<p class=MsoNormal><span style='font-size:12.0pt'>${withBreaks}<o:p></o:p></span></p>`;
-      })
-      .join("");
-  }
-
-  private getSignature(): string {
-    return `
-<p class=MsoNormal style='margin-bottom:10.0pt;line-height:115%'><b><span style='font-size:10.0pt;line-height:115%;font-family:"Arial",sans-serif;mso-fareast-language:EN-CA'>Sergeant Aaron Cropper<o:p></o:p></span></b></p>
-<p class=MsoNormal><span style='font-size:12.0pt;mso-fareast-language:EN-CA'>IC Vehicle maintenance / 1 Combat Engineer Regiment / CFB Edmonton </span><span style='font-size:12.0pt;font-family:"Calibri",sans-serif;mso-fareast-language:EN-CA'><o:p></o:p></span></p>
-<p class=MsoNormal><span style='font-size:12.0pt;mso-fareast-language:EN-CA'>Canadian Armed Forces / Government of Canada</span><span style='font-size:12.0pt;mso-ligatures:none;mso-fareast-language:EN-CA'><o:p></o:p></span></p>
-<p class=MsoNormal><span style='font-size:12.0pt;mso-fareast-language:EN-CA'><a href="mailto:aaron.cropper@forces.gc.ca"><span style='color:#0070C0'>aaron.cropper@forces.gc.ca</span></a> / Tel: </span><span style='font-size:10.0pt;mso-fareast-language:EN-CA'>780-528-3593 </span><span style='font-size:12.0pt;mso-fareast-language:EN-CA'>/ CSN: </span><span style='font-size:10.0pt;mso-fareast-language:EN-CA'>528-3593</span><span style='font-size:12.0pt;mso-fareast-language:EN-CA'><o:p></o:p></span></p>
-<p class=MsoNormal><span style='font-size:12.0pt;mso-fareast-language:EN-CA'><o:p>&nbsp;</o:p></span></p>
-<p class=MsoNormal style='line-height:27.0pt;background:#F8F9FA'><span lang=FR style='font-size:12.0pt;color:#202124;mso-fareast-language:EN-CA'>IC Maintenance des v hicules / 1er R giment du g nie de combat </span><span lang=FR-CA style='font-size:12.0pt;color:black;mso-fareast-language:EN-CA'>/ BFC Edmonton </span><span lang=FR-CA style='font-size:12.0pt;color:#202124;mso-fareast-language:EN-CA'><o:p></o:p></span></p>
-<p class=MsoNormal><span lang=FR-CA style='font-size:12.0pt;mso-fareast-language:EN-CA'>Forces Arm es Canadiennes / Gouvernement du Canada<o:p></o:p></span></p>
-<p class=MsoNormal><span style='font-size:12.0pt;mso-fareast-language:EN-CA'><a href="mailto:aaron.cropper@forces.gc.ca"><span lang=FR-CA style='color:#0070C0'>aaron.cropper@forces.gc.ca</span></a></span><span lang=FR-CA style='font-size:12.0pt;mso-fareast-language:EN-CA'>&nbsp; / T l: </span><span lang=FR-CA style='font-size:10.0pt;mso-fareast-language:EN-CA'>780-528-3593 </span><span lang=FR-CA style='font-size:12.0pt;mso-fareast-language:EN-CA'>/ RMCC </span><span lang=FR-CA style='font-size:10.0pt;mso-fareast-language:EN-CA'>528-3593<o:p></o:p></span></p>
-<p class=MsoNormal><span lang=FR-CA style='font-size:10.0pt;mso-fareast-language:EN-CA'><o:p>&nbsp;</o:p></span></p>
-<p class=MsoNormal><span style='font-size:10.0pt;mso-fareast-language:EN-CA'>This email and any attachments are the property of the DND. Unauthorized copying, alteration or distribution is not permitted. </span><span lang=FR-CA style='font-size:10.0pt;mso-fareast-language:EN-CA'>If you are not the intended recipient, please contact the sender and delete this email | Ce courriel et les pi ces jointes sont la propri t  de la MRC et/ou du MDN. La copie non autoris e, la modification ou la distribution n&#8217;est pas permise. Si vous n&#8217; tes pas le destinataire pr vu, veuillez communiquer avec l&#8217;exp diteur et supprimer le pr sent courriel.<u><o:p></o:p></u></span></p>`;
+    // Return content as-is, assuming it is already formatted as HTML by the agent
+    return content;
   }
 
   private getReplyHeader(originalEmail: ParsedEmailData): string {
