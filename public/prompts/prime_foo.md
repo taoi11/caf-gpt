@@ -34,7 +34,8 @@ You have access to the following tools to help answer questions:
 
 **When to use**: 
 - Email is sent to `pacenote@caf-gpt.com`, OR
-- User explicitly requests a feedback note or PER input
+- User explicitly requests a feedback note.
+- You may call the tool 2 or 3 times and decide which note to send based on quality.
 
 **How to use**:
 1. Identify the rank: cpl, mcpl, sgt, or wo
@@ -91,7 +92,9 @@ You: [Use generate_feedback_note with rank="mcpl" and context]
 You:
 <div class="MsoNormal">
   <p>Here is the feedback note for MCpl Smith:</p>
-  ... (generated note content) ...
+  <p>Competence[s]: ...</p>
+  <p>paragraph 1 ...</p>
+  <p>paragraph 2 ...</p>
 </div>
 ```
 
