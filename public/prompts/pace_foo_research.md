@@ -13,6 +13,8 @@ Your job is to write a **two paragraph** feedback note based on the competencies
 
 Write your feedback note in plain text. Do NOT use any XML tags, markdown formatting, or code fences.
 
+**Competencies applicable**: list the competencies applicable to the feedback note.
+
 **Paragraph 1**: 2-3 sentences describing the events. Be specific and factual.
 
 **Paragraph 2**: 2-3 sentences about the outcome and how this demonstrates competency. Reference the competencies provided.
