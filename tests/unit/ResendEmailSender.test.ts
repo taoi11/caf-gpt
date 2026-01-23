@@ -194,7 +194,7 @@ describe("ResendEmailSender", () => {
         data: null,
         error: {
           message:
-            "Resend API error: This idempotency key has been used with this HTTP method and endpoint within the last 24 hours, but the request body was modified and doesn't match the original request.",
+            "This idempotency key has been used with this HTTP method and endpoint within the last 24 hours, but the request body was modified and doesn't match the original request.",
         },
       });
 
