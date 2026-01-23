@@ -162,6 +162,26 @@ describe("ResendEmailSender", () => {
       expect(mockSend).toHaveBeenCalledWith(expect.any(Object), {});
     });
 
+    it("should handle idempotency key conflict as success", async () => {
+      mockSend.mockResolvedValueOnce({
+        data: null,
+        error: {
+          message:
+            "This idempotency key has been used with this HTTP method and endpoint within the last 24 hours, but the request body was modified and doesn't match the original request.",
+          name: "application_error",
+        },
+      });
+
+      const originalEmail = createMockParsedEmail({
+        from: "user@forces.gc.ca",
+        messageId: "<original@forces.gc.ca>",
+      });
+
+      const result = await sender.sendReply(originalEmail, "Response", {}, false);
+
+      expect(result).toEqual({ id: "idempotent-<original@forces.gc.ca>" });
+    });
+
     it("should throw error when Resend API returns error", async () => {
       mockSend.mockResolvedValueOnce({
         data: null,

@@ -119,6 +119,23 @@ export class ResendEmailSender {
       );
 
       if (error) {
+        // Handle idempotency conflict as success
+        // This occurs when retrying a request (e.g. after a crash) where the key matches
+        // but the content (likely LLM generated) differs slightly.
+        if (
+          error.message.includes("idempotency key has been used") &&
+          error.message.includes("request body was modified")
+        ) {
+          this.logger.warn(
+            "Resend idempotency conflict detected. Assuming previous attempt succeeded.",
+            {
+              to: originalEmail.from,
+              error: error.message,
+            }
+          );
+          return { id: `idempotent-${originalEmail.messageId || "unknown"}` };
+        }
+
         throw this.classifyResendError(error);
       }
 
