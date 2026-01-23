@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from "vitest";
 import { HtmlEmailComposer } from "../../src/email/components/HtmlEmailComposer";
 import { createMockParsedEmail } from "../mocks/email";
@@ -48,8 +47,7 @@ describe("HtmlEmailComposer", () => {
         from: "sender@example.com",
       });
 
-      const replyContent =
-        "<div class=MsoNormal><p>Line 1.</p><p>Line 2.</p></div>";
+      const replyContent = "<div class=MsoNormal><p>Line 1.</p><p>Line 2.</p></div>";
       const html = composer.composeHtmlReply(originalEmail, replyContent);
 
       expect(html).toContain(replyContent);
@@ -68,12 +66,12 @@ describe("HtmlEmailComposer", () => {
     });
 
     it("should include CC in headers if present", () => {
-        const originalEmail = createMockParsedEmail({
-            cc: ["cc1@example.com", "cc2@example.com"]
-        });
+      const originalEmail = createMockParsedEmail({
+        cc: ["cc1@example.com", "cc2@example.com"],
+      });
 
-        const html = composer.composeHtmlReply(originalEmail, "Reply");
-        expect(html).toContain("Cc:</b> cc1@example.com; cc2@example.com");
+      const html = composer.composeHtmlReply(originalEmail, "Reply");
+      expect(html).toContain("Cc:</b> cc1@example.com; cc2@example.com");
     });
   });
 });
