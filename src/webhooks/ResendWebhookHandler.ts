@@ -99,12 +99,13 @@ export class ResendWebhookHandler {
       const parsedEmail = this.convertToInternalFormat(fullEmail);
 
       // Process email in background if context is available to prevent webhook timeouts/retries
+      const processingStartTime = Date.now();
       const processingPromise = this.emailHandler
         .processEmail(parsedEmail, ctx)
         .then(() => {
           this.logger.info("Email processing completed", {
             emailId: emailEvent.data.email_id,
-            processingTime: Date.now() - startTime,
+            processingTime: Date.now() - processingStartTime,
           });
         })
         .catch((error) => {
