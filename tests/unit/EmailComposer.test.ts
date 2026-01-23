@@ -1,4 +1,3 @@
-
 import { describe, expect, it } from "vitest";
 import { EmailComposer } from "../../src/email/components/EmailComposer";
 import { createMockParsedEmail } from "../mocks/email";
@@ -55,13 +54,13 @@ describe("EmailComposer", () => {
     });
 
     it("should handle missing body gracefully", () => {
-        const originalMessage = createMockParsedEmail({
-            body: ""
-        });
-        const formatted = composer.formatQuotedContent(originalMessage);
+      const originalMessage = createMockParsedEmail({
+        body: "",
+      });
+      const formatted = composer.formatQuotedContent(originalMessage);
 
-        expect(formatted).toContain("From: ");
-        expect(formatted).not.toContain("Original message body.");
+      expect(formatted).toContain("From: ");
+      expect(formatted).not.toContain("Original message body.");
     });
   });
 });

@@ -14,6 +14,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-10-31",
   "compatibility_flags": ["nodejs_compat"],
+  "placement": {
+    "mode": "smart"
+  },
   "assets": {
     "binding": "ASSETS",
     "directory": "./public",
