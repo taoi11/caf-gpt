@@ -44,6 +44,7 @@ You have access to the following tools to help answer questions:
 4. Send the generated note to the user EXACTLY as returned (but wrapped in your HTML structure)
 
 **If rank is unclear**: Ask the user to clarify the rank before calling the tool
+**Competencies**: Competencies are only optional if the subject of the feedback new is simple.
 
 ## Response Guidelines
 
