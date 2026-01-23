@@ -95,35 +95,17 @@ export class ResendWebhookHandler {
         return new Response("OK", { status: 200 });
       }
 
+      const fullEmail = await this.fetchFullEmail(emailEvent.data.email_id);
+      const parsedEmail = this.convertToInternalFormat(fullEmail);
+
       if (ctx) {
-        ctx.waitUntil(
-          (async () => {
-            try {
-              const fullEmail = await this.fetchFullEmail(emailEvent.data.email_id);
-              const parsedEmail = this.convertToInternalFormat(fullEmail);
-              await this.emailHandler.processEmail(parsedEmail, ctx);
-              this.logger.info("Email processing completed in background", {
-                emailId: emailEvent.data.email_id,
-                from: emailEvent.data.from,
-              });
-            } catch (error) {
-              const { message, stack } = formatError(error);
-              this.logger.error("Background email processing failed", {
-                error: message,
-                stack,
-                emailId: emailEvent.data.email_id,
-              });
-            }
-          })()
-        );
+        ctx.waitUntil(this.emailHandler.processEmail(parsedEmail, ctx));
         this.logger.info("Email processing offloaded to background", {
           emailId: emailEvent.data.email_id,
           from: emailEvent.data.from,
         });
       } else {
         this.logger.warn("ExecutionContext missing, processing synchronously");
-        const fullEmail = await this.fetchFullEmail(emailEvent.data.email_id);
-        const parsedEmail = this.convertToInternalFormat(fullEmail);
         await this.emailHandler.processEmail(parsedEmail, ctx);
       }
 
@@ -135,11 +117,7 @@ export class ResendWebhookHandler {
       });
 
       return new Response(
-        JSON.stringify({
-          received: true,
-          emailId: emailEvent.data.email_id,
-          status: "processing",
-        }),
+        JSON.stringify({ received: true, emailId: fullEmail.id, status: "processing" }),
         {
           status: 200,
           headers: { "Content-Type": "application/json" },

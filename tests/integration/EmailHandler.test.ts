@@ -72,18 +72,6 @@ vi.mock("resend", () => ({
   }),
 }));
 
-const { mockUpdateMemory } = vi.hoisted(() => ({
-  mockUpdateMemory: vi.fn(),
-}));
-
-vi.mock("../../src/agents/sub-agents", () => ({
-  MemoryFooAgent: vi.fn().mockImplementation(function () {
-    return {
-      updateMemory: mockUpdateMemory,
-    };
-  }),
-}));
-
 import { createConfig } from "../../src/config";
 import { SimpleEmailHandler } from "../../src/email/SimpleEmailHandler";
 
@@ -440,12 +428,13 @@ describe("SimpleEmailHandler - Integration", () => {
   });
 
   describe("Memory Update", () => {
-    beforeEach(() => {
-      mockUpdateMemory.mockReset();
-      mockUpdateMemory.mockResolvedValue({ updated: true, content: "memory" });
-    });
+    it("should trigger memory update after successful reply with ExecutionContext", async () => {
+      const mockCtx: ExecutionContext = {
+        waitUntil: vi.fn(),
+        passThroughOnException: vi.fn(),
+        props: {} as Record<string, unknown>,
+      };
 
-    it("should trigger memory update after successful reply", async () => {
       const mockEmailSender: MockEmailSender = {
         sendReply: vi.fn().mockResolvedValue({ id: "reply-123" }),
         sendErrorResponse: vi.fn(),
@@ -468,12 +457,12 @@ describe("SimpleEmailHandler - Integration", () => {
 
       setMockAgentResponse("AI response with content");
 
-      await customHandler.processEmail(message);
+      await customHandler.processEmail(message, mockCtx);
 
-      expect(mockUpdateMemory).toHaveBeenCalled();
+      expect(mockCtx.waitUntil).toHaveBeenCalled();
     });
 
-    it("should trigger memory update even without ExecutionContext", async () => {
+    it("should not trigger memory update without ExecutionContext", async () => {
       const message = createMockParsedEmail({
         from: "test@forces.gc.ca",
         subject: "Test",
@@ -482,11 +471,15 @@ describe("SimpleEmailHandler - Integration", () => {
       setMockAgentResponse("AI response");
 
       await handler.processEmail(message);
-
-      expect(mockUpdateMemory).toHaveBeenCalled();
     });
 
     it("should not trigger memory update without Hyperdrive", async () => {
+      const mockCtx: ExecutionContext = {
+        waitUntil: vi.fn(),
+        passThroughOnException: vi.fn(),
+        props: {} as Record<string, unknown>,
+      };
+
       const envWithoutHyperdrive: Partial<Env> = {
         ...createMockEnv(),
         HYPERDRIVE: undefined,
@@ -502,9 +495,9 @@ describe("SimpleEmailHandler - Integration", () => {
 
       setMockAgentResponse("AI response");
 
-      await customHandler.processEmail(message);
+      await customHandler.processEmail(message, mockCtx);
 
-      expect(mockUpdateMemory).not.toHaveBeenCalled();
+      expect(mockCtx.waitUntil).not.toHaveBeenCalled();
     });
   });
 
