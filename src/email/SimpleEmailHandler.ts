@@ -66,7 +66,7 @@ export class SimpleEmailHandler {
       emailSender || new ResendEmailSender(env.RESEND_API_KEY, config.email.agentFromEmail);
   }
 
-  async processEmail(parsedEmail: ParsedEmailData, _ctx?: ExecutionContext): Promise<void> {
+  async processEmail(parsedEmail: ParsedEmailData, ctx?: ExecutionContext): Promise<void> {
     try {
       this.logger.info("Processing email from sender", { from: parsedEmail.from });
 
@@ -88,7 +88,7 @@ export class SimpleEmailHandler {
       const response = await this.getAIResponse(emailContext, memory);
 
       // 5. Send reply if needed
-      await this.sendReplyIfNeeded(parsedEmail, response, emailUsername, memory, emailContext);
+      await this.sendReplyIfNeeded(parsedEmail, response, ctx, emailUsername, memory, emailContext);
     } catch (error) {
       this.logger.error("Email processing failed", {
         from: parsedEmail.from,
@@ -216,6 +216,7 @@ ${parsedEmail.body}`;
   private async sendReplyIfNeeded(
     parsedEmail: ParsedEmailData,
     response: { shouldRespond: boolean; content?: string },
+    ctx: ExecutionContext | undefined,
     emailUsername: string | null,
     memory: string,
     emailContext: string
@@ -223,37 +224,42 @@ ${parsedEmail.body}`;
     if (response.shouldRespond && response.content?.trim()) {
       await this.sendReplyWithResend(parsedEmail, response.content);
 
-      // Run memory update after successful reply (awaited to ensure completion)
-      if (this.env.HYPERDRIVE && emailUsername) {
-        await this.triggerMemoryUpdate(emailUsername, memory, emailContext, response.content);
+      // Fire-and-forget memory update after successful reply
+      if (ctx && this.env.HYPERDRIVE && emailUsername) {
+        this.triggerMemoryUpdate(ctx, emailUsername, memory, emailContext, response.content);
       }
     }
   }
 
-  // Memory update after successful email reply
-  private async triggerMemoryUpdate(
+  // Fire-and-forget memory update after successful email reply
+  private triggerMemoryUpdate(
+    ctx: ExecutionContext,
     emailUsername: string,
     currentMemory: string,
     emailContext: string,
     agentReply: string
-  ): Promise<void> {
-    try {
-      const memoryAgent = new MemoryFooAgent(this.env, this.config);
-      const result = await memoryAgent.updateMemory(currentMemory, emailContext, agentReply);
+  ): void {
+    ctx.waitUntil(
+      (async () => {
+        try {
+          const memoryAgent = new MemoryFooAgent(this.env, this.config);
+          const result = await memoryAgent.updateMemory(currentMemory, emailContext, agentReply);
 
-      if (result.updated && result.content) {
-        const repo = new MemoryRepository(this.env.HYPERDRIVE);
-        await repo.updateMemory(emailUsername, result.content);
-        this.logger.info("User memory updated successfully", { emailUsername });
-      } else {
-        this.logger.info("User memory unchanged", { emailUsername });
-      }
-    } catch (err) {
-      this.logger.error("Memory update failed", {
-        emailUsername,
-        ...formatError(err),
-      });
-    }
+          if (result.updated && result.content) {
+            const repo = new MemoryRepository(this.env.HYPERDRIVE);
+            await repo.updateMemory(emailUsername, result.content);
+            this.logger.info("User memory updated successfully", { emailUsername });
+          } else {
+            this.logger.info("User memory unchanged", { emailUsername });
+          }
+        } catch (err) {
+          this.logger.error("Memory update failed", {
+            emailUsername,
+            ...formatError(err),
+          });
+        }
+      })()
+    );
   }
 
   // Send reply via Resend with full CC support
