@@ -98,7 +98,30 @@ export class ResendWebhookHandler {
       const fullEmail = await this.fetchFullEmail(emailEvent.data.email_id);
       const parsedEmail = this.convertToInternalFormat(fullEmail);
 
-      await this.emailHandler.processEmail(parsedEmail, ctx);
+      // Process email in background if context is available to prevent webhook timeouts/retries
+      const processingPromise = this.emailHandler
+        .processEmail(parsedEmail, ctx)
+        .then(() => {
+          this.logger.info("Email processing completed", {
+            emailId: emailEvent.data.email_id,
+            processingTime: Date.now() - startTime,
+          });
+        })
+        .catch((error) => {
+          this.logger.error("Email processing failed in background", {
+            emailId: emailEvent.data.email_id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+
+      if (ctx) {
+        ctx.waitUntil(processingPromise);
+        this.logger.info("Email processing offloaded to background", {
+          emailId: emailEvent.data.email_id,
+        });
+      } else {
+        await processingPromise;
+      }
 
       this.logger.info("Webhook processed successfully", {
         emailId: emailEvent.data.email_id,
