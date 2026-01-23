@@ -98,19 +98,31 @@ export class ResendWebhookHandler {
       const fullEmail = await this.fetchFullEmail(emailEvent.data.email_id);
       const parsedEmail = this.convertToInternalFormat(fullEmail);
 
-      await this.emailHandler.processEmail(parsedEmail, ctx);
+      if (ctx) {
+        ctx.waitUntil(this.emailHandler.processEmail(parsedEmail, ctx));
+        this.logger.info("Email processing offloaded to background", {
+          emailId: emailEvent.data.email_id,
+          from: emailEvent.data.from,
+        });
+      } else {
+        this.logger.warn("ExecutionContext missing, processing synchronously");
+        await this.emailHandler.processEmail(parsedEmail, ctx);
+      }
 
-      this.logger.info("Webhook processed successfully", {
+      this.logger.info("Webhook received and validated", {
         emailId: emailEvent.data.email_id,
         from: emailEvent.data.from,
         to: emailEvent.data.to,
         processingTime: Date.now() - startTime,
       });
 
-      return new Response(JSON.stringify({ received: true, emailId: fullEmail.id }), {
-        status: 200,
-        headers: { "Content-Type": "application/json" },
-      });
+      return new Response(
+        JSON.stringify({ received: true, emailId: fullEmail.id, status: "processing" }),
+        {
+          status: 200,
+          headers: { "Content-Type": "application/json" },
+        }
+      );
     } catch (error) {
       const { message, stack } = formatError(error);
       this.logger.error("Webhook processing failed", {

@@ -188,6 +188,25 @@ describe("ResendEmailSender", () => {
         "Network error"
       );
     });
+
+    it("should treat idempotency conflict as success", async () => {
+      mockSend.mockResolvedValueOnce({
+        data: null,
+        error: {
+          message:
+            "This idempotency key has been used with this HTTP method and endpoint within the last 24 hours, but the request body was modified and doesn't match the original request.",
+        },
+      });
+
+      const originalEmail = createMockParsedEmail({
+        from: "user@forces.gc.ca",
+        messageId: "<original@forces.gc.ca>",
+      });
+
+      const result = await sender.sendReply(originalEmail, "Response", {}, false);
+
+      expect(result).toEqual({ id: "idempotent-success-<original@forces.gc.ca>" });
+    });
   });
 
   describe("sendErrorResponse", () => {
