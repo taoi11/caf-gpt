@@ -72,6 +72,12 @@ vi.mock("resend", () => ({
   }),
 }));
 
+const mockSql = vi.fn().mockResolvedValue([]);
+vi.mock("../../src/storage/database", () => ({
+  getSqlClient: vi.fn(() => mockSql),
+  resetSqlClient: vi.fn(),
+}));
+
 import { createConfig } from "../../src/config";
 import { SimpleEmailHandler } from "../../src/email/SimpleEmailHandler";
 

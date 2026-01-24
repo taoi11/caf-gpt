@@ -9,37 +9,26 @@
  * - updateMemory: Upserts user record and memory content
  */
 
-import postgres from "postgres";
+import type postgres from "postgres";
 import { StorageConnectionError } from "../errors";
 import { formatError, Logger } from "../Logger";
+import { getSqlClient } from "./database";
 
-// Connection pool configuration constants
-const IDLE_TIMEOUT_SECONDS = 20;
-const MAX_LIFETIME_SECONDS = 60 * 30; // 30 minutes
-
-// Database constraint for memory content length (~1000 tokens)
 const MAX_CONTENT_LENGTH = 4000;
 
-// Handles user memory CRUD operations via Hyperdrive connection pooling
 export class MemoryRepository {
   private sql: postgres.Sql;
   private logger: Logger;
 
   constructor(hyperdrive: Hyperdrive) {
     this.logger = Logger.getInstance();
-    // Hyperdrive handles connection pooling - just create client
-    this.sql = postgres(hyperdrive.connectionString, {
-      idle_timeout: IDLE_TIMEOUT_SECONDS,
-      max_lifetime: MAX_LIFETIME_SECONDS,
-    });
+    this.sql = getSqlClient(hyperdrive);
   }
 
-  // Retrieves memory content for a user by email username
   async getUserMemory(emailUsername: string): Promise<string> {
     try {
       this.logger.info("Fetching user memory", { emailUsername });
 
-      // postgres library returns an array; destructure first row (or undefined if empty)
       const [row] = await this.sql`
         SELECT m.content 
         FROM memory m
@@ -64,10 +53,8 @@ export class MemoryRepository {
     }
   }
 
-  // Upserts user record and memory content
   async updateMemory(emailUsername: string, newContent: string): Promise<void> {
     try {
-      // Validate content length before database operation
       if (newContent.length > MAX_CONTENT_LENGTH) {
         this.logger.warn("Memory content exceeds max length, truncating", {
           emailUsername,

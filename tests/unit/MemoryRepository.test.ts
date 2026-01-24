@@ -11,13 +11,17 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-// Mock postgres module
-const mockSql = vi.fn();
+const mockSql = vi.fn() as ReturnType<typeof vi.fn>;
 vi.mock("postgres", () => ({
   default: vi.fn(() => mockSql),
 }));
 
-// Import AFTER mocking
+// Must mock database.ts to control the SQL client in tests
+vi.mock("../../src/storage/database", () => ({
+  getSqlClient: vi.fn(() => mockSql),
+  resetSqlClient: vi.fn(),
+}));
+
 import { MemoryRepository } from "../../src/storage/MemoryRepository";
 import { MockHyperdrive } from "../mocks/cloudflare";
 
