@@ -15,7 +15,7 @@
   "compatibility_date": "2025-10-31",
   "compatibility_flags": ["nodejs_compat"],
   "limits": {
-    "cpu_ms": 600000, // default is 30000 (30 seconds)
+    "cpu_ms": 60000, // default is 30000 (30 seconds)
   },
   "placement": {
     "mode": "smart"
