@@ -98,18 +98,13 @@ export class ResendWebhookHandler {
       const fullEmail = await this.fetchFullEmail(emailEvent.data.email_id);
       const parsedEmail = this.convertToInternalFormat(fullEmail);
 
-      if (ctx) {
-        ctx.waitUntil(this.emailHandler.processEmail(parsedEmail, ctx));
-        this.logger.info("Email processing offloaded to background", {
-          emailId: emailEvent.data.email_id,
-          from: emailEvent.data.from,
-        });
-      } else {
-        this.logger.warn("ExecutionContext missing, processing synchronously");
-        await this.emailHandler.processEmail(parsedEmail, ctx);
-      }
+      // Process email synchronously to keep client connection alive.
+      // Using waitUntil() would limit background processing to 30 seconds,
+      // but LLM API calls can exceed that. Synchronous processing allows
+      // unlimited wall-clock time (up to configured cpu_ms limit).
+      await this.emailHandler.processEmail(parsedEmail, ctx);
 
-      this.logger.info("Webhook received and validated", {
+      this.logger.info("Email processing completed", {
         emailId: emailEvent.data.email_id,
         from: emailEvent.data.from,
         to: emailEvent.data.to,
@@ -117,7 +112,7 @@ export class ResendWebhookHandler {
       });
 
       return new Response(
-        JSON.stringify({ received: true, emailId: fullEmail.id, status: "processing" }),
+        JSON.stringify({ received: true, emailId: fullEmail.id, status: "completed" }),
         {
           status: 200,
           headers: { "Content-Type": "application/json" },
