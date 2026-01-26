@@ -14,7 +14,9 @@
   "main": "src/index.ts",
   "compatibility_date": "2025-10-31",
   "compatibility_flags": ["nodejs_compat"],
-  "usage_model": "unbound",
+  "limits": {
+    "cpu_ms": 600000, // default is 30000 (30 seconds)
+  },
   "placement": {
     "mode": "smart"
   },
