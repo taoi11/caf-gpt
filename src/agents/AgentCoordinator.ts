@@ -13,7 +13,7 @@ import { formatError, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { iterationTrackerMiddleware, resetToolCallCount } from "./middleware";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
-import { createFeedbackNoteTool, createResearchTools } from "./tools";
+import { createBatchResearchTool, createFeedbackNoteTool } from "./tools";
 import { createModel } from "./utils/BaseAgent";
 import { PromptManager } from "./utils/PromptManager";
 
@@ -36,7 +36,7 @@ export class AgentCoordinator {
     const doadFooAgent = new DoadFooAgent(env, config);
     const qroFooAgent = new QroFooAgent(env, config);
 
-    const researchTools = createResearchTools(leaveFooAgent, doadFooAgent, qroFooAgent);
+    const batchResearchTool = createBatchResearchTool(leaveFooAgent, doadFooAgent, qroFooAgent);
     const feedbackNoteTool = createFeedbackNoteTool(paceFooAgent);
 
     const model = await createModel(
@@ -47,7 +47,7 @@ export class AgentCoordinator {
 
     const agent = createAgent({
       model,
-      tools: [...researchTools, feedbackNoteTool],
+      tools: [batchResearchTool, feedbackNoteTool],
       middleware: [iterationTrackerMiddleware],
     });
 
