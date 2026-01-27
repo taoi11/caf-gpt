@@ -9,7 +9,6 @@
 
 import { tool } from "@langchain/core/tools";
 import { z } from "zod";
-import type { ResearchRequest } from "../../types";
 import type { DoadFooAgent, LeaveFooAgent, QroFooAgent } from "../sub-agents";
 
 // Schema for batch research tool
@@ -18,11 +17,6 @@ const batchResearchSchema = z.object({
   doad_queries: z.array(z.string()).max(3).optional().describe("DOAD policy questions (max 3)"),
   qro_queries: z.array(z.string()).max(3).optional().describe("QR&O policy questions (max 3)"),
 });
-
-// Agent interface for research capability
-interface ResearchAgent {
-  research: (req: ResearchRequest) => Promise<string>;
-}
 
 // Creates batch research tool from sub-agent instances
 export function createBatchResearchTool(

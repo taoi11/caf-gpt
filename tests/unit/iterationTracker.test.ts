@@ -235,24 +235,24 @@ describe("iterationTrackerMiddleware", () => {
       expect(result).toEqual({ result: "batch research results" });
 
       // Should still have 2 more calls available
-      const result2 = await callWrapToolCall(
+      await callWrapToolCall(
         { toolCall: { id: "call-2", name: "batch_research", args: {} } },
         mockHandler
       );
       expect(mockHandler).toHaveBeenCalledTimes(2);
 
-      const result3 = await callWrapToolCall(
+      await callWrapToolCall(
         { toolCall: { id: "call-3", name: "generate_feedback_note", args: {} } },
         mockHandler
       );
       expect(mockHandler).toHaveBeenCalledTimes(3);
 
       // Fourth call should be blocked
-      const result4 = await callWrapToolCall(
+      const blockedResult = await callWrapToolCall(
         { toolCall: { id: "call-4", name: "batch_research", args: {} } },
         mockHandler
       );
-      expect(result4).toBeInstanceOf(ToolMessage);
+      expect(blockedResult).toBeInstanceOf(ToolMessage);
       expect(mockHandler).toHaveBeenCalledTimes(3);
     });
   });
