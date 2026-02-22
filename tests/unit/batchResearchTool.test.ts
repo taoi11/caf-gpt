@@ -9,7 +9,8 @@
  * - Parallel execution within agent
  * - Sequential agent execution
  * - Max 3 queries per agent
- * - Empty input handling
+ * - Empty input rejection via schema validation
+ * - Empty array rejection via schema validation
  * - Error handling from sub-agent
  */
 
@@ -144,19 +145,30 @@ describe("batchResearchTool", () => {
     ]);
   });
 
-  it("should handle empty input", async () => {
+  it("should reject empty input via schema validation", async () => {
     const tool = createBatchResearchTool(
       mockLeaveAgent as unknown as LeaveFooAgent,
       mockDoadAgent as unknown as DoadFooAgent,
       mockQroAgent as unknown as QroFooAgent
     );
 
-    const result = await tool.invoke({});
+    await expect(tool.invoke({})).rejects.toThrow();
 
     expect(mockLeaveAgent.research).not.toHaveBeenCalled();
     expect(mockDoadAgent.research).not.toHaveBeenCalled();
     expect(mockQroAgent.research).not.toHaveBeenCalled();
-    expect(result).toBe("No research queries provided.");
+  });
+
+  it("should reject empty arrays via schema validation", async () => {
+    const tool = createBatchResearchTool(
+      mockLeaveAgent as unknown as LeaveFooAgent,
+      mockDoadAgent as unknown as DoadFooAgent,
+      mockQroAgent as unknown as QroFooAgent
+    );
+
+    await expect(tool.invoke({ leave_queries: [] })).rejects.toThrow();
+
+    expect(mockLeaveAgent.research).not.toHaveBeenCalled();
   });
 
   it("should handle agent errors gracefully", async () => {
