@@ -11,12 +11,35 @@ import { tool } from "@langchain/core/tools";
 import { z } from "zod";
 import type { DoadFooAgent, LeaveFooAgent, QroFooAgent } from "../sub-agents";
 
-// Schema for batch research tool
-const batchResearchSchema = z.object({
-  leave_queries: z.array(z.string()).max(3).optional().describe("Leave policy questions (max 3)"),
-  doad_queries: z.array(z.string()).max(3).optional().describe("DOAD policy questions (max 3)"),
-  qro_queries: z.array(z.string()).max(3).optional().describe("QR&O policy questions (max 3)"),
-});
+// Schema for batch research tool - at least one array must be provided with at least one query
+const batchResearchSchema = z
+  .object({
+    leave_queries: z
+      .array(z.string())
+      .min(1)
+      .max(3)
+      .optional()
+      .describe("Leave policy questions (max 3)"),
+    doad_queries: z
+      .array(z.string())
+      .min(1)
+      .max(3)
+      .optional()
+      .describe("DOAD policy questions (max 3)"),
+    qro_queries: z
+      .array(z.string())
+      .min(1)
+      .max(3)
+      .optional()
+      .describe("QR&O policy questions (max 3)"),
+  })
+  .refine(
+    (data) =>
+      (data.leave_queries?.length ?? 0) > 0 ||
+      (data.doad_queries?.length ?? 0) > 0 ||
+      (data.qro_queries?.length ?? 0) > 0,
+    { message: "At least one query array with at least one query must be provided" }
+  );
 
 // Creates batch research tool from sub-agent instances
 export function createBatchResearchTool(
