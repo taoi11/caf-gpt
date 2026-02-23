@@ -210,4 +210,50 @@ describe("iterationTrackerMiddleware", () => {
       expect(message).toContain("compose your final response");
     });
   });
+
+  describe("Batch Research Behavior", () => {
+    it("should count batch_research as single tool call regardless of internal queries", async () => {
+      const mockHandler = vi.fn().mockResolvedValue({ result: "batch research results" });
+
+      // Simulate a batch_research call with multiple internal queries
+      const batchRequest: ToolCallRequest = {
+        toolCall: {
+          id: "batch-1",
+          name: "batch_research",
+          args: {
+            leave_queries: ["query1", "query2", "query3"],
+            doad_queries: ["query4"],
+            qro_queries: ["query5", "query6"],
+          },
+        },
+      };
+
+      const result = await callWrapToolCall(batchRequest, mockHandler);
+
+      // Should count as 1 tool call, not 6 (the number of queries)
+      expect(mockHandler).toHaveBeenCalledTimes(1);
+      expect(result).toEqual({ result: "batch research results" });
+
+      // Should still have 2 more calls available
+      await callWrapToolCall(
+        { toolCall: { id: "call-2", name: "batch_research", args: {} } },
+        mockHandler
+      );
+      expect(mockHandler).toHaveBeenCalledTimes(2);
+
+      await callWrapToolCall(
+        { toolCall: { id: "call-3", name: "generate_feedback_note", args: {} } },
+        mockHandler
+      );
+      expect(mockHandler).toHaveBeenCalledTimes(3);
+
+      // Fourth call should be blocked
+      const blockedResult = await callWrapToolCall(
+        { toolCall: { id: "call-4", name: "batch_research", args: {} } },
+        mockHandler
+      );
+      expect(blockedResult).toBeInstanceOf(ToolMessage);
+      expect(mockHandler).toHaveBeenCalledTimes(3);
+    });
+  });
 });

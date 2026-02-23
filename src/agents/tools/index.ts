@@ -1,2 +1,2 @@
 export { createFeedbackNoteTool } from "./feedbackNoteTool";
-export { createResearchTools } from "./researchTools";
+export { createBatchResearchTool } from "./researchTools";
