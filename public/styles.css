@@ -9,6 +9,7 @@
   --accent: #4b5320; /* olive drab */
   --border: #1a1a1a;
   --code-bg: #f0f0f0;
+  --notice-bg: #fff5d6;
   --max-width: 700px;
 }
 
@@ -37,6 +38,14 @@ header {
   margin-bottom: 2rem;
   border-bottom: 3px solid var(--border);
   padding-bottom: 1rem;
+}
+
+.notice {
+  margin-top: 1rem;
+  background: var(--notice-bg);
+  border: 2px solid var(--border);
+  padding: 0.75rem 1rem;
+  font-size: 0.875rem;
 }
 
 h1 {
