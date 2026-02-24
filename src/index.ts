@@ -1,21 +1,21 @@
 /**
  * src/index.ts
  *
- * Entry point for Cloudflare Worker with Resend webhook handling
+ * Entry point for Cloudflare Worker with HTTP and Email Worker handlers
  *
  * Top-level functions:
- * - fetch: HTTP handler for Resend webhooks and health checks
+ * - fetch: HTTP handler for health checks and static assets
+ * - email: Email Worker handler for inbound email processing
  * - default: Default export for Cloudflare Worker
  */
 
 import { createConfig } from "./config";
+import { CloudflareEmailWorkerHandler } from "./email/CloudflareEmailWorkerHandler";
 import { formatError, Logger } from "./Logger";
-import { ResendWebhookHandler } from "./webhooks/ResendWebhookHandler";
 
-async function fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+async function fetch(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
   const logger = Logger.getInstance();
-  const config = createConfig(env);
   const url = new URL(request.url);
 
   logger.info("Request received", {
@@ -36,17 +36,6 @@ async function fetch(request: Request, env: Env, ctx: ExecutionContext): Promise
     // Prevent 404 for favicon requests
     if (url.pathname === "/favicon.ico") {
       return new Response(null, { status: 204 });
-    }
-
-    if (url.pathname === config.email.webhookPath && request.method === "POST") {
-      const webhookHandler = new ResendWebhookHandler(
-        env,
-        env.RESEND_API_KEY,
-        env.RESEND_WEBHOOK_SECRET,
-        config
-      );
-
-      return await webhookHandler.handleWebhook(request, ctx);
     }
 
     return env.ASSETS.fetch(request);
@@ -71,6 +60,31 @@ async function fetch(request: Request, env: Env, ctx: ExecutionContext): Promise
   }
 }
 
+async function email(
+  message: ForwardableEmailMessage,
+  env: Env,
+  ctx: ExecutionContext
+): Promise<void> {
+  const logger = Logger.getInstance();
+  const config = createConfig(env);
+  const emailHandler = new CloudflareEmailWorkerHandler(env, config);
+
+  try {
+    await emailHandler.handleEmail(message, ctx);
+  } catch (error) {
+    const { message: errorMessage, stack } = formatError(error);
+
+    logger.error(`Email processing failed: ${errorMessage}`, {
+      stack,
+      from: message.from,
+      to: message.to,
+    });
+
+    throw error;
+  }
+}
+
 export default {
   fetch,
+  email,
 };

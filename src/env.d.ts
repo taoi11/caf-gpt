@@ -13,8 +13,6 @@
 declare module "cloudflare:workers" {
   interface Env extends CloudflareBindings {
     OPENROUTER_TOKEN: string;
-    RESEND_API_KEY: string;
-    RESEND_WEBHOOK_SECRET: string;
     AUTHORIZED_SENDERS: string;
     CF_AIG_AUTH: string;
     HYPERDRIVE: Hyperdrive;
@@ -25,8 +23,6 @@ declare module "cloudflare:workers" {
 declare global {
   interface Env extends CloudflareBindings {
     OPENROUTER_TOKEN: string;
-    RESEND_API_KEY: string;
-    RESEND_WEBHOOK_SECRET: string;
     AUTHORIZED_SENDERS: string;
     CF_AIG_AUTH: string;
     HYPERDRIVE: Hyperdrive;

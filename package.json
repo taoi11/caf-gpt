@@ -16,8 +16,8 @@
     "@langchain/core": "^1.1.8",
     "@langchain/openai": "^1.2.0",
     "langchain": "^1.2.3",
+    "postal-mime": "^2.4.4",
     "postgres": "^3.4.5",
-    "resend": "^6.6.0",
     "zod": "^4.2.1"
   },
   "devDependencies": {
