@@ -97,8 +97,10 @@ ${memory}
 <div class="MsoNormal">
 <br><br>
 CAF-GPT<br>
-<a href="https://github.com/taoi11/caf-gpt">Source Code</a><br>
-How to use CAF-GPT: <a href="https://caf-gpt.com">Documentation</a>
+Source Code:<br>
+<pre><code>https://github.com/taoi11/caf-gpt</code></pre>
+How to use CAF-GPT:<br>
+<pre><code>https://caf-gpt.com</code></pre>
 </div>`;
       const finalContent = content ? content + signature : "";
 
