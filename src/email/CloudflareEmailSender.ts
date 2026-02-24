@@ -95,10 +95,12 @@ function buildReplyMime(
   textBody: string,
   threadingHeaders: ThreadingHeaders
 ): string {
+  const messageId = createMessageId(fromAddress);
   const headers = [
     `From: CAF-GPT <${fromAddress}>`,
     `To: <${toAddress}>`,
     `Subject: ${subject}`,
+    `Message-ID: ${messageId}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8",
   ];
@@ -116,13 +118,22 @@ function buildReplyMime(
 
 /** Builds RFC 822 plain-text MIME for error responses. */
 function buildErrorMime(fromAddress: string, toAddress: string, textBody: string): string {
+  const messageId = createMessageId(fromAddress);
   return [
     `From: CAF-GPT <${fromAddress}>`,
     `To: <${toAddress}>`,
     "Subject: Error Processing Email",
+    `Message-ID: ${messageId}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8",
     "",
     textBody,
   ].join("\r\n");
+}
+
+// Builds a Message-ID value for outgoing emails.
+function createMessageId(fromAddress: string): string {
+  const domain = fromAddress.split("@")[1] || "caf-gpt.com";
+  const unique = `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 10)}`;
+  return `<${unique}@${domain}>`;
 }
