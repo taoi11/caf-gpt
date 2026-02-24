@@ -11,7 +11,7 @@ export class HtmlEmailComposer {
    * Composes a full HTML reply email.
    *
    * @param originalEmail The original email being replied to.
-   * @param newContent The plain text content of the reply (from LLM).
+   * @param newContent The HTML content of the reply (from LLM).
    * @returns The complete HTML string for the email body.
    */
   composeHtmlReply(originalEmail: ParsedEmailData, newContent: string): string {

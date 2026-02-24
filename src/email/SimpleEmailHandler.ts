@@ -30,7 +30,7 @@ import {
 import { formatError, Logger } from "../Logger";
 import { MemoryRepository } from "../storage/MemoryRepository";
 import { CloudflareEmailSender } from "./CloudflareEmailSender";
-import { EmailComposer, EmailThreadManager } from "./components";
+import { EmailComposer, EmailThreadManager, HtmlEmailComposer } from "./components";
 import type { ParsedEmailData } from "./types";
 import { normalizeEmailAddress } from "./utils/EmailNormalizer";
 import { validateEmailContent, validateRecipients } from "./utils/EmailValidator";
@@ -41,6 +41,7 @@ const agentCache = new Map<string, AgentCoordinator>();
 export class SimpleEmailHandler {
   private readonly emailThreadManager: EmailThreadManager;
   private readonly emailComposer: EmailComposer;
+  private readonly htmlEmailComposer: HtmlEmailComposer;
   private readonly emailSender: CloudflareEmailSender;
   private readonly config: AppConfig;
   private readonly logger: Logger;
@@ -50,7 +51,8 @@ export class SimpleEmailHandler {
     config: AppConfig,
     emailThreadManager?: EmailThreadManager,
     emailComposer?: EmailComposer,
-    emailSender?: CloudflareEmailSender
+    emailSender?: CloudflareEmailSender,
+    htmlEmailComposer?: HtmlEmailComposer
   ) {
     this.config = config;
     this.logger = Logger.getInstance();
@@ -58,6 +60,7 @@ export class SimpleEmailHandler {
     this.emailThreadManager = emailThreadManager || new EmailThreadManager();
     this.emailComposer = emailComposer || new EmailComposer();
     this.emailSender = emailSender || new CloudflareEmailSender(config.email.agentFromEmail);
+    this.htmlEmailComposer = htmlEmailComposer || new HtmlEmailComposer();
   }
 
   async processEmail(parsedEmail: ParsedEmailData, ctx?: ExecutionContext): Promise<void> {
@@ -277,10 +280,16 @@ ${parsedEmail.body}`;
       }
 
       // 3. Build complete reply content with quoted text
-      const fullContent = content.trim() + quotedContent;
+      const replyText = this.convertHtmlToText(content);
+      const fullTextContent = (replyText ? replyText : content.trim()) + quotedContent;
+      const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());
 
       // 4. Send via Cloudflare Email Workers (reply to sender only)
-      await this.emailSender.sendReply(parsedEmail, fullContent, threadingHeaders);
+      await this.emailSender.sendReply(
+        parsedEmail,
+        { text: fullTextContent, html: htmlContent },
+        threadingHeaders
+      );
 
       this.logger.info("Reply sent successfully via Cloudflare Email Workers", {
         to: parsedEmail.from,
@@ -294,6 +303,43 @@ ${parsedEmail.body}`;
         `Reply sending failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
+  }
+
+  // Convert HTML reply content into a plain-text fallback.
+  private convertHtmlToText(html: string): string {
+    if (!html) {
+      return "";
+    }
+
+    const withLineBreaks = html
+      .replace(/\r\n/g, "\n")
+      .replace(/<\s*br\s*\/?>/gi, "\n")
+      .replace(/<\/\s*p\s*>/gi, "\n")
+      .replace(/<\/\s*div\s*>/gi, "\n")
+      .replace(/<\/\s*li\s*>/gi, "\n")
+      .replace(/<\s*li[^>]*>/gi, "- ")
+      .replace(/<\/\s*h[1-6]\s*>/gi, "\n")
+      .replace(/<\s*a [^>]*href=["']([^"']+)["'][^>]*>(.*?)<\s*\/\s*a\s*>/gi, "$2 ($1)");
+
+    const withoutTags = withLineBreaks.replace(/<[^>]*>/g, "");
+    const decoded = this.decodeHtmlEntities(withoutTags);
+
+    return decoded.replace(/\n{3,}/g, "\n\n").trim();
+  }
+
+  // Decode common HTML entities for plain-text fallbacks.
+  private decodeHtmlEntities(text: string): string {
+    return text
+      .replace(/&nbsp;/gi, " ")
+      .replace(/&amp;/gi, "&")
+      .replace(/&lt;/gi, "<")
+      .replace(/&gt;/gi, ">")
+      .replace(/&quot;/gi, '"')
+      .replace(/&#39;/gi, "'")
+      .replace(/&#x27;/gi, "'")
+      .replace(/&#x2f;/gi, "/")
+      .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)))
+      .replace(/&#x([0-9a-f]+);/gi, (_match, code) => String.fromCharCode(parseInt(code, 16)));
   }
 
   // Handle processing errors with recovery strategies

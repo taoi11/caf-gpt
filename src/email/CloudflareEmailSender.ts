@@ -4,8 +4,8 @@
  * Sends reply emails using Cloudflare Email Workers native reply API
  *
  * Top-level declarations:
- * - CloudflareEmailSender: Sends plain-text replies and error responses through message.reply()
- * - buildReplyMime: Builds RFC 822 plain-text MIME for normal replies
+ * - CloudflareEmailSender: Sends multipart replies and plain-text error responses through message.reply()
+ * - buildReplyMime: Builds RFC 822 multipart MIME for normal replies
  * - buildErrorMime: Builds RFC 822 plain-text MIME for error responses
  */
 
@@ -14,7 +14,7 @@ import { APIValidationError } from "../errors";
 import { formatError, Logger } from "../Logger";
 import type { ParsedEmailData, ThreadingHeaders } from "./types";
 
-/** Sends plain-text replies and error responses through message.reply(). */
+/** Sends multipart replies and plain-text error responses through message.reply(). */
 export class CloudflareEmailSender {
   private readonly logger: Logger;
 
@@ -24,7 +24,7 @@ export class CloudflareEmailSender {
 
   async sendReply(
     originalEmail: ParsedEmailData,
-    content: string,
+    content: { text: string; html: string },
     threadingHeaders: ThreadingHeaders
   ): Promise<{ id: string }> {
     if (!originalEmail.originalMessage) {
@@ -87,22 +87,23 @@ export class CloudflareEmailSender {
   }
 }
 
-/** Builds RFC 822 plain-text MIME for normal replies. */
+/** Builds RFC 822 multipart/alternative MIME for normal replies. */
 function buildReplyMime(
   fromAddress: string,
   toAddress: string,
   subject: string,
-  textBody: string,
+  content: { text: string; html: string },
   threadingHeaders: ThreadingHeaders
 ): string {
   const messageId = createMessageId(fromAddress);
+  const boundary = createMimeBoundary();
   const headers = [
     `From: CAF-GPT <${fromAddress}>`,
     `To: <${toAddress}>`,
     `Subject: ${subject}`,
     `Message-ID: ${messageId}`,
     "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
+    `Content-Type: multipart/alternative; boundary="${boundary}"`,
   ];
 
   if (threadingHeaders.inReplyTo) {
@@ -113,7 +114,25 @@ function buildReplyMime(
     headers.push(`References: ${threadingHeaders.references}`);
   }
 
-  return `${headers.join("\r\n")}\r\n\r\n${textBody}`;
+  const textPart = [
+    `--${boundary}`,
+    "Content-Type: text/plain; charset=UTF-8",
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    content.text,
+  ].join("\r\n");
+
+  const htmlPart = [
+    `--${boundary}`,
+    "Content-Type: text/html; charset=UTF-8",
+    "Content-Transfer-Encoding: 7bit",
+    "",
+    content.html,
+  ].join("\r\n");
+
+  const closingBoundary = `--${boundary}--`;
+
+  return `${headers.join("\r\n")}\r\n\r\n${textPart}\r\n\r\n${htmlPart}\r\n\r\n${closingBoundary}`;
 }
 
 /** Builds RFC 822 plain-text MIME for error responses. */
@@ -136,4 +155,10 @@ function createMessageId(fromAddress: string): string {
   const domain = fromAddress.split("@")[1] || "caf-gpt.com";
   const unique = `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 10)}`;
   return `<${unique}@${domain}>`;
+}
+
+// Builds a unique MIME boundary for multipart messages.
+function createMimeBoundary(): string {
+  const random = Math.random().toString(36).slice(2, 12);
+  return `caf-gpt-${Date.now().toString(36)}-${random}`;
 }

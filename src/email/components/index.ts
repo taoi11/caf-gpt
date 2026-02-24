@@ -6,7 +6,9 @@
  * Top-level exports:
  * - EmailThreadManager: Export EmailThreadManager from EmailThreadManager.ts
  * - EmailComposer: Export EmailComposer from EmailComposer.ts
+ * - HtmlEmailComposer: Export HtmlEmailComposer from HtmlEmailComposer.ts
  */
 
 export { EmailComposer } from "./EmailComposer";
 export { EmailThreadManager } from "./EmailThreadManager";
+export { HtmlEmailComposer } from "./HtmlEmailComposer";

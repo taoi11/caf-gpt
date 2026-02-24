@@ -363,7 +363,10 @@ describe("SimpleEmailHandler - Integration", () => {
 
       expect(mockEmailSender.sendReply).toHaveBeenCalledWith(
         message,
-        expect.stringContaining("AI response"),
+        expect.objectContaining({
+          text: expect.stringContaining("AI response"),
+          html: expect.stringContaining("AI response"),
+        }),
         expect.any(Object)
       );
     });
