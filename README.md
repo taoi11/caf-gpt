@@ -14,7 +14,7 @@ npm run deploy
 
 ## Features
 
-- **Email Processing**: Receives emails via Resend webhooks
+- **Email Processing**: Receives emails via Cloudflare Email Workers
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
 - **Full CC Support**: Replies include all CC recipients (up to 50)
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
@@ -23,7 +23,7 @@ npm run deploy
 ## Architecture
 
 ```
-Email → Resend MX → Webhook → Verify Signature → Authorize Sender
+Email → Cloudflare Email Routing → Email Worker → Authorize Sender
                                                          ↓
                                                  SimpleEmailHandler
                                                          ↓
@@ -33,9 +33,9 @@ Email → Resend MX → Webhook → Verify Signature → Authorize Sender
                                     /        |         \
                       LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
                                                          ↓
-                                                 ResendEmailSender
+                                              CloudflareEmailSender
                                                          ↓
-                                                 Reply with CC support
+                                           Reply to sender (no CC/reply-all)
 ```
 
 ## Setup
@@ -49,9 +49,7 @@ npm install
 ### 2. Configure Secrets
 
 ```bash
-wrangler secret put RESEND_API_KEY
-wrangler secret put RESEND_WEBHOOK_SECRET
-wrangler secret put OPENROUTER_API_KEY
+wrangler secret put OPENROUTER_TOKEN
 wrangler secret put AUTHORIZED_SENDERS
 ```
 
@@ -61,12 +59,10 @@ wrangler secret put AUTHORIZED_SENDERS
 npm run deploy
 ```
 
-### 4. Configure Resend Webhook
+### 4. Configure Cloudflare Email Routing
 
-1. Go to Resend Dashboard → Webhooks
-2. Add webhook URL: `https://caf-gpt-email.<your-subdomain>.workers.dev/webhooks/resend`
-3. Subscribe to: `email.received`
-4. Copy webhook secret and update via `wrangler secret put RESEND_WEBHOOK_SECRET`
+1. In Cloudflare Email Routing, route `agent@caf-gpt.com` and `pacenote@caf-gpt.com` to this Worker.
+2. Ensure the Worker has the Email event handler enabled (already exported in `src/index.ts`).
 
 [For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
 
