@@ -1,16 +1,15 @@
 /**
  * src/email/SimpleEmailHandler.ts
  *
- * Main email processing handler using Resend API
- * Handles replies with full CC support enabled
+ * Main email processing handler using Cloudflare Email Workers reply API
  *
  * Top-level declarations:
- * - SimpleEmailHandler: Primary email handler with Resend integration
+ * - SimpleEmailHandler: Primary email handler with Cloudflare Email Workers integration
  * - processEmail: Processes incoming email with validation, AI response generation, and reply sending
- * - sendReplyWithResend: Sends reply via Resend API with CC support
+ * - sendReply: Sends reply using Cloudflare Email Workers native reply
  * - handleProcessingError: Handles processing errors with recovery strategies
  * - shouldSendErrorResponse: Determines if error response should be sent
- * - sendErrorResponse: Sends error response email to user via Resend
+ * - sendErrorResponse: Sends error response email to user via Cloudflare Email Workers
  * - getErrorResponseMessage: Gets user-friendly error message
  * - triggerMemoryUpdate: Fire-and-forget memory update after successful email reply
  */
@@ -30,9 +29,8 @@ import {
 } from "../errors";
 import { formatError, Logger } from "../Logger";
 import { MemoryRepository } from "../storage/MemoryRepository";
+import { CloudflareEmailSender } from "./CloudflareEmailSender";
 import { EmailComposer, EmailThreadManager } from "./components";
-import { HtmlEmailComposer } from "./components/HtmlEmailComposer";
-import { ResendEmailSender } from "./ResendEmailSender";
 import type { ParsedEmailData } from "./types";
 import { normalizeEmailAddress } from "./utils/EmailNormalizer";
 import { validateEmailContent, validateRecipients } from "./utils/EmailValidator";
@@ -43,8 +41,7 @@ const agentCache = new Map<string, AgentCoordinator>();
 export class SimpleEmailHandler {
   private readonly emailThreadManager: EmailThreadManager;
   private readonly emailComposer: EmailComposer;
-  private readonly htmlEmailComposer: HtmlEmailComposer;
-  private readonly emailSender: ResendEmailSender;
+  private readonly emailSender: CloudflareEmailSender;
   private readonly config: AppConfig;
   private readonly logger: Logger;
 
@@ -53,17 +50,14 @@ export class SimpleEmailHandler {
     config: AppConfig,
     emailThreadManager?: EmailThreadManager,
     emailComposer?: EmailComposer,
-    htmlEmailComposer?: HtmlEmailComposer,
-    emailSender?: ResendEmailSender
+    emailSender?: CloudflareEmailSender
   ) {
     this.config = config;
     this.logger = Logger.getInstance();
 
     this.emailThreadManager = emailThreadManager || new EmailThreadManager();
     this.emailComposer = emailComposer || new EmailComposer();
-    this.htmlEmailComposer = htmlEmailComposer || new HtmlEmailComposer();
-    this.emailSender =
-      emailSender || new ResendEmailSender(env.RESEND_API_KEY, config.email.agentFromEmail);
+    this.emailSender = emailSender || new CloudflareEmailSender(config.email.agentFromEmail);
   }
 
   async processEmail(parsedEmail: ParsedEmailData, ctx?: ExecutionContext): Promise<void> {
@@ -222,7 +216,7 @@ ${parsedEmail.body}`;
     emailContext: string
   ): Promise<void> {
     if (response.shouldRespond && response.content?.trim()) {
-      await this.sendReplyWithResend(parsedEmail, response.content);
+      await this.sendReply(parsedEmail, response.content);
 
       // Fire-and-forget memory update after successful reply
       if (ctx && this.env.HYPERDRIVE && emailUsername) {
@@ -262,8 +256,8 @@ ${parsedEmail.body}`;
     );
   }
 
-  // Send reply via Resend with full CC support
-  private async sendReplyWithResend(parsedEmail: ParsedEmailData, content: string): Promise<void> {
+  // Send reply via Cloudflare Email Workers
+  private async sendReply(parsedEmail: ParsedEmailData, content: string): Promise<void> {
     try {
       // 1. Generate threading headers using EmailThreadManager
       const threadingHeaders = this.emailThreadManager.buildThreadingHeaders(parsedEmail);
@@ -285,24 +279,14 @@ ${parsedEmail.body}`;
       // 3. Build complete reply content with quoted text
       const fullContent = content.trim() + quotedContent;
 
-      // 4. Generate HTML content
-      const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content);
+      // 4. Send via Cloudflare Email Workers (reply to sender only)
+      await this.emailSender.sendReply(parsedEmail, fullContent, threadingHeaders);
 
-      // 5. Send via Resend with full CC support
-      await this.emailSender.sendReply(
-        parsedEmail,
-        fullContent,
-        threadingHeaders,
-        true,
-        htmlContent
-      );
-
-      this.logger.info("Reply sent successfully via Resend", {
+      this.logger.info("Reply sent successfully via Cloudflare Email Workers", {
         to: parsedEmail.from,
-        ccCount: parsedEmail.cc.length,
       });
     } catch (error) {
-      this.logger.error("Failed to send reply via Resend", {
+      this.logger.error("Failed to send reply via Cloudflare Email Workers", {
         to: parsedEmail.from,
         ...formatError(error),
       });
@@ -357,16 +341,18 @@ ${parsedEmail.body}`;
     return !skipConditions.some((condition) => errorMessage.includes(condition));
   }
 
-  // Send error response email to user via Resend
+  // Send error response email to user via Cloudflare Email Workers
   private async sendErrorResponse(error: unknown, parsedEmail: ParsedEmailData): Promise<void> {
     try {
       const errorMessage = this.getErrorResponseMessage(error);
 
-      await this.emailSender.sendErrorResponse(parsedEmail.from, errorMessage);
+      await this.emailSender.sendErrorResponse(parsedEmail, errorMessage);
 
-      this.logger.info("Error reply sent successfully via Resend", { to: parsedEmail.from });
+      this.logger.info("Error reply sent successfully via Cloudflare Email Workers", {
+        to: parsedEmail.from,
+      });
     } catch (replyError) {
-      this.logger.error("Failed to send error reply via Resend", {
+      this.logger.error("Failed to send error reply via Cloudflare Email Workers", {
         error: replyError instanceof Error ? replyError.message : String(replyError),
         from: parsedEmail.from,
       });

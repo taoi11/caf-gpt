@@ -32,7 +32,6 @@ interface AuthorizationConfig {
 interface EmailConfig {
   agentFromEmail: string;
   monitoredAddresses: string[];
-  webhookPath: string;
 }
 
 // Orchestrator model config - handles multi-turn conversations, coordination, tool use
@@ -70,7 +69,6 @@ export function createConfig(env?: Env, overrides?: Partial<AppConfig>): AppConf
     email: overrides?.email ?? {
       agentFromEmail: "agent@caf-gpt.com",
       monitoredAddresses: ["agent@caf-gpt.com", "pacenote@caf-gpt.com"],
-      webhookPath: "/webhooks/resend",
     },
     authorization: overrides?.authorization ?? {
       authorizedDomains,

@@ -59,19 +59,6 @@ vi.mock("@langchain/openai", () => ({
   }),
 }));
 
-vi.mock("resend", () => ({
-  Resend: vi.fn(function MockResend() {
-    return {
-      emails: {
-        send: vi.fn(async () => ({
-          data: { id: "mock-email-id-123" },
-          error: null,
-        })),
-      },
-    };
-  }),
-}));
-
 const mockSql = vi.fn().mockResolvedValue([]);
 vi.mock("../../src/storage/database", () => ({
   getSqlClient: vi.fn(() => mockSql),
@@ -102,6 +89,13 @@ describe("SimpleEmailHandler - Integration", () => {
   let handler: SimpleEmailHandler;
   let mockEnv: ReturnType<typeof createMockEnv>;
 
+  function createDefaultEmailSender(): MockEmailSender {
+    return {
+      sendReply: vi.fn().mockResolvedValue({ id: "reply-123" }),
+      sendErrorResponse: vi.fn().mockResolvedValue({ id: "error-123" }),
+    };
+  }
+
   beforeEach(() => {
     mockAgentInvoke.mockReset();
     mockProcessWithPrimeFoo.mockReset();
@@ -118,7 +112,13 @@ describe("SimpleEmailHandler - Integration", () => {
     mockBucket.seed("paceNote/cpl.md", "# CPL Competencies\n\nLeadership and technical skills");
     mockBucket.seed("paceNote/examples.md", "# Example Notes\n\nExample feedback notes");
 
-    handler = new SimpleEmailHandler(mockEnv, config);
+    handler = new SimpleEmailHandler(
+      mockEnv,
+      config,
+      undefined,
+      undefined,
+      createDefaultEmailSender() as never
+    );
   });
 
   describe("Email Processing Flow", () => {
@@ -320,7 +320,6 @@ describe("SimpleEmailHandler - Integration", () => {
         config,
         undefined,
         undefined,
-        undefined,
         mockEmailSender as never
       );
 
@@ -349,7 +348,6 @@ describe("SimpleEmailHandler - Integration", () => {
         config,
         undefined,
         undefined,
-        undefined,
         mockEmailSender as never
       );
 
@@ -366,9 +364,7 @@ describe("SimpleEmailHandler - Integration", () => {
       expect(mockEmailSender.sendReply).toHaveBeenCalledWith(
         message,
         expect.stringContaining("AI response"),
-        expect.any(Object),
-        true,
-        expect.any(String)
+        expect.any(Object)
       );
     });
 
@@ -390,7 +386,6 @@ describe("SimpleEmailHandler - Integration", () => {
         config,
         undefined,
         mockEmailComposer as never,
-        undefined,
         mockEmailSender as never
       );
 
@@ -416,7 +411,6 @@ describe("SimpleEmailHandler - Integration", () => {
       const customHandler = new SimpleEmailHandler(
         mockEnv,
         config,
-        undefined,
         undefined,
         undefined,
         mockEmailSender as never
@@ -450,7 +444,6 @@ describe("SimpleEmailHandler - Integration", () => {
       const customHandler = new SimpleEmailHandler(
         mockEnv,
         config,
-        undefined,
         undefined,
         undefined,
         mockEmailSender as never
@@ -492,7 +485,13 @@ describe("SimpleEmailHandler - Integration", () => {
       };
 
       const config = createConfig(undefined);
-      const customHandler = new SimpleEmailHandler(envWithoutHyperdrive as Env, config);
+      const customHandler = new SimpleEmailHandler(
+        envWithoutHyperdrive as Env,
+        config,
+        undefined,
+        undefined,
+        createDefaultEmailSender() as never
+      );
 
       const message = createMockParsedEmail({
         from: "test@forces.gc.ca",

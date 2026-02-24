@@ -4,7 +4,7 @@
  * Type definitions for email processing components
  *
  * Top-level declarations:
- * - ParsedEmailData: Parsed email data from Resend webhook
+ * - ParsedEmailData: Parsed email data from Cloudflare Email Worker inbound event
  * - ThreadingHeaders: RFC 5322 threading headers
  */
 
@@ -19,6 +19,7 @@ export interface ParsedEmailData {
   inReplyTo?: string;
   references?: string;
   date?: Date;
+  originalMessage?: ForwardableEmailMessage;
 }
 
 export interface ThreadingHeaders {

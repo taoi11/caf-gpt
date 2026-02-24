@@ -4,14 +4,12 @@
 
 ```
 src/
-├── index.ts                    # Main entry point with HTTP webhook handler
+├── index.ts                    # Main entry point with HTTP + email worker handlers
 ├── types.ts                    # TypeScript interfaces
-├── webhooks/
-│   ├── ResendWebhookHandler.ts # Resend webhook processing and authorization
-│   └── types.ts                # Webhook event and API response types
 ├── email/
 │   ├── SimpleEmailHandler.ts   # Email processing and orchestration
-│   ├── ResendEmailSender.ts    # Email sending via Resend API with CC support
+│   ├── CloudflareEmailSender.ts # Email sending via Cloudflare Email Workers reply API
+│   ├── CloudflareEmailWorkerHandler.ts # Email worker ingress parsing + authorization
 │   ├── components/              # Email processing components
 │   │   ├── EmailComposer.ts     # Email composition with quoted content
 │   │   ├── EmailThreadManager.ts # Threading headers (In-Reply-To, References)
@@ -48,7 +46,7 @@ src/
 
 ## Dependencies
 
-- **resend**: Email service provider with webhook support and CC capabilities
+- **postal-mime**: MIME parser for Cloudflare Email Worker inbound messages
 - **@langchain/openai**: LangChain integration for structured LLM outputs
 - **zod**: Schema validation for structured agent responses
 
@@ -60,7 +58,5 @@ src/
 
 ## Environment Variables (Secrets)
 
-- **RESEND_API_KEY**: Resend API key for sending emails (format: `re_xxxxx`)
-- **RESEND_WEBHOOK_SECRET**: Resend webhook secret for signature verification (format: `whsec_xxxxx`)
-- **OPENROUTER_API_KEY**: OpenRouter API key for LLM access
+- **OPENROUTER_TOKEN**: OpenRouter API key for LLM access
 - **AUTHORIZED_SENDERS**: Comma-separated list of authorized email domains/addresses (e.g., `forces.gc.ca,test@example.com`)
