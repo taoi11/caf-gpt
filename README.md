@@ -16,14 +16,14 @@ npm run deploy
 
 - **Email Processing**: Receives emails via Cloudflare Email Workers
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
-- **Full CC Support**: Replies include all CC recipients (up to 50)
+- **Sender-Only Replies**: Uses Cloudflare Email Workers reply API (no CC/reply-all)
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
 - **Memory Management**: User context stored in Hyperdrive (PostgreSQL)
 
 ## Architecture
 
 ```
-Email → Cloudflare Email Routing → Email Worker → Authorize Sender
+Email → Cloudflare Email Routing → Email Worker → CloudflareEmailWorkerHandler
                                                          ↓
                                                  SimpleEmailHandler
                                                          ↓
