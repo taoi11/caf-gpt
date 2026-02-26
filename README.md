@@ -70,6 +70,12 @@ npm run deploy
 npm run cf-typegen
 ```
 
+Commit `worker-configuration.d.ts` to git so editor tooling and CI use the same bindings. In CI, use:
+
+```txt
+npm run types:check
+```
+
 ## Development Setup
 
 ### Enable Pre-commit Hook

@@ -73,5 +73,22 @@ describe("HtmlEmailComposer", () => {
       const html = composer.composeHtmlReply(originalEmail, "Reply");
       expect(html).toContain("Cc:</b> cc1@example.com; cc2@example.com");
     });
+
+    it("should escape header fields and plain text fallback content", () => {
+      const originalEmail = createMockParsedEmail({
+        from: 'Bad Sender <script>alert("x")</script>',
+        to: ["to@example.com"],
+        subject: 'Subject & "test"',
+        body: "Line <b>bold</b> & more",
+        html: undefined,
+      });
+
+      const html = composer.composeHtmlReply(originalEmail, "Reply");
+
+      expect(html).toContain("Bad Sender &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
+      expect(html).toContain("Subject &amp; &quot;test&quot;");
+      expect(html).toContain("<p class=MsoNormal>Line &lt;b&gt;bold&lt;/b&gt; &amp; more</p>");
+      expect(html).not.toContain("<script>");
+    });
   });
 });

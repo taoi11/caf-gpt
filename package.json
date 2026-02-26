@@ -3,6 +3,7 @@
     "dev": "wrangler dev",
     "deploy": "wrangler deploy --minify",
     "types": "wrangler types --env-interface CloudflareBindings",
+    "types:check": "wrangler types --check --env-interface CloudflareBindings",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "compile": "tsc --noEmit",
     "test": "vitest --run --reporter=dot --silent",
