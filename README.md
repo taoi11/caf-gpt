@@ -1,6 +1,6 @@
 # CAF-GPT
 
-AI-powered email agent for the Canadian Armed Forces, built with TypeScript and deployed on Cloudflare Workers.
+AI-powered email agent for the Canadian Armed Forces, crafted with TypeScript and deployed on Cloudflare Workers.
 
 > **Disclaimer:** CAF-GPT is an **unofficial** hobby project. It is **not** an official Government of Canada / DND / CAF application and is **not** affiliated with or endorsed by the Government of Canada, DND, or the CAF.
 
