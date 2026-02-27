@@ -63,6 +63,7 @@ export class CloudflareEmailWorkerHandler {
     const parser = new PostalMime();
     const parsed = await parser.parse(rawEmail);
 
+    const headers = this.buildHeaderMap(message.headers);
     const messageIdHeader = message.headers.get("message-id") ?? undefined;
     const inReplyToHeader = message.headers.get("in-reply-to") ?? undefined;
     const referencesHeader = message.headers.get("references") ?? undefined;
@@ -78,6 +79,7 @@ export class CloudflareEmailWorkerHandler {
       to: [normalizeEmailAddress(message.to)],
       cc: [],
       subject: parsed.subject ?? message.headers.get("subject") ?? "",
+      headers,
       body: derivedBody,
       html: rawHtmlBody,
       messageId: messageIdHeader,
@@ -86,6 +88,22 @@ export class CloudflareEmailWorkerHandler {
       date: new Date(),
       originalMessage: message,
     };
+  }
+
+  /** Builds a normalized header map with lowercase keys. */
+  private buildHeaderMap(headers: Headers): Record<string, string> {
+    const normalized: Record<string, string> = {};
+
+    headers.forEach((value, key) => {
+      const lowerKey = key.toLowerCase();
+      if (normalized[lowerKey]) {
+        normalized[lowerKey] = `${normalized[lowerKey]}, ${value}`;
+        return;
+      }
+      normalized[lowerKey] = value;
+    });
+
+    return normalized;
   }
 
   /** Checks configured sender allow list. */

@@ -13,6 +13,7 @@ export interface ParsedEmailData {
   to: string[];
   cc: string[];
   subject: string;
+  headers?: Record<string, string>;
   body: string;
   html?: string;
   messageId?: string;

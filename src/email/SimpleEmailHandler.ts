@@ -32,6 +32,7 @@ import { MemoryRepository } from "../storage/MemoryRepository";
 import { CloudflareEmailSender } from "./CloudflareEmailSender";
 import { EmailComposer, EmailThreadManager, HtmlEmailComposer } from "./components";
 import type { ParsedEmailData } from "./types";
+import { detectAutoReply } from "./utils/EmailLoopGuard";
 import { normalizeEmailAddress } from "./utils/EmailNormalizer";
 import { validateEmailContent, validateRecipients } from "./utils/EmailValidator";
 import { htmlToText } from "./utils/HtmlToText";
@@ -70,6 +71,16 @@ export class SimpleEmailHandler {
 
       // 0. Check if email is from our own address (prevent loops)
       if (this.guardAgainstSelfLoop(parsedEmail)) {
+        return;
+      }
+
+      const autoReplyDetection = detectAutoReply(parsedEmail);
+      if (autoReplyDetection.ignore) {
+        this.logger.info("Ignoring auto-reply or bounce email", {
+          from: parsedEmail.from,
+          subject: parsedEmail.subject,
+          reasons: autoReplyDetection.reasons,
+        });
         return;
       }
 
