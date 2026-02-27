@@ -34,6 +34,7 @@ import { EmailComposer, EmailThreadManager, HtmlEmailComposer } from "./componen
 import type { ParsedEmailData } from "./types";
 import { normalizeEmailAddress } from "./utils/EmailNormalizer";
 import { validateEmailContent, validateRecipients } from "./utils/EmailValidator";
+import { htmlToText } from "./utils/HtmlToText";
 
 // Global cache for AgentCoordinator instances to reduce cold starts
 const agentCache = new Map<string, AgentCoordinator>();
@@ -280,7 +281,7 @@ ${parsedEmail.body}`;
       }
 
       // 3. Build complete reply content with quoted text
-      const replyText = this.convertHtmlToText(content);
+      const replyText = htmlToText(content);
       const fullTextContent = (replyText ? replyText : content.trim()) + quotedContent;
       const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());
 
@@ -303,43 +304,6 @@ ${parsedEmail.body}`;
         `Reply sending failed: ${error instanceof Error ? error.message : String(error)}`
       );
     }
-  }
-
-  // Convert HTML reply content into a plain-text fallback.
-  private convertHtmlToText(html: string): string {
-    if (!html) {
-      return "";
-    }
-
-    const withLineBreaks = html
-      .replace(/\r\n/g, "\n")
-      .replace(/<\s*br\s*\/?>/gi, "\n")
-      .replace(/<\/\s*p\s*>/gi, "\n")
-      .replace(/<\/\s*div\s*>/gi, "\n")
-      .replace(/<\/\s*li\s*>/gi, "\n")
-      .replace(/<\s*li[^>]*>/gi, "- ")
-      .replace(/<\/\s*h[1-6]\s*>/gi, "\n")
-      .replace(/<\s*a [^>]*href=["']([^"']+)["'][^>]*>(.*?)<\s*\/\s*a\s*>/gi, "$2 ($1)");
-
-    const withoutTags = withLineBreaks.replace(/<[^>]*>/g, "");
-    const decoded = this.decodeHtmlEntities(withoutTags);
-
-    return decoded.replace(/\n{3,}/g, "\n\n").trim();
-  }
-
-  // Decode common HTML entities for plain-text fallbacks.
-  private decodeHtmlEntities(text: string): string {
-    return text
-      .replace(/&nbsp;/gi, " ")
-      .replace(/&amp;/gi, "&")
-      .replace(/&lt;/gi, "<")
-      .replace(/&gt;/gi, ">")
-      .replace(/&quot;/gi, '"')
-      .replace(/&#39;/gi, "'")
-      .replace(/&#x27;/gi, "'")
-      .replace(/&#x2f;/gi, "/")
-      .replace(/&#(\d+);/g, (_match, code) => String.fromCharCode(Number(code)))
-      .replace(/&#x([0-9a-f]+);/gi, (_match, code) => String.fromCharCode(parseInt(code, 16)));
   }
 
   // Handle processing errors with recovery strategies

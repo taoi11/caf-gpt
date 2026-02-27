@@ -48,6 +48,7 @@ describe("EmailValidator", () => {
       to: ["recipient@forces.gc.ca"],
       subject: "Test Subject",
       body: "Test email body content.",
+      html: undefined,
       messageId: "<test-123@forces.gc.ca>",
       date: new Date(),
       cc: [],
@@ -98,12 +99,30 @@ describe("EmailValidator", () => {
       expect(result.errors).toContain("Email body is empty");
     });
 
+    it("should accept HTML-only emails", () => {
+      const email = createValidEmail();
+      email.body = "   ";
+      email.html = "<div><p>Hello</p><p>World</p></div>";
+      const result = validateEmailContent(email);
+      expect(result.isValid).toBe(true);
+      expect(result.errors).toHaveLength(0);
+    });
+
     it("should reject emails exceeding size limit", () => {
       const email = createValidEmail();
       email.body = "A".repeat(1000001);
       const result = validateEmailContent(email);
       expect(result.isValid).toBe(false);
       expect(result.errors).toContain("Email body exceeds size limit");
+    });
+
+    it("should reject emails with oversized HTML body", () => {
+      const email = createValidEmail();
+      email.body = "   ";
+      email.html = "A".repeat(1000001);
+      const result = validateEmailContent(email);
+      expect(result.isValid).toBe(false);
+      expect(result.errors).toContain("Email HTML body exceeds size limit");
     });
 
     it("should warn about suspicious content", () => {

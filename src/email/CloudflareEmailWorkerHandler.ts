@@ -16,6 +16,7 @@ import { Logger } from "../Logger";
 import { SimpleEmailHandler } from "./SimpleEmailHandler";
 import type { ParsedEmailData } from "./types";
 import { normalizeEmailAddress } from "./utils/EmailNormalizer";
+import { htmlToText } from "./utils/HtmlToText";
 
 /** Parses inbound EmailMessage, validates sender/recipient, and triggers processing. */
 export class CloudflareEmailWorkerHandler {
@@ -66,13 +67,19 @@ export class CloudflareEmailWorkerHandler {
     const inReplyToHeader = message.headers.get("in-reply-to") ?? undefined;
     const referencesHeader = message.headers.get("references") ?? undefined;
 
+    const rawTextBody = parsed.text ?? "";
+    const rawHtmlBody = typeof parsed.html === "string" ? parsed.html : undefined;
+
+    const derivedBody =
+      rawTextBody.trim().length > 0 ? rawTextBody : rawHtmlBody ? htmlToText(rawHtmlBody) : "";
+
     return {
       from: normalizeEmailAddress(message.from),
       to: [normalizeEmailAddress(message.to)],
       cc: [],
       subject: parsed.subject ?? message.headers.get("subject") ?? "",
-      body: parsed.text ?? "",
-      html: parsed.html ?? undefined,
+      body: derivedBody,
+      html: rawHtmlBody,
       messageId: messageIdHeader,
       inReplyTo: inReplyToHeader,
       references: referencesHeader,

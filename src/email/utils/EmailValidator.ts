@@ -13,6 +13,8 @@
 import { z } from "zod";
 import type { ParsedEmailData } from "../types";
 
+const MAX_EMAIL_BODY_LENGTH = 1_000_000;
+
 const emailAddressSchema = z
   .string()
   .transform((val) => {
@@ -37,6 +39,9 @@ export function validateEmailContent(parsedEmail: ParsedEmailData): ValidationRe
   const errors: string[] = [];
   const warnings: string[] = [];
 
+  const hasTextBody = !!parsedEmail.body && parsedEmail.body.trim().length > 0;
+  const hasHtmlBody = !!parsedEmail.html && parsedEmail.html.trim().length > 0;
+
   // Basic structure validation
   if (!parsedEmail.from) {
     errors.push("Missing sender address");
@@ -50,15 +55,19 @@ export function validateEmailContent(parsedEmail: ParsedEmailData): ValidationRe
     warnings.push("Subject line is unusually long");
   }
 
-  if (!parsedEmail.body || parsedEmail.body.trim().length === 0) {
+  if (!hasTextBody && !hasHtmlBody) {
     errors.push("Email body is empty");
-  } else if (parsedEmail.body.length > 1000000) {
-    // 1MB limit
+  } else if (parsedEmail.body && parsedEmail.body.length > MAX_EMAIL_BODY_LENGTH) {
+    // 1MB limit (text extracted from inbound email)
     errors.push("Email body exceeds size limit");
+  } else if (parsedEmail.html && parsedEmail.html.length > MAX_EMAIL_BODY_LENGTH) {
+    // 1MB limit for raw inbound HTML
+    errors.push("Email HTML body exceeds size limit");
   }
 
   // Content security validation
-  if (containsSuspiciousContent(parsedEmail.body)) {
+  const combinedContent = `${parsedEmail.body ?? ""}\n${parsedEmail.html ?? ""}`.trim();
+  if (combinedContent.length > 0 && containsSuspiciousContent(combinedContent)) {
     warnings.push("Email contains potentially suspicious content");
   }
 
