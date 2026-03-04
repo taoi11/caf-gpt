@@ -14,7 +14,13 @@
 import { ChatOpenAI } from "@langchain/openai";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
-import { AgentAPIError, AgentTimeoutError, AgentValidationError } from "../../errors";
+import {
+  AgentAPIError,
+  AgentCreditsExhaustedError,
+  AgentTimeoutError,
+  AgentValidationError,
+  isOpenRouterCreditsErrorMessage,
+} from "../../errors";
 import { formatError, Logger } from "../../Logger";
 import { DocumentRetriever } from "../../storage/DocumentRetriever";
 import { PromptManager } from "./PromptManager";
@@ -144,6 +150,10 @@ export abstract class BaseAgent {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
+      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
+        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
+      }
+
       if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
         throw new AgentTimeoutError(`LangChain call timed out: ${errorMessage}`);
       }
@@ -193,6 +203,10 @@ export abstract class BaseAgent {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
+      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
+        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
+      }
+
       if (errorMessage.includes("validation") || errorMessage.includes("schema")) {
         throw new AgentValidationError(
           `LangChain structured output validation failed: ${errorMessage}`
@@ -220,6 +234,10 @@ export abstract class BaseAgent {
       ...context,
       ...formatError(error),
     });
+
+    if (error instanceof AgentCreditsExhaustedError) {
+      throw error;
+    }
 
     if (error instanceof Error) {
       if (error.message.includes("timeout")) {

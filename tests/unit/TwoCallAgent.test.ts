@@ -16,6 +16,7 @@ import { z } from "zod";
 import { TwoCallAgent, type TwoCallAgentConfig } from "../../src/agents/utils/TwoCallAgent";
 import type { AppConfig } from "../../src/config";
 import { createConfig } from "../../src/config";
+import { AgentCreditsExhaustedError } from "../../src/errors";
 import type { ResearchRequest } from "../../src/types";
 import { createMockEnv } from "../mocks";
 import type { MockR2Bucket } from "../mocks/cloudflare";
@@ -217,6 +218,16 @@ describe("TwoCallAgent", () => {
       const result = await agent.research(request);
 
       expect(result).toContain("couldn't identify relevant");
+    });
+
+    it("should throw on credit exhaustion errors", async () => {
+      setMockLLMError("OpenRouter error 402: can only afford 123 tokens with credit balance");
+
+      const request: ResearchRequest = {
+        question: "Test question",
+      };
+
+      await expect(agent.research(request)).rejects.toBeInstanceOf(AgentCreditsExhaustedError);
     });
 
     it("should handle missing selected documents", async () => {

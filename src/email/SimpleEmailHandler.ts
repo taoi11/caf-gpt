@@ -7,7 +7,9 @@
  * - SimpleEmailHandler: Primary email handler with Cloudflare Email Workers integration
  * - processEmail: Processes incoming email with validation, AI response generation, and reply sending
  * - sendReply: Sends reply using Cloudflare Email Workers native reply
+ * - logProcessingFailure: Logs processing errors with consistent context
  * - handleProcessingError: Handles processing errors with recovery strategies
+ * - shouldRethrowProcessingError: Determines if errors should be rethrown after handling
  * - shouldSendErrorResponse: Determines if error response should be sent
  * - sendErrorResponse: Sends error response email to user via Cloudflare Email Workers
  * - getErrorResponseMessage: Gets user-friendly error message
@@ -17,16 +19,7 @@
 import { AgentCoordinator } from "../agents/AgentCoordinator";
 import { MemoryFooAgent } from "../agents/sub-agents";
 import type { AppConfig } from "../config";
-import {
-  AgentError,
-  BaseAppError,
-  EmailCompositionError,
-  EmailError,
-  EmailParsingError,
-  EmailThreadingError,
-  EmailValidationError,
-  StorageError,
-} from "../errors";
+import { BaseAppError, EmailCompositionError, EmailValidationError } from "../errors";
 import { formatError, Logger } from "../Logger";
 import { MemoryRepository } from "../storage/MemoryRepository";
 import { CloudflareEmailSender } from "./CloudflareEmailSender";
@@ -35,6 +28,7 @@ import type { ParsedEmailData } from "./types";
 import { detectAutoReply } from "./utils/EmailLoopGuard";
 import { normalizeEmailAddress } from "./utils/EmailNormalizer";
 import { validateEmailContent, validateRecipients } from "./utils/EmailValidator";
+import { ERROR_RESPONSE_TEMPLATES } from "./utils/ErrorResponseTemplates";
 import { htmlToText } from "./utils/HtmlToText";
 
 // Global cache for AgentCoordinator instances to reduce cold starts
@@ -99,20 +93,39 @@ export class SimpleEmailHandler {
       // 5. Send reply if needed
       await this.sendReplyIfNeeded(parsedEmail, response, ctx, emailUsername, memory, emailContext);
     } catch (error) {
-      this.logger.error("Email processing failed", {
-        from: parsedEmail.from,
-        ...formatError(error),
-      });
+      this.logProcessingFailure(error, parsedEmail);
       await this.handleProcessingError(error, parsedEmail);
 
-      // Re-throw non-recoverable errors
-      if (error instanceof EmailError && !error.recoverable) {
+      if (this.shouldRethrowProcessingError(error)) {
         throw error;
-      } else if (!(error instanceof EmailError)) {
-        throw error; // Re-throw unknown errors
       }
-      // Recoverable errors are logged but not re-thrown
     }
+  }
+
+  // Log processing failures with consistent context
+  private logProcessingFailure(error: unknown, parsedEmail: ParsedEmailData): void {
+    if (error instanceof BaseAppError) {
+      this.logger.error("Email processing failed", {
+        from: parsedEmail.from,
+        code: error.code,
+        recoverable: error.recoverable,
+        ...formatError(error),
+      });
+      return;
+    }
+
+    this.logger.error("Email processing failed", {
+      from: parsedEmail.from,
+      ...formatError(error),
+    });
+  }
+
+  // Decide whether to rethrow errors after handling
+  private shouldRethrowProcessingError(error: unknown): boolean {
+    if (error instanceof BaseAppError) {
+      return !error.recoverable;
+    }
+    return true;
   }
 
   // Check if email is from our own address to prevent loops
@@ -319,18 +332,9 @@ ${parsedEmail.body}`;
 
   // Handle processing errors with recovery strategies
   private async handleProcessingError(error: unknown, parsedEmail: ParsedEmailData): Promise<void> {
-    // Log error using polymorphism - all BaseAppError subclasses handled uniformly
-    if (error instanceof BaseAppError) {
-      this.logger.error(`${error.constructor.name}`, {
-        code: error.code,
-        error: error.message,
-        from: parsedEmail.from,
-      });
-
-      if (!error.recoverable) {
-        this.logger.info(`${error.constructor.name} is not recoverable, skipping error response`);
-        return;
-      }
+    if (error instanceof BaseAppError && !error.recoverable) {
+      this.logger.info(`${error.constructor.name} is not recoverable, skipping error response`);
+      return;
     }
 
     // Determine if we should send an error response
@@ -387,33 +391,9 @@ ${parsedEmail.body}`;
 
   // Get user-friendly error message
   private getErrorResponseMessage(error: unknown): string {
-    if (error instanceof EmailParsingError) {
-      return "Sorry, I had trouble reading your email. Please try sending it again or contact support if the problem persists.";
-    }
-
-    if (error instanceof EmailThreadingError) {
-      return "Sorry, I encountered an issue with email threading. Your message was received but the reply formatting may be affected.";
-    }
-
-    if (error instanceof EmailCompositionError) {
-      return "Sorry, I had trouble composing a response to your email. Please try again or contact support.";
-    }
-
-    if (error instanceof EmailValidationError) {
-      return "Sorry, there was an issue with your email format or content. Please check your email and try again.";
-    }
-
-    // Agent errors
-    if (error instanceof AgentError) {
-      return "Sorry, I encountered an issue processing your request with our AI system. Please try again in a moment.";
-    }
-
-    // Storage errors
-    if (error instanceof StorageError) {
-      return "Sorry, I encountered a temporary issue accessing our systems. Please try again in a moment.";
-    }
-
-    // Generic error message for unknown errors
-    return "Sorry, I encountered an error processing your email. Please try again.";
+    const template =
+      ERROR_RESPONSE_TEMPLATES.find((entry) => entry.match(error)) ??
+      ERROR_RESPONSE_TEMPLATES[ERROR_RESPONSE_TEMPLATES.length - 1];
+    return template.lines.join("\n");
   }
 }

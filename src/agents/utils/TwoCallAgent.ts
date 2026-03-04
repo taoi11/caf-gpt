@@ -10,6 +10,7 @@
 
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
+import { AgentCreditsExhaustedError } from "../../errors";
 import { formatError } from "../../Logger";
 import type { ResearchRequest } from "../../types";
 import { BaseAgent } from "./BaseAgent";
@@ -134,6 +135,9 @@ export abstract class TwoCallAgent<TSelector> extends BaseAgent {
 
       return this.extractFilesFromResponse(response);
     } catch (error) {
+      if (error instanceof AgentCreditsExhaustedError) {
+        throw error;
+      }
       this.logger.error(`${this.agentConfig.policyType} file selection failed`, formatError(error));
       return [];
     }
