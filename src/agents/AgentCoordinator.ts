@@ -43,7 +43,8 @@ export class AgentCoordinator {
     const model = await createModel(
       env,
       config.llm.models.primeFoo.model,
-      config.llm.models.primeFoo.temperature
+      config.llm.models.primeFoo.temperature,
+      config.llm.maxTokens
     );
 
     const agent = createAgent({

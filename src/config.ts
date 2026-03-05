@@ -14,6 +14,7 @@ interface LLMModelConfig {
 }
 
 interface LLMConfig {
+  maxTokens: number;
   models: {
     primeFoo: LLMModelConfig;
     leaveFoo: LLMModelConfig;
@@ -46,6 +47,8 @@ const SPECIALIST_CONFIG: LLMModelConfig = {
   temperature: 0.1,
 };
 
+const DEFAULT_MAX_TOKENS = 250000;
+
 // Overall application configuration interface
 export interface AppConfig {
   email: EmailConfig;
@@ -58,12 +61,22 @@ export function createConfig(env?: Env, overrides?: Partial<AppConfig>): AppConf
   // Parse authorized senders from environment variable
   let authorizedDomains = ["forces.gc.ca"];
   let authorizedEmails: string[] = ["luffy@luffy.email"];
+  const llmOverride = overrides?.llm;
 
   if (env?.AUTHORIZED_SENDERS) {
     const senders = env.AUTHORIZED_SENDERS.split(",").map((s: string) => s.trim());
     authorizedDomains = senders.filter((s: string) => !s.includes("@"));
     authorizedEmails = senders.filter((s: string) => s.includes("@"));
   }
+
+  const defaultModels = {
+    primeFoo: ORCHESTRATOR_CONFIG,
+    leaveFoo: SPECIALIST_CONFIG,
+    paceFoo: SPECIALIST_CONFIG,
+    doadFoo: SPECIALIST_CONFIG,
+    qroFoo: SPECIALIST_CONFIG,
+    memoryFoo: SPECIALIST_CONFIG,
+  };
 
   return {
     email: overrides?.email ?? {
@@ -74,15 +87,9 @@ export function createConfig(env?: Env, overrides?: Partial<AppConfig>): AppConf
       authorizedDomains,
       authorizedEmails,
     },
-    llm: overrides?.llm ?? {
-      models: {
-        primeFoo: ORCHESTRATOR_CONFIG,
-        leaveFoo: SPECIALIST_CONFIG,
-        paceFoo: SPECIALIST_CONFIG,
-        doadFoo: SPECIALIST_CONFIG,
-        qroFoo: SPECIALIST_CONFIG,
-        memoryFoo: SPECIALIST_CONFIG,
-      },
+    llm: {
+      maxTokens: llmOverride?.maxTokens ?? DEFAULT_MAX_TOKENS,
+      models: llmOverride?.models ?? defaultModels,
     },
   };
 }
