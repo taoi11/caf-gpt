@@ -14,7 +14,13 @@
 import { ChatOpenAI } from "@langchain/openai";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
-import { AgentAPIError, AgentTimeoutError, AgentValidationError } from "../../errors";
+import {
+  AgentAPIError,
+  AgentCreditsExhaustedError,
+  AgentTimeoutError,
+  AgentValidationError,
+  isOpenRouterCreditsErrorMessage,
+} from "../../errors";
 import { formatError, Logger } from "../../Logger";
 import { DocumentRetriever } from "../../storage/DocumentRetriever";
 import { PromptManager } from "./PromptManager";
@@ -53,7 +59,8 @@ interface LLMCallParams {
 export async function createModel(
   env: Env,
   model: string,
-  temperature: number
+  temperature: number,
+  maxTokens?: number
 ): Promise<ChatOpenAI> {
   const gatewayUrl = await getGatewayUrl(env);
   const baseURL = gatewayUrl ?? "https://openrouter.ai/api/v1";
@@ -74,6 +81,7 @@ export async function createModel(
     apiKey: env.OPENROUTER_TOKEN,
     configuration: { baseURL, defaultHeaders },
     maxRetries: 2,
+    maxTokens,
     timeout: 60000,
   });
 }
@@ -97,12 +105,16 @@ export abstract class BaseAgent {
   }
 
   // Get cached ChatOpenAI model instance
-  private async getCachedModel(model: string, temperature: number): Promise<ChatOpenAI> {
-    const cacheKey = `${model}-${temperature}`;
+  private async getCachedModel(
+    model: string,
+    temperature: number,
+    maxTokens?: number
+  ): Promise<ChatOpenAI> {
+    const cacheKey = `${model}-${temperature}-${maxTokens ?? "default"}`;
     let cached = this.modelCache.get(cacheKey);
 
     if (!cached) {
-      cached = await createModel(this.env, model, temperature);
+      cached = await createModel(this.env, model, temperature, maxTokens);
       this.modelCache.set(cacheKey, cached);
       this.logger.debug("Created and cached new ChatOpenAI model", { model, temperature });
     }
@@ -121,7 +133,11 @@ export abstract class BaseAgent {
       const template = await this.promptManager.getTemplate(params.promptName);
       const messages = await template.invoke(params.variables);
 
-      const chat = await this.getCachedModel(params.model, params.temperature);
+      const chat = await this.getCachedModel(
+        params.model,
+        params.temperature,
+        this.config.llm.maxTokens
+      );
       const response = await chat.invoke(messages);
 
       if (!response.content || String(response.content).trim() === "") {
@@ -143,6 +159,10 @@ export abstract class BaseAgent {
       if (error instanceof AgentValidationError) throw error;
 
       const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
+        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
+      }
 
       if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
         throw new AgentTimeoutError(`LangChain call timed out: ${errorMessage}`);
@@ -168,7 +188,11 @@ export abstract class BaseAgent {
       const template = await this.promptManager.getTemplate(params.promptName);
       const messages = await template.invoke(params.variables);
 
-      const chat = await this.getCachedModel(params.model, params.temperature);
+      const chat = await this.getCachedModel(
+        params.model,
+        params.temperature,
+        this.config.llm.maxTokens
+      );
       const structuredChat = chat.withStructuredOutput(schema, {
         method: "jsonSchema",
         strict: true,
@@ -192,6 +216,10 @@ export abstract class BaseAgent {
       });
 
       const errorMessage = error instanceof Error ? error.message : String(error);
+
+      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
+        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
+      }
 
       if (errorMessage.includes("validation") || errorMessage.includes("schema")) {
         throw new AgentValidationError(
@@ -220,6 +248,10 @@ export abstract class BaseAgent {
       ...context,
       ...formatError(error),
     });
+
+    if (error instanceof AgentCreditsExhaustedError) {
+      throw error;
+    }
 
     if (error instanceof Error) {
       if (error.message.includes("timeout")) {

@@ -27,7 +27,6 @@ lerna-debug.log*
 .DS_Store
 
 # generated files
-worker-configuration.d.ts
 
 .dev.vars*
 !.dev.vars.example

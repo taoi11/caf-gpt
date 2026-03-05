@@ -1,6 +1,6 @@
 # CAF-GPT
 
-AI-powered email agent for the Canadian Armed Forces, built with TypeScript and deployed on Cloudflare Workers.
+AI-powered email agent for the Canadian Armed Forces, crafted with TypeScript and deployed on Cloudflare Workers.
 
 > **Disclaimer:** CAF-GPT is an **unofficial** hobby project. It is **not** an official Government of Canada / DND / CAF application and is **not** affiliated with or endorsed by the Government of Canada, DND, or the CAF.
 
@@ -16,14 +16,14 @@ npm run deploy
 
 - **Email Processing**: Receives emails via Cloudflare Email Workers
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
-- **Full CC Support**: Replies include all CC recipients (up to 50)
+- **Sender-Only Replies**: Uses Cloudflare Email Workers reply API (no CC/reply-all)
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
 - **Memory Management**: User context stored in Hyperdrive (PostgreSQL)
 
 ## Architecture
 
 ```
-Email → Cloudflare Email Routing → Email Worker → Authorize Sender
+Email → Cloudflare Email Routing → Email Worker → CloudflareEmailWorkerHandler
                                                          ↓
                                                  SimpleEmailHandler
                                                          ↓
@@ -68,6 +68,12 @@ npm run deploy
 
 ```txt
 npm run cf-typegen
+```
+
+Commit `worker-configuration.d.ts` to git so editor tooling and CI use the same bindings. In CI, use:
+
+```txt
+npm run types:check
 ```
 
 ## Development Setup

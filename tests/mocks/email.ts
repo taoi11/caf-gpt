@@ -15,6 +15,7 @@ export function createMockParsedEmail(overrides?: Partial<ParsedEmailData>): Par
     to: ["cafgpt@test.com"],
     cc: [],
     subject: "Test Subject",
+    headers: {},
     body: "Test email body content.",
     messageId: "<test-123@forces.gc.ca>",
     references: "",

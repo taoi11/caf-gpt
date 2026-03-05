@@ -1,11 +1,17 @@
 /**
  * src/email/components/HtmlEmailComposer.ts
  *
- * HTML Email composition utility using specific Outlook-style templates
+ * HTML email composition utility using Outlook-style templates
+ *
+ * Top-level declarations:
+ * - HtmlEmailComposer: Composes HTML reply emails with reply headers and quoted content
  */
 
 import type { ParsedEmailData } from "../types";
 
+/**
+ * Composes HTML reply emails with Outlook-style formatting.
+ */
 export class HtmlEmailComposer {
   /**
    * Composes a full HTML reply email.
@@ -84,22 +90,24 @@ ${originalBody}
   }
 
   private getReplyHeader(originalEmail: ParsedEmailData): string {
-    const from = originalEmail.from;
-    const sent = originalEmail.date
-      ? originalEmail.date.toLocaleString("en-US", {
-          year: "numeric",
-          month: "long",
-          day: "numeric",
-          hour: "numeric",
-          minute: "numeric",
-          hour12: true,
-        })
-      : "Unknown Date";
-    const to = originalEmail.to.join("; ");
-    const subject = originalEmail.subject;
+    const from = this.escapeHtml(originalEmail.from);
+    const sent = this.escapeHtml(
+      originalEmail.date
+        ? originalEmail.date.toLocaleString("en-US", {
+            year: "numeric",
+            month: "long",
+            day: "numeric",
+            hour: "numeric",
+            minute: "numeric",
+            hour12: true,
+          })
+        : "Unknown Date"
+    );
+    const to = originalEmail.to.map((value) => this.escapeHtml(value)).join("; ");
+    const subject = this.escapeHtml(originalEmail.subject);
     const cc =
       originalEmail.cc && originalEmail.cc.length > 0
-        ? `<br><b>Cc:</b> ${originalEmail.cc.join("; ")}`
+        ? `<br><b>Cc:</b> ${originalEmail.cc.map((value) => this.escapeHtml(value)).join("; ")}`
         : "";
 
     return `<p class=MsoNormal><b><span lang=EN-US style='font-family:"Calibri",sans-serif;mso-ligatures:none;mso-fareast-language:EN-CA'>From:</span></b><span lang=EN-US style='font-family:"Calibri",sans-serif;mso-ligatures:none;mso-fareast-language:EN-CA'> ${from} <br><b>Sent:</b> ${sent}<br><b>To:</b> ${to}${cc}<br><b>Subject:</b> ${subject}<o:p></o:p></span></p>`;
@@ -109,7 +117,16 @@ ${originalBody}
     // Basic fallback if original email had no HTML
     return text
       .split("\n")
-      .map((line) => `<p class=MsoNormal>${line}</p>`)
+      .map((line) => `<p class=MsoNormal>${this.escapeHtml(line)}</p>`)
       .join("");
+  }
+
+  private escapeHtml(text: string): string {
+    return text
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#39;");
   }
 }

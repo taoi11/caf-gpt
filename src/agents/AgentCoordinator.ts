@@ -9,6 +9,7 @@
 
 import { createAgent } from "langchain";
 import type { AppConfig } from "../config";
+import { AgentCreditsExhaustedError, isOpenRouterCreditsErrorMessage } from "../errors";
 import { formatError, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { iterationTrackerMiddleware, resetToolCallCount } from "./middleware";
@@ -42,7 +43,8 @@ export class AgentCoordinator {
     const model = await createModel(
       env,
       config.llm.models.primeFoo.model,
-      config.llm.models.primeFoo.temperature
+      config.llm.models.primeFoo.temperature,
+      config.llm.maxTokens
     );
 
     const agent = createAgent({
@@ -115,6 +117,15 @@ How to use CAF-GPT:<br>
         processingTime: Date.now() - startTime,
         ...formatError(error),
       });
+
+      if (error instanceof AgentCreditsExhaustedError) {
+        throw error;
+      }
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
+        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
+      }
 
       return {
         content:

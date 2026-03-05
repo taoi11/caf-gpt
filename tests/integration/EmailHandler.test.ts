@@ -216,6 +216,16 @@ describe("SimpleEmailHandler - Integration", () => {
       await handler.processEmail(message);
       expect(mockProcessWithPrimeFoo).not.toHaveBeenCalled();
     });
+
+    it("should ignore auto-reply emails", async () => {
+      const message = createMockParsedEmail({
+        headers: { "Auto-Submitted": "auto-replied" },
+        subject: "Out of office reply",
+      });
+
+      await handler.processEmail(message);
+      expect(mockProcessWithPrimeFoo).not.toHaveBeenCalled();
+    });
   });
 
   describe("Email Validation", () => {

@@ -4,7 +4,7 @@ Instrauctions and architecture patterns LLM developers AI agents.
 
 ## Project Overview
 
-CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Resend for inbound email processing via webhooks, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated replies via Resend API with full CC support.
+CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated replies via the Cloudflare Email Workers reply API (sender-only replies).
 
 ## Development Commands
 
@@ -43,15 +43,16 @@ wrangler types --env-interface CloudflareBindings  # Generate TypeScript types
 
 ### Email Routing
 
-Emails are processed through **Resend webhooks** with authorization checks:
+Emails are processed through **Cloudflare Email Workers** with authorization checks:
 
-- Incoming emails trigger `POST /webhooks/resend` handled by `ResendWebhookHandler`
-- Handler verifies Svix webhook signature for security
+- Inbound emails trigger the Worker `email()` handler in `src/index.ts`
+- `CloudflareEmailWorkerHandler` validates authorized senders and monitored recipients
+- MIME content is parsed with `postal-mime` into `ParsedEmailData`
 - Authorized senders (forces.gc.ca domains or specific email addresses) are validated
 - Validated emails are processed by `SimpleEmailHandler.processEmail()`
 - The handler processes **all** validated emails through `AgentCoordinator.processWithPrimeFoo()`
 - Monitored addresses: `agent@caf-gpt.com`, `pacenote@caf-gpt.com`
-- Replies sent via `ResendEmailSender` with **full CC support** (up to 50 recipients)
+- Replies sent via `CloudflareEmailSender` using `message.reply()` (sender-only)
 
 ### Iterative Agent Workflow
 
@@ -169,21 +170,20 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 ### Threading & Concurrency
 
 - `SimpleEmailHandler` handles each email as an independent Cloudflare Worker event
-- No background polling - emails are processed via Resend webhook triggers
+- No background polling - emails are processed via Cloudflare Email Worker events
 - Each email request is processed synchronously without concurrency concerns
 - Failed processing results are logged but don't leave emails "unread" in the traditional sense
 
-### Webhook Flow
+### Email Worker Flow
 
-1. **Email arrives** → Resend MX receives email
-2. **Webhook triggered** → POST to `/webhooks/resend` with event metadata
-3. **Signature verification** → Svix signature validated for security
-4. **Authorization check** → Sender domain/email validated against `AUTHORIZED_SENDERS`
-5. **Recipient check** → Verified against monitored addresses
-6. **Fetch full email** → API call to Resend to retrieve complete email content
-7. **Process email** → `SimpleEmailHandler.processEmail()` with `ParsedEmailData`
-8. **AI processing** → `AgentCoordinator` with memory context
-9. **Send reply** → `ResendEmailSender.sendReply()` with TO + CC recipients
+1. **Email arrives** → Cloudflare Email Routing receives email
+2. **Email event triggered** → Worker `email()` handler runs
+3. **Authorization check** → Sender domain/email validated against `AUTHORIZED_SENDERS`
+4. **Recipient check** → Verified against monitored addresses
+5. **Parse message** → `CloudflareEmailWorkerHandler` parses MIME into `ParsedEmailData`
+6. **Process email** → `SimpleEmailHandler.processEmail()` with `ParsedEmailData`
+7. **AI processing** → `AgentCoordinator` with memory context
+8. **Send reply** → `CloudflareEmailSender.sendReply()` via `message.reply()` (sender-only)
 
 ### Email Threading Headers
 
@@ -195,9 +195,8 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 
 ### Email Replies
 
-- Replies sent via `ResendEmailSender` using Resend API
-- **Full CC support**: All original CC recipients included (up to 50 limit)
-- CC list filters out: self address, original sender, duplicates
+- Replies sent via `CloudflareEmailSender` using Cloudflare Email Workers reply API
+- **Sender-only replies**: current implementation does not CC/reply-all
 - Threading headers preserved: `In-Reply-To`, `References`
 - Quoted content formatted using `EmailComposer.formatQuotedContent()`
 
