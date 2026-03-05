@@ -13,6 +13,7 @@ import { EmailMessage } from "cloudflare:email";
 import { APIValidationError } from "../errors";
 import { formatError, Logger } from "../Logger";
 import type { ParsedEmailData, ThreadingHeaders } from "./types";
+import { normalizeEmailAddress } from "./utils/EmailNormalizer";
 
 /** Sends multipart replies and plain-text error responses through message.reply(). */
 export class CloudflareEmailSender {
@@ -31,13 +32,16 @@ export class CloudflareEmailSender {
       throw new APIValidationError("Cloudflare EmailMessage context missing for reply");
     }
 
+    const replyRecipient = originalEmail.originalMessage.from || originalEmail.from;
+    const headerRecipient = normalizeEmailAddress(replyRecipient) || originalEmail.from;
+
     const subject = originalEmail.subject.startsWith("Re:")
       ? originalEmail.subject
       : `Re: ${originalEmail.subject}`;
 
     const mime = buildReplyMime(
       this.fromAddress,
-      originalEmail.from,
+      headerRecipient,
       subject,
       content,
       threadingHeaders
@@ -45,7 +49,7 @@ export class CloudflareEmailSender {
 
     try {
       await originalEmail.originalMessage.reply(
-        new EmailMessage(this.fromAddress, originalEmail.from, mime)
+        new EmailMessage(this.fromAddress, replyRecipient, mime)
       );
 
       return { id: `cf-reply-${originalEmail.messageId ?? Date.now().toString()}` };
@@ -68,11 +72,13 @@ export class CloudflareEmailSender {
       throw new APIValidationError("Cloudflare EmailMessage context missing for error response");
     }
 
-    const mime = buildErrorMime(this.fromAddress, originalEmail.from, errorMessage);
+    const replyRecipient = originalEmail.originalMessage.from || originalEmail.from;
+    const headerRecipient = normalizeEmailAddress(replyRecipient) || originalEmail.from;
+    const mime = buildErrorMime(this.fromAddress, headerRecipient, errorMessage);
 
     try {
       await originalEmail.originalMessage.reply(
-        new EmailMessage(this.fromAddress, originalEmail.from, mime)
+        new EmailMessage(this.fromAddress, replyRecipient, mime)
       );
       return { id: `cf-error-${originalEmail.messageId ?? Date.now().toString()}` };
     } catch (error) {
