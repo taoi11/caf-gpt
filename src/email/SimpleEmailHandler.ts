@@ -370,8 +370,16 @@ ${parsedEmail.body}`;
   private async sendErrorResponse(error: unknown, parsedEmail: ParsedEmailData): Promise<void> {
     try {
       const errorMessage = this.getErrorResponseMessage(error);
+      const threadingHeaders = this.emailThreadManager.buildThreadingHeaders(parsedEmail);
 
-      await this.emailSender.sendErrorResponse(parsedEmail, errorMessage);
+      if (!threadingHeaders.inReplyTo) {
+        this.logger.warn("Skipping error response because In-Reply-To is missing", {
+          from: parsedEmail.from,
+        });
+        return;
+      }
+
+      await this.emailSender.sendErrorResponse(parsedEmail, errorMessage, threadingHeaders);
 
       this.logger.info("Error reply sent successfully via Cloudflare Email Workers", {
         to: parsedEmail.from,

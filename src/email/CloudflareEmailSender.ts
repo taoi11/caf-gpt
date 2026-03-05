@@ -66,7 +66,8 @@ export class CloudflareEmailSender {
 
   async sendErrorResponse(
     originalEmail: ParsedEmailData,
-    errorMessage: string
+    errorMessage: string,
+    threadingHeaders: ThreadingHeaders
   ): Promise<{ id: string }> {
     if (!originalEmail.originalMessage) {
       throw new APIValidationError("Cloudflare EmailMessage context missing for error response");
@@ -74,7 +75,7 @@ export class CloudflareEmailSender {
 
     const replyRecipient = originalEmail.originalMessage.from || originalEmail.from;
     const headerRecipient = normalizeEmailAddress(replyRecipient) || originalEmail.from;
-    const mime = buildErrorMime(this.fromAddress, headerRecipient, errorMessage);
+    const mime = buildErrorMime(this.fromAddress, headerRecipient, errorMessage, threadingHeaders);
 
     try {
       await originalEmail.originalMessage.reply(
@@ -142,18 +143,31 @@ function buildReplyMime(
 }
 
 /** Builds RFC 822 plain-text MIME for error responses. */
-function buildErrorMime(fromAddress: string, toAddress: string, textBody: string): string {
+function buildErrorMime(
+  fromAddress: string,
+  toAddress: string,
+  textBody: string,
+  threadingHeaders: ThreadingHeaders
+): string {
   const messageId = createMessageId(fromAddress);
-  return [
+  const headers = [
     `From: CAF-GPT <${fromAddress}>`,
     `To: <${toAddress}>`,
     "Subject: Error Processing Email",
     `Message-ID: ${messageId}`,
     "MIME-Version: 1.0",
     "Content-Type: text/plain; charset=UTF-8",
-    "",
-    textBody,
-  ].join("\r\n");
+  ];
+
+  if (threadingHeaders.inReplyTo) {
+    headers.push(`In-Reply-To: ${threadingHeaders.inReplyTo}`);
+  }
+
+  if (threadingHeaders.references) {
+    headers.push(`References: ${threadingHeaders.references}`);
+  }
+
+  return [...headers, "", textBody].join("\r\n");
 }
 
 // Builds a Message-ID value for outgoing emails.
