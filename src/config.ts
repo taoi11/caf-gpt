@@ -43,7 +43,7 @@ const ORCHESTRATOR_CONFIG: LLMModelConfig = {
 
 // Specialist model config - focused tasks: document Q&A, selection, generation
 const SPECIALIST_CONFIG: LLMModelConfig = {
-  model: "google/gemini-3-flash-preview",
+  model: "google/gemini-3.1-flash-lite-preview",
   temperature: 0.1,
 };
 
