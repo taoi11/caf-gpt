@@ -11,6 +11,7 @@
 interface LLMModelConfig {
   model: string;
   temperature: number;
+  reasoning?: LLMReasoningConfig;
 }
 
 interface LLMConfig {
@@ -35,16 +36,29 @@ interface EmailConfig {
   monitoredAddresses: string[];
 }
 
+interface LLMReasoningConfig {
+  enabled?: boolean;
+  effort?: "xhigh" | "high" | "medium" | "low" | "minimal" | "none";
+  max_tokens?: number;
+  exclude?: boolean;
+}
+
+const THINKING_CONFIG: LLMReasoningConfig = {
+  effort: "high",
+};
+
 // Orchestrator model config - handles multi-turn conversations, coordination, tool use
 const ORCHESTRATOR_CONFIG: LLMModelConfig = {
-  model: "google/gemini-3-pro-preview",
+  model: "google/gemini-3-flash-preview",
   temperature: 0.1,
+  reasoning: THINKING_CONFIG,
 };
 
 // Specialist model config - focused tasks: document Q&A, selection, generation
 const SPECIALIST_CONFIG: LLMModelConfig = {
-  model: "google/gemini-3.1-flash-lite-preview",
+  model: "google/gemini-3-flash-preview",
   temperature: 0.1,
+  reasoning: THINKING_CONFIG,
 };
 
 const DEFAULT_MAX_TOKENS = 250000;

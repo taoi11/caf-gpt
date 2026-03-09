@@ -128,6 +128,7 @@ export abstract class TwoCallAgent<TSelector> extends BaseAgent {
           promptName: this.agentConfig.selectorPromptName,
           variables: this.getSelectorVariables(query, indexContent),
           temperature: modelConfig.temperature,
+          reasoning: modelConfig.reasoning,
         },
         this.getSelectorSchema(),
         `${this.agentConfig.category}_selector`
@@ -194,6 +195,7 @@ export abstract class TwoCallAgent<TSelector> extends BaseAgent {
           user_input: query,
         },
         temperature: modelConfig.temperature,
+        reasoning: modelConfig.reasoning,
       });
 
       return response;

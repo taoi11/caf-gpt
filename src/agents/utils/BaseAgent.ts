@@ -28,6 +28,9 @@ import { PromptManager } from "./PromptManager";
 // AI Gateway name configured in Cloudflare dashboard
 const AI_GATEWAY_NAME = "caf-gpt";
 
+type LLMReasoningConfig =
+  AppConfig["llm"]["models"][keyof AppConfig["llm"]["models"]]["reasoning"];
+
 // Module-level gateway URL cache (shared across all agents in same request)
 let gatewayUrlCache: string | undefined;
 let gatewayUrlResolved = false;
@@ -53,6 +56,7 @@ interface LLMCallParams {
   promptName: string;
   variables: Record<string, string>;
   temperature: number;
+  reasoning?: LLMReasoningConfig;
 }
 
 // Create ChatOpenAI model routed through CF AI Gateway
@@ -60,7 +64,8 @@ export async function createModel(
   env: Env,
   model: string,
   temperature: number,
-  maxTokens?: number
+  maxTokens?: number,
+  reasoning?: LLMReasoningConfig
 ): Promise<ChatOpenAI> {
   const gatewayUrl = await getGatewayUrl(env);
   const baseURL = gatewayUrl ?? "https://openrouter.ai/api/v1";
@@ -75,6 +80,14 @@ export async function createModel(
     defaultHeaders["cf-aig-authorization"] = `Bearer ${env.CF_AIG_AUTH}`;
   }
 
+  const modelKwargs = reasoning
+    ? {
+        extra_body: {
+          reasoning,
+        },
+      }
+    : undefined;
+
   return new ChatOpenAI({
     model,
     temperature,
@@ -83,6 +96,7 @@ export async function createModel(
     maxRetries: 2,
     maxTokens,
     timeout: 60000,
+    modelKwargs,
   });
 }
 
@@ -108,13 +122,15 @@ export abstract class BaseAgent {
   private async getCachedModel(
     model: string,
     temperature: number,
-    maxTokens?: number
+    maxTokens?: number,
+    reasoning?: LLMReasoningConfig
   ): Promise<ChatOpenAI> {
-    const cacheKey = `${model}-${temperature}-${maxTokens ?? "default"}`;
+    const reasoningKey = reasoning ? JSON.stringify(reasoning) : "none";
+    const cacheKey = `${model}-${temperature}-${maxTokens ?? "default"}-${reasoningKey}`;
     let cached = this.modelCache.get(cacheKey);
 
     if (!cached) {
-      cached = await createModel(this.env, model, temperature, maxTokens);
+      cached = await createModel(this.env, model, temperature, maxTokens, reasoning);
       this.modelCache.set(cacheKey, cached);
       this.logger.debug("Created and cached new ChatOpenAI model", { model, temperature });
     }
@@ -136,7 +152,8 @@ export abstract class BaseAgent {
       const chat = await this.getCachedModel(
         params.model,
         params.temperature,
-        this.config.llm.maxTokens
+        this.config.llm.maxTokens,
+        params.reasoning
       );
       const response = await chat.invoke(messages);
 
@@ -191,7 +208,8 @@ export abstract class BaseAgent {
       const chat = await this.getCachedModel(
         params.model,
         params.temperature,
-        this.config.llm.maxTokens
+        this.config.llm.maxTokens,
+        params.reasoning
       );
       const structuredChat = chat.withStructuredOutput(schema, {
         method: "jsonSchema",
