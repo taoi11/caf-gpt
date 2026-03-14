@@ -1,38 +1,51 @@
 /**
  * src/agents/middleware/iterationTracker.ts
  *
- * Middleware for tracking tool call iterations in LangChain agents
+ * Middleware-compatible helper for tracking tool call iterations
  *
  * Top-level declarations:
- * - iterationTrackerMiddleware: Middleware that tracks and limits tool calls
+ * - ToolLimitMessage: Message payload used when the tool call limit is exceeded
+ * - iterationTrackerMiddleware: Wrapper exposing wrapToolCall for tool call limiting
+ * - resetToolCallCount: Resets the current tool call counter
  */
 
-import { ToolMessage } from "@langchain/core/messages";
-import { createMiddleware } from "langchain";
 import { Logger } from "../../Logger";
+
+export class ToolLimitMessage {
+  constructor(
+    public content: string,
+    public tool_call_id: string
+  ) {}
+}
+
+interface ToolCallRequest {
+  toolCall: { id?: string };
+}
 
 const logger = Logger.getInstance();
 let toolCallCount = 0;
 
-export const iterationTrackerMiddleware = createMiddleware({
+export const iterationTrackerMiddleware = {
   name: "IterationTracker",
-
-  wrapToolCall: async (request, handler) => {
+  wrapToolCall: async (
+    request: ToolCallRequest,
+    handler: (request: ToolCallRequest) => Promise<unknown>
+  ) => {
     toolCallCount++;
     const maxCalls = 3;
 
     logger.info("Tool call tracked", { toolCallCount, maxCalls });
 
     if (toolCallCount > maxCalls) {
-      return new ToolMessage({
-        content: `Research limit reached (${maxCalls} tool calls maximum). Please compose your final response using the information gathered so far.`,
-        tool_call_id: request.toolCall.id || "unknown",
-      });
+      return new ToolLimitMessage(
+        `Research limit reached (${maxCalls} tool calls maximum). Please compose your final response using the information gathered so far.`,
+        request.toolCall.id || "unknown"
+      );
     }
 
     return handler(request);
   },
-});
+};
 
 export function resetToolCallCount() {
   toolCallCount = 0;

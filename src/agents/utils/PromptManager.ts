@@ -1,30 +1,30 @@
 /**
  * src/agents/utils/PromptManager.ts
  *
- * Prompt manager for loading from static assets with ChatPromptTemplate caching
+ * Prompt manager for loading prompt assets and rendering variable placeholders
  *
  * Top-level declarations:
- * - PromptManager: Manages loading of prompts and caching compiled ChatPromptTemplates
+ * - PromptManager: Manages loading of prompts and caching raw prompt strings
  * - getPrompt: Loads raw prompt content from static assets by name
- * - getTemplate: Returns cached ChatPromptTemplate for system prompts with variables
+ * - renderPrompt: Renders system prompt placeholders and user input payload
  */
 
-import { ChatPromptTemplate } from "@langchain/core/prompts";
 import { formatError, Logger } from "../../Logger";
 
-// Load prompts from static assets and cache compiled templates
+interface RenderedPrompt {
+  system: string;
+  user: string;
+}
+
 export class PromptManager {
   private logger: Logger;
   private promptCache = new Map<string, string>();
-  private templateCache = new Map<string, ChatPromptTemplate>();
 
   constructor(private assets: Fetcher) {
     this.logger = Logger.getInstance();
   }
 
-  // Load raw prompt content from static assets
   async getPrompt(promptName: string): Promise<string> {
-    // Check cache first
     const cached = this.promptCache.get(promptName);
     if (cached) {
       this.logger.debug("Returning cached prompt", { promptName });
@@ -32,7 +32,6 @@ export class PromptManager {
     }
 
     try {
-      // The domain in the URL doesn't matter for static assets - only the path is used
       const assetResponse = await this.assets.fetch(
         new Request(`https://assets.local/prompts/${promptName}.md`)
       );
@@ -53,26 +52,24 @@ export class PromptManager {
     throw new Error(`Prompt '${promptName}' not found in static assets`);
   }
 
-  // Get cached ChatPromptTemplate for system prompt with user input placeholder
-  async getTemplate(promptName: string): Promise<ChatPromptTemplate> {
-    // Check template cache first
-    const cached = this.templateCache.get(promptName);
-    if (cached) {
-      this.logger.debug("Returning cached template", { promptName });
-      return cached;
-    }
+  // Render prompt variables and return system+user strings for model calls
+  async renderPrompt(
+    promptName: string,
+    variables: Record<string, string | undefined>
+  ): Promise<RenderedPrompt> {
+    const rawPrompt = await this.getPrompt(promptName);
+    const userInput = variables.user_input ?? "";
 
-    // Load raw prompt and compile to template
-    const content = await this.getPrompt(promptName);
-    // System message contains prompt-specific variables (e.g., {current_memory}, {leave_policy})
-    // User message always uses {user_input} for the actual user question/content
-    const template = ChatPromptTemplate.fromMessages([
-      ["system", content],
-      ["user", "{user_input}"],
-    ]);
+    const system = rawPrompt.replaceAll(/\{([a-zA-Z0-9_]+)\}/g, (_match, key: string) => {
+      if (key === "user_input") {
+        return "";
+      }
+      return variables[key] ?? `{${key}}`;
+    });
 
-    this.templateCache.set(promptName, template);
-    this.logger.debug("Compiled and cached template", { promptName });
-    return template;
+    return {
+      system,
+      user: userInput,
+    };
   }
 }
