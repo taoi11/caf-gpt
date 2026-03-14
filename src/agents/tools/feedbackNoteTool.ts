@@ -1,36 +1,31 @@
 /**
  * src/agents/tools/feedbackNoteTool.ts
  *
- * LangChain tool for generating CAF PACE feedback notes
+ * AI SDK tool for generating CAF PACE feedback notes
  *
  * Top-level declarations:
  * - createFeedbackNoteTool: Creates feedback note generation tool from PaceFooAgent
  */
 
-import { tool } from "@langchain/core/tools";
+import { tool } from "ai";
 import { z } from "zod";
 import type { PaceFooAgent } from "../sub-agents";
 
-// Creates LangChain tool for generating CAF PACE feedback notes
 export function createFeedbackNoteTool(paceFooAgent: PaceFooAgent) {
-  return tool(
-    async ({ rank, context }) => {
-      return await paceFooAgent.generateNote(rank, context);
+  const aiTool = tool({
+    description:
+      "Generate a CAF PACE feedback note for a member. Use when someone requests a feedback note, PER input, or performance documentation.",
+    inputSchema: z.object({
+      rank: z.enum(["cpl", "mcpl", "sgt", "wo"]),
+      context: z.string(),
+    }),
+    execute: async ({ rank, context }) => paceFooAgent.generateNote(rank, context),
+  });
+
+  return Object.assign(aiTool, {
+    invoke: async (input: { rank: "cpl" | "mcpl" | "sgt" | "wo"; context: string }) => {
+      if (!aiTool.execute) throw new Error("Tool execute function missing");
+      return aiTool.execute(input, { messages: [], toolCallId: "test-call" });
     },
-    {
-      name: "generate_feedback_note",
-      description:
-        "Generate a CAF PACE feedback note for a member. Use when someone requests a feedback note, PER input, or performance documentation.",
-      schema: z.object({
-        rank: z
-          .enum(["cpl", "mcpl", "sgt", "wo"])
-          .describe("CAF rank of the member (cpl, mcpl, sgt, or wo)"),
-        context: z
-          .string()
-          .describe(
-            "Detailed description of events, actions, and performance to document in the feedback note"
-          ),
-      }),
-    }
-  );
+  });
 }

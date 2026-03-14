@@ -9,11 +9,11 @@
  * - Reset functionality
  */
 
-import { ToolMessage } from "@langchain/core/messages";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   iterationTrackerMiddleware,
   resetToolCallCount,
+  ToolLimitMessage,
 } from "../../src/agents/middleware/iterationTracker";
 
 // Type definitions for tool call middleware requests
@@ -62,7 +62,7 @@ describe("iterationTrackerMiddleware", () => {
       expect(mockHandler).toHaveBeenCalledTimes(3);
     });
 
-    it("should return ToolMessage when exceeding max calls", async () => {
+    it("should return ToolLimitMessage when exceeding max calls", async () => {
       const mockHandler = vi.fn().mockResolvedValue({ result: "success" });
 
       await callWrapToolCall({ toolCall: { id: "call-1", name: "tool1", args: {} } }, mockHandler);
@@ -74,10 +74,10 @@ describe("iterationTrackerMiddleware", () => {
         mockHandler
       );
 
-      expect(result).toBeInstanceOf(ToolMessage);
-      expect((result as ToolMessage).content).toContain("Research limit reached");
-      expect((result as ToolMessage).content).toContain("3 tool calls maximum");
-      expect((result as ToolMessage).tool_call_id).toBe("call-4");
+      expect(result).toBeInstanceOf(ToolLimitMessage);
+      expect((result as ToolLimitMessage).content).toContain("Research limit reached");
+      expect((result as ToolLimitMessage).content).toContain("3 tool calls maximum");
+      expect((result as ToolLimitMessage).tool_call_id).toBe("call-4");
     });
 
     it("should not call handler after exceeding max calls", async () => {
@@ -111,7 +111,7 @@ describe("iterationTrackerMiddleware", () => {
         mockHandler
       );
 
-      expect(lastResult).toBeInstanceOf(ToolMessage);
+      expect(lastResult).toBeInstanceOf(ToolLimitMessage);
     });
 
     it("should use 'unknown' tool_call_id when id is missing", async () => {
@@ -123,7 +123,7 @@ describe("iterationTrackerMiddleware", () => {
 
       const result = await callWrapToolCall({ toolCall: { name: "tool4", args: {} } }, mockHandler);
 
-      expect((result as ToolMessage).tool_call_id).toBe("unknown");
+      expect((result as ToolLimitMessage).tool_call_id).toBe("unknown");
     });
   });
 
@@ -176,17 +176,17 @@ describe("iterationTrackerMiddleware", () => {
     it("should prevent infinite loops with max 3 calls", async () => {
       const mockHandler = vi.fn().mockResolvedValue({ result: "success" });
 
-      const results: (ToolMessage | Record<string, unknown>)[] = [];
+      const results: (ToolLimitMessage | Record<string, unknown>)[] = [];
       for (let i = 1; i <= 10; i++) {
         const result = await callWrapToolCall(
           { toolCall: { id: `call-${i}`, name: `tool${i}`, args: {} } },
           mockHandler
         );
-        results.push(result as ToolMessage | Record<string, unknown>);
+        results.push(result as ToolLimitMessage | Record<string, unknown>);
       }
 
       expect(mockHandler).toHaveBeenCalledTimes(3);
-      expect(results.slice(3).every((r) => r instanceof ToolMessage)).toBe(true);
+      expect(results.slice(3).every((r) => r instanceof ToolLimitMessage)).toBe(true);
     });
 
     it("should provide clear error message when limit reached", async () => {
@@ -204,7 +204,7 @@ describe("iterationTrackerMiddleware", () => {
         mockHandler
       );
 
-      const message = (result as ToolMessage).content as string;
+      const message = (result as ToolLimitMessage).content as string;
       expect(message).toContain("Research limit reached");
       expect(message).toContain("3 tool calls maximum");
       expect(message).toContain("compose your final response");
@@ -252,7 +252,7 @@ describe("iterationTrackerMiddleware", () => {
         { toolCall: { id: "call-4", name: "batch_research", args: {} } },
         mockHandler
       );
-      expect(blockedResult).toBeInstanceOf(ToolMessage);
+      expect(blockedResult).toBeInstanceOf(ToolLimitMessage);
       expect(mockHandler).toHaveBeenCalledTimes(3);
     });
   });
