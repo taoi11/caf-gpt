@@ -4,10 +4,10 @@
  * Agent coordinator for prime_foo using AI SDK built-in tool orchestration
  *
  * Top-level declarations:
- * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools
+ * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools and a circuit breaker (maxSteps: 3)
  */
 
-import { generateText, tool } from "ai";
+import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { AgentCreditsExhaustedError, isOpenRouterCreditsErrorMessage } from "../errors";
@@ -64,12 +64,25 @@ export class AgentCoordinator {
       }
 
       const model = await createModel(this.env, this.config.llm.models.primeFoo.model);
+      const maxSteps = 3;
       const result = await generateText({
         model,
         system: systemPrompt,
         prompt: `Email context:\n\n${context}`,
         temperature: this.config.llm.models.primeFoo.temperature,
         maxOutputTokens: this.config.llm.maxTokens,
+        stopWhen: stepCountIs(maxSteps),
+        onStepFinish: ({ stepNumber, toolCalls }) => {
+          if (toolCalls.length > 0) {
+            this.logger.info("Tool call tracked", { stepNumber: stepNumber + 1, maxSteps });
+            if (stepNumber + 1 >= maxSteps) {
+              this.logger.warn("Circuit breaker: tool call limit reached", {
+                stepNumber: stepNumber + 1,
+                maxSteps,
+              });
+            }
+          }
+        },
         tools: {
           batch_research: tool({
             description:
