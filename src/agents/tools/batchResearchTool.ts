@@ -76,9 +76,10 @@ export function createBatchResearchTool(
 
   return Object.assign(aiTool, {
     schema: batchResearchSchema,
-    invoke: async (input: z.infer<typeof batchResearchSchema>) => {
+    invoke: async (input: z.infer<typeof batchResearchSchema>, context?: any) => {
       if (!aiTool.execute) throw new Error("Tool execute function missing");
-      return aiTool.execute(input, { messages: [], toolCallId: "test-call" });
+      const executeFn = aiTool.execute as any;
+      return context !== undefined ? executeFn(input, context) : executeFn(input);
     },
   });
 }
