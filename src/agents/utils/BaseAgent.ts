@@ -11,7 +11,7 @@
  */
 
 import { createOpenAI } from "@ai-sdk/openai";
-import type { LanguageModel } from "ai";
+import type { JSONValue, LanguageModel } from "ai";
 import { generateObject, generateText } from "ai";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
@@ -55,6 +55,8 @@ interface LLMCallParams {
   temperature: number;
   reasoning?: LLMReasoningConfig;
 }
+
+type ReasoningProviderOptions = Record<string, Record<string, JSONValue>>;
 
 export async function createModel(env: Env, model: string): Promise<LanguageModel> {
   const gatewayUrl = await getGatewayUrl(env);
@@ -115,12 +117,14 @@ export abstract class BaseAgent {
 
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = await this.getCachedModel(params.model);
+      const providerOptions = this.getReasoningProviderOptions(params.reasoning);
       const result = await generateText({
         model,
         system: rendered.system,
         prompt: rendered.user,
         temperature: params.temperature,
         maxOutputTokens: this.config.llm.maxTokens,
+        providerOptions,
       });
 
       if (!result.text || result.text.trim().length === 0) {
@@ -167,6 +171,7 @@ export abstract class BaseAgent {
 
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = await this.getCachedModel(params.model);
+      const providerOptions = this.getReasoningProviderOptions(params.reasoning);
       const result = await generateObject({
         model,
         schema,
@@ -175,6 +180,7 @@ export abstract class BaseAgent {
         prompt: rendered.user,
         temperature: params.temperature,
         maxOutputTokens: this.config.llm.maxTokens,
+        providerOptions,
       });
 
       this.logger.info("AI SDK structured call successful", {
@@ -207,6 +213,30 @@ export abstract class BaseAgent {
 
       throw new AgentAPIError(`AI SDK structured API call failed: ${errorMessage}`);
     }
+  }
+
+  // Map config reasoning options to provider-specific options for OpenRouter and OpenAI-compatible APIs
+  private getReasoningProviderOptions(
+    reasoning?: LLMReasoningConfig
+  ): ReasoningProviderOptions | undefined {
+    if (!reasoning || reasoning.enabled === false || reasoning.exclude) {
+      return undefined;
+    }
+
+    if (!reasoning.effort) {
+      return undefined;
+    }
+
+    return {
+      openai: {
+        reasoningEffort: reasoning.effort,
+      },
+      openrouter: {
+        reasoning: {
+          effort: reasoning.effort,
+        },
+      },
+    };
   }
 
   protected handleAgentError(
