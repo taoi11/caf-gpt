@@ -55,7 +55,7 @@ export class PromptManager {
   // Render prompt variables and return system+user strings for model calls
   async renderPrompt(
     promptName: string,
-    variables: Record<string, string>
+    variables: Record<string, string | undefined>
   ): Promise<RenderedPrompt> {
     const rawPrompt = await this.getPrompt(promptName);
     const userInput = variables.user_input ?? "";
