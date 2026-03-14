@@ -23,9 +23,12 @@ export function createFeedbackNoteTool(paceFooAgent: PaceFooAgent) {
   });
 
   return Object.assign(aiTool, {
-    invoke: async (input: { rank: "cpl" | "mcpl" | "sgt" | "wo"; context: string }) => {
+    invoke: async (
+      input: { rank: "cpl" | "mcpl" | "sgt" | "wo"; context: string },
+      context?: unknown,
+    ) => {
       if (!aiTool.execute) throw new Error("Tool execute function missing");
-      return aiTool.execute(input, { messages: [], toolCallId: "test-call" });
+      return aiTool.execute(input, context as any);
     },
   });
 }
