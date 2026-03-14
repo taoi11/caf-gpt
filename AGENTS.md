@@ -8,29 +8,19 @@ CAF-GPT is a backend-only email agent platform using a multi-agent coordinator p
 
 ## Development Commands
 
-**IMPORTANT**: When making code changes, ALWAYS follow this sequence:
+**IMPORTANT**: ALWAYS follow this sequence: **Format** (`npm run format`) → **Lint** (`npm run lint`) → **Test** (`npm run test`) → **Compile** (`npm run compile`).
 
-1. **Format** → 2. **Lint** → 3. **Test** → 4. **Compile**
-
-### Code Quality Workflow
+### Command Reference
 
 ```bash
 npm run format      # Format all files with Biome
 npm run lint        # Check for lint issues (or npm run lint:fix to auto-fix)
-npm run test        # Run Vitest test suite
+npm run test        # Run Vitest test suite (minimal output)
+npm run test:verbose # Run tests (full console output)
+npm run test:watch   # Run tests in watch mode
 npm run compile     # Run TypeScript type checking
-```
-
-This ensures code quality before committing. The pre-commit hook enforces linting automatically.
-
-### Running & Testing
-
-```bash
-npm run test           # Run tests (minimal output)
-npm run test:verbose   # Run tests (full console output)
-npm run test:watch     # Run tests in watch mode
-npm run dev            # Run local dev server with wrangler
-npm run deploy         # Deploy to production (--minify enabled)
+npm run dev         # Run local dev server with wrangler
+npm run deploy      # Deploy to production (--minify enabled)
 wrangler types --env-interface CloudflareBindings  # Generate TypeScript types
 ```
 
@@ -41,18 +31,15 @@ wrangler types --env-interface CloudflareBindings  # Generate TypeScript types
 
 ## Agent Architecture Patterns
 
-### Email Routing
+### Email Routing & Flow
 
-Emails are processed through **Cloudflare Email Workers** with authorization checks:
+Emails are processed through **Cloudflare Email Workers**:
 
-- Inbound emails trigger the Worker `email()` handler in `src/index.ts`
-- `CloudflareEmailWorkerHandler` validates authorized senders and monitored recipients
-- MIME content is parsed with `postal-mime` into `ParsedEmailData`
-- Authorized senders (forces.gc.ca domains or specific email addresses) are validated
-- Validated emails are processed by `SimpleEmailHandler.processEmail()`
-- The handler processes **all** validated emails through `AgentCoordinator.processWithPrimeFoo()`
-- Monitored addresses: `agent@caf-gpt.com`, `pacenote@caf-gpt.com`
-- Replies sent via `CloudflareEmailSender` using `message.reply()` (sender-only)
+1. **Inbound Trigger**: Worker `email()` handler in `src/index.ts`.
+2. **Validation**: `CloudflareEmailWorkerHandler` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
+3. **Parsing**: MIME content parsed with `postal-mime` into `ParsedEmailData`.
+4. **Agent Processing**: `SimpleEmailHandler.processEmail()` routes to `AgentCoordinator.processWithPrimeFoo()`.
+5. **Reply**: `CloudflareEmailSender` sends AI-generated response via `message.reply()` (sender-only).
 
 ### Iterative Agent Workflow
 
@@ -77,6 +64,14 @@ All agents use `callLangChainStructured()` with Zod schema validation:
 - LangChain automatically validates and parses response using `withStructuredOutput()`
 - Zod throws `ValidationError` if response doesn't match schema
 - LangChain's built-in error handling catches API failures and timeout errors
+
+### Strict Failure Mode (No Degraded State)
+
+Business logic must be designed to either succeed completely or fail cleanly. The application explicitly does not support a "degraded" operational mode.
+
+- If workflow encounters an unrecoverable error (e.g., API failure, missing context), the operation must be halted.
+- The system must catch the failure and respond to the user with a standardized error email using the pre-defined error templates.
+- App should never fallback to providing partial, unverified, or degraded responses.
 
 ## Storage & Document Retrieval
 
@@ -174,17 +169,6 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 - Each email request is processed synchronously without concurrency concerns
 - Failed processing results are logged but don't leave emails "unread" in the traditional sense
 
-### Email Worker Flow
-
-1. **Email arrives** → Cloudflare Email Routing receives email
-2. **Email event triggered** → Worker `email()` handler runs
-3. **Authorization check** → Sender domain/email validated against `AUTHORIZED_SENDERS`
-4. **Recipient check** → Verified against monitored addresses
-5. **Parse message** → `CloudflareEmailWorkerHandler` parses MIME into `ParsedEmailData`
-6. **Process email** → `SimpleEmailHandler.processEmail()` with `ParsedEmailData`
-7. **AI processing** → `AgentCoordinator` with memory context
-8. **Send reply** → `CloudflareEmailSender.sendReply()` via `message.reply()` (sender-only)
-
 ### Email Threading Headers
 
 `EmailThreadManager` builds proper threading headers:
@@ -250,8 +234,3 @@ Inline comments are used sparingly within functions. **Only add them when:**
 1. Documenting a specific lesson learned
 2. Explaining a non-obvious solution to a specific problem
 3. Noting a workaround for a known issue
-
-## Lessons Learned (by previous LLM agents)
-
-- Use of sub-agents to explor the codebase keeps context manageable
-- Reading the docs before talking to the user helps ground responses
