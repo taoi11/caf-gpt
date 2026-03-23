@@ -83,15 +83,15 @@ R2 organization: `${category}/${filename}`
 
 ## LLM Integration
 
-The codebase uses **Vercel AI SDK** (`ai` + `workers-ai-provider`) with Cloudflare Workers AI for all LLM interactions.
+The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudflare AI Gateway for all LLM interactions.
 
 **Key points:**
 
 - All agents use `callLangChain()` and `callLangChainStructured()` methods in `BaseAgent.ts`
 - **Prompt templating**: Uses `PromptManager` with `{variable}` syntax for template rendering
 - **Structured output**: Uses `generateObject()` with Zod schemas (defined in `src/schemas.ts`) for automatic JSON validation
-- **Workers AI binding**: Uses `env.AI` binding directly via `workers-ai-provider` — no external API keys needed
-- **Models**: `@cf/moonshotai/kimi-k2.5` (orchestrator), `@cf/zai-org/glm-4.7-flash` (specialists)
+- **AI Gateway**: Routes through Cloudflare AI Gateway via `ai-gateway-provider` with the unified provider — requires `CF_AIG_TOKEN` secret
+- **Models**: `workers-ai/@cf/moonshotai/kimi-k2.5` (orchestrator), `workers-ai/@cf/zai-org/glm-4.7-flash` (specialists)
 - **Streaming is disabled** for CPU efficiency in Cloudflare Workers
 
 ## Adding New Agents/Sub-agents

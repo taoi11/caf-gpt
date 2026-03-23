@@ -47,7 +47,7 @@ src/
 ## Dependencies
 
 - **postal-mime**: MIME parser for Cloudflare Email Worker inbound messages
-- **ai** + **workers-ai-provider**: Vercel AI SDK with Cloudflare Workers AI provider
+- **ai** + **ai-gateway-provider**: Vercel AI SDK with Cloudflare AI Gateway provider
 - **zod**: Schema validation for structured agent responses
 
 ## Cloudflare Bindings

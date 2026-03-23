@@ -5,14 +5,15 @@
  *
  * Top-level declarations:
  * - BaseAgent: Base agent with AI SDK integration and template-based prompts
- * - createModel: Creates Workers AI model via workers-ai-provider binding
+ * - createModel: Creates AI model via AI Gateway provider
  * - callLangChain: Backward-compatible wrapper for plain text model calls
  * - callLangChainStructured: Backward-compatible wrapper for structured model calls
  */
 
 import type { LanguageModel } from "ai";
 import { generateObject, generateText } from "ai";
-import { createWorkersAI } from "workers-ai-provider";
+import { createAiGateway } from "ai-gateway-provider";
+import { createUnified } from "ai-gateway-provider/providers/unified";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
 import {
@@ -33,9 +34,13 @@ interface LLMCallParams {
 }
 
 export function createModel(env: Env, model: string): LanguageModel {
-  const workersai = createWorkersAI({ binding: env.AI });
-  // Cast needed since new CF models may not be in the provider's type map yet.
-  return workersai(model as Parameters<typeof workersai>[0]) as unknown as LanguageModel;
+  const aigateway = createAiGateway({
+    accountId: "7101c0eb0cce7925fd15056c805c97eb",
+    gateway: "caf-gpt",
+    apiKey: env.CF_AIG_TOKEN,
+  });
+  const unified = createUnified();
+  return aigateway(unified(model)) as unknown as LanguageModel;
 }
 
 export abstract class BaseAgent {
