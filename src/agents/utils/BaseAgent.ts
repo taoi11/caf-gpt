@@ -33,7 +33,7 @@ interface LLMCallParams {
 }
 
 export function createModel(env: Env, model: string): LanguageModel {
-  const workersai = createWorkersAI({ binding: env.AI });
+  const workersai = createWorkersAI({ binding: env.AI, gateway: { id: "caf-gpt" } });
   // Cast needed since new CF models may not be in the provider's type map yet.
   return workersai(model as Parameters<typeof workersai>[0]) as unknown as LanguageModel;
 }
