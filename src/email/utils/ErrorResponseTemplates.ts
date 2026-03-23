@@ -10,7 +10,6 @@
 
 import {
   AgentError,
-  AgentNeuronLimitError,
   EmailCompositionError,
   EmailParsingError,
   EmailThreadingError,
@@ -49,13 +48,6 @@ export const ERROR_RESPONSE_TEMPLATES: ErrorResponseTemplate[] = [
     lines: [
       "I am picky about email formats and I seem to have rejected yours.",
       "Please double-check the content and try again.",
-    ],
-  },
-  {
-    match: (error) => error instanceof AgentNeuronLimitError,
-    lines: [
-      "The daily AI neuron allocation has been reached.",
-      "Try again tomorrow when it resets.",
     ],
   },
   {

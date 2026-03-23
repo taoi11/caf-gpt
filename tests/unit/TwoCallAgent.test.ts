@@ -16,7 +16,6 @@ import { z } from "zod";
 import { TwoCallAgent, type TwoCallAgentConfig } from "../../src/agents/utils/TwoCallAgent";
 import type { AppConfig } from "../../src/config";
 import { createConfig } from "../../src/config";
-import { AgentNeuronLimitError } from "../../src/errors";
 import type { ResearchRequest } from "../../src/types";
 import { createMockEnv } from "../mocks";
 import type { MockR2Bucket } from "../mocks/cloudflare";
@@ -225,16 +224,6 @@ describe("TwoCallAgent", () => {
       const result = await agent.research(request);
 
       expect(result).toContain("couldn't identify relevant");
-    });
-
-    it("should throw on neuron limit errors", async () => {
-      setMockLLMError("429: You have exceeded the neurons limit for today");
-
-      const request: ResearchRequest = {
-        question: "Test question",
-      };
-
-      await expect(agent.research(request)).rejects.toBeInstanceOf(AgentNeuronLimitError);
     });
 
     it("should handle missing selected documents", async () => {

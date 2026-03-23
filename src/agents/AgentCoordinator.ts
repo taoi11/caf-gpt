@@ -10,7 +10,6 @@
 import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { AgentNeuronLimitError, isWorkersAINeuronLimitError } from "../errors";
 import { formatError, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
@@ -173,15 +172,6 @@ How to use CAF-GPT:<br>
         processingTime: Date.now() - startTime,
         ...formatError(error),
       });
-
-      if (error instanceof AgentNeuronLimitError) {
-        throw error;
-      }
-
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (isWorkersAINeuronLimitError(errorMessage)) {
-        throw new AgentNeuronLimitError(`Workers AI neuron limit reached: ${errorMessage}`);
-      }
 
       return {
         content:

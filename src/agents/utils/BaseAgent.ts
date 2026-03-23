@@ -17,10 +17,8 @@ import type { z } from "zod";
 import type { AppConfig } from "../../config";
 import {
   AgentAPIError,
-  AgentNeuronLimitError,
   AgentTimeoutError,
   AgentValidationError,
-  isWorkersAINeuronLimitError,
 } from "../../errors";
 import { formatError, Logger } from "../../Logger";
 import { DocumentRetriever } from "../../storage/DocumentRetriever";
@@ -104,10 +102,6 @@ export abstract class BaseAgent {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      if (isWorkersAINeuronLimitError(errorMessage)) {
-        throw new AgentNeuronLimitError(`Workers AI neuron limit reached: ${errorMessage}`);
-      }
-
       if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
         throw new AgentTimeoutError(`AI SDK call timed out: ${errorMessage}`);
       }
@@ -157,9 +151,6 @@ export abstract class BaseAgent {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      if (isWorkersAINeuronLimitError(errorMessage)) {
-        throw new AgentNeuronLimitError(`Workers AI neuron limit reached: ${errorMessage}`);
-      }
       if (errorMessage.includes("validation") || errorMessage.includes("schema")) {
         throw new AgentValidationError(
           `AI SDK structured output validation failed: ${errorMessage}`
@@ -186,10 +177,6 @@ export abstract class BaseAgent {
       ...context,
       ...formatError(error),
     });
-
-    if (error instanceof AgentNeuronLimitError) {
-      throw error;
-    }
 
     if (error instanceof Error) {
       if (error.message.includes("timeout")) {
