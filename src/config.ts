@@ -39,14 +39,14 @@ interface EmailConfig {
 const ORCHESTRATOR_CONFIG: LLMModelConfig = {
   model: "@cf/moonshotai/kimi-k2.5",
   temperature: 0.1,
-  maxOutputTokens: 16384,
+  maxOutputTokens: 32768,
 };
 
 // Specialist model config - focused tasks: document Q&A, selection, generation
 const SPECIALIST_CONFIG: LLMModelConfig = {
   model: "@cf/zai-org/glm-4.7-flash",
   temperature: 0.1,
-  maxOutputTokens: 16384,
+  maxOutputTokens: 32768,
 };
 
 // Overall application configuration interface
