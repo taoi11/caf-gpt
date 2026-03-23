@@ -48,15 +48,17 @@ vi.mock("langchain", () => ({
   tool: vi.fn((func) => func),
 }));
 
-vi.mock("@langchain/openai", () => ({
-  ChatOpenAI: vi.fn(function MockChatOpenAI() {
-    return {
-      invoke: vi.fn(),
-      withStructuredOutput: vi.fn(() => ({
-        invoke: vi.fn(),
-      })),
-    };
-  }),
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    generateText: vi.fn(),
+    generateObject: vi.fn(),
+  };
+});
+
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: vi.fn(() => vi.fn(() => ({ modelId: "test-model" }))),
 }));
 
 const mockSql = vi.fn().mockResolvedValue([]);

@@ -10,7 +10,7 @@
 import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { AgentCreditsExhaustedError, isOpenRouterCreditsErrorMessage } from "../errors";
+import { AgentNeuronLimitError, isWorkersAINeuronLimitError } from "../errors";
 import { formatError, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
@@ -63,14 +63,14 @@ export class AgentCoordinator {
         systemPrompt = `${systemPrompt}\n\n<memory>\n${memory}\n</memory>`;
       }
 
-      const model = await createModel(this.env, this.config.llm.models.primeFoo.model);
+      const model = createModel(this.env, this.config.llm.models.primeFoo.model);
       const maxSteps = 3;
       const result = await generateText({
         model,
         system: systemPrompt,
         prompt: `Email context:\n\n${context}`,
         temperature: this.config.llm.models.primeFoo.temperature,
-        maxOutputTokens: this.config.llm.maxTokens,
+        maxOutputTokens: this.config.llm.models.primeFoo.maxOutputTokens,
         stopWhen: stepCountIs(maxSteps),
         onStepFinish: ({ stepNumber, toolCalls }) => {
           if (toolCalls.length > 0) {
@@ -174,13 +174,13 @@ How to use CAF-GPT:<br>
         ...formatError(error),
       });
 
-      if (error instanceof AgentCreditsExhaustedError) {
+      if (error instanceof AgentNeuronLimitError) {
         throw error;
       }
 
       const errorMessage = error instanceof Error ? error.message : String(error);
-      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
-        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
+      if (isWorkersAINeuronLimitError(errorMessage)) {
+        throw new AgentNeuronLimitError(`Workers AI neuron limit reached: ${errorMessage}`);
       }
 
       return {

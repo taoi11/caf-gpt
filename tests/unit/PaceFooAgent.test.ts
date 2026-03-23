@@ -15,17 +15,20 @@ import { createMockEnv } from "../mocks";
 import type { MockR2Bucket } from "../mocks/cloudflare";
 
 // Use vi.hoisted to define mock function BEFORE module imports
-const { mockInvoke } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
+const { mockGenerateText } = vi.hoisted(() => ({
+  mockGenerateText: vi.fn(),
 }));
 
-// Mock ChatOpenAI
-vi.mock("@langchain/openai", () => ({
-  ChatOpenAI: vi.fn(function MockChatOpenAI() {
-    return {
-      invoke: mockInvoke,
-    };
-  }),
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    generateText: mockGenerateText,
+  };
+});
+
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: vi.fn(() => vi.fn(() => ({ modelId: "test-model" }))),
 }));
 
 // Import modules AFTER mocks
@@ -33,30 +36,11 @@ import { PaceFooAgent } from "../../src/agents/sub-agents/PaceFooAgent";
 import { createConfig } from "../../src/config";
 
 function setMockLLMResponse(response: string) {
-  mockInvoke.mockResolvedValueOnce({ content: response });
+  mockGenerateText.mockResolvedValueOnce({ text: response });
 }
 
 function setMockLLMError(message: string) {
-  mockInvoke.mockRejectedValueOnce(new Error(message));
-}
-
-interface ChatPromptValue {
-  messages?: Array<{ content: string }>;
-}
-
-function captureMockMessages() {
-  let capturedInput: unknown = null;
-
-  mockInvoke.mockImplementation(async (input: unknown) => {
-    capturedInput = input;
-    return { content: "Note" };
-  });
-
-  return () => {
-    if (!capturedInput) return null;
-    const promptValue = capturedInput as ChatPromptValue;
-    return promptValue.messages ?? null;
-  };
+  mockGenerateText.mockRejectedValueOnce(new Error(message));
 }
 
 describe("PaceFooAgent", () => {
@@ -65,10 +49,10 @@ describe("PaceFooAgent", () => {
   let mockBucket: MockR2Bucket;
 
   beforeEach(() => {
-    mockInvoke.mockReset();
+    mockGenerateText.mockReset();
 
-    mockInvoke.mockResolvedValue({
-      content: "Default response",
+    mockGenerateText.mockResolvedValue({
+      text: "Default response",
     });
 
     mockEnv = createMockEnv();
@@ -132,7 +116,7 @@ Cpl Test demonstrated exceptional initiative during the training exercise by vol
     expect(result).toContain("CPL");
     expect(result).toContain("initiative");
 
-    expect(mockInvoke).toHaveBeenCalled();
+    expect(mockGenerateText).toHaveBeenCalled();
   });
 
   it("should generate feedback note for MCPL rank", async () => {
@@ -161,7 +145,7 @@ MCpl Leader effectively supervised the team during the field exercise.`;
     const result = await agent.generateNote("unknown_rank", "Some context");
 
     expect(result).toBeTruthy();
-    expect(mockInvoke).toHaveBeenCalled();
+    expect(mockGenerateText).toHaveBeenCalled();
   });
 
   it("should reject empty context", async () => {
@@ -209,31 +193,25 @@ MCpl Leader effectively supervised the team during the field exercise.`;
   });
 
   it("should convert rank to uppercase in prompt", async () => {
-    const getCapturedMessages = captureMockMessages();
+    mockGenerateText.mockResolvedValueOnce({ text: "Note" });
 
     await agent.generateNote("cpl", "Test context");
 
-    const capturedMessages = getCapturedMessages();
-    expect(capturedMessages).not.toBeNull();
-    expect(capturedMessages).toBeDefined();
-    const messages = capturedMessages as unknown[];
-    const systemContent = (messages[0] as { content: string }).content;
-    expect(systemContent).toContain("CPL");
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.system).toContain("CPL");
   });
 
   it("should include competencies and examples in prompt", async () => {
-    const getCapturedMessages = captureMockMessages();
+    mockGenerateText.mockResolvedValueOnce({ text: "Note" });
 
     await agent.generateNote("cpl", "Test context");
 
-    const capturedMessages = getCapturedMessages();
-    expect(capturedMessages).not.toBeNull();
-    expect(capturedMessages).toBeDefined();
-    const messages = capturedMessages as unknown[];
-    const systemContent = (messages[0] as { content: string }).content;
-    expect(systemContent).toContain("Leadership");
-    expect(systemContent).toContain("Technical Skills");
-    expect(systemContent).toContain("Example Feedback Notes");
+    expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    const callArgs = mockGenerateText.mock.calls[0][0];
+    expect(callArgs.system).toContain("Leadership");
+    expect(callArgs.system).toContain("Technical Skills");
+    expect(callArgs.system).toContain("Example Feedback Notes");
   });
 
   it("should handle case-insensitive rank matching", async () => {

@@ -22,7 +22,7 @@ src/
 │   └── types.ts                 # Email type definitions
 ├── agents/
 │   ├── AgentCoordinator.ts      # Prime_foo and sub-agent coordination
-│   ├── BaseAgent.ts             # Base agent class with LangChain integration
+│   ├── BaseAgent.ts             # Base agent class with Workers AI integration
 │   ├── PromptManager.ts         # Prompt management and caching
 │   ├── middleware/              # Agent middleware
 │   │   ├── iterationTracker.ts  # Circuit breaker for sub-agent calls
@@ -47,7 +47,7 @@ src/
 ## Dependencies
 
 - **postal-mime**: MIME parser for Cloudflare Email Worker inbound messages
-- **@langchain/openai**: LangChain integration for structured LLM outputs
+- **ai** + **workers-ai-provider**: Vercel AI SDK with Cloudflare Workers AI provider
 - **zod**: Schema validation for structured agent responses
 
 ## Cloudflare Bindings
@@ -58,5 +58,4 @@ src/
 
 ## Environment Variables (Secrets)
 
-- **OPENROUTER_TOKEN**: OpenRouter API key for LLM access
 - **AUTHORIZED_SENDERS**: Comma-separated list of authorized email domains/addresses (e.g., `forces.gc.ca,test@example.com`)

@@ -9,8 +9,8 @@
  */
 
 import {
-  AgentCreditsExhaustedError,
   AgentError,
+  AgentNeuronLimitError,
   EmailCompositionError,
   EmailParsingError,
   EmailThreadingError,
@@ -52,10 +52,10 @@ export const ERROR_RESPONSE_TEMPLATES: ErrorResponseTemplate[] = [
     ],
   },
   {
-    match: (error) => error instanceof AgentCreditsExhaustedError,
+    match: (error) => error instanceof AgentNeuronLimitError,
     lines: [
-      "Tragically, the AI credits given by Big AI have run out for this month.",
-      "Come back after the monthly reset next month.",
+      "The daily AI neuron allocation has been reached.",
+      "Try again tomorrow when it resets.",
     ],
   },
   {

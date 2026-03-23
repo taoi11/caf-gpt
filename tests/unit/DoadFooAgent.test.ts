@@ -8,19 +8,22 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
 import type { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
-const { mockInvoke } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
+const { mockGenerateText, mockGenerateObject } = vi.hoisted(() => ({
+  mockGenerateText: vi.fn(),
+  mockGenerateObject: vi.fn(),
 }));
 
-vi.mock("@langchain/openai", () => ({
-  ChatOpenAI: vi.fn(function MockChatOpenAI() {
-    return {
-      invoke: mockInvoke,
-      withStructuredOutput: vi.fn(() => ({
-        invoke: mockInvoke,
-      })),
-    };
-  }),
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    generateText: mockGenerateText,
+    generateObject: mockGenerateObject,
+  };
+});
+
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: vi.fn(() => vi.fn(() => ({ modelId: "test-model" }))),
 }));
 
 import { DoadFooAgent } from "../../src/agents/sub-agents/DoadFooAgent";
@@ -28,37 +31,36 @@ import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";
 
 function setMockSelectorResponse(doadNumbers: string[]) {
-  mockInvoke.mockResolvedValueOnce({ doad_numbers: doadNumbers });
+  mockGenerateObject.mockResolvedValueOnce({ object: { doad_numbers: doadNumbers } });
 }
 
 function setMockAnswerResponse(answer: string) {
-  mockInvoke.mockResolvedValueOnce({ content: answer });
+  mockGenerateText.mockResolvedValueOnce({ text: answer });
 }
 
 function setMockError(message: string) {
-  mockInvoke.mockRejectedValueOnce(new Error(message));
+  mockGenerateObject.mockRejectedValueOnce(new Error(message));
 }
 
-interface ChatPromptValue {
-  messages?: Array<{ content: string }>;
+function setMockAnswerError(message: string) {
+  mockGenerateText.mockRejectedValueOnce(new Error(message));
 }
 
 function captureMockAnswerCall() {
-  let capturedInput: unknown = null;
-
   // First call: selector (return structured output)
-  mockInvoke.mockResolvedValueOnce({ doad_numbers: ["5019-0"] });
+  mockGenerateObject.mockResolvedValueOnce({ object: { doad_numbers: ["5019-0"] } });
 
   // Second call: answer (capture and return)
-  mockInvoke.mockImplementationOnce(async (input: unknown) => {
-    capturedInput = input;
-    return { content: "Final answer" };
-  });
+  mockGenerateText.mockResolvedValueOnce({ text: "Final answer" });
 
   return () => {
-    if (!capturedInput) return null;
-    const promptValue = capturedInput as ChatPromptValue;
-    return promptValue.messages ?? null;
+    const calls = mockGenerateText.mock.calls;
+    if (calls.length === 0) return null;
+    const lastCall = calls[calls.length - 1][0];
+    if (lastCall?.system) {
+      return [{ content: lastCall.system }];
+    }
+    return null;
   };
 }
 
@@ -69,7 +71,8 @@ describe("DoadFooAgent", () => {
   let mockAssets: MockFetcher;
 
   beforeEach(() => {
-    mockInvoke.mockReset();
+    mockGenerateText.mockReset();
+    mockGenerateObject.mockReset();
 
     mockEnv = createMockEnv();
     const config = createConfig(undefined);
@@ -134,7 +137,8 @@ Members are entitled to relocation assistance when posted.`
       const result = await agent.research(request);
 
       expect(result).toContain("conduct deficiencies");
-      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+      expect(mockGenerateText).toHaveBeenCalledTimes(1);
     });
 
     it("should load multiple DOADs in parallel", async () => {
@@ -148,12 +152,14 @@ Members are entitled to relocation assistance when posted.`
       const result = await agent.research(request);
 
       expect(result).toContain("Answer based on three DOADs");
-      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+      expect(mockGenerateText).toHaveBeenCalledTimes(1);
     });
 
     it("should format documents with DOAD tags", async () => {
       mockBucket.seed("DOAD/5019-0.md", "DOAD 5019-0 content");
-      mockInvoke.mockReset();
+      mockGenerateText.mockReset();
+      mockGenerateObject.mockReset();
       const getCapturedMessages = captureMockAnswerCall();
 
       const request: ResearchRequest = {
@@ -183,7 +189,8 @@ Members are entitled to relocation assistance when posted.`
       const result = await agent.research(request);
 
       expect(result).toContain("error");
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(mockGenerateObject).not.toHaveBeenCalled();
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should handle selector returning no DOADs", async () => {
@@ -196,7 +203,7 @@ Members are entitled to relocation assistance when posted.`
       const result = await agent.research(request);
 
       expect(result).toContain("couldn't identify relevant DOAD policy documents");
-      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
     });
 
     it("should handle missing DOAD index", async () => {
@@ -237,7 +244,8 @@ Members are entitled to relocation assistance when posted.`
       const result = await agent.research(request);
 
       expect(result).toContain("Answer based on available DOADs");
-      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+      expect(mockGenerateText).toHaveBeenCalledTimes(1);
     });
 
     it("should handle selector errors", async () => {
@@ -254,7 +262,7 @@ Members are entitled to relocation assistance when posted.`
 
     it("should handle answer generation errors", async () => {
       setMockSelectorResponse(["5019-0"]);
-      setMockError("Answer API error");
+      setMockAnswerError("Answer API error");
 
       const request: ResearchRequest = {
         question: "Test question",
@@ -266,22 +274,8 @@ Members are entitled to relocation assistance when posted.`
     });
 
     it("should include DOAD table in selector call", async () => {
-      let capturedPrompt = "";
-      mockInvoke.mockImplementationOnce(async (input: unknown) => {
-        if (
-          typeof input === "object" &&
-          input !== null &&
-          "messages" in input &&
-          Array.isArray(input.messages) &&
-          input.messages[0]
-        ) {
-          const msg = input.messages[0] as { content: string };
-          capturedPrompt = msg.content;
-        }
-        return { doad_numbers: ["5019-0"] };
-      });
-
-      mockInvoke.mockResolvedValueOnce({ content: "Answer" });
+      mockGenerateObject.mockResolvedValueOnce({ object: { doad_numbers: ["5019-0"] } });
+      mockGenerateText.mockResolvedValueOnce({ text: "Answer" });
 
       const request: ResearchRequest = {
         question: "Test question",
@@ -289,8 +283,10 @@ Members are entitled to relocation assistance when posted.`
 
       await agent.research(request);
 
-      expect(capturedPrompt).toContain("DOAD Index");
-      expect(capturedPrompt).toContain("5019-0");
+      const selectorCall = mockGenerateObject.mock.calls[0][0];
+      const capturedSystem = selectorCall.system || "";
+      expect(capturedSystem).toContain("DOAD Index");
+      expect(capturedSystem).toContain("5019-0");
     });
 
     it("should handle grievance questions", async () => {

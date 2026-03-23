@@ -13,14 +13,14 @@
  * - AgentError: Base class for AI agent errors
  * - AgentTimeoutError: Agent/LLM timeout errors
  * - AgentAPIError: Agent/LLM API failures
- * - AgentCreditsExhaustedError: OpenRouter credit exhaustion errors
+ * - AgentNeuronLimitError: Workers AI neuron limit errors
  * - StorageError: Base class for storage errors
  * - StorageNotFoundError: Document/resource not found
  * - StorageConnectionError: Database/R2 connection failures
  * - APIError: Base class for external API errors
  * - APITimeoutError: External API timeout errors
  * - APIAuthError: External API authentication failures
- * - isOpenRouterCreditsErrorMessage: Detects OpenRouter credit exhaustion from error text
+ * - isWorkersAINeuronLimitError: Detects Workers AI neuron limit errors from error text
  */
 
 // Base error class for all application errors
@@ -79,9 +79,9 @@ export class AgentAPIError extends AgentError {
   readonly recoverable = true;
 }
 
-/** OpenRouter credit exhaustion error. */
-export class AgentCreditsExhaustedError extends AgentError {
-  readonly code = "AGENT_CREDITS_EXHAUSTED";
+/** Workers AI neuron limit error - resets daily. */
+export class AgentNeuronLimitError extends AgentError {
+  readonly code = "AGENT_NEURON_LIMIT";
   readonly recoverable = true;
 }
 
@@ -150,19 +150,18 @@ export function isTypedAPIError(error: unknown): error is TypedAPIError {
   );
 }
 
-/** Detect OpenRouter credit exhaustion errors from message text. */
-export function isOpenRouterCreditsErrorMessage(message: string): boolean {
+/** Detect Workers AI neuron limit errors from message text. */
+export function isWorkersAINeuronLimitError(message: string): boolean {
   const normalized = message.toLowerCase();
-  const has402 = normalized.includes("402");
-  const mentionsCredits = normalized.includes("credit");
-  const mentionsMaxTokens = normalized.includes("max_tokens") || normalized.includes("max tokens");
-  const mentionsAfford = normalized.includes("can only afford");
-  const mentionsRequiresCredits = normalized.includes("requires more credits");
-  const mentionsOpenRouter = normalized.includes("openrouter");
+  const has429 = normalized.includes("429");
+  const mentionsNeuron = normalized.includes("neuron");
+  const mentionsLimit = normalized.includes("limit");
+  const mentionsExceeded = normalized.includes("exceeded");
+  const mentionsRateLimit = normalized.includes("rate limit") || normalized.includes("rate_limit");
+  const mentionsQuota = normalized.includes("quota");
 
   return (
-    (has402 && (mentionsCredits || mentionsMaxTokens || mentionsAfford)) ||
-    (mentionsRequiresCredits && mentionsCredits) ||
-    (mentionsOpenRouter && mentionsCredits && mentionsMaxTokens)
+    (mentionsNeuron && (mentionsLimit || mentionsExceeded)) ||
+    (has429 && (mentionsNeuron || mentionsRateLimit || mentionsQuota))
   );
 }

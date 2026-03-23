@@ -33,7 +33,7 @@ export class LeaveFooAgent extends BaseAgent {
           user_input: request.question,
         },
         temperature: this.config.llm.models.leaveFoo.temperature,
-        reasoning: this.config.llm.models.leaveFoo.reasoning,
+        maxOutputTokens: this.config.llm.models.leaveFoo.maxOutputTokens,
       });
 
       this.logger.performance("leave_foo research", startTime, {

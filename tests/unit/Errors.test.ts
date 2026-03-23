@@ -4,39 +4,35 @@
  * Unit tests for error helpers
  *
  * Tests:
- * - isOpenRouterCreditsErrorMessage detects credit exhaustion errors
- * - isOpenRouterCreditsErrorMessage ignores non-credit errors
+ * - isWorkersAINeuronLimitError detects neuron limit errors
+ * - isWorkersAINeuronLimitError ignores non-neuron errors
  */
 
 import { describe, expect, it } from "vitest";
-import { isOpenRouterCreditsErrorMessage } from "../../src/errors";
+import { isWorkersAINeuronLimitError } from "../../src/errors";
 
-describe("isOpenRouterCreditsErrorMessage", () => {
-  it("detects 402 credit exhaustion messages", () => {
-    expect(
-      isOpenRouterCreditsErrorMessage(
-        "OpenRouter error 402: You can only afford 123 tokens with credit balance"
-      )
-    ).toBe(true);
+describe("isWorkersAINeuronLimitError", () => {
+  it("detects neuron limit exceeded messages", () => {
+    expect(isWorkersAINeuronLimitError("You have exceeded the neurons limit for today")).toBe(true);
   });
 
-  it("detects max_tokens credit exhaustion messages", () => {
-    expect(
-      isOpenRouterCreditsErrorMessage(
-        "402: requires more credits or max_tokens exceeds your remaining credit"
-      )
-    ).toBe(true);
+  it("detects 429 with neuron messages", () => {
+    expect(isWorkersAINeuronLimitError("429: neuron budget exhausted, try again tomorrow")).toBe(
+      true
+    );
   });
 
-  it("detects OpenRouter credit wording without 402", () => {
-    expect(
-      isOpenRouterCreditsErrorMessage(
-        "OpenRouter: requires more credits for this request. max_tokens too high."
-      )
-    ).toBe(true);
+  it("detects 429 with rate limit messages", () => {
+    expect(isWorkersAINeuronLimitError("HTTP 429: rate limit exceeded for this account")).toBe(
+      true
+    );
+  });
+
+  it("detects 429 with quota messages", () => {
+    expect(isWorkersAINeuronLimitError("429: daily quota reached")).toBe(true);
   });
 
   it("ignores unrelated errors", () => {
-    expect(isOpenRouterCreditsErrorMessage("Validation failed: schema mismatch")).toBe(false);
+    expect(isWorkersAINeuronLimitError("Validation failed: schema mismatch")).toBe(false);
   });
 });
