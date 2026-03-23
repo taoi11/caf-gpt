@@ -27,8 +27,11 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
-vi.mock("workers-ai-provider", () => ({
-  createWorkersAI: vi.fn(() => vi.fn(() => ({ modelId: "test-model" }))),
+vi.mock("ai-gateway-provider", () => ({
+  createAiGateway: vi.fn(() => vi.fn((model: unknown) => model)),
+}));
+vi.mock("ai-gateway-provider/providers/unified", () => ({
+  createUnified: vi.fn(() => vi.fn((model: string) => model)),
 }));
 
 import { MemoryFooAgent } from "../../src/agents/sub-agents/MemoryFooAgent";
