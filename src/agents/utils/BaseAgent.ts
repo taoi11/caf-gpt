@@ -34,9 +34,7 @@ interface LLMCallParams {
 
 export function createModel(env: Env, model: string): LanguageModel {
   const workersai = createWorkersAI({ binding: env.AI });
-  // Type assertion needed: workers-ai-provider exports LanguageModelV1
-  // which is runtime-compatible with AI SDK v6 but not type-compatible.
-  // The model string is also cast since new CF models may not be in the type map yet.
+  // Cast needed since new CF models may not be in the provider's type map yet.
   return workersai(model as Parameters<typeof workersai>[0]) as unknown as LanguageModel;
 }
 
