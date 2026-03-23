@@ -1,83 +1,43 @@
 /**
  * src/agents/utils/BaseAgent.ts
  *
- * Base agent with Cloudflare-compatible AI SDK integration for prompt and structured calls
+ * Base agent with Cloudflare Workers AI integration via AI SDK
  *
  * Top-level declarations:
  * - BaseAgent: Base agent with AI SDK integration and template-based prompts
- * - createModel: Creates OpenRouter model via AI SDK OpenAI-compatible provider
+ * - createModel: Creates Workers AI model via workers-ai-provider binding
  * - callLangChain: Backward-compatible wrapper for plain text model calls
  * - callLangChainStructured: Backward-compatible wrapper for structured model calls
  */
 
-import { createOpenAI } from "@ai-sdk/openai";
-import type { JSONValue, LanguageModel } from "ai";
+import type { LanguageModel } from "ai";
 import { generateObject, generateText } from "ai";
+import { createWorkersAI } from "workers-ai-provider";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
 import {
   AgentAPIError,
-  AgentCreditsExhaustedError,
   AgentTimeoutError,
   AgentValidationError,
-  isOpenRouterCreditsErrorMessage,
 } from "../../errors";
 import { formatError, Logger } from "../../Logger";
 import { DocumentRetriever } from "../../storage/DocumentRetriever";
 import { PromptManager } from "./PromptManager";
-
-const AI_GATEWAY_NAME = "caf-gpt";
-
-type LLMReasoningConfig = AppConfig["llm"]["models"][keyof AppConfig["llm"]["models"]]["reasoning"];
-
-let gatewayUrlCache: string | undefined;
-let gatewayUrlResolved = false;
-
-async function getGatewayUrl(env: Env): Promise<string | undefined> {
-  if (gatewayUrlResolved) return gatewayUrlCache;
-
-  try {
-    const gateway = env.AI.gateway(AI_GATEWAY_NAME);
-    const url = await gateway.getUrl("openrouter");
-    gatewayUrlCache = `${url}/v1`;
-  } catch {
-    gatewayUrlCache = undefined;
-  }
-
-  gatewayUrlResolved = true;
-  return gatewayUrlCache;
-}
 
 interface LLMCallParams {
   model: string;
   promptName: string;
   variables: Record<string, string>;
   temperature: number;
-  reasoning?: LLMReasoningConfig;
+  maxOutputTokens: number;
 }
 
-type ReasoningProviderOptions = Record<string, Record<string, JSONValue>>;
-
-export async function createModel(env: Env, model: string): Promise<LanguageModel> {
-  const gatewayUrl = await getGatewayUrl(env);
-  const baseURL = gatewayUrl ?? "https://openrouter.ai/api/v1";
-
-  const headers: Record<string, string> = {
-    "HTTP-Referer": "https://caf-gpt.com",
-    "X-Title": "CAF-GPT",
-  };
-
-  if (gatewayUrl && env.CF_AIG_AUTH) {
-    headers["cf-aig-authorization"] = `Bearer ${env.CF_AIG_AUTH}`;
-  }
-
-  const openai = createOpenAI({
-    baseURL,
-    apiKey: env.OPENROUTER_TOKEN,
-    headers,
-  });
-
-  return openai(model);
+export function createModel(env: Env, model: string): LanguageModel {
+  const workersai = createWorkersAI({ binding: env.AI });
+  // Type assertion needed: workers-ai-provider exports LanguageModelV1
+  // which is runtime-compatible with AI SDK v6 but not type-compatible.
+  // The model string is also cast since new CF models may not be in the type map yet.
+  return workersai(model as Parameters<typeof workersai>[0]) as unknown as LanguageModel;
 }
 
 export abstract class BaseAgent {
@@ -97,10 +57,10 @@ export abstract class BaseAgent {
     this.docRetriever = new DocumentRetriever(env.R2_BUCKET);
   }
 
-  private async getCachedModel(model: string): Promise<LanguageModel> {
+  private getCachedModel(model: string): LanguageModel {
     let cached = this.modelCache.get(model);
     if (!cached) {
-      cached = await createModel(this.env, model);
+      cached = createModel(this.env, model);
       this.modelCache.set(model, cached);
       this.logger.debug("Created and cached new AI SDK model", { model });
     }
@@ -110,21 +70,19 @@ export abstract class BaseAgent {
   // Backward-compatible wrapper for text generation
   protected async callLangChain(params: LLMCallParams): Promise<string> {
     try {
-      this.logger.info("Calling OpenRouter via AI SDK", {
+      this.logger.info("Calling Workers AI via AI SDK", {
         model: params.model,
         promptName: params.promptName,
       });
 
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
-      const model = await this.getCachedModel(params.model);
-      const providerOptions = this.getReasoningProviderOptions(params.reasoning);
+      const model = this.getCachedModel(params.model);
       const result = await generateText({
         model,
         system: rendered.system,
         prompt: rendered.user,
         temperature: params.temperature,
-        maxOutputTokens: this.config.llm.maxTokens,
-        providerOptions,
+        maxOutputTokens: params.maxOutputTokens,
       });
 
       if (!result.text || result.text.trim().length === 0) {
@@ -144,10 +102,6 @@ export abstract class BaseAgent {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
-        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
-      }
-
       if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
         throw new AgentTimeoutError(`AI SDK call timed out: ${errorMessage}`);
       }
@@ -163,15 +117,14 @@ export abstract class BaseAgent {
     schemaName?: string
   ): Promise<T> {
     try {
-      this.logger.info("Calling OpenRouter via AI SDK with structured output", {
+      this.logger.info("Calling Workers AI via AI SDK with structured output", {
         model: params.model,
         promptName: params.promptName,
         schemaName,
       });
 
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
-      const model = await this.getCachedModel(params.model);
-      const providerOptions = this.getReasoningProviderOptions(params.reasoning);
+      const model = this.getCachedModel(params.model);
       const result = await generateObject({
         model,
         schema,
@@ -179,8 +132,7 @@ export abstract class BaseAgent {
         system: rendered.system,
         prompt: rendered.user,
         temperature: params.temperature,
-        maxOutputTokens: this.config.llm.maxTokens,
-        providerOptions,
+        maxOutputTokens: params.maxOutputTokens,
       });
 
       this.logger.info("AI SDK structured call successful", {
@@ -199,9 +151,6 @@ export abstract class BaseAgent {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
-        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
-      }
       if (errorMessage.includes("validation") || errorMessage.includes("schema")) {
         throw new AgentValidationError(
           `AI SDK structured output validation failed: ${errorMessage}`
@@ -213,30 +162,6 @@ export abstract class BaseAgent {
 
       throw new AgentAPIError(`AI SDK structured API call failed: ${errorMessage}`);
     }
-  }
-
-  // Map config reasoning options to provider-specific options for OpenRouter and OpenAI-compatible APIs
-  private getReasoningProviderOptions(
-    reasoning?: LLMReasoningConfig
-  ): ReasoningProviderOptions | undefined {
-    if (!reasoning || reasoning.enabled === false || reasoning.exclude) {
-      return undefined;
-    }
-
-    if (!reasoning.effort) {
-      return undefined;
-    }
-
-    return {
-      openai: {
-        reasoningEffort: reasoning.effort,
-      },
-      openrouter: {
-        reasoning: {
-          effort: reasoning.effort,
-        },
-      },
-    };
   }
 
   protected handleAgentError(
@@ -252,10 +177,6 @@ export abstract class BaseAgent {
       ...context,
       ...formatError(error),
     });
-
-    if (error instanceof AgentCreditsExhaustedError) {
-      throw error;
-    }
 
     if (error instanceof Error) {
       if (error.message.includes("timeout")) {

@@ -3,7 +3,6 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  *
  * Required secrets (set with: wrangler secret put <NAME>):
- * - OPENROUTER_TOKEN: OpenRouter API key for LLM access
  * - AUTHORIZED_SENDERS: Comma-separated list of authorized email domains/addresses
  */
 {
@@ -40,8 +39,8 @@
     }
   ],
   /**
-   * AI Gateway binding for routing LLM requests through Cloudflare
-   * Provides analytics, rate limiting, and caching capabilities
+   * Workers AI binding for direct LLM access via Cloudflare
+   * Models: @cf/moonshotai/kimi-k2.5 (orchestrator), @cf/zai-org/glm-4.7-flash (specialists)
    */
   "ai": {
     "binding": "AI"

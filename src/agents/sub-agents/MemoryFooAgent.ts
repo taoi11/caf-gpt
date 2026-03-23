@@ -61,7 +61,7 @@ ${agentReply}
             user_input: emailExchange,
           },
           temperature: this.config.llm.models.memoryFoo.temperature,
-          reasoning: this.config.llm.models.memoryFoo.reasoning,
+          maxOutputTokens: this.config.llm.models.memoryFoo.maxOutputTokens,
         },
         MemoryResponseSchema,
         "memory_response"

@@ -16,7 +16,6 @@ import { z } from "zod";
 import { TwoCallAgent, type TwoCallAgentConfig } from "../../src/agents/utils/TwoCallAgent";
 import type { AppConfig } from "../../src/config";
 import { createConfig } from "../../src/config";
-import { AgentCreditsExhaustedError } from "../../src/errors";
 import type { ResearchRequest } from "../../src/types";
 import { createMockEnv } from "../mocks";
 import type { MockR2Bucket } from "../mocks/cloudflare";
@@ -28,20 +27,22 @@ interface MockAssets {
 }
 
 // Use vi.hoisted to define mock function BEFORE module imports
-const { mockInvoke } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
+const { mockGenerateText, mockGenerateObject } = vi.hoisted(() => ({
+  mockGenerateText: vi.fn(),
+  mockGenerateObject: vi.fn(),
 }));
 
-// Mock ChatOpenAI
-vi.mock("@langchain/openai", () => ({
-  ChatOpenAI: vi.fn(function MockChatOpenAI() {
-    return {
-      invoke: mockInvoke,
-      withStructuredOutput: vi.fn((_schema: unknown) => ({
-        invoke: mockInvoke,
-      })),
-    };
-  }),
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    generateText: mockGenerateText,
+    generateObject: mockGenerateObject,
+  };
+});
+
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: vi.fn(() => vi.fn(() => ({ modelId: "test-model" }))),
 }));
 
 // Test schema for selector
@@ -86,15 +87,15 @@ class TestTwoCallAgent extends TwoCallAgent<TestSelectorResponse> {
 }
 
 function setMockLLMStructuredResponse(response: TestSelectorResponse) {
-  mockInvoke.mockResolvedValueOnce(response);
+  mockGenerateObject.mockResolvedValueOnce({ object: response });
 }
 
 function setMockLLMResponse(response: string) {
-  mockInvoke.mockResolvedValueOnce({ content: response });
+  mockGenerateText.mockResolvedValueOnce({ text: response });
 }
 
 function setMockLLMError(message: string) {
-  mockInvoke.mockRejectedValueOnce(new Error(message));
+  mockGenerateObject.mockRejectedValueOnce(new Error(message));
 }
 
 describe("TwoCallAgent", () => {
@@ -112,7 +113,8 @@ describe("TwoCallAgent", () => {
   };
 
   beforeEach(() => {
-    mockInvoke.mockReset();
+    mockGenerateText.mockReset();
+    mockGenerateObject.mockReset();
 
     mockEnv = createMockEnv();
     config = createConfig(undefined);
@@ -157,7 +159,8 @@ describe("TwoCallAgent", () => {
       const result = await agent.research(request);
 
       expect(result).toContain("answer based on documents");
-      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+      expect(mockGenerateText).toHaveBeenCalledTimes(1);
     });
 
     it("should reject empty research question", async () => {
@@ -168,7 +171,8 @@ describe("TwoCallAgent", () => {
       const result = await agent.research(request);
 
       expect(result).toContain("error");
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(mockGenerateObject).not.toHaveBeenCalled();
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should reject whitespace-only research question", async () => {
@@ -179,7 +183,8 @@ describe("TwoCallAgent", () => {
       const result = await agent.research(request);
 
       expect(result).toContain("error");
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(mockGenerateObject).not.toHaveBeenCalled();
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should handle missing index file", async () => {
@@ -192,7 +197,8 @@ describe("TwoCallAgent", () => {
       const result = await agent.research(request);
 
       expect(result).toContain("couldn't identify relevant");
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(mockGenerateObject).not.toHaveBeenCalled();
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should handle selector returning empty file list", async () => {
@@ -205,7 +211,7 @@ describe("TwoCallAgent", () => {
       const result = await agent.research(request);
 
       expect(result).toContain("couldn't identify relevant");
-      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
     });
 
     it("should handle selector error gracefully", async () => {
@@ -218,16 +224,6 @@ describe("TwoCallAgent", () => {
       const result = await agent.research(request);
 
       expect(result).toContain("couldn't identify relevant");
-    });
-
-    it("should throw on credit exhaustion errors", async () => {
-      setMockLLMError("OpenRouter error 402: can only afford 123 tokens with credit balance");
-
-      const request: ResearchRequest = {
-        question: "Test question",
-      };
-
-      await expect(agent.research(request)).rejects.toBeInstanceOf(AgentCreditsExhaustedError);
     });
 
     it("should handle missing selected documents", async () => {
@@ -258,12 +254,13 @@ describe("TwoCallAgent", () => {
 
       // Should still succeed with doc1
       expect(result).toContain("Answer based on available documents");
-      expect(mockInvoke).toHaveBeenCalledTimes(2);
+      expect(mockGenerateObject).toHaveBeenCalledTimes(1);
+      expect(mockGenerateText).toHaveBeenCalledTimes(1);
     });
 
     it("should handle answer generation error", async () => {
       setMockLLMStructuredResponse({ files: ["doc1"] });
-      setMockLLMError("Answer API error");
+      mockGenerateText.mockRejectedValueOnce(new Error("Answer API error"));
 
       const request: ResearchRequest = {
         question: "Test question",
@@ -287,28 +284,13 @@ describe("TwoCallAgent", () => {
       expect(result).toContain("Answer using all three documents");
 
       // Check that answer call includes all three documents
-      const answerCallArgs = mockInvoke.mock.calls[1];
+      const answerCallArgs = mockGenerateText.mock.calls[0];
       expect(answerCallArgs).toBeDefined();
     });
 
     it("should format documents with correct tags", async () => {
       setMockLLMStructuredResponse({ files: ["doc1"] });
-
-      // Capture the prompt input to verify formatting
-      let capturedPrompt = "";
-      mockInvoke.mockImplementation(async (input: unknown) => {
-        if (
-          typeof input === "object" &&
-          input !== null &&
-          "messages" in input &&
-          Array.isArray(input.messages) &&
-          input.messages[0]
-        ) {
-          const msg = input.messages[0] as { content: string };
-          capturedPrompt = msg.content;
-        }
-        return { content: "Answer" };
-      });
+      mockGenerateText.mockResolvedValueOnce({ text: "Answer" });
 
       const request: ResearchRequest = {
         question: "Test question",
@@ -316,27 +298,15 @@ describe("TwoCallAgent", () => {
 
       await agent.research(request);
 
-      expect(capturedPrompt).toContain("<doc_doc1>");
-      expect(capturedPrompt).toContain("</doc_doc1>");
+      const answerCall = mockGenerateText.mock.calls[0][0];
+      const capturedSystem = answerCall.system || "";
+      expect(capturedSystem).toContain("<doc_doc1>");
+      expect(capturedSystem).toContain("</doc_doc1>");
     });
 
     it("should include query in selector call", async () => {
-      let capturedQuery = "";
-      mockInvoke.mockImplementationOnce(async (input: unknown) => {
-        if (
-          typeof input === "object" &&
-          input !== null &&
-          "messages" in input &&
-          Array.isArray(input.messages) &&
-          input.messages.length > 0
-        ) {
-          const msg = input.messages[input.messages.length - 1] as { content: string };
-          capturedQuery = msg.content;
-        }
-        return { files: ["doc1"] };
-      });
-
-      mockInvoke.mockResolvedValueOnce({ content: "Answer" });
+      mockGenerateObject.mockResolvedValueOnce({ object: { files: ["doc1"] } });
+      mockGenerateText.mockResolvedValueOnce({ text: "Answer" });
 
       const request: ResearchRequest = {
         question: "What is the test policy?",
@@ -344,7 +314,9 @@ describe("TwoCallAgent", () => {
 
       await agent.research(request);
 
-      expect(capturedQuery).toContain("What is the test policy?");
+      const selectorCall = mockGenerateObject.mock.calls[0][0];
+      const capturedPrompt = selectorCall.prompt || "";
+      expect(capturedPrompt).toContain("What is the test policy?");
     });
 
     it("should truncate long questions in logs", async () => {
@@ -421,27 +393,23 @@ describe("TwoCallAgent", () => {
       );
 
       expect(answer).toBe("Generated answer");
-      expect(mockInvoke).toHaveBeenCalled();
+      expect(mockGenerateText).toHaveBeenCalled();
     });
 
     it("should include content in prompt variables", async () => {
-      let capturedVariables: unknown = null;
-      mockInvoke.mockImplementationOnce(async (input: unknown) => {
-        const typedInput = input as { messages?: Array<{ content: string }> };
-        if (typedInput.messages?.[0]) {
-          capturedVariables = typedInput.messages[0].content;
-        }
-        return { content: "Answer" };
-      });
+      mockGenerateText.mockResolvedValueOnce({ text: "Answer" });
 
       // @ts-expect-error - Testing protected method
       await agent.answerQuery("Test question", "Document content here");
 
-      expect(capturedVariables).toContain("Document content here");
+      const answerCall = mockGenerateText.mock.calls[0][0];
+      // Content variables go into the system prompt, user_input goes into prompt
+      const capturedSystem = answerCall.system || "";
+      expect(capturedSystem).toContain("Document content here");
     });
 
     it("should throw error on LLM failure", async () => {
-      setMockLLMError("API error");
+      mockGenerateText.mockRejectedValueOnce(new Error("API error"));
 
       // @ts-expect-error - Testing protected method
       await expect(agent.answerQuery("Test question", "Content")).rejects.toThrow("API error");

@@ -60,10 +60,10 @@ Emails are processed through **Cloudflare Email Workers**:
 All agents use `callLangChainStructured()` with Zod schema validation:
 
 - Define response schema using Zod (see `src/schemas.ts`)
-- LLM returns JSON matching schema (enforced by OpenAI's structured output mode with `method: "jsonSchema"` and `strict: true`)
-- LangChain automatically validates and parses response using `withStructuredOutput()`
+- LLM returns JSON matching schema via AI SDK's `generateObject()` with structured output
+- AI SDK automatically validates and parses response using the Zod schema
 - Zod throws `ValidationError` if response doesn't match schema
-- LangChain's built-in error handling catches API failures and timeout errors
+- AI SDK's built-in error handling catches API failures and timeout errors
 
 ### Strict Failure Mode (No Degraded State)
 
@@ -83,35 +83,16 @@ R2 organization: `${category}/${filename}`
 
 ## LLM Integration
 
-The codebase uses **LangChain** (`@langchain/openai`) for all LLM interactions.
+The codebase uses **Vercel AI SDK** (`ai` + `workers-ai-provider`) with Cloudflare Workers AI for all LLM interactions.
 
 **Key points:**
 
 - All agents use `callLangChain()` and `callLangChainStructured()` methods in `BaseAgent.ts`
-- **Prompt templating**: Uses `ChatPromptTemplate` with `{variable}` syntax, cached via `PromptManager.getTemplate()`
-- **Structured output**: Uses `withStructuredOutput()` with Zod schemas (defined in `src/schemas.ts`) for automatic JSON validation
-- **Direct OpenRouter calls**: ChatOpenAI connects directly to `https://openrouter.ai/api/v1` (no AI Gateway)
-- **Streaming is disabled** (`streaming: false`) for CPU efficiency in Cloudflare Workers - non-streaming responses are faster and consume less CPU time
-
-### Prompt Template Variable Escaping
-
-**CRITICAL**: LangChain's `ChatPromptTemplate` interprets `{variable}` as template placeholders. If your prompt contains JSON examples with curly braces, you MUST escape them:
-
-**Wrong** (will cause "Missing value for input variable" error):
-```json
-{
-  "example_field": ["value1", "value2"]
-}
-```
-
-**Correct** (double curly braces render as literal `{` and `}`):
-```json
-{{
-  "example_field": ["value1", "value2"]
-}}
-```
-
-See `public/prompts/memory_foo.md` for a working example of escaped JSON in prompts.
+- **Prompt templating**: Uses `PromptManager` with `{variable}` syntax for template rendering
+- **Structured output**: Uses `generateObject()` with Zod schemas (defined in `src/schemas.ts`) for automatic JSON validation
+- **Workers AI binding**: Uses `env.AI` binding directly via `workers-ai-provider` — no external API keys needed
+- **Models**: `@cf/moonshotai/kimi-k2.5` (orchestrator), `@cf/zai-org/glm-4.7-flash` (specialists)
+- **Streaming is disabled** for CPU efficiency in Cloudflare Workers
 
 ## Adding New Agents/Sub-agents
 

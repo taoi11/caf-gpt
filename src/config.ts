@@ -11,11 +11,10 @@
 interface LLMModelConfig {
   model: string;
   temperature: number;
-  reasoning?: LLMReasoningConfig;
+  maxOutputTokens: number;
 }
 
 interface LLMConfig {
-  maxTokens: number;
   models: {
     primeFoo: LLMModelConfig;
     leaveFoo: LLMModelConfig;
@@ -36,32 +35,19 @@ interface EmailConfig {
   monitoredAddresses: string[];
 }
 
-interface LLMReasoningConfig {
-  enabled?: boolean;
-  effort?: "xhigh" | "high" | "medium" | "low" | "minimal" | "none";
-  max_tokens?: number;
-  exclude?: boolean;
-}
-
-const THINKING_CONFIG: LLMReasoningConfig = {
-  effort: "high",
-};
-
 // Orchestrator model config - handles multi-turn conversations, coordination, tool use
 const ORCHESTRATOR_CONFIG: LLMModelConfig = {
-  model: "google/gemini-3-flash-preview",
+  model: "@cf/moonshotai/kimi-k2.5",
   temperature: 0.1,
-  reasoning: THINKING_CONFIG,
+  maxOutputTokens: 16384,
 };
 
 // Specialist model config - focused tasks: document Q&A, selection, generation
 const SPECIALIST_CONFIG: LLMModelConfig = {
-  model: "google/gemini-3-flash-preview",
+  model: "@cf/zai-org/glm-4.7-flash",
   temperature: 0.1,
-  reasoning: THINKING_CONFIG,
+  maxOutputTokens: 16384,
 };
-
-const DEFAULT_MAX_TOKENS = 250000;
 
 // Overall application configuration interface
 export interface AppConfig {
@@ -102,7 +88,6 @@ export function createConfig(env?: Env, overrides?: Partial<AppConfig>): AppConf
       authorizedEmails,
     },
     llm: {
-      maxTokens: llmOverride?.maxTokens ?? DEFAULT_MAX_TOKENS,
       models: llmOverride?.models ?? defaultModels,
     },
   };

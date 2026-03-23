@@ -49,7 +49,7 @@ export class PaceFooAgent extends BaseAgent {
           user_input: context,
         },
         temperature: this.config.llm.models.paceFoo.temperature,
-        reasoning: this.config.llm.models.paceFoo.reasoning,
+        maxOutputTokens: this.config.llm.models.paceFoo.maxOutputTokens,
       });
 
       this.logger.performance("pacenote generation", startTime, {

@@ -49,7 +49,6 @@ npm install
 ### 2. Configure Secrets
 
 ```bash
-wrangler secret put OPENROUTER_TOKEN
 wrangler secret put AUTHORIZED_SENDERS
 ```
 
