@@ -1,100 +1,154 @@
 /**
  * src/agents/AgentCoordinator.ts
  *
- * Agent coordinator for prime_foo using LangChain createAgent
+ * Agent coordinator for prime_foo using AI SDK built-in tool orchestration
  *
  * Top-level declarations:
- * - AgentCoordinator: Coordinates prime_foo processing using LangChain tools and agents
+ * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools and a circuit breaker (maxSteps: 3)
  */
 
-import { createAgent } from "langchain";
+import { generateText, stepCountIs, tool } from "ai";
+import { z } from "zod";
 import type { AppConfig } from "../config";
-import { AgentCreditsExhaustedError, isOpenRouterCreditsErrorMessage } from "../errors";
 import { formatError, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
-import { iterationTrackerMiddleware, resetToolCallCount } from "./middleware";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
-import { createBatchResearchTool, createFeedbackNoteTool } from "./tools";
 import { createModel } from "./utils/BaseAgent";
 import { PromptManager } from "./utils/PromptManager";
 
 export class AgentCoordinator {
   private logger: Logger;
   private promptManager: PromptManager;
-  private agent: ReturnType<typeof createAgent>;
 
-  private constructor(agent: ReturnType<typeof createAgent>, promptManager: PromptManager) {
+  private constructor(
+    private env: Env,
+    private config: AppConfig,
+    promptManager: PromptManager,
+    private leaveFooAgent: LeaveFooAgent,
+    private doadFooAgent: DoadFooAgent,
+    private qroFooAgent: QroFooAgent,
+    private paceFooAgent: PaceFooAgent
+  ) {
     this.logger = Logger.getInstance();
     this.promptManager = promptManager;
-    this.agent = agent;
   }
 
   static async create(env: Env, config: AppConfig): Promise<AgentCoordinator> {
     const promptManager = new PromptManager(env.ASSETS);
-
-    const leaveFooAgent = new LeaveFooAgent(env, config);
-    const paceFooAgent = new PaceFooAgent(env, config);
-    const doadFooAgent = new DoadFooAgent(env, config);
-    const qroFooAgent = new QroFooAgent(env, config);
-
-    const batchResearchTool = createBatchResearchTool(leaveFooAgent, doadFooAgent, qroFooAgent);
-    const feedbackNoteTool = createFeedbackNoteTool(paceFooAgent);
-
-    const model = await createModel(
+    return new AgentCoordinator(
       env,
-      config.llm.models.primeFoo.model,
-      config.llm.models.primeFoo.temperature,
-      config.llm.maxTokens,
-      config.llm.models.primeFoo.reasoning
+      config,
+      promptManager,
+      new LeaveFooAgent(env, config),
+      new DoadFooAgent(env, config),
+      new QroFooAgent(env, config),
+      new PaceFooAgent(env, config)
     );
-
-    const agent = createAgent({
-      model,
-      tools: [batchResearchTool, feedbackNoteTool],
-      middleware: [iterationTrackerMiddleware],
-    });
-
-    return new AgentCoordinator(agent, promptManager);
   }
 
   async processWithPrimeFoo(context: string, memory?: string): Promise<AgentResponse> {
     const startTime = Date.now();
 
     try {
-      this.logger.info("Starting prime_foo processing with createAgent");
+      this.logger.info("Starting prime_foo processing with AI SDK tools");
 
       if (!context || context.trim().length === 0) {
         this.logger.warn("Empty context provided to prime_foo");
         return { content: "", shouldRespond: false };
       }
 
-      resetToolCallCount();
-
       let systemPrompt = await this.promptManager.getPrompt("prime_foo");
-
-      // Inject memory into system prompt if available
       if (memory && memory.trim().length > 0) {
-        systemPrompt = `${systemPrompt}
-
-<memory>
-${memory}
-</memory>`;
+        systemPrompt = `${systemPrompt}\n\n<memory>\n${memory}\n</memory>`;
       }
 
-      const result = await this.agent.invoke(
-        {
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: `Email context:\n\n${context}` },
-          ],
+      const model = createModel(this.env, this.config.llm.models.primeFoo.model);
+      const maxSteps = 3;
+      const result = await generateText({
+        model,
+        system: systemPrompt,
+        prompt: `Email context:\n\n${context}`,
+        temperature: this.config.llm.models.primeFoo.temperature,
+        maxOutputTokens: this.config.llm.models.primeFoo.maxOutputTokens,
+        stopWhen: stepCountIs(maxSteps),
+        onStepFinish: ({ stepNumber, toolCalls }) => {
+          if (toolCalls.length > 0) {
+            this.logger.info("Tool call tracked", { stepNumber: stepNumber + 1, maxSteps });
+            if (stepNumber + 1 >= maxSteps) {
+              this.logger.warn("Circuit breaker: tool call limit reached", {
+                stepNumber: stepNumber + 1,
+                maxSteps,
+              });
+            }
+          }
         },
-        {
-          recursionLimit: 10,
-        }
-      );
+        tools: {
+          batch_research: tool({
+            description:
+              "Research policy questions across leave, DOAD, and QR&O domains. Max 3 questions per domain.",
+            inputSchema: z
+              .object({
+                leave_queries: z.array(z.string()).min(1).max(3).optional(),
+                doad_queries: z.array(z.string()).min(1).max(3).optional(),
+                qro_queries: z.array(z.string()).min(1).max(3).optional(),
+              })
+              .refine(
+                (data) =>
+                  (data.leave_queries?.length ?? 0) > 0 ||
+                  (data.doad_queries?.length ?? 0) > 0 ||
+                  (data.qro_queries?.length ?? 0) > 0,
+                { message: "At least one query array must be provided" }
+              ),
+            execute: async ({ leave_queries, doad_queries, qro_queries }) => {
+              const results: string[] = [];
 
-      const lastMessage = result.messages[result.messages.length - 1];
-      const content = lastMessage.text;
+              if (leave_queries && leave_queries.length > 0) {
+                results.push("=== Leave Policy Research ===\n");
+                const answers = await Promise.all(
+                  leave_queries.map(async (query, index) => {
+                    const answer = await this.leaveFooAgent.research({ question: query });
+                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+                  })
+                );
+                results.push(answers.join("\n"));
+              }
+
+              if (doad_queries && doad_queries.length > 0) {
+                results.push("=== DOAD Policy Research ===\n");
+                const answers = await Promise.all(
+                  doad_queries.map(async (query, index) => {
+                    const answer = await this.doadFooAgent.research({ question: query });
+                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+                  })
+                );
+                results.push(answers.join("\n"));
+              }
+
+              if (qro_queries && qro_queries.length > 0) {
+                results.push("=== QR&O Policy Research ===\n");
+                const answers = await Promise.all(
+                  qro_queries.map(async (query, index) => {
+                    const answer = await this.qroFooAgent.research({ question: query });
+                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+                  })
+                );
+                results.push(answers.join("\n"));
+              }
+
+              return results.length > 0 ? results.join("\n") : "No research queries provided.";
+            },
+          }),
+          generate_feedback_note: tool({
+            description:
+              "Generate a CAF PACE feedback note for a member when a feedback note request is received.",
+            inputSchema: z.object({
+              rank: z.enum(["cpl", "mcpl", "sgt", "wo"]),
+              context: z.string(),
+            }),
+            execute: async ({ rank, context }) => this.paceFooAgent.generateNote(rank, context),
+          }),
+        },
+      });
 
       const signature = `
 <div class="MsoNormal">
@@ -105,7 +159,7 @@ Source Code:<br>
 How to use CAF-GPT:<br>
 <pre><code>https://caf-gpt.com</code></pre>
 </div>`;
-      const finalContent = content ? content + signature : "";
+      const finalContent = result.text ? result.text + signature : "";
 
       this.logger.performance("prime_foo processing", startTime);
 
@@ -118,15 +172,6 @@ How to use CAF-GPT:<br>
         processingTime: Date.now() - startTime,
         ...formatError(error),
       });
-
-      if (error instanceof AgentCreditsExhaustedError) {
-        throw error;
-      }
-
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
-        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
-      }
 
       return {
         content:

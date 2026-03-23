@@ -10,7 +10,6 @@
 
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
-import { AgentCreditsExhaustedError } from "../../errors";
 import { formatError } from "../../Logger";
 import type { ResearchRequest } from "../../types";
 import { BaseAgent } from "./BaseAgent";
@@ -128,7 +127,7 @@ export abstract class TwoCallAgent<TSelector> extends BaseAgent {
           promptName: this.agentConfig.selectorPromptName,
           variables: this.getSelectorVariables(query, indexContent),
           temperature: modelConfig.temperature,
-          reasoning: modelConfig.reasoning,
+          maxOutputTokens: modelConfig.maxOutputTokens,
         },
         this.getSelectorSchema(),
         `${this.agentConfig.category}_selector`
@@ -136,9 +135,6 @@ export abstract class TwoCallAgent<TSelector> extends BaseAgent {
 
       return this.extractFilesFromResponse(response);
     } catch (error) {
-      if (error instanceof AgentCreditsExhaustedError) {
-        throw error;
-      }
       this.logger.error(`${this.agentConfig.policyType} file selection failed`, formatError(error));
       return [];
     }
@@ -195,7 +191,7 @@ export abstract class TwoCallAgent<TSelector> extends BaseAgent {
           user_input: query,
         },
         temperature: modelConfig.temperature,
-        reasoning: modelConfig.reasoning,
+        maxOutputTokens: modelConfig.maxOutputTokens,
       });
 
       return response;

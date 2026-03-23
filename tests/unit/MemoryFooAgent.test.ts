@@ -15,18 +15,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
 
 // Use vi.hoisted to define mock function BEFORE module imports
-const { mockInvoke, mockWithStructuredOutput } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
-  mockWithStructuredOutput: vi.fn(),
+const { mockGenerateObject } = vi.hoisted(() => ({
+  mockGenerateObject: vi.fn(),
 }));
 
-vi.mock("@langchain/openai", () => ({
-  ChatOpenAI: vi.fn(function MockChatOpenAI() {
-    return {
-      invoke: mockInvoke,
-      withStructuredOutput: mockWithStructuredOutput,
-    };
-  }),
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    generateObject: mockGenerateObject,
+  };
+});
+
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: vi.fn(() => vi.fn(() => ({ modelId: "test-model" }))),
 }));
 
 import { MemoryFooAgent } from "../../src/agents/sub-agents/MemoryFooAgent";
@@ -35,17 +37,11 @@ import { createConfig } from "../../src/config";
 function setMockStructuredResponse(
   response: { status: "unchanged" } | { status: "updated"; content: string }
 ) {
-  const mockStructuredChat = {
-    invoke: vi.fn().mockResolvedValueOnce(response),
-  };
-  mockWithStructuredOutput.mockReturnValueOnce(mockStructuredChat);
+  mockGenerateObject.mockResolvedValueOnce({ object: response });
 }
 
 function setMockLLMError(message: string) {
-  const mockStructuredChat = {
-    invoke: vi.fn().mockRejectedValueOnce(new Error(message)),
-  };
-  mockWithStructuredOutput.mockReturnValueOnce(mockStructuredChat);
+  mockGenerateObject.mockRejectedValueOnce(new Error(message));
 }
 
 describe("MemoryFooAgent", () => {
@@ -53,13 +49,8 @@ describe("MemoryFooAgent", () => {
   let mockEnv: ReturnType<typeof createMockEnv>;
 
   beforeEach(() => {
-    mockInvoke.mockReset();
-    mockWithStructuredOutput.mockReset();
-
-    const defaultStructuredChat = {
-      invoke: vi.fn().mockResolvedValue({ status: "unchanged" }),
-    };
-    mockWithStructuredOutput.mockReturnValue(defaultStructuredChat);
+    mockGenerateObject.mockReset();
+    mockGenerateObject.mockResolvedValue({ object: { status: "unchanged" } });
 
     mockEnv = createMockEnv();
     const config = createConfig(undefined);
@@ -115,7 +106,7 @@ describe("MemoryFooAgent", () => {
     const result = await agent.updateMemory("Memory", "", "Reply");
 
     expect(result.updated).toBe(false);
-    expect(mockWithStructuredOutput).not.toHaveBeenCalled();
+    expect(mockGenerateObject).not.toHaveBeenCalled();
   });
 
   it("should reject whitespace-only email context", async () => {
@@ -128,7 +119,7 @@ describe("MemoryFooAgent", () => {
     const result = await agent.updateMemory("Memory", "User email content", "");
 
     expect(result.updated).toBe(false);
-    expect(mockWithStructuredOutput).not.toHaveBeenCalled();
+    expect(mockGenerateObject).not.toHaveBeenCalled();
   });
 
   it("should handle LLM API errors gracefully", async () => {
@@ -171,22 +162,15 @@ Paragraph 3: Currently focused on deployment preparation.`;
   });
 
   it("should use empty memory placeholder for new users", async () => {
-    let capturedInput: unknown = null;
-
-    const mockStructuredChat = {
-      invoke: vi.fn(async (input: unknown) => {
-        capturedInput = input;
-        return { status: "unchanged" };
-      }),
-    };
-    mockWithStructuredOutput.mockReturnValueOnce(mockStructuredChat);
+    mockGenerateObject.mockResolvedValueOnce({ object: { status: "unchanged" } });
 
     await agent.updateMemory("", "Question", "Answer");
 
-    const promptValue = capturedInput as { messages: Array<{ content: string }> };
-    expect(promptValue.messages).toBeDefined();
-    expect(promptValue.messages.length).toBeGreaterThan(0);
-    const systemContent = promptValue.messages[0].content;
-    expect(systemContent).toContain("No prior interaction history");
+    const calls = mockGenerateObject.mock.calls;
+    expect(calls.length).toBeGreaterThan(0);
+    const lastCall = calls[calls.length - 1][0];
+    // Memory content goes into the system prompt via template variables
+    const capturedContent = (lastCall.system || "") + (lastCall.prompt || "");
+    expect(capturedContent).toContain("No prior interaction history");
   });
 });

@@ -9,7 +9,6 @@
  */
 
 import {
-  AgentCreditsExhaustedError,
   AgentError,
   EmailCompositionError,
   EmailParsingError,
@@ -49,13 +48,6 @@ export const ERROR_RESPONSE_TEMPLATES: ErrorResponseTemplate[] = [
     lines: [
       "I am picky about email formats and I seem to have rejected yours.",
       "Please double-check the content and try again.",
-    ],
-  },
-  {
-    match: (error) => error instanceof AgentCreditsExhaustedError,
-    lines: [
-      "Tragically, the AI credits given by Big AI have run out for this month.",
-      "Come back after the monthly reset next month.",
     ],
   },
   {

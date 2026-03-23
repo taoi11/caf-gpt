@@ -1,112 +1,49 @@
 /**
  * src/agents/utils/BaseAgent.ts
  *
- * Base agent with LangChain LLM integration using ChatPromptTemplate
- * Routes requests through Cloudflare AI Gateway for analytics and monitoring
+ * Base agent with Cloudflare Workers AI integration via AI SDK
  *
  * Top-level declarations:
- * - BaseAgent: Base agent with LangChain integration and template-based prompts
- * - createModel: Creates ChatOpenAI model routed through CF AI Gateway
- * - callLangChain: Calls LLM using cached ChatPromptTemplate with variables
- * - callLangChainStructured: Calls LLM with structured output using Zod schema
+ * - BaseAgent: Base agent with AI SDK integration and template-based prompts
+ * - createModel: Creates Workers AI model via workers-ai-provider binding
+ * - callLangChain: Backward-compatible wrapper for plain text model calls
+ * - callLangChainStructured: Backward-compatible wrapper for structured model calls
  */
 
-import { ChatOpenAI } from "@langchain/openai";
+import type { LanguageModel } from "ai";
+import { generateObject, generateText } from "ai";
+import { createWorkersAI } from "workers-ai-provider";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
 import {
   AgentAPIError,
-  AgentCreditsExhaustedError,
   AgentTimeoutError,
   AgentValidationError,
-  isOpenRouterCreditsErrorMessage,
 } from "../../errors";
 import { formatError, Logger } from "../../Logger";
 import { DocumentRetriever } from "../../storage/DocumentRetriever";
 import { PromptManager } from "./PromptManager";
-
-// AI Gateway name configured in Cloudflare dashboard
-const AI_GATEWAY_NAME = "caf-gpt";
-
-type LLMReasoningConfig =
-  AppConfig["llm"]["models"][keyof AppConfig["llm"]["models"]]["reasoning"];
-
-// Module-level gateway URL cache (shared across all agents in same request)
-let gatewayUrlCache: string | undefined;
-let gatewayUrlResolved = false;
-
-// Resolve AI Gateway URL, caching result for the request lifecycle
-async function getGatewayUrl(env: Env): Promise<string | undefined> {
-  if (gatewayUrlResolved) return gatewayUrlCache;
-
-  try {
-    const gateway = env.AI.gateway(AI_GATEWAY_NAME);
-    const url = await gateway.getUrl("openrouter");
-    // CRITICAL: Must append /v1 - LangChain adds /chat/completions
-    gatewayUrlCache = `${url}/v1`;
-  } catch {
-    gatewayUrlCache = undefined;
-  }
-  gatewayUrlResolved = true;
-  return gatewayUrlCache;
-}
 
 interface LLMCallParams {
   model: string;
   promptName: string;
   variables: Record<string, string>;
   temperature: number;
-  reasoning?: LLMReasoningConfig;
+  maxOutputTokens: number;
 }
 
-// Create ChatOpenAI model routed through CF AI Gateway
-export async function createModel(
-  env: Env,
-  model: string,
-  temperature: number,
-  maxTokens?: number,
-  reasoning?: LLMReasoningConfig
-): Promise<ChatOpenAI> {
-  const gatewayUrl = await getGatewayUrl(env);
-  const baseURL = gatewayUrl ?? "https://openrouter.ai/api/v1";
-
-  const defaultHeaders: Record<string, string> = {
-    "HTTP-Referer": "https://caf-gpt.com",
-    "X-Title": "CAF-GPT",
-  };
-
-  // CRITICAL: cf-aig-authorization required when AI Gateway "Authenticated Gateway" is enabled
-  if (gatewayUrl && env.CF_AIG_AUTH) {
-    defaultHeaders["cf-aig-authorization"] = `Bearer ${env.CF_AIG_AUTH}`;
-  }
-
-  const modelKwargs = reasoning
-    ? {
-        extra_body: {
-          reasoning,
-        },
-      }
-    : undefined;
-
-  return new ChatOpenAI({
-    model,
-    temperature,
-    apiKey: env.OPENROUTER_TOKEN,
-    configuration: { baseURL, defaultHeaders },
-    maxRetries: 2,
-    maxTokens,
-    timeout: 60000,
-    modelKwargs,
-  });
+export function createModel(env: Env, model: string): LanguageModel {
+  const workersai = createWorkersAI({ binding: env.AI });
+  // Cast needed since new CF models may not be in the provider's type map yet.
+  return workersai(model as Parameters<typeof workersai>[0]) as unknown as LanguageModel;
 }
 
-// Base agent with OpenRouter integration and ChatPromptTemplate support
 export abstract class BaseAgent {
   protected logger: Logger;
   protected config: AppConfig;
   protected promptManager: PromptManager;
   protected docRetriever: DocumentRetriever;
-  private modelCache: Map<string, ChatOpenAI> = new Map();
+  private modelCache: Map<string, LanguageModel> = new Map();
 
   constructor(
     protected env: Env,
@@ -118,56 +55,42 @@ export abstract class BaseAgent {
     this.docRetriever = new DocumentRetriever(env.R2_BUCKET);
   }
 
-  // Get cached ChatOpenAI model instance
-  private async getCachedModel(
-    model: string,
-    temperature: number,
-    maxTokens?: number,
-    reasoning?: LLMReasoningConfig
-  ): Promise<ChatOpenAI> {
-    const reasoningKey = reasoning ? JSON.stringify(reasoning) : "none";
-    const cacheKey = `${model}-${temperature}-${maxTokens ?? "default"}-${reasoningKey}`;
-    let cached = this.modelCache.get(cacheKey);
-
+  private getCachedModel(model: string): LanguageModel {
+    let cached = this.modelCache.get(model);
     if (!cached) {
-      cached = await createModel(this.env, model, temperature, maxTokens, reasoning);
-      this.modelCache.set(cacheKey, cached);
-      this.logger.debug("Created and cached new ChatOpenAI model", { model, temperature });
+      cached = createModel(this.env, model);
+      this.modelCache.set(model, cached);
+      this.logger.debug("Created and cached new AI SDK model", { model });
     }
-
     return cached;
   }
 
-  // Call LLM using cached ChatPromptTemplate with variables
+  // Backward-compatible wrapper for text generation
   protected async callLangChain(params: LLMCallParams): Promise<string> {
     try {
-      this.logger.info("Calling OpenRouter via LangChain", {
+      this.logger.info("Calling Workers AI via AI SDK", {
         model: params.model,
         promptName: params.promptName,
       });
 
-      const template = await this.promptManager.getTemplate(params.promptName);
-      const messages = await template.invoke(params.variables);
+      const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
+      const model = this.getCachedModel(params.model);
+      const result = await generateText({
+        model,
+        system: rendered.system,
+        prompt: rendered.user,
+        temperature: params.temperature,
+        maxOutputTokens: params.maxOutputTokens,
+      });
 
-      const chat = await this.getCachedModel(
-        params.model,
-        params.temperature,
-        this.config.llm.maxTokens,
-        params.reasoning
-      );
-      const response = await chat.invoke(messages);
-
-      if (!response.content || String(response.content).trim() === "") {
-        throw new AgentValidationError("LangChain returned empty content");
+      if (!result.text || result.text.trim().length === 0) {
+        throw new AgentValidationError("AI SDK returned empty content");
       }
 
-      this.logger.info("LangChain call successful", {
-        model: params.model,
-        tokens: response.usage_metadata,
-      });
-      return String(response.content);
+      this.logger.info("AI SDK call successful", { model: params.model });
+      return result.text;
     } catch (error) {
-      this.logger.error("LangChain call failed", {
+      this.logger.error("AI SDK call failed", {
         model: params.model,
         promptName: params.promptName,
         ...formatError(error),
@@ -177,56 +100,47 @@ export abstract class BaseAgent {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
-        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
-      }
-
       if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
-        throw new AgentTimeoutError(`LangChain call timed out: ${errorMessage}`);
+        throw new AgentTimeoutError(`AI SDK call timed out: ${errorMessage}`);
       }
 
-      throw new AgentAPIError(`LangChain API call failed: ${errorMessage}`);
+      throw new AgentAPIError(`AI SDK call failed: ${errorMessage}`);
     }
   }
 
-  // Call LLM with structured output using Zod schema
+  // Backward-compatible wrapper for structured generation
   protected async callLangChainStructured<T>(
     params: LLMCallParams,
     schema: z.ZodType<T>,
     schemaName?: string
   ): Promise<T> {
     try {
-      this.logger.info("Calling OpenRouter via LangChain with structured output", {
+      this.logger.info("Calling Workers AI via AI SDK with structured output", {
         model: params.model,
         promptName: params.promptName,
         schemaName,
       });
 
-      const template = await this.promptManager.getTemplate(params.promptName);
-      const messages = await template.invoke(params.variables);
-
-      const chat = await this.getCachedModel(
-        params.model,
-        params.temperature,
-        this.config.llm.maxTokens,
-        params.reasoning
-      );
-      const structuredChat = chat.withStructuredOutput(schema, {
-        method: "jsonSchema",
-        strict: true,
-        name: schemaName ?? "response",
+      const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
+      const model = this.getCachedModel(params.model);
+      const result = await generateObject({
+        model,
+        schema,
+        schemaName: schemaName ?? "response",
+        system: rendered.system,
+        prompt: rendered.user,
+        temperature: params.temperature,
+        maxOutputTokens: params.maxOutputTokens,
       });
 
-      const response = await structuredChat.invoke(messages);
-
-      this.logger.info("LangChain structured call successful", {
+      this.logger.info("AI SDK structured call successful", {
         model: params.model,
         schemaName,
       });
 
-      return response as T;
+      return result.object;
     } catch (error) {
-      this.logger.error("LangChain structured call failed", {
+      this.logger.error("AI SDK structured call failed", {
         model: params.model,
         promptName: params.promptName,
         schemaName,
@@ -235,21 +149,16 @@ export abstract class BaseAgent {
 
       const errorMessage = error instanceof Error ? error.message : String(error);
 
-      if (isOpenRouterCreditsErrorMessage(errorMessage)) {
-        throw new AgentCreditsExhaustedError(`OpenRouter credits exhausted: ${errorMessage}`);
-      }
-
       if (errorMessage.includes("validation") || errorMessage.includes("schema")) {
         throw new AgentValidationError(
-          `LangChain structured output validation failed: ${errorMessage}`
+          `AI SDK structured output validation failed: ${errorMessage}`
         );
       }
-
       if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
-        throw new AgentTimeoutError(`LangChain structured call timed out: ${errorMessage}`);
+        throw new AgentTimeoutError(`AI SDK structured call timed out: ${errorMessage}`);
       }
 
-      throw new AgentAPIError(`LangChain structured API call failed: ${errorMessage}`);
+      throw new AgentAPIError(`AI SDK structured API call failed: ${errorMessage}`);
     }
   }
 
@@ -267,15 +176,11 @@ export abstract class BaseAgent {
       ...formatError(error),
     });
 
-    if (error instanceof AgentCreditsExhaustedError) {
-      throw error;
-    }
-
     if (error instanceof Error) {
       if (error.message.includes("timeout")) {
         return errorMessages.timeout;
       }
-      if (error.message.includes("AI Gateway") || error.message.includes("LangChain")) {
+      if (error.message.includes("AI Gateway") || error.message.includes("AI SDK")) {
         return errorMessages.aiGateway;
       }
     }
@@ -283,7 +188,6 @@ export abstract class BaseAgent {
     return errorMessages.generic;
   }
 
-  // Convenience wrapper for research operations - delegates to handleAgentError
   protected handleResearchError(
     operation: string,
     startTime: number,

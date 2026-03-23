@@ -1,7 +1,7 @@
 /**
  * tests/mocks/cloudflare.ts
  *
- * Mock Cloudflare bindings for testing (R2, AI Gateway, Email, Assets, Hyperdrive)
+ * Mock Cloudflare bindings for testing (R2, AI, Email, Assets, Hyperdrive)
  *
  * Top-level declarations:
  * - MockR2Object: Mock R2 object implementation
@@ -9,7 +9,6 @@
  * - MockFetcher: Mock Fetcher for static assets
  * - MockHyperdrive: Mock Hyperdrive for database connections
  * - createMockEnv: Creates mock Cloudflare environment
- * - createMockFetch: Creates mock fetch function
  */
 
 import { vi } from "vitest";
@@ -175,7 +174,11 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
   const mockAssets = new MockFetcher();
   const mockHyperdrive = new MockHyperdrive();
 
-  const mockAIGateway = {
+  // Mock Workers AI binding for workers-ai-provider
+  const mockAI = {
+    run: vi.fn(async () => ({
+      response: "mock AI response",
+    })),
     gateway: vi.fn((_gatewayId: string) => ({
       getUrl: vi.fn(async (provider: string) => {
         return `https://gateway.ai.cloudflare.com/v1/test-account/test-gateway/${provider}/v1`;
@@ -187,27 +190,12 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
   };
 
   return {
-    AI_GATEWAY_ACCOUNT_ID: "test-account-id",
-    AI_GATEWAY_ID: "test-gateway-id",
-    SMTP_SERVER: "smtp.test.com",
-    SMTP_PORT: "587",
-    SMTP_USER: "test@test.com",
-    SMTP_PASSWORD: "test-password",
-    EMAIL_FROM: "cafgpt@test.com",
-    OPENROUTER_TOKEN: "test-api-key",
     AUTHORIZED_SENDERS: "test@forces.gc.ca,admin@test.com",
     R2_BUCKET: mockR2 as unknown as R2Bucket,
     BUCKET: mockR2 as unknown as R2Bucket,
     ASSETS: mockAssets as unknown as Fetcher,
-    AI_GATEWAY: mockAIGateway as unknown as Ai,
+    AI: mockAI as unknown as Ai,
     HYPERDRIVE: mockHyperdrive as unknown as Hyperdrive,
     ...overrides,
   } as Env;
-}
-
-// Mock fetch for OpenRouter/AI Gateway calls
-export function createMockFetch(responseBody: string, status = 200): typeof fetch {
-  return vi.fn(async () => {
-    return new Response(responseBody, { status });
-  }) as unknown as typeof fetch;
 }

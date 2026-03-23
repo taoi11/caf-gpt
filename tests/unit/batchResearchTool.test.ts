@@ -145,29 +145,31 @@ describe("batchResearchTool", () => {
     ]);
   });
 
-  it("should reject empty input via schema validation", async () => {
+  it("should handle empty input gracefully", async () => {
     const tool = createBatchResearchTool(
       mockLeaveAgent as unknown as LeaveFooAgent,
       mockDoadAgent as unknown as DoadFooAgent,
       mockQroAgent as unknown as QroFooAgent
     );
 
-    await expect(tool.invoke({})).rejects.toThrow();
+    const result = await tool.invoke({});
 
+    expect(result).toBe("No research queries provided.");
     expect(mockLeaveAgent.research).not.toHaveBeenCalled();
     expect(mockDoadAgent.research).not.toHaveBeenCalled();
     expect(mockQroAgent.research).not.toHaveBeenCalled();
   });
 
-  it("should reject empty arrays via schema validation", async () => {
+  it("should handle empty arrays gracefully", async () => {
     const tool = createBatchResearchTool(
       mockLeaveAgent as unknown as LeaveFooAgent,
       mockDoadAgent as unknown as DoadFooAgent,
       mockQroAgent as unknown as QroFooAgent
     );
 
-    await expect(tool.invoke({ leave_queries: [] })).rejects.toThrow();
+    const result = await tool.invoke({ leave_queries: [] });
 
+    expect(result).toBe("No research queries provided.");
     expect(mockLeaveAgent.research).not.toHaveBeenCalled();
   });
 

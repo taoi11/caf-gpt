@@ -13,14 +13,12 @@
  * - AgentError: Base class for AI agent errors
  * - AgentTimeoutError: Agent/LLM timeout errors
  * - AgentAPIError: Agent/LLM API failures
- * - AgentCreditsExhaustedError: OpenRouter credit exhaustion errors
- * - StorageError: Base class for storage errors
+* - StorageError: Base class for storage errors
  * - StorageNotFoundError: Document/resource not found
  * - StorageConnectionError: Database/R2 connection failures
  * - APIError: Base class for external API errors
  * - APITimeoutError: External API timeout errors
  * - APIAuthError: External API authentication failures
- * - isOpenRouterCreditsErrorMessage: Detects OpenRouter credit exhaustion from error text
  */
 
 // Base error class for all application errors
@@ -76,12 +74,6 @@ export class AgentTimeoutError extends AgentError {
 
 export class AgentAPIError extends AgentError {
   readonly code = "AGENT_API_ERROR";
-  readonly recoverable = true;
-}
-
-/** OpenRouter credit exhaustion error. */
-export class AgentCreditsExhaustedError extends AgentError {
-  readonly code = "AGENT_CREDITS_EXHAUSTED";
   readonly recoverable = true;
 }
 
@@ -150,19 +142,3 @@ export function isTypedAPIError(error: unknown): error is TypedAPIError {
   );
 }
 
-/** Detect OpenRouter credit exhaustion errors from message text. */
-export function isOpenRouterCreditsErrorMessage(message: string): boolean {
-  const normalized = message.toLowerCase();
-  const has402 = normalized.includes("402");
-  const mentionsCredits = normalized.includes("credit");
-  const mentionsMaxTokens = normalized.includes("max_tokens") || normalized.includes("max tokens");
-  const mentionsAfford = normalized.includes("can only afford");
-  const mentionsRequiresCredits = normalized.includes("requires more credits");
-  const mentionsOpenRouter = normalized.includes("openrouter");
-
-  return (
-    (has402 && (mentionsCredits || mentionsMaxTokens || mentionsAfford)) ||
-    (mentionsRequiresCredits && mentionsCredits) ||
-    (mentionsOpenRouter && mentionsCredits && mentionsMaxTokens)
-  );
-}

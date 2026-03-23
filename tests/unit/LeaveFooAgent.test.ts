@@ -13,16 +13,20 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
 import type { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
-const { mockInvoke } = vi.hoisted(() => ({
-  mockInvoke: vi.fn(),
+const { mockGenerateText } = vi.hoisted(() => ({
+  mockGenerateText: vi.fn(),
 }));
 
-vi.mock("@langchain/openai", () => ({
-  ChatOpenAI: vi.fn(function MockChatOpenAI() {
-    return {
-      invoke: mockInvoke,
-    };
-  }),
+vi.mock("ai", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("ai")>();
+  return {
+    ...actual,
+    generateText: mockGenerateText,
+  };
+});
+
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: vi.fn(() => vi.fn(() => ({ modelId: "test-model" }))),
 }));
 
 import { LeaveFooAgent } from "../../src/agents/sub-agents/LeaveFooAgent";
@@ -30,29 +34,24 @@ import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";
 
 function setMockLLMResponse(response: string) {
-  mockInvoke.mockResolvedValueOnce({ content: response });
+  mockGenerateText.mockResolvedValueOnce({ text: response });
 }
 
 function setMockLLMError(message: string) {
-  mockInvoke.mockRejectedValueOnce(new Error(message));
-}
-
-interface ChatPromptValue {
-  messages?: Array<{ content: string }>;
+  mockGenerateText.mockRejectedValueOnce(new Error(message));
 }
 
 function captureMockMessages() {
-  let capturedInput: unknown = null;
-
-  mockInvoke.mockImplementationOnce(async (input: unknown) => {
-    capturedInput = input;
-    return { content: "Policy answer" };
-  });
+  mockGenerateText.mockResolvedValueOnce({ text: "Policy answer" });
 
   return () => {
-    if (!capturedInput) return null;
-    const promptValue = capturedInput as ChatPromptValue;
-    return promptValue.messages ?? null;
+    const calls = mockGenerateText.mock.calls;
+    if (calls.length === 0) return null;
+    const lastCall = calls[calls.length - 1][0];
+    if (lastCall?.system) {
+      return [{ content: lastCall.system }];
+    }
+    return null;
   };
 }
 
@@ -63,8 +62,8 @@ describe("LeaveFooAgent", () => {
   let mockAssets: MockFetcher;
 
   beforeEach(() => {
-    mockInvoke.mockReset();
-    mockInvoke.mockResolvedValue({ content: "Default response" });
+    mockGenerateText.mockReset();
+    mockGenerateText.mockResolvedValue({ text: "Default response" });
 
     mockEnv = createMockEnv();
     const config = createConfig(undefined);
@@ -116,7 +115,7 @@ Members are entitled to:
       const result = await agent.research(request);
 
       expect(result).toContain("20 days of annual leave");
-      expect(mockInvoke).toHaveBeenCalledTimes(1);
+      expect(mockGenerateText).toHaveBeenCalledTimes(1);
     });
 
     it("should include policy document in LLM call", async () => {
@@ -144,7 +143,7 @@ Members are entitled to:
       const result = await agent.research(request);
 
       expect(result).toContain("error");
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should reject whitespace-only question", async () => {
@@ -155,7 +154,7 @@ Members are entitled to:
       const result = await agent.research(request);
 
       expect(result).toContain("error");
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should handle missing leave policy document", async () => {
@@ -168,7 +167,7 @@ Members are entitled to:
       const result = await agent.research(request);
 
       expect(result).toContain("cannot access the leave policy document");
-      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should handle LLM API errors", async () => {
@@ -209,7 +208,7 @@ Members are entitled to:
     });
 
     it("should answer medical leave questions", async () => {
-      mockInvoke.mockReset();
+      mockGenerateText.mockReset();
       const mockResponse = "You can take up to 3 days of sick leave without a medical certificate.";
       setMockLLMResponse(mockResponse);
 
@@ -223,7 +222,7 @@ Members are entitled to:
     });
 
     it("should answer carry-forward questions", async () => {
-      mockInvoke.mockReset();
+      mockGenerateText.mockReset();
       const mockResponse = "You can carry forward up to 5 days of annual leave to the next year.";
       setMockLLMResponse(mockResponse);
 
