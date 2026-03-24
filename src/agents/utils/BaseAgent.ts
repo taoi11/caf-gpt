@@ -5,15 +5,14 @@
  *
  * Top-level declarations:
  * - BaseAgent: Base agent with AI SDK integration and template-based prompts
- * - createModel: Creates AI model via AI Gateway provider
+ * - createModel: Creates Workers AI model via workers-ai-provider binding
  * - callLangChain: Backward-compatible wrapper for plain text model calls
  * - callLangChainStructured: Backward-compatible wrapper for structured model calls
  */
 
 import type { LanguageModel } from "ai";
 import { generateObject, generateText } from "ai";
-import { createAiGateway } from "ai-gateway-provider";
-import { createUnified } from "ai-gateway-provider/providers/unified";
+import { createWorkersAI } from "workers-ai-provider";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
 import {
