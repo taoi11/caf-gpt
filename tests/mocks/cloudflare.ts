@@ -11,8 +11,6 @@
  * - createMockEnv: Creates mock Cloudflare environment
  */
 
-import { vi } from "vitest";
-
 // Mock Hyperdrive for database connections
 export class MockHyperdrive {
   connectionString = "postgres://mock:mock@localhost:5432/mock";
@@ -174,27 +172,12 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
   const mockAssets = new MockFetcher();
   const mockHyperdrive = new MockHyperdrive();
 
-  // Mock Workers AI binding for workers-ai-provider
-  const mockAI = {
-    run: vi.fn(async () => ({
-      response: "mock AI response",
-    })),
-    gateway: vi.fn((_gatewayId: string) => ({
-      getUrl: vi.fn(async (provider: string) => {
-        return `https://gateway.ai.cloudflare.com/v1/test-account/test-gateway/${provider}/v1`;
-      }),
-      patchLog: vi.fn(),
-      getLog: vi.fn(),
-      run: vi.fn(),
-    })),
-  };
-
   return {
     AUTHORIZED_SENDERS: "test@forces.gc.ca,admin@test.com",
     R2_BUCKET: mockR2 as unknown as R2Bucket,
     BUCKET: mockR2 as unknown as R2Bucket,
     ASSETS: mockAssets as unknown as Fetcher,
-    AI: mockAI as unknown as Ai,
+    CF_AIG_TOKEN: "test-token",
     HYPERDRIVE: mockHyperdrive as unknown as Hyperdrive,
     ...overrides,
   } as Env;

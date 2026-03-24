@@ -39,13 +39,6 @@
     }
   ],
   /**
-   * Workers AI binding for direct LLM access via Cloudflare
-   * Models: @cf/moonshotai/kimi-k2.5 (orchestrator), @cf/zai-org/glm-4.7-flash (specialists)
-   */
-  "ai": {
-    "binding": "AI"
-  },
-  /**
    * Hyperdrive binding for PostgreSQL connection pooling
    * Used for user memory storage
    */
