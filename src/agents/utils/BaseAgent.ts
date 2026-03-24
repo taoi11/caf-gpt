@@ -33,7 +33,7 @@ export function createModel(env: Env, model: string): LanguageModel {
   const aigateway = createAiGateway({
     accountId: "7101c0eb0cce7925fd15056c805c97eb",
     gateway: "caf-gpt",
-    apiKey: env.CF_AIG_TOKEN,
+    apiKey: env.CF_AIG_AUTH,
   });
   const unified = createUnified();
   return aigateway(unified(model)) as unknown as LanguageModel;

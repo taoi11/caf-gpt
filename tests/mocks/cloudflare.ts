@@ -177,7 +177,7 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     R2_BUCKET: mockR2 as unknown as R2Bucket,
     BUCKET: mockR2 as unknown as R2Bucket,
     ASSETS: mockAssets as unknown as Fetcher,
-    CF_AIG_TOKEN: "test-token",
+    CF_AIG_AUTH: "test-token",
     HYPERDRIVE: mockHyperdrive as unknown as Hyperdrive,
     ...overrides,
   } as Env;

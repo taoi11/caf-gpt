@@ -13,7 +13,7 @@ declare module "cloudflare:workers" {
   interface Env extends CloudflareBindings {
     AUTHORIZED_SENDERS: string;
     HYPERDRIVE: Hyperdrive;
-    CF_AIG_TOKEN: string;
+    CF_AIG_AUTH: string;
   }
 }
 
@@ -21,7 +21,7 @@ declare global {
   interface Env extends CloudflareBindings {
     AUTHORIZED_SENDERS: string;
     HYPERDRIVE: Hyperdrive;
-    CF_AIG_TOKEN: string;
+    CF_AIG_AUTH: string;
   }
 }
 
