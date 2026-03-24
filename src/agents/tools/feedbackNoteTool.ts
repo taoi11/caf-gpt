@@ -7,6 +7,7 @@
  * - createFeedbackNoteTool: Creates feedback note generation tool from PaceFooAgent
  */
 
+import type { ToolExecutionOptions } from "ai";
 import { tool } from "ai";
 import { z } from "zod";
 import type { PaceFooAgent } from "../sub-agents";
@@ -25,10 +26,10 @@ export function createFeedbackNoteTool(paceFooAgent: PaceFooAgent) {
   return Object.assign(aiTool, {
     invoke: async (
       input: { rank: "cpl" | "mcpl" | "sgt" | "wo"; context: string },
-      context?: unknown
+      context?: ToolExecutionOptions
     ) => {
       if (!aiTool.execute) throw new Error("Tool execute function missing");
-      return aiTool.execute(input, context as any);
+      return aiTool.execute(input, context as ToolExecutionOptions);
     },
   });
 }

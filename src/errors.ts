@@ -13,7 +13,7 @@
  * - AgentError: Base class for AI agent errors
  * - AgentTimeoutError: Agent/LLM timeout errors
  * - AgentAPIError: Agent/LLM API failures
-* - StorageError: Base class for storage errors
+ * - StorageError: Base class for storage errors
  * - StorageNotFoundError: Document/resource not found
  * - StorageConnectionError: Database/R2 connection failures
  * - APIError: Base class for external API errors
@@ -141,4 +141,3 @@ export function isTypedAPIError(error: unknown): error is TypedAPIError {
     error instanceof APIValidationError
   );
 }
-

@@ -179,6 +179,7 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     ASSETS: mockAssets as unknown as Fetcher,
     CF_AIG_TOKEN: "test-token",
     HYPERDRIVE: mockHyperdrive as unknown as Hyperdrive,
+    AI: {} as unknown as Ai,
     ...overrides,
   } as Env;
 }

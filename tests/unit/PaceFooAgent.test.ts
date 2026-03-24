@@ -27,11 +27,8 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
-vi.mock("ai-gateway-provider", () => ({
-  createAiGateway: vi.fn(() => vi.fn((model: unknown) => model)),
-}));
-vi.mock("ai-gateway-provider/providers/unified", () => ({
-  createUnified: vi.fn(() => vi.fn((model: string) => model)),
+vi.mock("workers-ai-provider", () => ({
+  createWorkersAI: vi.fn(() => vi.fn((model: string) => model)),
 }));
 
 // Import modules AFTER mocks
