@@ -34,13 +34,9 @@ interface LLMCallParams {
 }
 
 export function createModel(env: Env, model: string): LanguageModel {
-  const aigateway = createAiGateway({
-    accountId: "7101c0eb0cce7925fd15056c805c97eb",
-    gateway: "caf-gpt",
-    apiKey: env.CF_AIG_TOKEN,
-  });
-  const unified = createUnified();
-  return aigateway(unified(model)) as unknown as LanguageModel;
+  const workersai = createWorkersAI({ binding: env.AI, gateway: { id: "caf-gpt" } });
+  // Cast needed since new CF models may not be in the provider's type map yet.
+  return workersai(model as Parameters<typeof workersai>[0]) as unknown as LanguageModel;
 }
 
 export abstract class BaseAgent {
