@@ -101,7 +101,7 @@ describe("batchResearchTool", () => {
     expect(maxDiff).toBeLessThan(5); // Started within 5ms (parallel)
   });
 
-  it("should execute agents sequentially", async () => {
+  it("should execute agents in parallel", async () => {
     const executionOrder: string[] = [];
 
     mockLeaveAgent.research.mockImplementation(async () => {
@@ -135,14 +135,12 @@ describe("batchResearchTool", () => {
       qro_queries: ["QRO?"],
     });
 
-    // Agents should execute in order: leave → doad → qro
-    expect(executionOrder).toEqual([
-      "leave-start",
-      "leave-end",
-      "doad-start",
-      "doad-end",
-      "qro-start",
-    ]);
+    // All agents should start executing before any finishes, showing parallel execution
+    const starts = executionOrder.filter(item => item.endsWith('-start'));
+    expect(starts).toContain("leave-start");
+    expect(starts).toContain("doad-start");
+    expect(starts).toContain("qro-start");
+    expect(executionOrder.slice(0, 3)).toEqual(expect.arrayContaining(starts));
   });
 
   it("should handle empty input gracefully", async () => {

@@ -13,6 +13,7 @@ import type { AppConfig } from "../config";
 import { formatError, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
+import { createBatchResearchTool } from "./tools";
 import { createModel } from "./utils/BaseAgent";
 import { PromptManager } from "./utils/PromptManager";
 
@@ -83,61 +84,11 @@ export class AgentCoordinator {
           }
         },
         tools: {
-          batch_research: tool({
-            description:
-              "Research policy questions across leave, DOAD, and QR&O domains. Max 3 questions per domain.",
-            inputSchema: z
-              .object({
-                leave_queries: z.array(z.string()).min(1).max(3).optional(),
-                doad_queries: z.array(z.string()).min(1).max(3).optional(),
-                qro_queries: z.array(z.string()).min(1).max(3).optional(),
-              })
-              .refine(
-                (data) =>
-                  (data.leave_queries?.length ?? 0) > 0 ||
-                  (data.doad_queries?.length ?? 0) > 0 ||
-                  (data.qro_queries?.length ?? 0) > 0,
-                { message: "At least one query array must be provided" }
-              ),
-            execute: async ({ leave_queries, doad_queries, qro_queries }) => {
-              const results: string[] = [];
-
-              if (leave_queries && leave_queries.length > 0) {
-                results.push("=== Leave Policy Research ===\n");
-                const answers = await Promise.all(
-                  leave_queries.map(async (query, index) => {
-                    const answer = await this.leaveFooAgent.research({ question: query });
-                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                  })
-                );
-                results.push(answers.join("\n"));
-              }
-
-              if (doad_queries && doad_queries.length > 0) {
-                results.push("=== DOAD Policy Research ===\n");
-                const answers = await Promise.all(
-                  doad_queries.map(async (query, index) => {
-                    const answer = await this.doadFooAgent.research({ question: query });
-                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                  })
-                );
-                results.push(answers.join("\n"));
-              }
-
-              if (qro_queries && qro_queries.length > 0) {
-                results.push("=== QR&O Policy Research ===\n");
-                const answers = await Promise.all(
-                  qro_queries.map(async (query, index) => {
-                    const answer = await this.qroFooAgent.research({ question: query });
-                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                  })
-                );
-                results.push(answers.join("\n"));
-              }
-
-              return results.length > 0 ? results.join("\n") : "No research queries provided.";
-            },
-          }),
+          batch_research: createBatchResearchTool(
+            this.leaveFooAgent,
+            this.doadFooAgent,
+            this.qroFooAgent
+          ),
           generate_feedback_note: tool({
             description:
               "Generate a CAF PACE feedback note for a member when a feedback note request is received.",

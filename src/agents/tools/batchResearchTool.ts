@@ -37,38 +37,36 @@ export function createBatchResearchTool(
     execute: async ({ leave_queries, doad_queries, qro_queries }) => {
       const results: string[] = [];
 
-      if (leave_queries?.length) {
-        results.push("=== Leave Policy Research ===\n");
-        const leaveResults = await Promise.all(
-          leave_queries.map(async (query, index) => {
-            const answer = await leaveFooAgent.research({ question: query });
-            return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-          })
-        );
-        results.push(leaveResults.join("\n"));
-      }
+      const [leaveResults, doadResults, qroResults] = await Promise.all([
+        leave_queries?.length
+          ? Promise.all(
+              leave_queries.map(async (query, index) => {
+                const answer = await leaveFooAgent.research({ question: query });
+                return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+              })
+            ).then((res) => ["=== Leave Policy Research ===\n", ...res].join("\n"))
+          : Promise.resolve(null),
+        doad_queries?.length
+          ? Promise.all(
+              doad_queries.map(async (query, index) => {
+                const answer = await doadFooAgent.research({ question: query });
+                return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+              })
+            ).then((res) => ["=== DOAD Policy Research ===\n", ...res].join("\n"))
+          : Promise.resolve(null),
+        qro_queries?.length
+          ? Promise.all(
+              qro_queries.map(async (query, index) => {
+                const answer = await qroFooAgent.research({ question: query });
+                return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+              })
+            ).then((res) => ["=== QR&O Policy Research ===\n", ...res].join("\n"))
+          : Promise.resolve(null),
+      ]);
 
-      if (doad_queries?.length) {
-        results.push("=== DOAD Policy Research ===\n");
-        const doadResults = await Promise.all(
-          doad_queries.map(async (query, index) => {
-            const answer = await doadFooAgent.research({ question: query });
-            return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-          })
-        );
-        results.push(doadResults.join("\n"));
-      }
-
-      if (qro_queries?.length) {
-        results.push("=== QR&O Policy Research ===\n");
-        const qroResults = await Promise.all(
-          qro_queries.map(async (query, index) => {
-            const answer = await qroFooAgent.research({ question: query });
-            return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-          })
-        );
-        results.push(qroResults.join("\n"));
-      }
+      if (leaveResults) results.push(leaveResults);
+      if (doadResults) results.push(doadResults);
+      if (qroResults) results.push(qroResults);
 
       return results.length === 0 ? "No research queries provided." : results.join("\n");
     },
