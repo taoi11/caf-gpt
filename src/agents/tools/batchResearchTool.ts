@@ -35,39 +35,50 @@ export function createBatchResearchTool(
       "Research policy questions across multiple areas simultaneously. Accepts queries for leave policy, DOAD policy, and QR&O policy.",
     inputSchema: batchResearchSchema,
     execute: async ({ leave_queries, doad_queries, qro_queries }) => {
+      // ⚡ Bolt: Execute cross-domain research concurrently
+      // Process leave, doad, and qro queries in parallel rather than awaiting sequentially
+      const [leaveAnswers, doadAnswers, qroAnswers] = await Promise.all([
+        leave_queries?.length
+          ? Promise.all(
+              leave_queries.map(async (query, index) => {
+                const answer = await leaveFooAgent.research({ question: query });
+                return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+              })
+            )
+          : Promise.resolve(null),
+        doad_queries?.length
+          ? Promise.all(
+              doad_queries.map(async (query, index) => {
+                const answer = await doadFooAgent.research({ question: query });
+                return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+              })
+            )
+          : Promise.resolve(null),
+        qro_queries?.length
+          ? Promise.all(
+              qro_queries.map(async (query, index) => {
+                const answer = await qroFooAgent.research({ question: query });
+                return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+              })
+            )
+          : Promise.resolve(null),
+      ]);
+
       const results: string[] = [];
 
-      if (leave_queries?.length) {
+      if (leaveAnswers) {
         results.push("=== Leave Policy Research ===\n");
-        const leaveResults = await Promise.all(
-          leave_queries.map(async (query, index) => {
-            const answer = await leaveFooAgent.research({ question: query });
-            return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-          })
-        );
-        results.push(leaveResults.join("\n"));
+        results.push(leaveAnswers.join("\n"));
       }
 
-      if (doad_queries?.length) {
+      if (doadAnswers) {
         results.push("=== DOAD Policy Research ===\n");
-        const doadResults = await Promise.all(
-          doad_queries.map(async (query, index) => {
-            const answer = await doadFooAgent.research({ question: query });
-            return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-          })
-        );
-        results.push(doadResults.join("\n"));
+        results.push(doadAnswers.join("\n"));
       }
 
-      if (qro_queries?.length) {
+      if (qroAnswers) {
         results.push("=== QR&O Policy Research ===\n");
-        const qroResults = await Promise.all(
-          qro_queries.map(async (query, index) => {
-            const answer = await qroFooAgent.research({ question: query });
-            return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-          })
-        );
-        results.push(qroResults.join("\n"));
+        results.push(qroAnswers.join("\n"));
       }
 
       return results.length === 0 ? "No research queries provided." : results.join("\n");
