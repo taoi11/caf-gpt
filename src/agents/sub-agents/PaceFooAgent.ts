@@ -36,8 +36,12 @@ export class PaceFooAgent extends BaseAgent {
 
       const selectedRankFile = isValidRank ? `${rankLower}.md` : "cpl.md";
 
-      const competencies = await this.docRetriever.getDocument("paceNote", selectedRankFile);
-      const examples = await this.docRetriever.getDocument("paceNote", "examples.md");
+      // ⚡ Bolt: Fetch required documents concurrently to reduce I/O wait time
+      // This eliminates the sequential delay of waiting for competencies before starting to fetch examples.
+      const [competencies, examples] = await Promise.all([
+        this.docRetriever.getDocument("paceNote", selectedRankFile),
+        this.docRetriever.getDocument("paceNote", "examples.md"),
+      ]);
 
       const response = await this.callLangChain({
         model: this.config.llm.models.paceFoo.model,
