@@ -100,39 +100,51 @@ export class AgentCoordinator {
                 { message: "At least one query array must be provided" }
               ),
             execute: async ({ leave_queries, doad_queries, qro_queries }) => {
+              // ⚡ Bolt: Execute cross-domain research concurrently
+              // Instead of awaiting leave, then doad, then qro sequentially,
+              // we process all requested domains in parallel.
+              const [leaveAnswers, doadAnswers, qroAnswers] = await Promise.all([
+                leave_queries && leave_queries.length > 0
+                  ? Promise.all(
+                      leave_queries.map(async (query, index) => {
+                        const answer = await this.leaveFooAgent.research({ question: query });
+                        return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+                      })
+                    )
+                  : Promise.resolve(null),
+                doad_queries && doad_queries.length > 0
+                  ? Promise.all(
+                      doad_queries.map(async (query, index) => {
+                        const answer = await this.doadFooAgent.research({ question: query });
+                        return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+                      })
+                    )
+                  : Promise.resolve(null),
+                qro_queries && qro_queries.length > 0
+                  ? Promise.all(
+                      qro_queries.map(async (query, index) => {
+                        const answer = await this.qroFooAgent.research({ question: query });
+                        return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+                      })
+                    )
+                  : Promise.resolve(null),
+              ]);
+
               const results: string[] = [];
 
-              if (leave_queries && leave_queries.length > 0) {
+              if (leaveAnswers) {
                 results.push("=== Leave Policy Research ===\n");
-                const answers = await Promise.all(
-                  leave_queries.map(async (query, index) => {
-                    const answer = await this.leaveFooAgent.research({ question: query });
-                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                  })
-                );
-                results.push(answers.join("\n"));
+                results.push(leaveAnswers.join("\n"));
               }
 
-              if (doad_queries && doad_queries.length > 0) {
+              if (doadAnswers) {
                 results.push("=== DOAD Policy Research ===\n");
-                const answers = await Promise.all(
-                  doad_queries.map(async (query, index) => {
-                    const answer = await this.doadFooAgent.research({ question: query });
-                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                  })
-                );
-                results.push(answers.join("\n"));
+                results.push(doadAnswers.join("\n"));
               }
 
-              if (qro_queries && qro_queries.length > 0) {
+              if (qroAnswers) {
                 results.push("=== QR&O Policy Research ===\n");
-                const answers = await Promise.all(
-                  qro_queries.map(async (query, index) => {
-                    const answer = await this.qroFooAgent.research({ question: query });
-                    return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                  })
-                );
-                results.push(answers.join("\n"));
+                results.push(qroAnswers.join("\n"));
               }
 
               return results.length > 0 ? results.join("\n") : "No research queries provided.";
