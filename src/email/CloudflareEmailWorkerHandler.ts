@@ -59,9 +59,10 @@ export class CloudflareEmailWorkerHandler {
 
   /** Converts ForwardableEmailMessage into ParsedEmailData. */
   private async parseMessage(message: ForwardableEmailMessage): Promise<ParsedEmailData> {
-    const rawEmail = await new Response(message.raw).arrayBuffer();
     const parser = new PostalMime();
-    const parsed = await parser.parse(rawEmail);
+    // postal-mime accepts ReadableStream, but types might be overly strict.
+    // Use unknown to avoid any.
+    const parsed = await parser.parse(message.raw as unknown as ReadableStream);
 
     const headers = this.buildHeaderMap(message.headers);
     const messageIdHeader = message.headers.get("message-id") ?? undefined;
