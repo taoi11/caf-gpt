@@ -80,12 +80,6 @@ function setMockAgentResponse(content: string) {
   });
 }
 
-function _setMockNoResponse() {
-  mockProcessWithPrimeFoo.mockResolvedValueOnce({
-    shouldRespond: false,
-  });
-}
-
 function setMockAgentError(message: string) {
   mockProcessWithPrimeFoo.mockRejectedValueOnce(new Error(message));
 }
