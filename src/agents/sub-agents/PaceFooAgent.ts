@@ -14,47 +14,21 @@ import { BaseAgent } from "../utils/BaseAgent";
 const VALID_RANKS = new Set(["cpl", "mcpl", "sgt", "wo"]);
 
 export class PaceFooAgent extends BaseAgent {
+  /**
+   * Generates a feedback note based on rank and context.
+   * Orchestrates validation, document retrieval, and AI generation.
+   */
   async generateNote(rank: string, context: string): Promise<string> {
     const startTime = Date.now();
 
     try {
       this.logger.info("Starting pacenote generation", { rank });
 
-      if (!context || context.trim().length === 0) {
-        throw new Error("Empty context provided");
-      }
+      this.validateContext(context);
 
-      const rankLower = rank.toLowerCase();
-      const isValidRank = VALID_RANKS.has(rankLower);
+      const { competencies, examples, effectiveRank } = await this.fetchRequiredDocuments(rank);
 
-      if (!isValidRank) {
-        this.logger.warn("Unknown rank, defaulting to CPL", {
-          providedRank: rank,
-          defaultRank: "cpl",
-        });
-      }
-
-      const selectedRankFile = isValidRank ? `${rankLower}.md` : "cpl.md";
-
-      // ⚡ Bolt: Fetch required documents concurrently to reduce I/O wait time
-      // This eliminates the sequential delay of waiting for competencies before starting to fetch examples.
-      const [competencies, examples] = await Promise.all([
-        this.docRetriever.getDocument("paceNote", selectedRankFile),
-        this.docRetriever.getDocument("paceNote", "examples.md"),
-      ]);
-
-      const response = await this.callLangChain({
-        model: this.config.llm.models.paceFoo.model,
-        promptName: "pace_foo_research",
-        variables: {
-          rank: rank.toUpperCase(),
-          competencies,
-          examples,
-          user_input: context,
-        },
-        temperature: this.config.llm.models.paceFoo.temperature,
-        maxOutputTokens: this.config.llm.models.paceFoo.maxOutputTokens,
-      });
+      const response = await this.executeGeneration(effectiveRank, context, competencies, examples);
 
       this.logger.performance("pacenote generation", startTime, {
         rank,
@@ -82,5 +56,63 @@ export class PaceFooAgent extends BaseAgent {
         { rank, contextLength: context.length }
       );
     }
+  }
+
+  /**
+   * Validates that the provided context is not empty.
+   */
+  private validateContext(context: string): void {
+    if (!context || context.trim().length === 0) {
+      throw new Error("Empty context provided");
+    }
+  }
+
+  /**
+   * Fetches rank-specific competencies and feedback examples concurrently from R2 storage.
+   * Returns the effective rank used (defaults to "cpl" for unknown ranks) alongside documents.
+   */
+  private async fetchRequiredDocuments(
+    rank: string
+  ): Promise<{ competencies: string; examples: string; effectiveRank: string }> {
+    const rankLower = rank.toLowerCase();
+    const isValidRank = VALID_RANKS.has(rankLower);
+    const effectiveRank = isValidRank ? rankLower : "cpl";
+
+    if (!isValidRank) {
+      this.logger.warn("Unknown rank, defaulting to CPL", {
+        providedRank: rank,
+        defaultRank: "cpl",
+      });
+    }
+
+    const [competencies, examples] = await Promise.all([
+      this.docRetriever.getDocument("paceNote", `${effectiveRank}.md`),
+      this.docRetriever.getDocument("paceNote", "examples.md"),
+    ]);
+
+    return { competencies, examples, effectiveRank };
+  }
+
+  /**
+   * Executes the LLM call to generate the feedback note.
+   */
+  private async executeGeneration(
+    effectiveRank: string,
+    context: string,
+    competencies: string,
+    examples: string
+  ): Promise<string> {
+    return await this.callLangChain({
+      model: this.config.llm.models.paceFoo.model,
+      promptName: "pace_foo_research",
+      variables: {
+        rank: effectiveRank.toUpperCase(),
+        competencies,
+        examples,
+        user_input: context,
+      },
+      temperature: this.config.llm.models.paceFoo.temperature,
+      maxOutputTokens: this.config.llm.models.paceFoo.maxOutputTokens,
+    });
   }
 }
