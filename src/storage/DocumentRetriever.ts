@@ -11,12 +11,29 @@
 import { StorageConnectionError, StorageNotFoundError, StorageValidationError } from "../errors";
 import { formatError, Logger } from "../Logger";
 
+interface CacheEntry {
+  content: string;
+  timestamp: number;
+}
+
 // Retrieve documents from R2 bucket
 export class DocumentRetriever {
   private logger: Logger;
+  // ⚡ Bolt: In-memory cache for R2 documents to reduce I/O wait times
+  // and R2 billing costs across multiple executions in the same worker isolate
+  private static cache: Map<string, CacheEntry> = new Map();
+  // Cache TTL: 1 hour (3600000 ms)
+  private static readonly CACHE_TTL_MS = 3600000;
+  // Max cache size to prevent memory leaks
+  private static readonly MAX_CACHE_SIZE = 50;
 
   constructor(private r2Bucket: R2Bucket) {
     this.logger = Logger.getInstance();
+  }
+
+  // Clear the static cache (used primarily for testing)
+  static clearCache(): void {
+    DocumentRetriever.cache.clear();
   }
 
   // Get document content from R2 storage
@@ -32,11 +49,24 @@ export class DocumentRetriever {
         throw new StorageValidationError("Invalid agent name or filename provided");
       }
 
+      const key = `${agentName}/${filename}`;
+      const now = Date.now();
+
+      // ⚡ Bolt: Check the in-memory cache first with TTL
+      const cached = DocumentRetriever.cache.get(key);
+      if (cached && now - cached.timestamp < DocumentRetriever.CACHE_TTL_MS) {
+        this.logger.info("Document retrieved from cache", { key });
+
+        // Update insertion order for LRU behavior
+        DocumentRetriever.cache.delete(key);
+        DocumentRetriever.cache.set(key, cached);
+
+        return cached.content;
+      }
+
       if (!this.r2Bucket) {
         throw new StorageConnectionError("R2 bucket not available");
       }
-
-      const key = `${agentName}/${filename}`;
 
       const object = await this.r2Bucket.get(key);
 
@@ -56,6 +86,15 @@ export class DocumentRetriever {
         key,
         size: content.length,
       });
+
+      // ⚡ Bolt: Cache the retrieved content for future requests, with eviction if needed
+      if (DocumentRetriever.cache.size >= DocumentRetriever.MAX_CACHE_SIZE) {
+        // Evict oldest entry (Map iterates in insertion order)
+        const firstKey = DocumentRetriever.cache.keys().next().value;
+        if (firstKey) DocumentRetriever.cache.delete(firstKey);
+      }
+      DocumentRetriever.cache.set(key, { content, timestamp: now });
+
       return content;
     } catch (error) {
       // Re-throw typed errors

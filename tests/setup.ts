@@ -7,7 +7,13 @@
  * - Sets up global test configuration
  */
 
-import { vi } from "vitest";
+// Clear the DocumentRetriever cache before each test
+import { beforeEach, vi } from "vitest";
+import { DocumentRetriever } from "../src/storage/DocumentRetriever";
+
+beforeEach(() => {
+  DocumentRetriever.clearCache();
+});
 
 // Mock the cloudflare:email module (not available in test environment)
 vi.mock("cloudflare:email", () => ({
