@@ -33,3 +33,4 @@ lerna-debug.log*
 !.env.example
 temp.*
 .sisyphus
+.jules/

@@ -101,7 +101,7 @@ describe("batchResearchTool", () => {
     expect(maxDiff).toBeLessThan(5); // Started within 5ms (parallel)
   });
 
-  it("should execute agents sequentially", async () => {
+  it("should execute agents concurrently", async () => {
     const executionOrder: string[] = [];
 
     mockLeaveAgent.research.mockImplementation(async () => {
@@ -135,14 +135,19 @@ describe("batchResearchTool", () => {
       qro_queries: ["QRO?"],
     });
 
-    // Agents should execute in order: leave → doad → qro
-    expect(executionOrder).toEqual([
-      "leave-start",
-      "leave-end",
-      "doad-start",
-      "doad-end",
-      "qro-start",
-    ]);
+    // Agents should start executing concurrently
+    expect(executionOrder).toContain("leave-start");
+    expect(executionOrder).toContain("doad-start");
+    expect(executionOrder).toContain("qro-start");
+
+    // Check that at least one start event for another agent happens before a finish event
+    // (e.g. doad-start happens before leave-end)
+    const leaveStartIdx = executionOrder.indexOf("leave-start");
+    const leaveEndIdx = executionOrder.indexOf("leave-end");
+    const doadStartIdx = executionOrder.indexOf("doad-start");
+
+    expect(doadStartIdx).toBeGreaterThan(leaveStartIdx);
+    expect(doadStartIdx).toBeLessThan(leaveEndIdx);
   });
 
   it("should handle empty input gracefully", async () => {
