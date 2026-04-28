@@ -26,9 +26,9 @@ export class PaceFooAgent extends BaseAgent {
 
       this.validateContext(context);
 
-      const { competencies, examples } = await this.fetchRequiredDocuments(rank);
+      const { competencies, examples, effectiveRank } = await this.fetchRequiredDocuments(rank);
 
-      const response = await this.executeGeneration(rank, context, competencies, examples);
+      const response = await this.executeGeneration(effectiveRank, context, competencies, examples);
 
       this.logger.performance("pacenote generation", startTime, {
         rank,
@@ -69,12 +69,14 @@ export class PaceFooAgent extends BaseAgent {
 
   /**
    * Fetches rank-specific competencies and feedback examples concurrently from R2 storage.
+   * Returns the effective rank used (defaults to "cpl" for unknown ranks) alongside documents.
    */
   private async fetchRequiredDocuments(
     rank: string
-  ): Promise<{ competencies: string; examples: string }> {
+  ): Promise<{ competencies: string; examples: string; effectiveRank: string }> {
     const rankLower = rank.toLowerCase();
     const isValidRank = VALID_RANKS.has(rankLower);
+    const effectiveRank = isValidRank ? rankLower : "cpl";
 
     if (!isValidRank) {
       this.logger.warn("Unknown rank, defaulting to CPL", {
@@ -83,21 +85,19 @@ export class PaceFooAgent extends BaseAgent {
       });
     }
 
-    const selectedRankFile = isValidRank ? `${rankLower}.md` : "cpl.md";
-
     const [competencies, examples] = await Promise.all([
-      this.docRetriever.getDocument("paceNote", selectedRankFile),
+      this.docRetriever.getDocument("paceNote", `${effectiveRank}.md`),
       this.docRetriever.getDocument("paceNote", "examples.md"),
     ]);
 
-    return { competencies, examples };
+    return { competencies, examples, effectiveRank };
   }
 
   /**
    * Executes the LLM call to generate the feedback note.
    */
   private async executeGeneration(
-    rank: string,
+    effectiveRank: string,
     context: string,
     competencies: string,
     examples: string
@@ -106,7 +106,7 @@ export class PaceFooAgent extends BaseAgent {
       model: this.config.llm.models.paceFoo.model,
       promptName: "pace_foo_research",
       variables: {
-        rank: rank.toUpperCase(),
+        rank: effectiveRank.toUpperCase(),
         competencies,
         examples,
         user_input: context,
