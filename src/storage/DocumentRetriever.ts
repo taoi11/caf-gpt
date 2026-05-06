@@ -68,7 +68,7 @@ export class DocumentRetriever {
           // Refresh insertion order on hit so eviction is LRU-like rather than FIFO.
           DocumentRetriever.documentCache.delete(key);
           DocumentRetriever.documentCache.set(key, entry);
-          this.logger.info("Document retrieved from cache", { key });
+          this.logger.debug("Document retrieved from cache", { key });
           return entry.content;
         }
         // Cache expired, remove it
