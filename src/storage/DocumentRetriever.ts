@@ -89,19 +89,20 @@ export class DocumentRetriever {
         throw new StorageNotFoundError(`Document is empty: ${key}`);
       }
 
-      // ⚡ Bolt: Store fetched document in static cache with size limit to prevent memory leaks
-      if (DocumentRetriever.documentCache.size >= DocumentRetriever.MAX_CACHE_SIZE) {
-        // Simple eviction: remove the oldest inserted entry
-        const oldestKey = DocumentRetriever.documentCache.keys().next().value;
-        if (oldestKey !== undefined) {
-          DocumentRetriever.documentCache.delete(oldestKey);
-        }
-      }
-
+      // ⚡ Bolt: Store fetched document in static cache.
       DocumentRetriever.documentCache.set(key, {
         content,
         expiresAt: Date.now() + DocumentRetriever.CACHE_TTL_MS,
       });
+
+      // Keep cache strictly bounded even when concurrent requests insert around the same time.
+      while (DocumentRetriever.documentCache.size > DocumentRetriever.MAX_CACHE_SIZE) {
+        const oldestKey = DocumentRetriever.documentCache.keys().next().value;
+        if (oldestKey === undefined) {
+          break;
+        }
+        DocumentRetriever.documentCache.delete(oldestKey);
+      }
 
       this.logger.info("Document retrieved successfully", {
         key,
