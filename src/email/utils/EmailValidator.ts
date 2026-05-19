@@ -10,23 +10,16 @@
  * - isValidMessageId: Validate Message-ID format per RFC 5322
  */
 
-import { z } from "zod";
 import type { ParsedEmailData } from "../types";
+import { normalizeEmailAddress } from "./EmailNormalizer";
 
 const MAX_EMAIL_BODY_LENGTH = 1_000_000;
 
-const emailAddressSchema = z
-  .string()
-  .transform((val) => {
-    const match = val.match(/<([^>]+)>/);
-    return match ? match[1] : val;
-  })
-  .pipe(
-    z
-      .string()
-      .email()
-      .transform((val) => val.toLowerCase().trim())
-  );
+// ⚡ Bolt: Use a native RegExp instead of Zod for email validation to dramatically
+// improve performance and reduce overhead in high-throughput paths like inbound parsing.
+// This regex covers standard email patterns compatible with what Zod validates.
+const EMAIL_REGEX =
+  /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?(?:\.[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)+$/;
 
 interface ValidationResult {
   isValid: boolean;
@@ -124,13 +117,11 @@ export function validateRecipients(to: string[], cc: string[] = []): ValidationR
       continue;
     }
 
-    const normalizedResult = emailAddressSchema.safeParse(recipient);
-    if (!normalizedResult.success) {
+    const normalizedRecipient = normalizeEmailAddress(recipient);
+    if (!normalizedRecipient || !EMAIL_REGEX.test(normalizedRecipient)) {
       invalidRecipients.push(recipient);
       continue;
     }
-
-    const normalizedRecipient = normalizedResult.data;
 
     if (seenRecipients.has(normalizedRecipient)) {
       duplicateRecipients.push(recipient);
@@ -158,7 +149,7 @@ export function validateRecipients(to: string[], cc: string[] = []): ValidationR
   };
 }
 
-// Validate email address format using Zod's built-in email validator
+// Validate email address format using a fast regular expression instead of Zod
 export function isValidEmailAddress(email: string): boolean {
   if (!email || typeof email !== "string") {
     return false;
@@ -168,7 +159,8 @@ export function isValidEmailAddress(email: string): boolean {
     return false;
   }
 
-  return emailAddressSchema.safeParse(email).success;
+  const normalized = normalizeEmailAddress(email);
+  return EMAIL_REGEX.test(normalized);
 }
 
 // Validate Message-ID format per RFC 5322: <local-part@domain>
