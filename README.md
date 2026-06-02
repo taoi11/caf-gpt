@@ -79,6 +79,7 @@ npm run types:check
 ## Development Setup
 
 ### Enable Pre-commit Hook
+
 ```bash
 git config core.hooksPath .githooks
 ```
@@ -86,6 +87,7 @@ git config core.hooksPath .githooks
 This enables a pre-commit hook that blocks commits if linting fails.
 
 ### Linting & Formatting
+
 ```bash
 npm run lint        # Check for issues
 npm run lint:fix    # Auto-fix issues
