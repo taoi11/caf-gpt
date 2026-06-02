@@ -50,6 +50,7 @@ npm install
 
 ```bash
 wrangler secret put AUTHORIZED_SENDERS
+wrangler secret put CF_AIG_AUTH
 ```
 
 ### 3. Deploy

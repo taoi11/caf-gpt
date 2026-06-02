@@ -59,3 +59,4 @@ src/
 ## Environment Variables (Secrets)
 
 - **AUTHORIZED_SENDERS**: Comma-separated list of authorized email domains/addresses (e.g., `forces.gc.ca,test@example.com`)
+- **CF_AIG_AUTH**: Cloudflare AI Gateway authentication token

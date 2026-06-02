@@ -444,6 +444,7 @@ describe("SimpleEmailHandler - Integration", () => {
       const mockCtx: ExecutionContext = {
         waitUntil: vi.fn(),
         passThroughOnException: vi.fn(),
+        exports: {} as Cloudflare.Exports,
         props: {} as Record<string, unknown>,
       };
 
@@ -488,6 +489,7 @@ describe("SimpleEmailHandler - Integration", () => {
       const mockCtx: ExecutionContext = {
         waitUntil: vi.fn(),
         passThroughOnException: vi.fn(),
+        exports: {} as Cloudflare.Exports,
         props: {} as Record<string, unknown>,
       };
 
