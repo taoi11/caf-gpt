@@ -4,7 +4,7 @@ Instructions and architecture patterns for LLM developers and AI agents.
 
 ## Project Overview
 
-CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated replies via the Cloudflare Email Workers reply API (currently sender-only replies).
+CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated replies via the Cloudflare Email Service `send_email` binding.
 
 ## Development Commands
 
@@ -39,7 +39,7 @@ Emails are processed through **Cloudflare Email Workers**:
 2. **Validation**: `CloudflareEmailWorkerHandler` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
 3. **Parsing**: MIME content parsed with `postal-mime` into `ParsedEmailData`.
 4. **Agent Processing**: `SimpleEmailHandler.processEmail()` routes to `AgentCoordinator.processWithPrimeFoo()`.
-5. **Reply**: `CloudflareEmailSender` sends AI-generated response via `message.reply()` (sender-only).
+5. **Reply**: `CloudflareEmailSender` sends AI-generated responses via `env.EMAIL.send()`, preserving threading headers and original-CC reply-all behavior for normal replies when CC recipients match the configured authorization allowlist.
 
 ### AI SDK Tool-Calling Workflow
 
@@ -169,8 +169,8 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 
 ### Email Replies
 
-- Replies sent via `CloudflareEmailSender` using Cloudflare Email Workers reply API
-- **Sender-only replies**: current implementation does not CC/reply-all
+- Replies sent via `CloudflareEmailSender` using Cloudflare Email Service `send_email`
+- Normal replies include original CC recipients for reply-all behavior only when those recipients match the configured authorized domains/emails; error responses remain sender-only
 - Threading headers preserved: `In-Reply-To`, `References`
 - Quoted content formatted using `EmailComposer.formatQuotedContent()`
 

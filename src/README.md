@@ -8,7 +8,7 @@ src/
 ├── types.ts                    # TypeScript interfaces
 ├── email/
 │   ├── SimpleEmailHandler.ts   # Email processing and orchestration
-│   ├── CloudflareEmailSender.ts # Email sending via Cloudflare Email Workers reply API
+│   ├── CloudflareEmailSender.ts # Email sending via Cloudflare Email Service
 │   ├── CloudflareEmailWorkerHandler.ts # Email worker ingress parsing + authorization
 │   ├── components/              # Email processing components
 │   │   ├── EmailComposer.ts     # Email composition with quoted content
@@ -55,6 +55,7 @@ src/
 - **R2_BUCKET**: R2 bucket for document storage (policies, prompts)
 - **HYPERDRIVE**: PostgreSQL connection for user memory storage
 - **ASSETS**: Static assets binding for prompt templates
+- **EMAIL**: Cloudflare Email Service send_email binding for outbound replies
 
 ## Environment Variables (Secrets)
 

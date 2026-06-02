@@ -1,17 +1,17 @@
 /**
  * src/email/SimpleEmailHandler.ts
  *
- * Main email processing handler using Cloudflare Email Workers reply API
+ * Main email processing handler using Cloudflare Email Service send_email API
  *
  * Top-level declarations:
  * - SimpleEmailHandler: Primary email handler with Cloudflare Email Workers integration
  * - processEmail: Processes incoming email with validation, AI response generation, and reply sending
- * - sendReply: Sends reply using Cloudflare Email Workers native reply
+ * - sendReply: Sends reply using Cloudflare Email Service
  * - logProcessingFailure: Logs processing errors with consistent context
  * - handleProcessingError: Handles processing errors with recovery strategies
  * - shouldRethrowProcessingError: Determines if errors should be rethrown after handling
  * - shouldSendErrorResponse: Determines if error response should be sent
- * - sendErrorResponse: Sends error response email to user via Cloudflare Email Workers
+ * - sendErrorResponse: Sends error response email to user via Cloudflare Email Service
  * - getErrorResponseMessage: Gets user-friendly error message
  * - triggerMemoryUpdate: Fire-and-forget memory update after successful email reply
  */
@@ -55,7 +55,14 @@ export class SimpleEmailHandler {
 
     this.emailThreadManager = emailThreadManager || new EmailThreadManager();
     this.emailComposer = emailComposer || new EmailComposer();
-    this.emailSender = emailSender || new CloudflareEmailSender(config.email.agentFromEmail);
+    this.emailSender =
+      emailSender ||
+      new CloudflareEmailSender(
+        config.email.agentFromEmail,
+        env.EMAIL,
+        config.email.monitoredAddresses,
+        config.authorization
+      );
     this.htmlEmailComposer = htmlEmailComposer || new HtmlEmailComposer();
   }
 
@@ -134,7 +141,14 @@ export class SimpleEmailHandler {
       this.logger.warn("Email sender is missing, ignoring email to prevent processing errors");
       return true;
     }
-    if (parsedEmail.from === this.config.email.agentFromEmail) {
+    const normalizedFrom = normalizeEmailAddress(parsedEmail.from);
+    const selfAddresses = new Set(
+      [this.config.email.agentFromEmail, ...this.config.email.monitoredAddresses].map((address) =>
+        normalizeEmailAddress(address)
+      )
+    );
+
+    if (selfAddresses.has(normalizedFrom)) {
       this.logger.info("Ignoring email from self", { from: parsedEmail.from });
       return true;
     }
@@ -284,7 +298,7 @@ ${parsedEmail.body}`;
     );
   }
 
-  // Send reply via Cloudflare Email Workers
+  // Send reply via Cloudflare Email Service
   private async sendReply(parsedEmail: ParsedEmailData, content: string): Promise<void> {
     try {
       // 1. Generate threading headers using EmailThreadManager
@@ -309,18 +323,19 @@ ${parsedEmail.body}`;
       const fullTextContent = (replyText ? replyText : content.trim()) + quotedContent;
       const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());
 
-      // 4. Send via Cloudflare Email Workers (reply to sender only)
+      // 4. Send via Cloudflare Email Service with safe reply-all CC handling
       await this.emailSender.sendReply(
         parsedEmail,
         { text: fullTextContent, html: htmlContent },
         threadingHeaders
       );
 
-      this.logger.info("Reply sent successfully via Cloudflare Email Workers", {
+      this.logger.info("Reply sent successfully via Cloudflare Email Service", {
         to: parsedEmail.from,
+        cc: parsedEmail.cc,
       });
     } catch (error) {
-      this.logger.error("Failed to send reply via Cloudflare Email Workers", {
+      this.logger.error("Failed to send reply via Cloudflare Email Service", {
         to: parsedEmail.from,
         ...formatError(error),
       });
@@ -366,7 +381,7 @@ ${parsedEmail.body}`;
     return !skipConditions.some((condition) => errorMessage.includes(condition));
   }
 
-  // Send error response email to user via Cloudflare Email Workers
+  // Send error response email to user via Cloudflare Email Service
   private async sendErrorResponse(error: unknown, parsedEmail: ParsedEmailData): Promise<void> {
     try {
       const errorMessage = this.getErrorResponseMessage(error);
@@ -381,11 +396,11 @@ ${parsedEmail.body}`;
 
       await this.emailSender.sendErrorResponse(parsedEmail, errorMessage, threadingHeaders);
 
-      this.logger.info("Error reply sent successfully via Cloudflare Email Workers", {
+      this.logger.info("Error reply sent successfully via Cloudflare Email Service", {
         to: parsedEmail.from,
       });
     } catch (replyError) {
-      this.logger.error("Failed to send error reply via Cloudflare Email Workers", {
+      this.logger.error("Failed to send error reply via Cloudflare Email Service", {
         error: replyError instanceof Error ? replyError.message : String(replyError),
         from: parsedEmail.from,
       });

@@ -10,12 +10,7 @@ This file tracks project-level work that should survive across coding sessions a
 
 ## Active TODOs
 
-- [ ] 1. Rework outbound email on Cloudflare's newer email APIs and support reply-all behavior.
-  - Context: Current implementation uses Email Workers `message.reply()` and sends sender-only replies. The next email layer should support CC/reply-all style behavior where safe and explicitly intended.
-  - Likely files: `src/email/CloudflareEmailSender.ts`, `src/email/types.ts`, `src/email/components/EmailThreadManager.ts`, `src/email/components/EmailComposer.ts`, `src/email/CloudflareEmailWorkerHandler.ts`, `tests/integration/EmailHandler.test.ts`
-  - Done when: Normal replies can include appropriate original CC recipients, tests cover sender-only versus reply-all behavior, threading headers remain correct, and authorization/loop-guard rules prevent accidental broad replies.
-
-- [ ] 2. Adopt Cloudflare Agents SDK where it improves the coordinator model.
+- [ ] 1. Adopt Cloudflare Agents SDK where it improves the coordinator model.
   - Context: `agents` is already in `package.json`, but the current Prime Foo flow uses direct AI SDK tool calls in `AgentCoordinator`. Introduce the Cloudflare Agents SDK deliberately rather than as an unused dependency.
   - Likely files: `package.json`, `src/agents/AgentCoordinator.ts`, `src/agents/sub-agents/*`, `src/agents/tools/*`, `tests/unit/*Agent*.test.ts`, `tests/integration/EmailHandler.test.ts`
   - Done when: There is a clear Cloudflare Agents SDK-backed orchestration path, tests cover the new lifecycle/tool behavior, and any unused direct-tooling or unused dependency surface is removed.
@@ -36,5 +31,6 @@ This file tracks project-level work that should survive across coding sessions a
 
 ### 2026-06-02
 
+- Reworked outbound email for Cloudflare Email Service: added the `send_email` binding, switched normal/error replies to structured `env.EMAIL.send()`, preserved inbound CC parsing, added authorization-allowlisted reply-all CC handling for normal replies, and kept error responses sender-only.
 - Reviewed Cloudflare Workers platform configuration before deploy: moved the compatibility date forward, kept `nodejs_compat` and assets intentionally, made observability sampling explicit, cleaned up generated-versus-manual Env typing, and documented required secrets.
 - Created the project TODO structure for cross-session task tracking.

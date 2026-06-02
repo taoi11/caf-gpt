@@ -1,26 +1,51 @@
 /**
  * src/email/CloudflareEmailSender.ts
  *
- * Sends reply emails using Cloudflare Email Workers native reply API
+ * Sends reply emails using Cloudflare Email Service send_email binding
  *
  * Top-level declarations:
- * - CloudflareEmailSender: Sends multipart replies and plain-text error responses through message.reply()
- * - buildReplyMime: Builds RFC 822 multipart MIME for normal replies
- * - buildErrorMime: Builds RFC 822 plain-text MIME for error responses
+ * - CloudflareEmailSender: Sends structured normal replies and plain-text error responses
+ * - buildThreadingHeaderMap: Builds Email Service custom headers for threading
+ * - buildReplyAllCcRecipients: Builds safe reply-all CC recipients from the original email
+ * - isAuthorizedReplyAllRecipient: Checks reply-all recipients against the configured allowlist
  */
 
-import { EmailMessage } from "cloudflare:email";
+import type { AuthorizationConfig } from "../config";
 import { APIValidationError } from "../errors";
 import { formatError, Logger } from "../Logger";
 import type { ParsedEmailData, ThreadingHeaders } from "./types";
 import { normalizeEmailAddress } from "./utils/EmailNormalizer";
+import { isValidEmailAddress } from "./utils/EmailValidator";
 
-/** Sends multipart replies and plain-text error responses through message.reply(). */
+const MAX_TOTAL_RECIPIENTS = 50;
+
+/** Sends structured normal replies and plain-text error responses. */
 export class CloudflareEmailSender {
   private readonly logger: Logger;
+  private readonly selfAddresses: Set<string>;
+  private readonly authorizedDomains: Set<string>;
+  private readonly authorizedEmails: Set<string>;
 
-  constructor(private readonly fromAddress: string) {
+  constructor(
+    private readonly fromAddress: string,
+    private readonly emailBinding?: SendEmail,
+    selfAddresses: string[] = [],
+    authorization: AuthorizationConfig = { authorizedDomains: [], authorizedEmails: [] }
+  ) {
     this.logger = Logger.getInstance();
+    this.selfAddresses = new Set(
+      [fromAddress, ...selfAddresses]
+        .map((address) => normalizeEmailAddress(address))
+        .filter(Boolean)
+    );
+    this.authorizedDomains = new Set(
+      authorization.authorizedDomains.map((domain) => domain.toLowerCase().trim()).filter(Boolean)
+    );
+    this.authorizedEmails = new Set(
+      authorization.authorizedEmails
+        .map((address) => normalizeEmailAddress(address))
+        .filter(Boolean)
+    );
   }
 
   async sendReply(
@@ -28,38 +53,50 @@ export class CloudflareEmailSender {
     content: { text: string; html: string },
     threadingHeaders: ThreadingHeaders
   ): Promise<{ id: string }> {
-    if (!originalEmail.originalMessage) {
-      throw new APIValidationError("Cloudflare EmailMessage context missing for reply");
+    if (!this.emailBinding) {
+      throw new APIValidationError("Cloudflare Email Service binding missing for reply");
     }
 
-    const replyRecipient = originalEmail.originalMessage.from || originalEmail.from;
-    const headerRecipient = normalizeEmailAddress(replyRecipient) || originalEmail.from;
+    const replyRecipient = normalizeEmailAddress(originalEmail.from);
+    if (!replyRecipient || !isValidEmailAddress(replyRecipient)) {
+      throw new APIValidationError(`Invalid reply recipient: ${originalEmail.from}`);
+    }
+
+    const ccRecipients = buildReplyAllCcRecipients(
+      originalEmail,
+      replyRecipient,
+      this.selfAddresses,
+      this.authorizedDomains,
+      this.authorizedEmails
+    );
 
     const subject = originalEmail.subject.startsWith("Re:")
       ? originalEmail.subject
       : `Re: ${originalEmail.subject}`;
 
-    const mime = buildReplyMime(
-      this.fromAddress,
-      headerRecipient,
-      subject,
-      content,
-      threadingHeaders
-    );
-
     try {
-      await originalEmail.originalMessage.reply(
-        new EmailMessage(this.fromAddress, replyRecipient, mime)
-      );
+      const response = await this.emailBinding.send({
+        to: replyRecipient,
+        ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
+        from: { email: this.fromAddress, name: "CAF-GPT" },
+        replyTo: this.fromAddress,
+        subject,
+        text: content.text,
+        html: content.html,
+        headers: buildThreadingHeaderMap(threadingHeaders),
+      });
 
-      return { id: `cf-reply-${originalEmail.messageId ?? Date.now().toString()}` };
+      return { id: response.messageId };
     } catch (error) {
-      this.logger.error("Failed to send reply via Cloudflare Email Workers", {
-        to: originalEmail.from,
+      this.logger.error("Failed to send reply via Cloudflare Email Service", {
+        to: replyRecipient,
+        cc: ccRecipients,
         ...formatError(error),
       });
       throw new APIValidationError(
-        `Cloudflare reply failed: ${error instanceof Error ? error.message : String(error)}`
+        `Cloudflare Email Service reply failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
     }
   }
@@ -69,116 +106,103 @@ export class CloudflareEmailSender {
     errorMessage: string,
     threadingHeaders: ThreadingHeaders
   ): Promise<{ id: string }> {
-    if (!originalEmail.originalMessage) {
-      throw new APIValidationError("Cloudflare EmailMessage context missing for error response");
+    if (!this.emailBinding) {
+      throw new APIValidationError("Cloudflare Email Service binding missing for error response");
     }
 
-    const replyRecipient = originalEmail.originalMessage.from || originalEmail.from;
-    const headerRecipient = normalizeEmailAddress(replyRecipient) || originalEmail.from;
-    const mime = buildErrorMime(this.fromAddress, headerRecipient, errorMessage, threadingHeaders);
+    const replyRecipient = normalizeEmailAddress(originalEmail.from);
+    if (!replyRecipient || !isValidEmailAddress(replyRecipient)) {
+      throw new APIValidationError(`Invalid error response recipient: ${originalEmail.from}`);
+    }
+
+    const subject = originalEmail.subject.startsWith("Re:")
+      ? `Error Processing Email: ${originalEmail.subject.slice(3).trim()}`
+      : "Error Processing Email";
 
     try {
-      await originalEmail.originalMessage.reply(
-        new EmailMessage(this.fromAddress, replyRecipient, mime)
-      );
-      return { id: `cf-error-${originalEmail.messageId ?? Date.now().toString()}` };
+      const response = await this.emailBinding.send({
+        to: replyRecipient,
+        from: { email: this.fromAddress, name: "CAF-GPT" },
+        replyTo: this.fromAddress,
+        subject,
+        text: errorMessage,
+        headers: buildThreadingHeaderMap(threadingHeaders),
+      });
+
+      return { id: response.messageId };
     } catch (error) {
-      this.logger.error("Failed to send error response via Cloudflare Email Workers", {
-        to: originalEmail.from,
+      this.logger.error("Failed to send error response via Cloudflare Email Service", {
+        to: replyRecipient,
         ...formatError(error),
       });
       throw new APIValidationError(
-        `Cloudflare error reply failed: ${error instanceof Error ? error.message : String(error)}`
+        `Cloudflare Email Service error reply failed: ${
+          error instanceof Error ? error.message : String(error)
+        }`
       );
     }
   }
 }
 
-/** Builds RFC 822 multipart/alternative MIME for normal replies. */
-function buildReplyMime(
-  fromAddress: string,
-  toAddress: string,
-  subject: string,
-  content: { text: string; html: string },
-  threadingHeaders: ThreadingHeaders
-): string {
-  const messageId = createMessageId(fromAddress);
-  const boundary = createMimeBoundary();
-  const headers = [
-    `From: CAF-GPT <${fromAddress}>`,
-    `To: <${toAddress}>`,
-    `Subject: ${subject}`,
-    `Message-ID: ${messageId}`,
-    "MIME-Version: 1.0",
-    `Content-Type: multipart/alternative; boundary="${boundary}"`,
-  ];
-
+/** Builds Email Service custom headers for threading. */
+function buildThreadingHeaderMap(threadingHeaders: ThreadingHeaders): Record<string, string> {
+  const headers: Record<string, string> = {};
   if (threadingHeaders.inReplyTo) {
-    headers.push(`In-Reply-To: ${threadingHeaders.inReplyTo}`);
+    headers["In-Reply-To"] = threadingHeaders.inReplyTo;
   }
-
   if (threadingHeaders.references) {
-    headers.push(`References: ${threadingHeaders.references}`);
+    headers.References = threadingHeaders.references;
   }
-
-  const textPart = [
-    `--${boundary}`,
-    "Content-Type: text/plain; charset=UTF-8",
-    "Content-Transfer-Encoding: 7bit",
-    "",
-    content.text,
-  ].join("\r\n");
-
-  const htmlPart = [
-    `--${boundary}`,
-    "Content-Type: text/html; charset=UTF-8",
-    "Content-Transfer-Encoding: 7bit",
-    "",
-    content.html,
-  ].join("\r\n");
-
-  const closingBoundary = `--${boundary}--`;
-
-  return `${headers.join("\r\n")}\r\n\r\n${textPart}\r\n\r\n${htmlPart}\r\n\r\n${closingBoundary}`;
+  return headers;
 }
 
-/** Builds RFC 822 plain-text MIME for error responses. */
-function buildErrorMime(
-  fromAddress: string,
-  toAddress: string,
-  textBody: string,
-  threadingHeaders: ThreadingHeaders
-): string {
-  const messageId = createMessageId(fromAddress);
-  const headers = [
-    `From: CAF-GPT <${fromAddress}>`,
-    `To: <${toAddress}>`,
-    "Subject: Error Processing Email",
-    `Message-ID: ${messageId}`,
-    "MIME-Version: 1.0",
-    "Content-Type: text/plain; charset=UTF-8",
-  ];
+/** Builds safe reply-all CC recipients from the original email. */
+function buildReplyAllCcRecipients(
+  originalEmail: ParsedEmailData,
+  primaryRecipient: string,
+  selfAddresses: Set<string>,
+  authorizedDomains: Set<string>,
+  authorizedEmails: Set<string>
+): string[] {
+  const ccRecipients: string[] = [];
+  const seen = new Set([primaryRecipient, ...selfAddresses]);
 
-  if (threadingHeaders.inReplyTo) {
-    headers.push(`In-Reply-To: ${threadingHeaders.inReplyTo}`);
+  for (const ccAddress of originalEmail.cc) {
+    const normalizedCc = normalizeEmailAddress(ccAddress);
+    if (!normalizedCc || seen.has(normalizedCc)) {
+      continue;
+    }
+
+    if (!isValidEmailAddress(normalizedCc)) {
+      throw new APIValidationError(`Invalid reply-all CC recipient: ${ccAddress}`);
+    }
+
+    if (!isAuthorizedReplyAllRecipient(normalizedCc, authorizedDomains, authorizedEmails)) {
+      continue;
+    }
+
+    ccRecipients.push(normalizedCc);
+    seen.add(normalizedCc);
   }
 
-  if (threadingHeaders.references) {
-    headers.push(`References: ${threadingHeaders.references}`);
+  if (ccRecipients.length + 1 > MAX_TOTAL_RECIPIENTS) {
+    throw new APIValidationError(
+      `Reply-all recipient count exceeds Cloudflare Email Service limit of ${MAX_TOTAL_RECIPIENTS}`
+    );
   }
 
-  return [...headers, "", textBody].join("\r\n");
+  return ccRecipients;
 }
 
-// Builds a Message-ID value for outgoing emails.
-function createMessageId(fromAddress: string): string {
-  const domain = fromAddress.split("@")[1] || "caf-gpt.com";
-  const unique = `${Date.now().toString(36)}.${Math.random().toString(36).slice(2, 10)}`;
-  return `<${unique}@${domain}>`;
-}
+/** Checks reply-all recipients against the configured allowlist. */
+function isAuthorizedReplyAllRecipient(
+  email: string,
+  authorizedDomains: Set<string>,
+  authorizedEmails: Set<string>
+): boolean {
+  if (authorizedEmails.has(email)) {
+    return true;
+  }
 
-// Builds a unique MIME boundary for multipart messages.
-function createMimeBoundary(): string {
-  const random = Math.random().toString(36).slice(2, 12);
-  return `caf-gpt-${Date.now().toString(36)}-${random}`;
+  return Array.from(authorizedDomains).some((domain) => email.endsWith(`@${domain}`));
 }

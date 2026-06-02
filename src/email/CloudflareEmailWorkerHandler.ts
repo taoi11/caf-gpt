@@ -10,7 +10,7 @@
  * - isMonitoredRecipient: Checks monitored recipient addresses
  */
 
-import PostalMime from "postal-mime";
+import PostalMime, { type Address } from "postal-mime";
 import type { AppConfig } from "../config";
 import { Logger } from "../Logger";
 import { SimpleEmailHandler } from "./SimpleEmailHandler";
@@ -51,10 +51,7 @@ export class CloudflareEmailWorkerHandler {
       return;
     }
 
-    const parsedEmail = await this.parseMessage(message);
-    parsedEmail.to = [this.config.email.agentFromEmail];
-
-    await this.emailHandler.processEmail(parsedEmail, ctx);
+    await this.emailHandler.processEmail(await this.parseMessage(message), ctx);
   }
 
   /** Converts ForwardableEmailMessage into ParsedEmailData. */
@@ -75,10 +72,14 @@ export class CloudflareEmailWorkerHandler {
     const derivedBody =
       rawTextBody.trim().length > 0 ? rawTextBody : rawHtmlBody ? htmlToText(rawHtmlBody) : "";
 
+    const toAddresses = this.mergeAddresses(this.extractAddresses(parsed.to), [
+      normalizeEmailAddress(message.to),
+    ]);
+
     return {
       from: normalizeEmailAddress(message.from),
-      to: [normalizeEmailAddress(message.to)],
-      cc: [],
+      to: toAddresses,
+      cc: this.extractAddresses(parsed.cc),
       subject: parsed.subject ?? message.headers.get("subject") ?? "",
       headers,
       body: derivedBody,
@@ -89,6 +90,38 @@ export class CloudflareEmailWorkerHandler {
       date: new Date(),
       originalMessage: message,
     };
+  }
+
+  /** Extracts normalized mailbox addresses from parsed MIME address groups. */
+  private extractAddresses(addresses?: Address[]): string[] {
+    if (!addresses) {
+      return [];
+    }
+
+    return this.mergeAddresses(
+      addresses.flatMap((entry) => {
+        if (entry.group) {
+          return entry.group.map((mailbox) => normalizeEmailAddress(mailbox.address));
+        }
+        return [normalizeEmailAddress(entry.address)];
+      })
+    );
+  }
+
+  /** Merges address lists while dropping empty values and preserving order. */
+  private mergeAddresses(...addressLists: string[][]): string[] {
+    const addresses: string[] = [];
+    const seen = new Set<string>();
+
+    for (const address of addressLists.flat()) {
+      if (!address || seen.has(address)) {
+        continue;
+      }
+      addresses.push(address);
+      seen.add(address);
+    }
+
+    return addresses;
   }
 
   /** Builds a normalized header map with lowercase keys. */
