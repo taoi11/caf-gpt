@@ -22,7 +22,7 @@ npm run deploy
 
 ## Architecture
 
-```
+```text
 Email → Cloudflare Email Routing → Email Worker → CloudflareEmailWorkerHandler
                                                          ↓
                                                  SimpleEmailHandler
