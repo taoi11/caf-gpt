@@ -2,7 +2,7 @@
 
 ## Project Structure
 
-```
+```text
 src/
 ├── index.ts                    # Main entry point with HTTP + email worker handlers
 ├── types.ts                    # TypeScript interfaces
