@@ -18,6 +18,7 @@ import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
 import { createUserAgentResolver } from "../../src/index";
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await reset();
 });
 
@@ -100,6 +101,7 @@ describe("UserAgent email processing", () => {
           subject: "Leave question",
           body: "Can I take annual leave next week?",
           messageId: "<msg-1@forces.gc.ca>",
+          headers: { references: "<root@forces.gc.ca> <parent@forces.gc.ca>" },
         })
       );
 
@@ -117,6 +119,7 @@ describe("UserAgent email processing", () => {
       cc: ["ally@forces.gc.ca"],
       subject: "Re: Leave question",
       inReplyTo: "<msg-1@forces.gc.ca>",
+      headers: { References: "<root@forces.gc.ca> <parent@forces.gc.ca> <msg-1@forces.gc.ca>" },
       secret: env.EMAIL_SECRET,
     });
     expect(result.schedules[0][1]).toBe("runMemoryUpdate");
@@ -169,6 +172,22 @@ describe("UserAgent email processing", () => {
     });
 
     expect(state.memory).toBe("Updated memory content");
+  });
+
+  it("rethrows memory update failures so scheduled retries can run", async () => {
+    const stub = getUserAgentStub("memory-failure@forces.gc.ca");
+    vi.spyOn(MemoryFooAgent.prototype, "updateMemory").mockRejectedValue(
+      new Error("transient model failure")
+    );
+
+    await runInDurableObject(stub, async (instance: UserAgent) => {
+      await expect(
+        instance.runMemoryUpdate({
+          emailContext: "Subject: Test\n\nUser details",
+          agentReply: "Agent reply",
+        })
+      ).rejects.toThrow("transient model failure");
+    });
   });
 });
 

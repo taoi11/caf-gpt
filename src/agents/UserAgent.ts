@@ -19,7 +19,11 @@ import { EmailComposer, HtmlEmailComposer } from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
-import { validateEmailContent, validateRecipients } from "../email/utils/EmailValidator";
+import {
+  isValidMessageId,
+  validateEmailContent,
+  validateRecipients,
+} from "../email/utils/EmailValidator";
 import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates";
 import { htmlToText } from "../email/utils/HtmlToText";
 import { buildReplyAllCcRecipients } from "../email/utils/ReplyRecipients";
@@ -29,6 +33,7 @@ import { AgentCoordinator } from "./AgentCoordinator";
 import { MemoryFooAgent } from "./sub-agents";
 
 const MEMORY_MAX_CONTENT_LENGTH = 4000;
+const REFERENCES_MAX_LENGTH = 1000;
 
 export interface UserAgentState {
   memory: string;
@@ -86,6 +91,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       });
     } catch (error) {
       this.logger.error("Memory update failed", formatError(error));
+      throw error;
     }
   }
 
@@ -295,6 +301,7 @@ ${parsedEmail.body}`;
       const subject = parsedEmail.subject.startsWith("Re:")
         ? parsedEmail.subject
         : `Re: ${parsedEmail.subject}`;
+      const threadingOptions = this.buildThreadingOptions(parsedEmail);
 
       await this.sendEmail({
         binding: this.env.EMAIL,
@@ -305,7 +312,7 @@ ${parsedEmail.body}`;
         subject,
         text: fullTextContent,
         html: htmlContent,
-        ...(parsedEmail.messageId ? { inReplyTo: parsedEmail.messageId } : {}),
+        ...threadingOptions,
         secret: this.env.EMAIL_SECRET,
       });
 
@@ -393,6 +400,7 @@ ${parsedEmail.body}`;
       const subject = parsedEmail.subject.startsWith("Re:")
         ? `Error Processing Email: ${parsedEmail.subject.slice(3).trim()}`
         : "Error Processing Email";
+      const threadingOptions = this.buildThreadingOptions(parsedEmail);
 
       await this.sendEmail({
         binding: this.env.EMAIL,
@@ -401,7 +409,7 @@ ${parsedEmail.body}`;
         replyTo: config.email.agentFromEmail,
         subject,
         text: errorMessage,
-        inReplyTo: parsedEmail.messageId,
+        ...threadingOptions,
         secret: this.env.EMAIL_SECRET,
       });
 
@@ -427,6 +435,63 @@ ${parsedEmail.body}`;
       ERROR_RESPONSE_TEMPLATES.find((entry) => entry.match(error)) ??
       ERROR_RESPONSE_TEMPLATES[ERROR_RESPONSE_TEMPLATES.length - 1];
     return template.lines.join("\n");
+  }
+
+  /** Builds threading options for Agents SDK sendEmail calls. */
+  private buildThreadingOptions(parsedEmail: ParsedEmailData): {
+    inReplyTo?: string;
+    headers?: Record<string, string>;
+  } {
+    if (!parsedEmail.messageId) {
+      return {};
+    }
+
+    const references = this.buildReferencesHeader(parsedEmail);
+    return {
+      inReplyTo: parsedEmail.messageId,
+      ...(references ? { headers: { References: references } } : {}),
+    };
+  }
+
+  /** Builds the reply References chain from prior References plus the original Message-ID. */
+  private buildReferencesHeader(parsedEmail: ParsedEmailData): string {
+    const messageId = parsedEmail.messageId;
+    if (!messageId) {
+      return "";
+    }
+
+    const references = parsedEmail.references?.trim();
+    const chain = references ? `${references} ${messageId}` : messageId;
+    return this.trimReferences(chain, REFERENCES_MAX_LENGTH);
+  }
+
+  /** Trims long References chains while keeping the most recent valid message IDs. */
+  private trimReferences(references: string, maxLength: number): string {
+    const trimmedReferences = references.trim();
+
+    if (trimmedReferences.length <= maxLength) {
+      return trimmedReferences;
+    }
+
+    const messageIds = trimmedReferences
+      .split(/\s+/)
+      .filter((messageId) => messageId.length > 0 && isValidMessageId(messageId));
+    const kept: string[] = [];
+    let currentLength = 0;
+
+    for (let index = messageIds.length - 1; index >= 0; index--) {
+      const messageId = messageIds[index];
+      const neededLength = currentLength + (kept.length > 0 ? 1 : 0) + messageId.length;
+
+      if (neededLength > maxLength) {
+        break;
+      }
+
+      kept.unshift(messageId);
+      currentLength = neededLength;
+    }
+
+    return kept.join(" ");
   }
 
   /** Extracts normalized mailbox addresses from parsed MIME address groups. */
