@@ -181,16 +181,24 @@ export function isValidMessageId(messageId: string): boolean {
   return MESSAGE_ID_REGEX.test(messageId.trim());
 }
 
+// Pre-compile regular expressions and use a Set for O(1) lookup
+const SUSPICIOUS_PATTERNS = [
+  /\b(urgent|immediate|act now|limited time)\b/i,
+  /\b(click here|download now|free money)\b/i,
+  /\b(nigerian prince|lottery winner|inheritance)\b/i,
+  /\b(phishing|malware|virus)\b/i,
+];
+
+const SUSPICIOUS_DOMAINS = new Set([
+  "tempmail.org",
+  "10minutemail.com",
+  "guerrillamail.com",
+  "mailinator.com",
+]);
+
 // Check for suspicious content patterns
 function containsSuspiciousContent(content: string): boolean {
-  const suspiciousPatterns = [
-    /\b(urgent|immediate|act now|limited time)\b/i,
-    /\b(click here|download now|free money)\b/i,
-    /\b(nigerian prince|lottery winner|inheritance)\b/i,
-    /\b(phishing|malware|virus)\b/i,
-  ];
-
-  return suspiciousPatterns.some((pattern) => pattern.test(content));
+  return SUSPICIOUS_PATTERNS.some((pattern) => pattern.test(content));
 }
 
 // Check if domain is suspicious
@@ -198,12 +206,5 @@ function isSuspiciousDomain(email: string): boolean {
   const domain = email.split("@")[1]?.toLowerCase();
   if (!domain) return false;
 
-  const suspiciousDomains = [
-    "tempmail.org",
-    "10minutemail.com",
-    "guerrillamail.com",
-    "mailinator.com",
-  ];
-
-  return suspiciousDomains.includes(domain);
+  return SUSPICIOUS_DOMAINS.has(domain);
 }

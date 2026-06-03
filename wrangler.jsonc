@@ -4,12 +4,14 @@
  *
  * Required secrets (set with: wrangler secret put <NAME>):
  * - AUTHORIZED_SENDERS: Comma-separated list of authorized email domains/addresses
+ * - CF_AIG_AUTH: Cloudflare AI Gateway authentication token
+ * - EMAIL_SECRET: HMAC secret for signed Agents SDK email reply routing
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "caf-gpt-email",
   "main": "src/index.ts",
-  "compatibility_date": "2025-10-31",
+  "compatibility_date": "2026-05-28",
   "compatibility_flags": ["nodejs_compat"],
   "limits": {
     "cpu_ms": 60000 // default is 30000 (30 seconds)
@@ -25,11 +27,13 @@
   "observability": {
     "logs": {
       "enabled": true,
-      "invocation_logs": true
+      "invocation_logs": true,
+      "head_sampling_rate": 1
     },
     "traces": {
       "enabled": true,
-      "persist": true
+      "persist": true,
+      "head_sampling_rate": 0.05
     }
   },
   "r2_buckets": [
@@ -38,14 +42,25 @@
       "bucket_name": "policies"
     }
   ],
-  /**
-   * Hyperdrive binding for PostgreSQL connection pooling
-   * Used for user memory storage
-   */
-  "hyperdrive": [
+  "send_email": [
     {
-      "binding": "HYPERDRIVE",
-      "id": "4b95a1c93ad2441a85e5d9353ae16f20"
+      "name": "EMAIL",
+      "remote": true,
+      "allowed_sender_addresses": ["agent@caf-gpt.com", "pacenote@caf-gpt.com"]
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "UserAgent",
+        "class_name": "UserAgent"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["UserAgent"]
     }
   ]
 }

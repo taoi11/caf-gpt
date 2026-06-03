@@ -16,26 +16,27 @@ npm run deploy
 
 - **Email Processing**: Receives emails via Cloudflare Email Workers
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
-- **Sender-Only Replies**: Uses Cloudflare Email Workers reply API (no CC/reply-all)
+- **Reply-All Email Responses**: Sends via Cloudflare Email Service with allowlisted original-CC handling
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
-- **Memory Management**: User context stored in Hyperdrive (PostgreSQL)
+- **Memory Management**: Per-user context stored in Cloudflare Agents Durable Object state
 
 ## Architecture
 
-```
-Email → Cloudflare Email Routing → Email Worker → CloudflareEmailWorkerHandler
-                                                         ↓
-                                                 SimpleEmailHandler
-                                                         ↓
-                                                 AgentCoordinator
-                                                         ↓
-                                    Prime Foo Agent (orchestrator)
-                                    /        |         \
-                      LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
-                                                         ↓
-                                              CloudflareEmailSender
-                                                         ↓
-                                           Reply to sender (no CC/reply-all)
+```text
+Email → Cloudflare Email Routing → routeAgentEmail
+                                      ↓
+                         UserAgent Durable Object
+                         (per normalized sender email)
+                                      ↓
+                              AgentCoordinator
+                                      ↓
+                         Prime Foo Agent (orchestrator)
+                         /        |         \
+           LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
+                                      ↓
+                   Agents SDK sendEmail + signed reply routing
+                                      ↓
+                         Cloudflare Email Service send_email
 ```
 
 ## Setup
@@ -50,6 +51,8 @@ npm install
 
 ```bash
 wrangler secret put AUTHORIZED_SENDERS
+wrangler secret put CF_AIG_AUTH
+wrangler secret put EMAIL_SECRET
 ```
 
 ### 3. Deploy
@@ -58,10 +61,11 @@ wrangler secret put AUTHORIZED_SENDERS
 npm run deploy
 ```
 
-### 4. Configure Cloudflare Email Routing
+### 4. Configure Cloudflare Email Service
 
 1. In Cloudflare Email Routing, route `agent@caf-gpt.com` and `pacenote@caf-gpt.com` to this Worker.
-2. Ensure the Worker has the Email event handler enabled (already exported in `src/index.ts`).
+2. In Cloudflare Email Sending, onboard `caf-gpt.com` and verify the sending DNS records.
+3. Ensure the Worker has the Email event handler enabled (already exported in `src/index.ts`).
 
 [For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
 
@@ -78,6 +82,7 @@ npm run types:check
 ## Development Setup
 
 ### Enable Pre-commit Hook
+
 ```bash
 git config core.hooksPath .githooks
 ```
@@ -85,6 +90,7 @@ git config core.hooksPath .githooks
 This enables a pre-commit hook that blocks commits if linting fails.
 
 ### Linting & Formatting
+
 ```bash
 npm run lint        # Check for issues
 npm run lint:fix    # Auto-fix issues

@@ -25,7 +25,7 @@ interface LLMConfig {
   };
 }
 
-interface AuthorizationConfig {
+export interface AuthorizationConfig {
   authorizedDomains: string[];
   authorizedEmails: string[];
 }

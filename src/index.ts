@@ -1,18 +1,92 @@
 /**
  * src/index.ts
  *
- * Entry point for Cloudflare Worker with HTTP and Email Worker handlers
+ * Entry point for Cloudflare Worker with HTTP and Agent-routed Email Worker handlers
  *
  * Top-level functions:
+ * - UserAgent: Durable Object-backed per-user email agent
+ * - createUserAgentResolver: Creates the Agents SDK email resolver for direct and signed reply routing
+ * - isAuthorizedSender: Checks configured sender allow list
+ * - isMonitoredRecipient: Checks monitored recipient addresses
  * - fetch: HTTP handler for health checks and static assets
  * - email: Email Worker handler for inbound email processing
  * - default: Default export for Cloudflare Worker
  */
 
+import { routeAgentEmail } from "agents";
+import { createSecureReplyEmailResolver, type EmailResolver } from "agents/email";
+import { getUserAgentId, UserAgent } from "./agents/UserAgent";
 import { createConfig } from "./config";
-import { CloudflareEmailWorkerHandler } from "./email/CloudflareEmailWorkerHandler";
+import { normalizeEmailAddress } from "./email/utils/EmailNormalizer";
 import { formatError, Logger } from "./Logger";
 
+export { UserAgent };
+
+/** Creates the Agents SDK email resolver for direct and signed reply routing. */
+export function createUserAgentResolver(env: Env): EmailResolver<Env> {
+  const logger = Logger.getInstance();
+  const config = createConfig(env);
+  const secureReplyResolver = createSecureReplyEmailResolver<Env>(env.EMAIL_SECRET, {
+    onInvalidSignature: (emailMessage, reason) => {
+      logger.warn("Invalid signed email routing headers", {
+        from: emailMessage.from,
+        to: emailMessage.to,
+        reason,
+      });
+    },
+  });
+
+  return async (emailMessage, resolverEnv) => {
+    const senderEmail = normalizeEmailAddress(emailMessage.from);
+    if (!isAuthorizedSender(senderEmail, config)) {
+      logger.info("Email ignored - sender not authorized", {
+        sender: emailMessage.from,
+        normalizedSender: senderEmail,
+      });
+      return null;
+    }
+
+    const recipientEmail = normalizeEmailAddress(emailMessage.to);
+    if (!isMonitoredRecipient(recipientEmail, config)) {
+      logger.info("Email ignored - recipient not monitored", {
+        recipient: emailMessage.to,
+        normalizedRecipient: recipientEmail,
+      });
+      return null;
+    }
+
+    const signedRoute = await secureReplyResolver(emailMessage, resolverEnv);
+    if (signedRoute) {
+      return signedRoute;
+    }
+
+    return {
+      agentName: "UserAgent",
+      agentId: getUserAgentId(senderEmail),
+    };
+  };
+}
+
+/** Checks configured sender allow list. */
+function isAuthorizedSender(senderEmail: string, config = createConfig()): boolean {
+  const isAuthorizedDomain = config.authorization.authorizedDomains.some((domain) =>
+    senderEmail.endsWith(`@${domain}`)
+  );
+  const isAuthorizedEmail = config.authorization.authorizedEmails.some(
+    (emailAddress) => senderEmail === normalizeEmailAddress(emailAddress)
+  );
+
+  return isAuthorizedDomain || isAuthorizedEmail;
+}
+
+/** Checks monitored recipient addresses. */
+function isMonitoredRecipient(recipientEmail: string, config = createConfig()): boolean {
+  return config.email.monitoredAddresses.some(
+    (address) => recipientEmail === normalizeEmailAddress(address)
+  );
+}
+
+/** Handles HTTP health checks and static assets. */
 async function fetch(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
   const logger = Logger.getInstance();
@@ -60,17 +134,25 @@ async function fetch(request: Request, env: Env): Promise<Response> {
   }
 }
 
+/** Routes inbound email into the per-user UserAgent Durable Object. */
 async function email(
   message: ForwardableEmailMessage,
   env: Env,
-  ctx: ExecutionContext
+  _ctx: ExecutionContext
 ): Promise<void> {
   const logger = Logger.getInstance();
-  const config = createConfig(env);
-  const emailHandler = new CloudflareEmailWorkerHandler(env, config);
 
   try {
-    await emailHandler.handleEmail(message, ctx);
+    await routeAgentEmail(message, env, {
+      resolver: createUserAgentResolver(env),
+      onNoRoute: (emailMessage) => {
+        logger.warn("Email rejected - no UserAgent route", {
+          from: emailMessage.from,
+          to: emailMessage.to,
+        });
+        emailMessage.setReject("Unauthorized sender or unknown recipient");
+      },
+    });
   } catch (error) {
     const { message: errorMessage, stack } = formatError(error);
 

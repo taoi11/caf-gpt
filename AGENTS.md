@@ -1,10 +1,10 @@
 # CAF-GPT Development Guide
 
-Instrauctions and architecture patterns LLM developers AI agents.
+Instructions and architecture patterns for LLM developers and AI agents.
 
 ## Project Overview
 
-CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated replies via the Cloudflare Email Workers reply API (sender-only replies).
+CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated replies via the Cloudflare Email Service `send_email` binding.
 
 ## Development Commands
 
@@ -39,25 +39,25 @@ Emails are processed through **Cloudflare Email Workers**:
 2. **Validation**: `CloudflareEmailWorkerHandler` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
 3. **Parsing**: MIME content parsed with `postal-mime` into `ParsedEmailData`.
 4. **Agent Processing**: `SimpleEmailHandler.processEmail()` routes to `AgentCoordinator.processWithPrimeFoo()`.
-5. **Reply**: `CloudflareEmailSender` sends AI-generated response via `message.reply()` (sender-only).
+5. **Reply**: `CloudflareEmailSender` sends AI-generated responses via `env.EMAIL.send()`, preserving threading headers and original-CC reply-all behavior for normal replies when CC recipients match the configured authorization allowlist.
 
-### Iterative Agent Workflow
+### AI SDK Tool-Calling Workflow
 
-**Prime Foo Agent** (`processWithPrimeFoo`) uses **iterative JSON response loops**:
+**Prime Foo Agent** (`processWithPrimeFoo`) uses **AI SDK tool calling**:
 
-- LLM returns structured JSON: `{"type": "reply"}`, `{"type": "research"}`, `{"type": "feedback_note"}`, or `{"type": "no_response"}`
-- If `research`: delegate to sub-agent → send results back → LLM replies again
-  - Sub-agents registered in `AgentCoordinator` constructor (`LeaveFooAgent`, `PaceFooAgent`, `DoadFooAgent`, `QroFooAgent`)
-  - Example: `{"type": "research", "research": {"sub_agent": "leave_foo", "queries": [{"query": "..."}]}}`
-- If `feedback_note`: delegate to `PaceFooAgent` → send generated note back → LLM wraps in reply
-  - Format: `{"type": "feedback_note", "feedbackNote": {"rank": "cpl", "context": "event context"}}`
-  - PaceFooAgent loads competencies from R2 (`paceNote/{rank}.md`) and generates feedback
-  - Rank files: `cpl.md`, `mcpl.md`, `sgt.md`, `wo.md`
-- **Circuit breaker**: max 3 sub-agent calls per email to prevent infinite loops
+- Prime Foo calls `generateText()` with tools defined inline in `src/agents/AgentCoordinator.ts`.
+- `batch_research` accepts leave, DOAD, and QR&O query arrays, then runs the requested sub-agent research calls concurrently.
+  - Research sub-agents are `LeaveFooAgent`, `DoadFooAgent`, and `QroFooAgent`.
+  - Each domain accepts up to 3 questions per `batch_research` call.
+- `generate_feedback_note` delegates to `PaceFooAgent.generateNote(rank, context)`.
+  - PaceFooAgent loads competencies from R2 (`paceNote/{rank}.md`) and generates feedback.
+  - Rank files: `cpl.md`, `mcpl.md`, `sgt.md`, `wo.md`.
+- **Circuit breaker**: `stopWhen: stepCountIs(3)` limits the Prime Foo tool loop to 3 model steps.
+- `MemoryFooAgent` runs from `SimpleEmailHandler` around the main response path to retrieve and update user memory.
 
 ### Structured Output with Zod
 
-All agents use `callLangChainStructured()` with Zod schema validation:
+Selector and memory agents use `callLangChainStructured()` with Zod schema validation:
 
 - Define response schema using Zod (see `src/schemas.ts`)
 - LLM returns JSON matching schema via AI SDK's `generateObject()` with structured output
@@ -65,13 +65,14 @@ All agents use `callLangChainStructured()` with Zod schema validation:
 - Zod throws `ValidationError` if response doesn't match schema
 - AI SDK's built-in error handling catches API failures and timeout errors
 
-### Strict Failure Mode (No Degraded State)
+### Strict Failure Mode (No Degraded State Within Logic Modules)
 
-Business logic must be designed to either succeed completely or fail cleanly. The application explicitly does not support a "degraded" operational mode.
+Business logic modules must be designed to either succeed completely or fail cleanly. Individual modules should not silently produce partial, unverified, or degraded results.
 
 - If workflow encounters an unrecoverable error (e.g., API failure, missing context), the operation must be halted.
 - The system must catch the failure and respond to the user with a standardized error email using the pre-defined error templates.
-- App should never fallback to providing partial, unverified, or degraded responses.
+- A module should never fallback to providing partial, unverified, or degraded responses within that module's own contract.
+- Outer orchestration can intentionally skip optional modules when that behavior is explicit, tested, and documented. For example, memory retrieval may fail without preventing the core email response path if the response itself remains complete and verified.
 
 ## Storage & Document Retrieval
 
@@ -80,6 +81,7 @@ R2 organization: `${category}/${filename}`
 - Categories: `leave/` (policy docs), `paceNote/` (rank competencies), `qro/` (QR&O chapters)
 - Access via: `documentRetriever.getDocument("paceNote", "mcpl.md")`
 - All documents are UTF-8 encoded markdown files
+- Current retrieval is R2 path-based document loading. Planned semantic retrieval work belongs in `TODO.md` until a pgvector/Neon migration is designed.
 
 ## LLM Integration
 
@@ -87,10 +89,11 @@ The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudfla
 
 **Key points:**
 
-- All agents use `callLangChain()` and `callLangChainStructured()` methods in `BaseAgent.ts`
+- Agents use `callLangChain()` and `callLangChainStructured()` methods in `src/agents/utils/BaseAgent.ts`
 - **Prompt templating**: Uses `PromptManager` with `{variable}` syntax for template rendering
 - **Structured output**: Uses `generateObject()` with Zod schemas (defined in `src/schemas.ts`) for automatic JSON validation
-- **AI Gateway**: Routes through Cloudflare AI Gateway via `ai-gateway-provider` with the unified provider — requires `CF_AIG_TOKEN` secret
+- **Tool calling**: Prime Foo uses AI SDK `generateText()` with tools in `src/agents/AgentCoordinator.ts`
+- **AI Gateway**: Routes through Cloudflare AI Gateway via `ai-gateway-provider` with the unified provider — current code requires the `CF_AIG_AUTH` secret
 - **Models**: `workers-ai/@cf/moonshotai/kimi-k2.5` (orchestrator), `workers-ai/@cf/zai-org/glm-4.7-flash` (specialists)
 - **Streaming is disabled** for CPU efficiency in Cloudflare Workers
 
@@ -119,11 +122,17 @@ For agents that need to select from an index before answering (like `DoadFooAgen
 
 ### Registering Agents
 
-After creating any new agent class, register it in the `AgentCoordinator` constructor:
+After creating any new tool-backed agent class, instantiate it in `AgentCoordinator.create()` and wire it into the relevant AI SDK tool:
 
 ```typescript
-this.yourAgent = new YourAgent(env);
-this.subAgents.set("your_foo", this.yourAgent);
+const yourAgent = new YourAgent(env, config);
+
+tools: {
+  your_tool: tool({
+    inputSchema: YourSchema,
+    execute: async (input) => yourAgent.research(input),
+  }),
+}
 ```
 
 ## Code Quality Standards
@@ -160,15 +169,15 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 
 ### Email Replies
 
-- Replies sent via `CloudflareEmailSender` using Cloudflare Email Workers reply API
-- **Sender-only replies**: current implementation does not CC/reply-all
+- Replies sent via `CloudflareEmailSender` using Cloudflare Email Service `send_email`
+- Normal replies include original CC recipients for reply-all behavior only when those recipients match the configured authorized domains/emails; error responses remain sender-only
 - Threading headers preserved: `In-Reply-To`, `References`
 - Quoted content formatted using `EmailComposer.formatQuotedContent()`
 
 ## Important Gotchas
 
 - **Prompts use caching**: `PromptManager` caches loaded prompts (LRU, max 32) - use its methods, don't read files directly
-- **Signature appending**: `AgentCoordinator.SIGNATURE` is appended to all Prime Foo agent replies (includes GitHub link)
+- **Signature appending**: `AgentCoordinator.processWithPrimeFoo()` appends the CAF-GPT signature to Prime Foo replies (includes GitHub link)
 
 ## TypeScript Comment Standards
 
@@ -184,14 +193,15 @@ Every TypeScript module must have a JSDoc comment block at the **very top** that
 
 ```typescript
 /**
- * src/agents/BaseAgent.ts
+ * src/agents/utils/BaseAgent.ts
  *
- * Base agent with LangChain LLM integration using ChatPromptTemplate
+ * Base agent with Cloudflare Workers AI integration via AI SDK
  *
  * Top-level declarations:
- * - BaseAgent: Base agent with LangChain integration and template-based prompts
- * - callLangChain: Calls LLM using cached ChatPromptTemplate with variables
- * - callLangChainStructured: Calls LLM with structured output using Zod schema
+ * - BaseAgent: Base agent with AI SDK integration and template-based prompts
+ * - createModel: Creates AI model via AI Gateway provider
+ * - callLangChain: Backward-compatible wrapper for plain text model calls
+ * - callLangChainStructured: Backward-compatible wrapper for structured model calls
  */
 ```
 
@@ -204,7 +214,7 @@ Every top-level function or class must have JSDoc comments immediately above the
 3. Are single-line for simple methods.
 
 ```typescript
-// Call LLM using cached ChatPromptTemplate with variables
+// Call LLM using cached AI SDK model and rendered prompt variables
 protected async callLangChain(params: LLMCallParams): Promise<string> {
 ```
 
