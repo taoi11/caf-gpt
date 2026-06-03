@@ -23,11 +23,8 @@ export class DocumentRetriever {
   // ⚡ Bolt: Cache R2 documents using a static property so that instances
   // sharing the same isolate (subsequent/concurrent fetch requests)
   // can reuse already retrieved documents instead of hitting R2.
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used by static/instance methods; Biome does not reliably track private static class references.
   private static documentCache = new Map<string, CacheEntry>();
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used by getDocument() cache eviction logic.
   private static readonly MAX_CACHE_SIZE = 50; // Limit size to prevent memory leaks (OOM)
-  // biome-ignore lint/correctness/noUnusedPrivateClassMembers: Used by getDocument() cache expiration logic.
   private static readonly CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes TTL to prevent serving stale data
 
   /** ⚡ Bolt: Expose a way to clear the cache, primarily for testing purposes */

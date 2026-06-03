@@ -6,29 +6,29 @@
     "types:check": "wrangler types --check --env-interface CloudflareBindings",
     "cf-typegen": "wrangler types --env-interface CloudflareBindings",
     "compile": "tsc --noEmit",
-    "test": "vitest --run --reporter=dot --silent",
+    "test": "vitest --run --reporter=dot --silent && vitest --run --config vitest.workers.config.mts --reporter=dot --silent",
     "test:watch": "vitest",
-    "test:verbose": "vitest --run",
+    "test:verbose": "vitest --run && vitest --run --config vitest.workers.config.mts",
     "lint": "biome check .",
     "lint:fix": "biome check --write .",
     "format": "biome format --write ."
   },
   "dependencies": {
-    "agents": "^0.7.6",
+    "agents": "^0.14.1",
     "ai": "^6.0.116",
     "ai-gateway-provider": "^3.1.2",
     "html-to-text": "^9.0.5",
     "postal-mime": "^2.4.4",
-    "postgres": "^3.4.5",
     "zod": "^4.2.1"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.3.10",
+    "@cloudflare/vitest-pool-workers": "^0.16.12",
     "@types/html-to-text": "^9.0.4",
     "@types/node": "^25.0.3",
-    "@vitest/coverage-v8": "^4.0.8",
+    "@vitest/coverage-v8": "^4.1.8",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.8",
+    "vitest": "^4.1.8",
     "wrangler": "^4.57.0"
   }
 }

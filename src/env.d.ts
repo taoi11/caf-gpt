@@ -12,13 +12,23 @@ declare module "cloudflare:workers" {
   interface Env extends CloudflareBindings {
     AUTHORIZED_SENDERS: string;
     CF_AIG_AUTH: string;
+    EMAIL_SECRET: string;
   }
 }
 
 declare global {
+  namespace Cloudflare {
+    interface Env {
+      AUTHORIZED_SENDERS: string;
+      CF_AIG_AUTH: string;
+      EMAIL_SECRET: string;
+    }
+  }
+
   interface Env extends CloudflareBindings {
     AUTHORIZED_SENDERS: string;
     CF_AIG_AUTH: string;
+    EMAIL_SECRET: string;
   }
 }
 

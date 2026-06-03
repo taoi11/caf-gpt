@@ -18,24 +18,25 @@ npm run deploy
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
 - **Reply-All Email Responses**: Sends via Cloudflare Email Service with allowlisted original-CC handling
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
-- **Memory Management**: User context stored in Hyperdrive (PostgreSQL)
+- **Memory Management**: Per-user context stored in Cloudflare Agents Durable Object state
 
 ## Architecture
 
 ```text
-Email → Cloudflare Email Routing → Email Worker → CloudflareEmailWorkerHandler
-                                                         ↓
-                                                 SimpleEmailHandler
-                                                         ↓
-                                                 AgentCoordinator
-                                                         ↓
-                                    Prime Foo Agent (orchestrator)
-                                    /        |         \
-                      LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
-                                                         ↓
-                                              CloudflareEmailSender
-                                                         ↓
-                                    Cloudflare Email Service send_email
+Email → Cloudflare Email Routing → routeAgentEmail
+                                      ↓
+                         UserAgent Durable Object
+                         (per normalized sender email)
+                                      ↓
+                              AgentCoordinator
+                                      ↓
+                         Prime Foo Agent (orchestrator)
+                         /        |         \
+           LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
+                                      ↓
+                   Agents SDK sendEmail + signed reply routing
+                                      ↓
+                         Cloudflare Email Service send_email
 ```
 
 ## Setup
@@ -51,6 +52,7 @@ npm install
 ```bash
 wrangler secret put AUTHORIZED_SENDERS
 wrangler secret put CF_AIG_AUTH
+wrangler secret put EMAIL_SECRET
 ```
 
 ### 3. Deploy
