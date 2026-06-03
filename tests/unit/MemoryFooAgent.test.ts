@@ -15,15 +15,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
 
 // Use vi.hoisted to define mock function BEFORE module imports
-const { mockGenerateObject } = vi.hoisted(() => ({
-  mockGenerateObject: vi.fn(),
+const { mockGenerateText } = vi.hoisted(() => ({
+  mockGenerateText: vi.fn(),
 }));
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
   return {
     ...actual,
-    generateObject: mockGenerateObject,
+    generateText: mockGenerateText,
   };
 });
 
@@ -37,14 +37,24 @@ vi.mock("ai-gateway-provider/providers/unified", () => ({
 import { MemoryFooAgent } from "../../src/agents/sub-agents/MemoryFooAgent";
 import { createConfig } from "../../src/config";
 
-function setMockStructuredResponse(
-  response: { status: "unchanged" } | { status: "updated"; content: string }
-) {
-  mockGenerateObject.mockResolvedValueOnce({ object: response });
+function createToolCall(toolName: string, input: unknown) {
+  return {
+    type: "tool-call",
+    toolCallId: "memory-tool-call",
+    toolName,
+    input,
+  };
+}
+
+function setMockMemoryToolCall(toolName: string, input: unknown = {}) {
+  mockGenerateText.mockResolvedValueOnce({
+    text: "",
+    toolCalls: [createToolCall(toolName, input)],
+  });
 }
 
 function setMockLLMError(message: string) {
-  mockGenerateObject.mockRejectedValueOnce(new Error(message));
+  mockGenerateText.mockRejectedValueOnce(new Error(message));
 }
 
 describe("MemoryFooAgent", () => {
@@ -52,8 +62,11 @@ describe("MemoryFooAgent", () => {
   let mockEnv: ReturnType<typeof createMockEnv>;
 
   beforeEach(() => {
-    mockGenerateObject.mockReset();
-    mockGenerateObject.mockResolvedValue({ object: { status: "unchanged" } });
+    mockGenerateText.mockReset();
+    mockGenerateText.mockResolvedValue({
+      text: "",
+      toolCalls: [createToolCall("leave_memory_unchanged", {})],
+    });
 
     mockEnv = createMockEnv();
     const config = createConfig(undefined);
@@ -63,7 +76,7 @@ describe("MemoryFooAgent", () => {
   it("should return updated memory when LLM provides new content", async () => {
     const newMemory = `The user is a Corporal in an infantry trade. They frequently ask about leave policy and prefer concise answers.`;
 
-    setMockStructuredResponse({ status: "updated", content: newMemory });
+    setMockMemoryToolCall("update_memory", { content: newMemory });
 
     const result = await agent.updateMemory(
       "",
@@ -76,7 +89,7 @@ describe("MemoryFooAgent", () => {
   });
 
   it("should return unchanged when LLM indicates no new information", async () => {
-    setMockStructuredResponse({ status: "unchanged" });
+    setMockMemoryToolCall("leave_memory_unchanged");
 
     const result = await agent.updateMemory(
       "Existing memory content",
@@ -88,28 +101,37 @@ describe("MemoryFooAgent", () => {
     expect(result.content).toBeUndefined();
   });
 
-  it("should handle whitespace in unchanged tag", async () => {
-    setMockStructuredResponse({ status: "unchanged" });
+  it("should request a required memory tool call", async () => {
+    setMockMemoryToolCall("leave_memory_unchanged");
 
     const result = await agent.updateMemory("Existing memory", "Hello", "Hi there!");
 
     expect(result.updated).toBe(false);
+    const lastCall = mockGenerateText.mock.calls.at(-1)?.[0];
+    expect(lastCall?.toolChoice).toBe("required");
+    expect(Object.keys(lastCall?.tools ?? {})).toEqual(["update_memory", "leave_memory_unchanged"]);
   });
 
-  it("should handle case-insensitive tags", async () => {
-    setMockStructuredResponse({ status: "updated", content: "New memory content" });
+  it("should pass Cloudflare Unified flex provider options for the small model", async () => {
+    setMockMemoryToolCall("update_memory", { content: "New memory content" });
 
     const result = await agent.updateMemory("", "Question", "Answer");
 
     expect(result.updated).toBe(true);
     expect(result.content).toBe("New memory content");
+    const lastCall = mockGenerateText.mock.calls.at(-1)?.[0];
+    expect(lastCall?.providerOptions).toMatchObject({
+      Unified: {
+        service_tier: "flex",
+      },
+    });
   });
 
   it("should reject empty user email", async () => {
     const result = await agent.updateMemory("Memory", "", "Reply");
 
     expect(result.updated).toBe(false);
-    expect(mockGenerateObject).not.toHaveBeenCalled();
+    expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
   it("should reject whitespace-only email context", async () => {
@@ -122,7 +144,7 @@ describe("MemoryFooAgent", () => {
     const result = await agent.updateMemory("Memory", "User email content", "");
 
     expect(result.updated).toBe(false);
-    expect(mockGenerateObject).not.toHaveBeenCalled();
+    expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
   it("should handle LLM API errors gracefully", async () => {
@@ -134,15 +156,18 @@ describe("MemoryFooAgent", () => {
   });
 
   it("should handle malformed LLM response gracefully", async () => {
-    setMockStructuredResponse({ status: "unchanged" });
+    mockGenerateText.mockResolvedValueOnce({
+      text: "",
+      toolCalls: [createToolCall("unknown_memory_tool", {})],
+    });
 
     const result = await agent.updateMemory("Memory", "Question", "Answer");
 
     expect(result.updated).toBe(false);
   });
 
-  it("should handle empty memory tag gracefully", async () => {
-    setMockStructuredResponse({ status: "unchanged" });
+  it("should handle invalid update memory content gracefully", async () => {
+    setMockMemoryToolCall("update_memory", { content: "" });
 
     const result = await agent.updateMemory("Memory", "Question", "Answer");
 
@@ -156,7 +181,7 @@ Paragraph 2: They frequently ask about leave policy.
 
 Paragraph 3: Currently focused on deployment preparation.`;
 
-    setMockStructuredResponse({ status: "updated", content: multilineMemory });
+    setMockMemoryToolCall("update_memory", { content: multilineMemory });
 
     const result = await agent.updateMemory("", "Question", "Answer");
 
@@ -165,11 +190,11 @@ Paragraph 3: Currently focused on deployment preparation.`;
   });
 
   it("should use empty memory placeholder for new users", async () => {
-    mockGenerateObject.mockResolvedValueOnce({ object: { status: "unchanged" } });
+    setMockMemoryToolCall("leave_memory_unchanged");
 
     await agent.updateMemory("", "Question", "Answer");
 
-    const calls = mockGenerateObject.mock.calls;
+    const calls = mockGenerateText.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     const lastCall = calls[calls.length - 1][0];
     // Memory content goes into the system prompt via template variables

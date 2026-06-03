@@ -5,7 +5,9 @@
  *
  * Top-level declarations:
  * - BaseAgent: Base agent with AI SDK integration and template-based prompts
+ * - isCloudflareUnifiedBillingModel: Checks if a model uses Cloudflare Unified Billing
  * - createModel: Creates AI model via AI Gateway provider
+ * - createProviderOptions: Creates model-specific provider options
  * - callLangChain: Backward-compatible wrapper for plain text model calls
  * - callLangChainStructured: Backward-compatible wrapper for structured model calls
  */
@@ -29,13 +31,45 @@ interface LLMCallParams {
   maxOutputTokens: number;
 }
 
+type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
+type JsonObject = { [key: string]: JsonValue | undefined };
+type ModelProviderOptions = Record<string, JsonObject>;
+
+const CLOUDFLARE_ACCOUNT_ID = "7101c0eb0cce7925fd15056c805c97eb";
+const CLOUDFLARE_AI_GATEWAY = "caf-gpt";
+const FLEX_REQUEST_TIMEOUT_MS = 900000;
+const CLOUDFLARE_UNIFIED_BILLING_MODEL_PREFIXES = ["google-ai-studio/"];
+
+const CLOUDFLARE_UNIFIED_FLEX_OPTIONS: ModelProviderOptions = {
+  Unified: {
+    service_tier: "flex",
+  },
+};
+
+// Checks whether a model uses Cloudflare AI Gateway Unified Billing.
+function isCloudflareUnifiedBillingModel(model: string): boolean {
+  return CLOUDFLARE_UNIFIED_BILLING_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
+}
+
+// Creates model-specific provider options for AI SDK calls.
+export function createProviderOptions(model: string): ModelProviderOptions | undefined {
+  return isCloudflareUnifiedBillingModel(model) ? CLOUDFLARE_UNIFIED_FLEX_OPTIONS : undefined;
+}
+
+// Creates AI model via Cloudflare AI Gateway provider routing.
 export function createModel(env: Env, model: string): LanguageModel {
   const aigateway = createAiGateway({
-    accountId: "7101c0eb0cce7925fd15056c805c97eb",
-    gateway: "caf-gpt",
+    accountId: CLOUDFLARE_ACCOUNT_ID,
+    gateway: CLOUDFLARE_AI_GATEWAY,
     apiKey: env.CF_AIG_AUTH,
+    options: {
+      requestTimeoutMs: FLEX_REQUEST_TIMEOUT_MS,
+    },
   });
-  const unified = createUnified();
+
+  const unified = createUnified({
+    supportsStructuredOutputs: isCloudflareUnifiedBillingModel(model),
+  });
   return aigateway(unified(model)) as unknown as LanguageModel;
 }
 
@@ -56,7 +90,7 @@ export abstract class BaseAgent {
     this.docRetriever = new DocumentRetriever(env.R2_BUCKET);
   }
 
-  private getCachedModel(model: string): LanguageModel {
+  protected getCachedModel(model: string): LanguageModel {
     let cached = this.modelCache.get(model);
     if (!cached) {
       cached = createModel(this.env, model);
@@ -76,12 +110,14 @@ export abstract class BaseAgent {
 
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = this.getCachedModel(params.model);
+      const providerOptions = createProviderOptions(params.model);
       const result = await generateText({
         model,
         system: rendered.system,
         prompt: rendered.user,
         temperature: params.temperature,
         maxOutputTokens: params.maxOutputTokens,
+        ...(providerOptions ? { providerOptions } : {}),
       });
 
       if (!result.text || result.text.trim().length === 0) {
@@ -124,6 +160,7 @@ export abstract class BaseAgent {
 
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = this.getCachedModel(params.model);
+      const providerOptions = createProviderOptions(params.model);
       const result = await generateObject({
         model,
         schema,
@@ -132,6 +169,7 @@ export abstract class BaseAgent {
         prompt: rendered.user,
         temperature: params.temperature,
         maxOutputTokens: params.maxOutputTokens,
+        ...(providerOptions ? { providerOptions } : {}),
       });
 
       this.logger.info("AI SDK structured call successful", {

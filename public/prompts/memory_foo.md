@@ -24,26 +24,12 @@ You will receive the full email exchange in the user message with this structure
 
 Analyze this complete email exchange and decide if any new information should be added to the user's memory.
 
-## Response Format
+## Decision Tools
 
-Return your response as a JSON object with this structure:
+Choose exactly one tool:
 
-If the email exchange contains new information worth remembering:
-
-```json
-{{
-  "status": "updated",
-  "content": "The full updated memory narrative (NOT just the changes)"
-}}
-```
-
-If nothing new to remember:
-
-```json
-{{
-  "status": "unchanged"
-}}
-```
+- Use `update_memory` when the email exchange contains new information worth remembering. The `content` field must contain the full updated memory narrative, not just the changes.
+- Use `leave_memory_unchanged` when there is nothing new worth remembering.
 
 ## Memory Structure
 
@@ -79,6 +65,6 @@ Maintain 3-5 paragraphs covering:
 - Keep memory concise (3-5 paragraphs, under 4000 characters)
 - Synthesize new information into existing narrative, don't just append
 - Focus on patterns and context that help personalization
-- If the email is routine with no new user information, return status "unchanged"
+- If the email is routine with no new user information, call `leave_memory_unchanged`
 - When in doubt about privacy, omit the detail
 - The intent is to be incrementally be adding substance to the memory over time

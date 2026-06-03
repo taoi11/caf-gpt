@@ -44,7 +44,7 @@ const ORCHESTRATOR_CONFIG: LLMModelConfig = {
 
 // Specialist model config - focused tasks: document Q&A, selection, generation
 const SPECIALIST_CONFIG: LLMModelConfig = {
-  model: "workers-ai/@cf/zai-org/glm-4.7-flash",
+  model: "google-ai-studio/gemini-3.1-flash-lite-preview",
   temperature: 0.1,
   maxOutputTokens: 16384,
 };

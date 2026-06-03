@@ -9,9 +9,13 @@
  * - updateMemory: Processes email exchange and returns updated memory or unchanged signal
  */
 
+import { generateText, tool } from "ai";
 import { formatError } from "../../Logger";
-import { MemoryResponseSchema } from "../../schemas";
-import { BaseAgent } from "../utils/BaseAgent";
+import { MemoryUnchangedToolInputSchema, MemoryUpdateToolInputSchema } from "../../schemas";
+import { BaseAgent, createProviderOptions } from "../utils/BaseAgent";
+
+const UPDATE_MEMORY_TOOL = "update_memory";
+const LEAVE_MEMORY_UNCHANGED_TOOL = "leave_memory_unchanged";
 
 // Result of memory update operation
 export interface MemoryUpdateResult {
@@ -52,25 +56,53 @@ ${agentReply}
       const memoryContext =
         currentMemory.trim().length > 0 ? currentMemory : "No prior interaction history.";
 
-      const response = await this.callLangChainStructured(
-        {
-          model: this.config.llm.models.memoryFoo.model,
-          promptName: "memory_foo",
-          variables: {
-            current_memory: memoryContext,
-            user_input: emailExchange,
-          },
-          temperature: this.config.llm.models.memoryFoo.temperature,
-          maxOutputTokens: this.config.llm.models.memoryFoo.maxOutputTokens,
+      const modelConfig = this.config.llm.models.memoryFoo;
+      const rendered = await this.promptManager.renderPrompt("memory_foo", {
+        current_memory: memoryContext,
+        user_input: emailExchange,
+      });
+      const providerOptions = createProviderOptions(modelConfig.model);
+
+      const response = await generateText({
+        model: this.getCachedModel(modelConfig.model),
+        system: rendered.system,
+        prompt: rendered.user,
+        temperature: modelConfig.temperature,
+        maxOutputTokens: modelConfig.maxOutputTokens,
+        tools: {
+          [UPDATE_MEMORY_TOOL]: tool({
+            description:
+              "Update the user's memory when the exchange contains new information worth remembering.",
+            inputSchema: MemoryUpdateToolInputSchema,
+          }),
+          [LEAVE_MEMORY_UNCHANGED_TOOL]: tool({
+            description: "Leave the user's memory unchanged when there is nothing new to remember.",
+            inputSchema: MemoryUnchangedToolInputSchema,
+          }),
         },
-        MemoryResponseSchema,
-        "memory_response"
+        toolChoice: "required",
+        ...(providerOptions ? { providerOptions } : {}),
+      });
+
+      const memoryToolCall = response.toolCalls.find(
+        (call) =>
+          call.toolName === UPDATE_MEMORY_TOOL || call.toolName === LEAVE_MEMORY_UNCHANGED_TOOL
       );
 
-      const result: MemoryUpdateResult =
-        response.status === "updated"
-          ? { updated: true, content: response.content }
-          : { updated: false };
+      if (!memoryToolCall) {
+        throw new Error("Memory update model did not call a recognized memory tool");
+      }
+
+      let result: MemoryUpdateResult;
+      if (memoryToolCall.toolName === UPDATE_MEMORY_TOOL) {
+        result = {
+          updated: true,
+          content: MemoryUpdateToolInputSchema.parse(memoryToolCall.input).content,
+        };
+      } else {
+        MemoryUnchangedToolInputSchema.parse(memoryToolCall.input ?? {});
+        result = { updated: false };
+      }
 
       this.logger.performance("memory update analysis", startTime, {
         updated: result.updated,
