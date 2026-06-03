@@ -7,6 +7,8 @@
  * - DoadSelectorSchema: Schema for DOAD file selector responses
  * - QroSelectorSchema: Schema for QRO file selector responses
  * - MemoryResponseSchema: Schema for memory update agent responses
+ * - MemoryUpdateToolInputSchema: Schema for memory update tool input
+ * - MemoryUnchangedToolInputSchema: Schema for unchanged memory tool input
  */
 
 import { z } from "zod";
@@ -32,3 +34,9 @@ export const MemoryResponseSchema = z.discriminatedUnion("status", [
     content: z.string().min(1).describe("The full updated memory narrative"),
   }),
 ]);
+
+export const MemoryUpdateToolInputSchema = z.object({
+  content: z.string().min(1).describe("The full updated memory narrative"),
+});
+
+export const MemoryUnchangedToolInputSchema = z.object({});
