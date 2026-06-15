@@ -10,16 +10,25 @@ This file tracks project-level work that should survive across coding sessions a
 
 ## Active TODOs
 
-No active TODOs.
+- [ ] 1. Replace DOAD/QR&O selector-loader-answer flow with a one-agent tool-reading pattern.
+  - Context: Keep `DoadFooAgent` and `QroFooAgent` as separate sub-agents with separate index files. Defer markdown table re-engineering for now. The immediate change is to give each agent its index up front and a validated `read_file` tool it can call up to three times before answering.
+  - Current mappings: DOAD should continue selecting by DOAD ID and mapping to `${id}.md`; QR&O should continue selecting by file path exactly as it does today.
+  - Likely files: `src/agents/utils/TwoCallAgent.ts` or a replacement utility, `src/agents/sub-agents/DoadFooAgent.ts`, `src/agents/sub-agents/QroFooAgent.ts`, `src/schemas.ts`, `public/prompts/doad_foo_selector.md`, `public/prompts/qro_foo_selector.md`, related unit tests.
+  - Done when: DOAD and QR&O each make one model call with a domain index plus a `read_file` tool, validate tool inputs against the current index/mapping, cap successful reads at three, and answer only from files read.
 
 ## Parking Lot
 
-- [ ] 1. Plan manual document chunking and migration from R2-only retrieval to Neon pgvector.
+- [ ] 1. Rework DOAD and QR&O indexes into a shared manifest table shape.
+  - Context: Standardize the separate sub-agent indexes to a clean markdown table with `| Id | Title | File |`. This is intentionally deferred until after the one-agent tool-reading pattern is in place.
+  - Likely files: DOAD index asset, QR&O index document, selector/tool-reading prompts, any manifest parsing helpers.
+  - Done when: Both domain indexes use the same table shape, DOAD and QR&O file validation can use a common manifest parser, and agent behavior is unchanged except for simpler index handling.
+
+- [ ] 2. Plan manual document chunking and migration from R2-only retrieval to Neon pgvector.
   - Context: Keep R2 path-based retrieval for now. Future work should manually chunk CAF policy docs, store embeddings in Neon pgvector, and decide whether R2 remains the source of truth for full documents.
   - Likely files: `src/storage/DocumentRetriever.ts`, `src/agents/utils/TwoCallAgent.ts`, `src/agents/sub-agents/*`, future database migration/seed scripts
   - Done when: Chunking strategy, schema, embedding model, retrieval ranking, citation format, and backfill process are designed before implementation begins.
 
-- [ ] 2. Revisit no-degraded-mode boundaries after memory and email rewrites.
+- [ ] 3. Revisit no-degraded-mode boundaries after memory and email rewrites.
   - Context: The project rule is no degraded behavior within logic modules. Outer orchestration may intentionally skip optional modules only when explicit, tested, and documented.
   - Likely files: `AGENTS.md`, `src/agents/UserAgent.ts`, tests around memory failure handling
   - Done when: Module-level failure contracts are documented in code/tests and orchestration-level optional behavior is named rather than accidental.
