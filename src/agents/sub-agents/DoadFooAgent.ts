@@ -1,58 +1,46 @@
 /**
  * src/agents/sub-agents/DoadFooAgent.ts
  *
- * Sub-agent for DOAD policy research using a two-call pattern
+ * Sub-agent for DOAD policy research using a bounded read_file tool
  *
  * Top-level declarations:
- * - DoadFooAgent: Answers DOAD policy questions using two-call pattern (selector -> answer)
+ * - DoadFooAgent: Answers DOAD policy questions using one tool-reading model call
  */
 
-import type { z } from "zod";
 import type { AppConfig } from "../../config";
-import { DoadSelectorSchema } from "../../schemas";
-import { TwoCallAgent } from "../utils/TwoCallAgent";
+import { ToolReadingAgent } from "../utils/ToolReadingAgent";
 
-type DoadSelectorResponse = z.infer<typeof DoadSelectorSchema>;
+const DOAD_ID_PATTERN = /^\|\s*(\d{4}-\d{1,2})\s*\|/gm;
 
-export class DoadFooAgent extends TwoCallAgent<DoadSelectorResponse> {
+export class DoadFooAgent extends ToolReadingAgent {
   constructor(env: Env, config: AppConfig) {
     super(env, config, {
       category: "doad",
       policyType: "DOAD policy",
       modelKey: "doadFoo",
-      selectorPromptName: "doad_foo_selector",
-      answerPromptName: "doad_foo_answer",
+      promptName: "doad_foo_tool_reader",
+      indexVariableName: "doad_table",
+      readLimits: {
+        totalCalls: 5,
+        successfulReads: 3,
+        badCalls: 2,
+      },
     });
-  }
-
-  protected async selectFiles(query: string): Promise<string[]> {
-    return this.runSelector(query);
-  }
-
-  protected getSelectorSchema(): z.ZodType<DoadSelectorResponse> {
-    return DoadSelectorSchema;
-  }
-
-  protected extractFilesFromResponse(response: DoadSelectorResponse): string[] {
-    return response.doad_numbers;
-  }
-
-  protected getSelectorVariables(query: string, indexContent: string): Record<string, string> {
-    return {
-      doad_table: indexContent,
-      user_input: query,
-    };
   }
 
   protected async getIndexContent(): Promise<string | null> {
     return this.promptManager.getPrompt("DOAD_Table");
   }
 
-  protected getFilePath(fileId: string): string {
-    return `${fileId}.md`;
+  protected getAllowedFiles(indexContent: string): Set<string> {
+    return new Set(Array.from(indexContent.matchAll(DOAD_ID_PATTERN), (match) => match[1]));
   }
 
-  protected formatDocumentTag(fileId: string, content: string): string {
-    return `<DOAD_${fileId}>\n${content}\n</DOAD_${fileId}>`;
+  protected getFilePath(file: string): string {
+    return `${file}.md`;
+  }
+
+  protected formatDocumentTag(file: string, content: string): string {
+    return `<DOAD_${file}>\n${content}\n</DOAD_${file}>`;
   }
 }

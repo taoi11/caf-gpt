@@ -10,11 +10,7 @@ This file tracks project-level work that should survive across coding sessions a
 
 ## Active TODOs
 
-- [ ] 1. Replace DOAD/QR&O selector-loader-answer flow with a one-agent tool-reading pattern.
-  - Context: Keep `DoadFooAgent` and `QroFooAgent` as separate sub-agents with separate index files. Defer markdown table re-engineering for now. The immediate change is to give each agent its index up front and a validated `read_file` tool it can call up to three times before answering.
-  - Current mappings: DOAD should continue selecting by DOAD ID and mapping to `${id}.md`; QR&O should continue selecting by file path exactly as it does today.
-  - Likely files: `src/agents/utils/TwoCallAgent.ts` or a replacement utility, `src/agents/sub-agents/DoadFooAgent.ts`, `src/agents/sub-agents/QroFooAgent.ts`, `src/schemas.ts`, `public/prompts/doad_foo_selector.md`, `public/prompts/qro_foo_selector.md`, related unit tests.
-  - Done when: DOAD and QR&O each make one model call with a domain index plus a `read_file` tool, validate tool inputs against the current index/mapping, cap successful reads at three, and answer only from files read.
+None.
 
 ## Parking Lot
 
@@ -25,7 +21,7 @@ This file tracks project-level work that should survive across coding sessions a
 
 - [ ] 2. Plan manual document chunking and migration from R2-only retrieval to Neon pgvector.
   - Context: Keep R2 path-based retrieval for now. Future work should manually chunk CAF policy docs, store embeddings in Neon pgvector, and decide whether R2 remains the source of truth for full documents.
-  - Likely files: `src/storage/DocumentRetriever.ts`, `src/agents/utils/TwoCallAgent.ts`, `src/agents/sub-agents/*`, future database migration/seed scripts
+  - Likely files: `src/storage/DocumentRetriever.ts`, `src/agents/utils/ToolReadingAgent.ts`, `src/agents/sub-agents/*`, future database migration/seed scripts
   - Done when: Chunking strategy, schema, embedding model, retrieval ranking, citation format, and backfill process are designed before implementation begins.
 
 - [ ] 3. Revisit no-degraded-mode boundaries after memory and email rewrites.
@@ -34,6 +30,10 @@ This file tracks project-level work that should survive across coding sessions a
   - Done when: Module-level failure contracts are documented in code/tests and orchestration-level optional behavior is named rather than accidental.
 
 ## Log
+
+### 2026-06-15
+
+- Replaced the DOAD/QR&O selector-loader-answer flow with a one-call tool-reading pattern: each specialist now receives its index up front, validates `read_file` requests against that index, caps reads at three successful documents and five total attempts, and fails cleanly after the correction budget is exhausted.
 
 ### 2026-06-03
 
