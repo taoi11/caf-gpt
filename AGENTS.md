@@ -94,7 +94,7 @@ The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudfla
 - **Structured output**: Uses `generateObject()` with Zod schemas (defined in `src/schemas.ts`) for automatic JSON validation
 - **Tool calling**: Prime Foo uses AI SDK `generateText()` with tools in `src/agents/AgentCoordinator.ts`
 - **AI Gateway**: Routes through Cloudflare AI Gateway via `ai-gateway-provider` with the unified provider — current code requires the `CF_AIG_AUTH` secret
-- **Models**: `workers-ai/@cf/moonshotai/kimi-k2.5` (orchestrator), `workers-ai/@cf/zai-org/glm-4.7-flash` (specialists)
+- **Models**: `workers-ai/@cf/moonshotai/kimi-k2.7-code` (orchestrator), `google-ai-studio/gemini-3.1-flash-lite-preview` (specialists)
 - **Streaming is disabled** for CPU efficiency in Cloudflare Workers
 
 ## Adding New Agents/Sub-agents

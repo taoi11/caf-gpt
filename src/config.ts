@@ -37,7 +37,7 @@ interface EmailConfig {
 
 // Orchestrator model config - handles multi-turn conversations, coordination, tool use
 const ORCHESTRATOR_CONFIG: LLMModelConfig = {
-  model: "workers-ai/@cf/moonshotai/kimi-k2.5",
+  model: "workers-ai/@cf/moonshotai/kimi-k2.7-code",
   temperature: 0.1,
   maxOutputTokens: 16384,
 };
