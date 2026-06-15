@@ -10,6 +10,7 @@
 {
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "caf-gpt-email",
+  "account_id": "7101c0eb0cce7925fd15056c805c97eb",
   "main": "src/index.ts",
   "compatibility_date": "2026-05-28",
   "compatibility_flags": ["nodejs_compat"],

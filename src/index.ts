@@ -28,6 +28,15 @@ export function createUserAgentResolver(env: Env): EmailResolver<Env> {
   const config = createConfig(env);
   const secureReplyResolver = createSecureReplyEmailResolver<Env>(env.EMAIL_SECRET, {
     onInvalidSignature: (emailMessage, reason) => {
+      if (reason === "missing_headers") {
+        logger.info("No signed email routing headers; using direct email routing", {
+          from: emailMessage.from,
+          to: emailMessage.to,
+          reason,
+        });
+        return;
+      }
+
       logger.warn("Invalid signed email routing headers", {
         from: emailMessage.from,
         to: emailMessage.to,

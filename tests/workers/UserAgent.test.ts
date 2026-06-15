@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { MemoryFooAgent } from "../../src/agents/sub-agents";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
 import { createUserAgentResolver } from "../../src/index";
+import { Logger } from "../../src/Logger";
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -24,6 +25,7 @@ afterEach(async () => {
 
 describe("UserAgent email routing", () => {
   it("routes authorized direct mail to a full-email UserAgent id", async () => {
+    const warn = vi.spyOn(Logger.getInstance(), "warn");
     const resolver = createUserAgentResolver(env);
     const message = createRoutingMessage({
       from: "Test@forces.gc.ca",
@@ -36,6 +38,7 @@ describe("UserAgent email routing", () => {
       agentName: "UserAgent",
       agentId: getUserAgentId("test@forces.gc.ca"),
     });
+    expect(warn).not.toHaveBeenCalled();
   });
 
   it("routes signed replies before falling back to direct sender routing", async () => {
@@ -68,23 +71,27 @@ describe("UserAgent email routing", () => {
 });
 
 describe("UserAgent email processing", () => {
-  it("sends a signed reply with safe CC recipients and schedules memory update", async () => {
+  it("sends a signed sender-only inbound reply and schedules memory update", async () => {
     const stub = getUserAgentStub("test@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const sentMessages: unknown[] = [];
       const schedules: unknown[][] = [];
       const processWithPrimeFoo = vi.fn(async (_context: string, memory?: string) => ({
         shouldRespond: true,
         content: "<p>AI response</p>",
         memory,
       }));
+      const email = createAgentEmail({
+        from: "test@forces.gc.ca",
+        to: "agent@caf-gpt.com",
+        cc: ["ally@forces.gc.ca", "outsider@example.com"],
+        subject: "Leave question",
+        body: "Can I take annual leave next week?",
+        messageId: "<msg-1@forces.gc.ca>",
+        headers: { references: "<root@forces.gc.ca> <parent@forces.gc.ca>" },
+      });
 
       instance.setState({ memory: "remembered preference" });
-      vi.spyOn(instance, "sendEmail").mockImplementation(async (options) => {
-        sentMessages.push(options);
-        return { messageId: "reply-1" };
-      });
       vi.spyOn(instance, "schedule").mockImplementation(async (...args) => {
         schedules.push(args);
         return { id: "schedule-1" } as never;
@@ -93,37 +100,34 @@ describe("UserAgent email processing", () => {
         processWithPrimeFoo,
       };
 
-      await instance.onEmail(
-        createAgentEmail({
-          from: "test@forces.gc.ca",
-          to: "agent@caf-gpt.com",
-          cc: ["ally@forces.gc.ca", "outsider@example.com"],
-          subject: "Leave question",
-          body: "Can I take annual leave next week?",
-          messageId: "<msg-1@forces.gc.ca>",
-          headers: { references: "<root@forces.gc.ca> <parent@forces.gc.ca>" },
-        })
-      );
+      await instance.onEmail(email);
 
       return {
-        sentMessages,
+        replyCalls: getReplyCalls(email),
         schedules,
         primeFooCalls: processWithPrimeFoo.mock.calls,
       };
     });
 
     expect(result.primeFooCalls[0][1]).toBe("remembered preference");
-    expect(result.sentMessages).toHaveLength(1);
-    expect(result.sentMessages[0]).toMatchObject({
+    expect(result.replyCalls).toHaveLength(1);
+    const reply = result.replyCalls[0][0];
+    expect(reply).toMatchObject({
+      from: "agent@caf-gpt.com",
       to: "test@forces.gc.ca",
-      cc: ["ally@forces.gc.ca"],
-      from: { email: "agent@caf-gpt.com", name: "CAF-GPT" },
-      replyTo: "agent@caf-gpt.com",
-      subject: "Re: Leave question",
-      inReplyTo: "<msg-1@forces.gc.ca>",
-      headers: { References: "<root@forces.gc.ca> <parent@forces.gc.ca> <msg-1@forces.gc.ca>" },
-      secret: env.EMAIL_SECRET,
     });
+    expect(reply.raw).toContain('From: "CAF-GPT" <agent@caf-gpt.com>');
+    expect(reply.raw).toContain("To: <test@forces.gc.ca>");
+    expect(reply.raw).toContain("Subject: Re: Leave question");
+    expect(reply.raw).toContain("In-Reply-To: <msg-1@forces.gc.ca>");
+    expect(reply.raw).toContain(
+      "References: <root@forces.gc.ca> <parent@forces.gc.ca> <msg-1@forces.gc.ca>"
+    );
+    expect(reply.raw).toContain("X-Agent-Name: user-agent");
+    expect(reply.raw).toContain(`X-Agent-ID: ${getUserAgentId("test@forces.gc.ca")}`);
+    expect(reply.raw).toContain("X-Agent-Sig:");
+    expect(reply.raw).toContain("Content-Type: multipart/alternative;");
+    expect(reply.raw).toContain("<p>AI response</p>");
     expect(result.schedules[0][1]).toBe("runMemoryUpdate");
   });
 
@@ -131,90 +135,82 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub("pacenote-user@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const sentMessages: unknown[] = [];
       const processWithPrimeFoo = vi.fn(async () => ({
         shouldRespond: true,
         content: "<p>Feedback note</p>",
       }));
-
-      vi.spyOn(instance, "sendEmail").mockImplementation(async (options) => {
-        sentMessages.push(options);
-        return { messageId: "reply-1" };
+      const email = createAgentEmail({
+        from: "pacenote-user@forces.gc.ca",
+        to: "pacenote@caf-gpt.com",
+        subject: "Feedback note",
+        body: "Write a feedback note.",
+        messageId: "<pacenote-1@forces.gc.ca>",
       });
+
       vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
       (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
         processWithPrimeFoo,
       };
 
-      await instance.onEmail(
-        createAgentEmail({
-          from: "pacenote-user@forces.gc.ca",
-          to: "pacenote@caf-gpt.com",
-          subject: "Feedback note",
-          body: "Write a feedback note.",
-          messageId: "<pacenote-1@forces.gc.ca>",
-        })
-      );
+      await instance.onEmail(email);
 
-      return { sentMessages };
+      return { replyCalls: getReplyCalls(email) };
     });
 
-    expect(result.sentMessages).toHaveLength(1);
-    expect(result.sentMessages[0]).toMatchObject({
+    expect(result.replyCalls).toHaveLength(1);
+    const reply = result.replyCalls[0][0];
+    expect(reply).toMatchObject({
+      from: "pacenote@caf-gpt.com",
       to: "pacenote-user@forces.gc.ca",
-      from: { email: "pacenote@caf-gpt.com", name: "CAF-GPT" },
-      replyTo: "pacenote@caf-gpt.com",
-      subject: "Re: Feedback note",
-      inReplyTo: "<pacenote-1@forces.gc.ca>",
-      secret: env.EMAIL_SECRET,
     });
+    expect(reply.raw).toContain('From: "CAF-GPT" <pacenote@caf-gpt.com>');
+    expect(reply.raw).toContain("To: <pacenote-user@forces.gc.ca>");
+    expect(reply.raw).toContain("Subject: Re: Feedback note");
+    expect(reply.raw).toContain("In-Reply-To: <pacenote-1@forces.gc.ca>");
+    expect(reply.raw).toContain("X-Agent-Name: user-agent");
   });
 
   it("sends pacenote error responses from the inbound pacenote alias", async () => {
     const stub = getUserAgentStub("pacenote-error@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const sentMessages: unknown[] = [];
       const processWithPrimeFoo = vi.fn(async () => {
         throw new Error("model down");
       });
       let thrownMessage = "";
-
-      vi.spyOn(instance, "sendEmail").mockImplementation(async (options) => {
-        sentMessages.push(options);
-        return { messageId: "error-1" };
+      const email = createAgentEmail({
+        from: "pacenote-error@forces.gc.ca",
+        to: "pacenote@caf-gpt.com",
+        subject: "Feedback note",
+        body: "Write a feedback note.",
+        messageId: "<pacenote-error-1@forces.gc.ca>",
       });
+
       (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
         processWithPrimeFoo,
       };
 
       try {
-        await instance.onEmail(
-          createAgentEmail({
-            from: "pacenote-error@forces.gc.ca",
-            to: "pacenote@caf-gpt.com",
-            subject: "Feedback note",
-            body: "Write a feedback note.",
-            messageId: "<pacenote-error-1@forces.gc.ca>",
-          })
-        );
+        await instance.onEmail(email);
       } catch (error) {
         thrownMessage = error instanceof Error ? error.message : String(error);
       }
 
-      return { sentMessages, thrownMessage };
+      return { replyCalls: getReplyCalls(email), thrownMessage };
     });
 
     expect(result.thrownMessage).toBe("model down");
-    expect(result.sentMessages).toHaveLength(1);
-    expect(result.sentMessages[0]).toMatchObject({
+    expect(result.replyCalls).toHaveLength(1);
+    const reply = result.replyCalls[0][0];
+    expect(reply).toMatchObject({
+      from: "pacenote@caf-gpt.com",
       to: "pacenote-error@forces.gc.ca",
-      from: { email: "pacenote@caf-gpt.com", name: "CAF-GPT" },
-      replyTo: "pacenote@caf-gpt.com",
-      subject: "Error Processing Email",
-      inReplyTo: "<pacenote-error-1@forces.gc.ca>",
-      secret: env.EMAIL_SECRET,
     });
+    expect(reply.raw).toContain('From: "CAF-GPT" <pacenote@caf-gpt.com>');
+    expect(reply.raw).toContain("To: <pacenote-error@forces.gc.ca>");
+    expect(reply.raw).toContain("Subject: Error Processing Email");
+    expect(reply.raw).toContain("In-Reply-To: <pacenote-error-1@forces.gc.ca>");
+    expect(reply.raw).toContain("Content-Type: text/plain; charset=utf-8");
   });
 
   it("does not process self-loop emails", async () => {
@@ -314,8 +310,16 @@ function createAgentEmail(options: {
     getRaw: async () => new TextEncoder().encode(raw),
     setReject: vi.fn(),
     forward: vi.fn(),
-    reply: vi.fn(),
+    reply: vi.fn(async () => ({ messageId: "mock-reply" })),
   };
+}
+
+function getReplyCalls(email: AgentEmail): Array<[Parameters<AgentEmail["reply"]>[0]]> {
+  return (
+    email.reply as unknown as {
+      mock: { calls: Array<[Parameters<AgentEmail["reply"]>[0]]> };
+    }
+  ).mock.calls;
 }
 
 function createRoutingMessage(options: {

@@ -4,6 +4,7 @@
  * Application configuration
  *
  * Top-level declarations:
+ * - TEMPORARY_AUTHORIZED_EMAILS: Short-term explicit sender allowlist entries
  * - AppConfig: Overall application configuration interface
  * - createConfig: Creates configuration from environment variables with overrides
  */
@@ -35,9 +36,11 @@ interface EmailConfig {
   monitoredAddresses: string[];
 }
 
+const TEMPORARY_AUTHORIZED_EMAILS = ["taoi33@pm.me"];
+
 // Orchestrator model config - handles multi-turn conversations, coordination, tool use
 const ORCHESTRATOR_CONFIG: LLMModelConfig = {
-  model: "workers-ai/@cf/moonshotai/kimi-k2.7-code",
+  model: "@cf/moonshotai/kimi-k2.7-code",
   temperature: 0.1,
   maxOutputTokens: 16384,
 };
@@ -68,6 +71,7 @@ export function createConfig(env?: Env, overrides?: Partial<AppConfig>): AppConf
     authorizedDomains = senders.filter((s: string) => !s.includes("@"));
     authorizedEmails = senders.filter((s: string) => s.includes("@"));
   }
+  authorizedEmails = Array.from(new Set([...authorizedEmails, ...TEMPORARY_AUTHORIZED_EMAILS]));
 
   const defaultModels = {
     primeFoo: ORCHESTRATOR_CONFIG,

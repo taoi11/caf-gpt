@@ -4,14 +4,16 @@
  * Durable Cloudflare Agents SDK email agent for per-user CAF-GPT processing
  *
  * Top-level declarations:
+ * - AGENT_EMAIL_ROUTING_NAME: Agents SDK routing name used in signed reply headers
  * - UserAgentState: Persistent per-user state stored by the Agents runtime
+ * - InboundReplyMessage: Raw MIME data for an inbound Email Worker reply
  * - MemoryUpdateTask: Scheduled memory update payload
  * - UserAgent: Durable Object-backed email agent with AI response and memory scheduling
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
  */
 
 import { Agent } from "agents";
-import type { AgentEmail } from "agents/email";
+import { type AgentEmail, signAgentHeaders } from "agents/email";
 import PostalMime, { type Address } from "postal-mime";
 import type { AppConfig } from "../config";
 import { createConfig } from "../config";
@@ -26,17 +28,30 @@ import {
 } from "../email/utils/EmailValidator";
 import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates";
 import { htmlToText } from "../email/utils/HtmlToText";
-import { buildReplyAllCcRecipients } from "../email/utils/ReplyRecipients";
 import { BaseAppError, EmailCompositionError, EmailValidationError } from "../errors";
 import { formatError, Logger } from "../Logger";
 import { AgentCoordinator } from "./AgentCoordinator";
 import { MemoryFooAgent } from "./sub-agents";
 
+const AGENT_EMAIL_ROUTING_NAME = "user-agent";
+const EMAIL_DISPLAY_NAME = "CAF-GPT";
 const MEMORY_MAX_CONTENT_LENGTH = 4000;
 const REFERENCES_MAX_LENGTH = 1000;
 
 export interface UserAgentState {
   memory: string;
+}
+
+interface InboundReplyMessage {
+  fromAddress: string;
+  toAddress: string;
+  subject: string;
+  text: string;
+  html?: string;
+  threadingOptions: {
+    inReplyTo?: string;
+    headers?: Record<string, string>;
+  };
 }
 
 interface MemoryUpdateTask {
@@ -62,7 +77,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   async onEmail(email: AgentEmail): Promise<void> {
     const config = createConfig(this.env);
     const parsedEmail = await this.parseEmail(email);
-    await this.processEmail(parsedEmail, config);
+    await this.processEmail(email, parsedEmail, config);
   }
 
   /** Runs a durable scheduled memory update after a successful email reply. */
@@ -125,7 +140,11 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   }
 
   /** Processes a parsed email through validation, Prime Foo, reply, and memory scheduling. */
-  private async processEmail(parsedEmail: ParsedEmailData, config: AppConfig): Promise<void> {
+  private async processEmail(
+    originalEmail: AgentEmail,
+    parsedEmail: ParsedEmailData,
+    config: AppConfig
+  ): Promise<void> {
     try {
       this.logger.info("Processing email from sender", { from: parsedEmail.from });
 
@@ -149,12 +168,12 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       const response = await this.getAIResponse(emailContext, config);
 
       if (response.shouldRespond && response.content?.trim()) {
-        await this.sendReply(parsedEmail, response.content, config);
+        await this.sendReply(originalEmail, parsedEmail, response.content, config);
         await this.scheduleMemoryUpdate(emailContext, response.content);
       }
     } catch (error) {
       this.logProcessingFailure(error, parsedEmail);
-      await this.handleProcessingError(error, parsedEmail, config);
+      await this.handleProcessingError(originalEmail, error, parsedEmail, config);
 
       if (this.shouldRethrowProcessingError(error)) {
         throw error;
@@ -269,8 +288,9 @@ ${parsedEmail.body}`;
     return await this.agentCoordinator.processWithPrimeFoo(emailContext, this.state.memory);
   }
 
-  /** Sends a normal signed reply through Cloudflare Email Service. */
+  /** Sends a normal signed reply through the inbound Email Worker reply envelope. */
   private async sendReply(
+    originalEmail: AgentEmail,
     parsedEmail: ParsedEmailData,
     content: string,
     config: AppConfig
@@ -293,37 +313,27 @@ ${parsedEmail.body}`;
       const replyText = htmlToText(content);
       const fullTextContent = (replyText ? replyText : content.trim()) + quotedContent;
       const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());
-      const ccRecipients = buildReplyAllCcRecipients(
-        parsedEmail,
-        replyRecipient,
-        [config.email.agentFromEmail, ...config.email.monitoredAddresses],
-        config.authorization
-      );
       const subject = parsedEmail.subject.startsWith("Re:")
         ? parsedEmail.subject
         : `Re: ${parsedEmail.subject}`;
       const threadingOptions = this.buildThreadingOptions(parsedEmail);
       const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
-      await this.sendEmail({
-        binding: this.env.EMAIL,
-        to: replyRecipient,
-        ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
-        from: { email: replyFromAddress, name: "CAF-GPT" },
-        replyTo: replyFromAddress,
+      await this.replyToInboundEmail(originalEmail, {
+        fromAddress: replyFromAddress,
+        toAddress: replyRecipient,
         subject,
         text: fullTextContent,
         html: htmlContent,
-        ...threadingOptions,
-        secret: this.env.EMAIL_SECRET,
+        threadingOptions,
       });
 
-      this.logger.info("Reply sent successfully via Agents SDK Email Service", {
+      this.logger.info("Reply sent successfully via Email Worker reply API", {
         to: parsedEmail.from,
-        cc: parsedEmail.cc,
+        from: replyFromAddress,
       });
     } catch (error) {
-      this.logger.error("Failed to send reply via Agents SDK Email Service", {
+      this.logger.error("Failed to send reply via Email Worker reply API", {
         to: parsedEmail.from,
         ...formatError(error),
       });
@@ -349,6 +359,7 @@ ${parsedEmail.body}`;
 
   /** Handles processing errors by sending a standardized error response when appropriate. */
   private async handleProcessingError(
+    originalEmail: AgentEmail,
     error: unknown,
     parsedEmail: ParsedEmailData,
     config: AppConfig
@@ -363,7 +374,7 @@ ${parsedEmail.body}`;
     }
 
     try {
-      await this.sendErrorResponse(error, parsedEmail, config);
+      await this.sendErrorResponse(originalEmail, error, parsedEmail, config);
     } catch (replyError) {
       this.logger.error("Failed to send error reply", {
         error: replyError instanceof Error ? replyError.message : String(replyError),
@@ -384,8 +395,9 @@ ${parsedEmail.body}`;
     return !skipConditions.some((condition) => errorMessage.includes(condition));
   }
 
-  /** Sends a signed sender-only error response via Cloudflare Email Service. */
+  /** Sends a signed sender-only error response through the inbound Email Worker reply envelope. */
   private async sendErrorResponse(
+    originalEmail: AgentEmail,
     error: unknown,
     parsedEmail: ParsedEmailData,
     config: AppConfig
@@ -405,22 +417,20 @@ ${parsedEmail.body}`;
       const threadingOptions = this.buildThreadingOptions(parsedEmail);
       const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
-      await this.sendEmail({
-        binding: this.env.EMAIL,
-        to: normalizeEmailAddress(parsedEmail.from),
-        from: { email: replyFromAddress, name: "CAF-GPT" },
-        replyTo: replyFromAddress,
+      await this.replyToInboundEmail(originalEmail, {
+        fromAddress: replyFromAddress,
+        toAddress: normalizeEmailAddress(parsedEmail.from),
         subject,
         text: errorMessage,
-        ...threadingOptions,
-        secret: this.env.EMAIL_SECRET,
+        threadingOptions,
       });
 
-      this.logger.info("Error reply sent successfully via Agents SDK Email Service", {
+      this.logger.info("Error reply sent successfully via Email Worker reply API", {
         to: parsedEmail.from,
+        from: replyFromAddress,
       });
     } catch (replyError) {
-      this.logger.error("Failed to send error reply via Agents SDK Email Service", {
+      this.logger.error("Failed to send error reply via Email Worker reply API", {
         error: replyError instanceof Error ? replyError.message : String(replyError),
         from: parsedEmail.from,
       });
@@ -440,6 +450,116 @@ ${parsedEmail.body}`;
     return template.lines.join("\n");
   }
 
+  /** Sends a raw MIME reply using the original inbound Email Worker message. */
+  private async replyToInboundEmail(
+    originalEmail: AgentEmail,
+    message: InboundReplyMessage
+  ): Promise<void> {
+    const raw = await this.buildInboundReplyRawMessage(message);
+    await originalEmail.reply({
+      from: message.fromAddress,
+      to: message.toAddress,
+      raw,
+    });
+  }
+
+  /** Builds a raw RFC 5322 reply with signed Agents SDK routing headers. */
+  private async buildInboundReplyRawMessage(message: InboundReplyMessage): Promise<string> {
+    const messageId = `<${crypto.randomUUID()}@${this.getEmailDomain(message.fromAddress)}>`;
+    const signedHeaders = await signAgentHeaders(
+      this.env.EMAIL_SECRET,
+      AGENT_EMAIL_ROUTING_NAME,
+      this.name
+    );
+    const headers = [
+      this.formatHeader("From", this.formatMailbox(message.fromAddress, EMAIL_DISPLAY_NAME)),
+      this.formatHeader("To", this.formatMailbox(message.toAddress)),
+      this.formatHeader("Subject", message.subject),
+      this.formatHeader("Message-ID", messageId),
+      this.formatHeader("Date", new Date().toUTCString()),
+      this.formatHeader("MIME-Version", "1.0"),
+      ...this.formatThreadingHeaders(message.threadingOptions),
+      ...Object.entries(signedHeaders).map(([name, value]) => this.formatHeader(name, value)),
+    ];
+
+    if (!message.html) {
+      return [
+        ...headers,
+        this.formatHeader("Content-Type", "text/plain; charset=utf-8"),
+        this.formatHeader("Content-Transfer-Encoding", "8bit"),
+        "",
+        this.normalizeMimeBody(message.text),
+      ].join("\r\n");
+    }
+
+    const boundary = `caf-gpt-${crypto.randomUUID()}`;
+    return [
+      ...headers,
+      this.formatHeader("Content-Type", `multipart/alternative; boundary="${boundary}"`),
+      "",
+      `--${boundary}`,
+      this.formatHeader("Content-Type", "text/plain; charset=utf-8"),
+      this.formatHeader("Content-Transfer-Encoding", "8bit"),
+      "",
+      this.normalizeMimeBody(message.text),
+      `--${boundary}`,
+      this.formatHeader("Content-Type", "text/html; charset=utf-8"),
+      this.formatHeader("Content-Transfer-Encoding", "8bit"),
+      "",
+      this.normalizeMimeBody(message.html),
+      `--${boundary}--`,
+      "",
+    ].join("\r\n");
+  }
+
+  /** Formats threading headers for the raw reply. */
+  private formatThreadingHeaders(
+    threadingOptions: InboundReplyMessage["threadingOptions"]
+  ): string[] {
+    const headers: string[] = [];
+
+    if (threadingOptions.inReplyTo) {
+      headers.push(this.formatHeader("In-Reply-To", threadingOptions.inReplyTo));
+    }
+
+    for (const [name, value] of Object.entries(threadingOptions.headers ?? {})) {
+      headers.push(this.formatHeader(name, value));
+    }
+
+    return headers;
+  }
+
+  /** Formats a single MIME header while preventing header injection. */
+  private formatHeader(name: string, value: string): string {
+    return `${name}: ${this.sanitizeHeaderValue(value)}`;
+  }
+
+  /** Formats a mailbox header value. */
+  private formatMailbox(address: string, displayName?: string): string {
+    const mailbox = `<${normalizeEmailAddress(address)}>`;
+
+    if (!displayName) {
+      return mailbox;
+    }
+
+    return `"${displayName.replace(/["\\]/g, "\\$&")}" ${mailbox}`;
+  }
+
+  /** Normalizes body line endings for raw MIME output. */
+  private normalizeMimeBody(content: string): string {
+    return content.replace(/\r?\n/g, "\r\n");
+  }
+
+  /** Sanitizes a MIME header value. */
+  private sanitizeHeaderValue(value: string): string {
+    return value.replace(/[\r\n]+/g, " ").trim();
+  }
+
+  /** Extracts the domain used for generated Message-ID values. */
+  private getEmailDomain(address: string): string {
+    return normalizeEmailAddress(address).split("@")[1] ?? "caf-gpt.com";
+  }
+
   /** Resolves the sender identity for replies from the inbound monitored recipient. */
   private resolveReplyFromAddress(parsedEmail: ParsedEmailData, config: AppConfig): string {
     const monitoredAddresses = new Set(
@@ -452,7 +572,7 @@ ${parsedEmail.body}`;
     return inboundRecipient ?? normalizeEmailAddress(config.email.agentFromEmail);
   }
 
-  /** Builds threading options for Agents SDK sendEmail calls. */
+  /** Builds threading options for reply MIME headers. */
   private buildThreadingOptions(parsedEmail: ParsedEmailData): {
     inReplyTo?: string;
     headers?: Record<string, string>;

@@ -4,7 +4,7 @@ Instructions and architecture patterns for LLM developers and AI agents.
 
 ## Project Overview
 
-CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated replies via the Cloudflare Email Service `send_email` binding.
+CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated inbound replies via the Email Workers `reply()` API.
 
 ## Development Commands
 
@@ -39,7 +39,7 @@ Emails are processed through **Cloudflare Email Workers**:
 2. **Validation**: `CloudflareEmailWorkerHandler` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
 3. **Parsing**: MIME content parsed with `postal-mime` into `ParsedEmailData`.
 4. **Agent Processing**: `SimpleEmailHandler.processEmail()` routes to `AgentCoordinator.processWithPrimeFoo()`.
-5. **Reply**: `CloudflareEmailSender` sends AI-generated responses via `env.EMAIL.send()`, preserving threading headers and original-CC reply-all behavior for normal replies when CC recipients match the configured authorization allowlist.
+5. **Reply**: `UserAgent` sends AI-generated sender-only responses via the original inbound `AgentEmail.reply()` envelope, preserving threading headers and signed Agents SDK routing headers.
 
 ### AI SDK Tool-Calling Workflow
 
@@ -94,7 +94,7 @@ The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudfla
 - **Structured output**: Uses `generateObject()` with Zod schemas (defined in `src/schemas.ts`) for automatic JSON validation
 - **Tool calling**: Prime Foo uses AI SDK `generateText()` with tools in `src/agents/AgentCoordinator.ts`
 - **AI Gateway**: Routes through Cloudflare AI Gateway via `ai-gateway-provider` with the unified provider — current code requires the `CF_AIG_AUTH` secret
-- **Models**: `workers-ai/@cf/moonshotai/kimi-k2.7-code` (orchestrator), `google-ai-studio/gemini-3.1-flash-lite-preview` (specialists)
+- **Models**: `@cf/moonshotai/kimi-k2.7-code` (orchestrator), `google-ai-studio/gemini-3.1-flash-lite-preview` (specialists)
 - **Streaming is disabled** for CPU efficiency in Cloudflare Workers
 
 ## Adding New Agents/Sub-agents
@@ -169,8 +169,8 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 
 ### Email Replies
 
-- Replies sent via `CloudflareEmailSender` using Cloudflare Email Service `send_email`
-- Normal replies include original CC recipients for reply-all behavior only when those recipients match the configured authorized domains/emails; error responses remain sender-only
+- Inbound replies are sent via `AgentEmail.reply()` using the original Email Worker message so arbitrary inbound senders do not need to be verified Cloudflare Email Service destinations
+- Normal replies and error responses are sender-only; do not use `env.EMAIL.send()` for direct inbound replies unless every destination is known to be verified/allowed
 - Threading headers preserved: `In-Reply-To`, `References`
 - Quoted content formatted using `EmailComposer.formatQuotedContent()`
 

@@ -16,7 +16,7 @@ npm run deploy
 
 - **Email Processing**: Receives emails via Cloudflare Email Workers
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
-- **Reply-All Email Responses**: Sends via Cloudflare Email Service with allowlisted original-CC handling
+- **Sender-Only Email Replies**: Replies to inbound senders via Cloudflare Email Workers `reply()`
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
 - **Memory Management**: Per-user context stored in Cloudflare Agents Durable Object state
 
@@ -34,9 +34,9 @@ Email → Cloudflare Email Routing → routeAgentEmail
                          /        |         \
            LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
                                       ↓
-                   Agents SDK sendEmail + signed reply routing
+                Signed raw MIME reply through inbound email
                                       ↓
-                         Cloudflare Email Service send_email
+                       Cloudflare Email Workers reply()
 ```
 
 ## Setup

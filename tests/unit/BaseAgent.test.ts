@@ -39,8 +39,8 @@ describe("BaseAgent provider routing", () => {
     });
   });
 
-  it("should not attach Cloudflare Unified Billing options to Workers AI models", () => {
-    expect(createProviderOptions("workers-ai/@cf/moonshotai/kimi-k2.7-code")).toBeUndefined();
+  it("should not attach Cloudflare Unified Billing options to Cloudflare native models", () => {
+    expect(createProviderOptions("@cf/moonshotai/kimi-k2.7-code")).toBeUndefined();
   });
 
   it("should route Gemini models through Cloudflare AI Gateway Unified Billing", () => {
@@ -61,18 +61,18 @@ describe("BaseAgent provider routing", () => {
     expect(mockUnified).toHaveBeenCalledWith("google-ai-studio/gemini-3.1-flash-lite-preview");
   });
 
-  it("should route Workers AI models through the Unified provider", () => {
+  it("should route Cloudflare native models through the Unified provider", () => {
     const gatewayModel = { provider: "gateway", modelId: "wrapped" };
-    const unifiedModel = { provider: "Unified.chat", modelId: "workers-ai/model" };
+    const unifiedModel = { provider: "Unified.chat", modelId: "@cf/model" };
     const mockUnified = vi.fn(() => unifiedModel);
     mockCreateAiGateway.mockReturnValueOnce(vi.fn(() => gatewayModel));
     mockCreateUnified.mockReturnValueOnce(mockUnified);
 
     const env = createMockEnv();
-    const result = createModel(env, "workers-ai/@cf/moonshotai/kimi-k2.7-code");
+    const result = createModel(env, "@cf/moonshotai/kimi-k2.7-code");
 
     expect(result).toBe(gatewayModel);
     expect(mockCreateUnified).toHaveBeenCalledWith({ supportsStructuredOutputs: false });
-    expect(mockUnified).toHaveBeenCalledWith("workers-ai/@cf/moonshotai/kimi-k2.7-code");
+    expect(mockUnified).toHaveBeenCalledWith("@cf/moonshotai/kimi-k2.7-code");
   });
 });
