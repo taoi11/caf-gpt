@@ -104,9 +104,10 @@ export class UserAgent extends Agent<Env, UserAgentState> {
     const rawHtmlBody = typeof parsed.html === "string" ? parsed.html : undefined;
     const derivedBody =
       rawTextBody.trim().length > 0 ? rawTextBody : rawHtmlBody ? htmlToText(rawHtmlBody) : "";
-    const toAddresses = this.mergeAddresses(this.extractAddresses(parsed.to), [
-      normalizeEmailAddress(email.to),
-    ]);
+    const toAddresses = this.mergeAddresses(
+      [normalizeEmailAddress(email.to)],
+      this.extractAddresses(parsed.to)
+    );
 
     return {
       from: normalizeEmailAddress(email.from),
@@ -302,13 +303,14 @@ ${parsedEmail.body}`;
         ? parsedEmail.subject
         : `Re: ${parsedEmail.subject}`;
       const threadingOptions = this.buildThreadingOptions(parsedEmail);
+      const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
       await this.sendEmail({
         binding: this.env.EMAIL,
         to: replyRecipient,
         ...(ccRecipients.length > 0 ? { cc: ccRecipients } : {}),
-        from: { email: config.email.agentFromEmail, name: "CAF-GPT" },
-        replyTo: config.email.agentFromEmail,
+        from: { email: replyFromAddress, name: "CAF-GPT" },
+        replyTo: replyFromAddress,
         subject,
         text: fullTextContent,
         html: htmlContent,
@@ -401,12 +403,13 @@ ${parsedEmail.body}`;
         ? `Error Processing Email: ${parsedEmail.subject.slice(3).trim()}`
         : "Error Processing Email";
       const threadingOptions = this.buildThreadingOptions(parsedEmail);
+      const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
       await this.sendEmail({
         binding: this.env.EMAIL,
         to: normalizeEmailAddress(parsedEmail.from),
-        from: { email: config.email.agentFromEmail, name: "CAF-GPT" },
-        replyTo: config.email.agentFromEmail,
+        from: { email: replyFromAddress, name: "CAF-GPT" },
+        replyTo: replyFromAddress,
         subject,
         text: errorMessage,
         ...threadingOptions,
@@ -435,6 +438,18 @@ ${parsedEmail.body}`;
       ERROR_RESPONSE_TEMPLATES.find((entry) => entry.match(error)) ??
       ERROR_RESPONSE_TEMPLATES[ERROR_RESPONSE_TEMPLATES.length - 1];
     return template.lines.join("\n");
+  }
+
+  /** Resolves the sender identity for replies from the inbound monitored recipient. */
+  private resolveReplyFromAddress(parsedEmail: ParsedEmailData, config: AppConfig): string {
+    const monitoredAddresses = new Set(
+      config.email.monitoredAddresses.map((address) => normalizeEmailAddress(address))
+    );
+    const inboundRecipient = parsedEmail.to
+      .map((address) => normalizeEmailAddress(address))
+      .find((address) => monitoredAddresses.has(address));
+
+    return inboundRecipient ?? normalizeEmailAddress(config.email.agentFromEmail);
   }
 
   /** Builds threading options for Agents SDK sendEmail calls. */

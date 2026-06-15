@@ -117,12 +117,104 @@ describe("UserAgent email processing", () => {
     expect(result.sentMessages[0]).toMatchObject({
       to: "test@forces.gc.ca",
       cc: ["ally@forces.gc.ca"],
+      from: { email: "agent@caf-gpt.com", name: "CAF-GPT" },
+      replyTo: "agent@caf-gpt.com",
       subject: "Re: Leave question",
       inReplyTo: "<msg-1@forces.gc.ca>",
       headers: { References: "<root@forces.gc.ca> <parent@forces.gc.ca> <msg-1@forces.gc.ca>" },
       secret: env.EMAIL_SECRET,
     });
     expect(result.schedules[0][1]).toBe("runMemoryUpdate");
+  });
+
+  it("sends direct pacenote replies from the inbound pacenote alias", async () => {
+    const stub = getUserAgentStub("pacenote-user@forces.gc.ca");
+
+    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const sentMessages: unknown[] = [];
+      const processWithPrimeFoo = vi.fn(async () => ({
+        shouldRespond: true,
+        content: "<p>Feedback note</p>",
+      }));
+
+      vi.spyOn(instance, "sendEmail").mockImplementation(async (options) => {
+        sentMessages.push(options);
+        return { messageId: "reply-1" };
+      });
+      vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
+      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
+        processWithPrimeFoo,
+      };
+
+      await instance.onEmail(
+        createAgentEmail({
+          from: "pacenote-user@forces.gc.ca",
+          to: "pacenote@caf-gpt.com",
+          subject: "Feedback note",
+          body: "Write a feedback note.",
+          messageId: "<pacenote-1@forces.gc.ca>",
+        })
+      );
+
+      return { sentMessages };
+    });
+
+    expect(result.sentMessages).toHaveLength(1);
+    expect(result.sentMessages[0]).toMatchObject({
+      to: "pacenote-user@forces.gc.ca",
+      from: { email: "pacenote@caf-gpt.com", name: "CAF-GPT" },
+      replyTo: "pacenote@caf-gpt.com",
+      subject: "Re: Feedback note",
+      inReplyTo: "<pacenote-1@forces.gc.ca>",
+      secret: env.EMAIL_SECRET,
+    });
+  });
+
+  it("sends pacenote error responses from the inbound pacenote alias", async () => {
+    const stub = getUserAgentStub("pacenote-error@forces.gc.ca");
+
+    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const sentMessages: unknown[] = [];
+      const processWithPrimeFoo = vi.fn(async () => {
+        throw new Error("model down");
+      });
+      let thrownMessage = "";
+
+      vi.spyOn(instance, "sendEmail").mockImplementation(async (options) => {
+        sentMessages.push(options);
+        return { messageId: "error-1" };
+      });
+      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
+        processWithPrimeFoo,
+      };
+
+      try {
+        await instance.onEmail(
+          createAgentEmail({
+            from: "pacenote-error@forces.gc.ca",
+            to: "pacenote@caf-gpt.com",
+            subject: "Feedback note",
+            body: "Write a feedback note.",
+            messageId: "<pacenote-error-1@forces.gc.ca>",
+          })
+        );
+      } catch (error) {
+        thrownMessage = error instanceof Error ? error.message : String(error);
+      }
+
+      return { sentMessages, thrownMessage };
+    });
+
+    expect(result.thrownMessage).toBe("model down");
+    expect(result.sentMessages).toHaveLength(1);
+    expect(result.sentMessages[0]).toMatchObject({
+      to: "pacenote-error@forces.gc.ca",
+      from: { email: "pacenote@caf-gpt.com", name: "CAF-GPT" },
+      replyTo: "pacenote@caf-gpt.com",
+      subject: "Error Processing Email",
+      inReplyTo: "<pacenote-error-1@forces.gc.ca>",
+      secret: env.EMAIL_SECRET,
+    });
   });
 
   it("does not process self-loop emails", async () => {
