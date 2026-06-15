@@ -1,25 +1,14 @@
 /**
  * tests/mocks/cloudflare.ts
  *
- * Mock Cloudflare bindings for testing (R2, AI, Email, Assets)
+ * Mock Cloudflare bindings for testing (R2 and Assets)
  *
  * Top-level declarations:
  * - MockR2Object: Mock R2 object implementation
  * - MockR2Bucket: Mock R2 bucket implementation
  * - MockFetcher: Mock Fetcher for static assets
- * - MockSendEmail: Mock Email Service send_email binding
  * - createMockEnv: Creates mock Cloudflare environment
  */
-
-// Mock Email Service send_email binding
-export class MockSendEmail {
-  sentMessages: unknown[] = [];
-
-  async send(message: unknown): Promise<EmailSendResult> {
-    this.sentMessages.push(message);
-    return { messageId: `mock-email-${this.sentMessages.length}` };
-  }
-}
 
 // Mock R2 object for get/put operations
 export class MockR2Object {
@@ -175,7 +164,6 @@ If nothing new:
 export function createMockEnv(overrides?: Partial<Env>): Env {
   const mockR2 = new MockR2Bucket();
   const mockAssets = new MockFetcher();
-  const mockEmail = new MockSendEmail();
 
   return {
     AUTHORIZED_SENDERS: "test@forces.gc.ca,admin@test.com",
@@ -183,7 +171,6 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     ASSETS: mockAssets as unknown as Fetcher,
     CF_AIG_AUTH: "test-token",
     EMAIL_SECRET: "test-secret",
-    EMAIL: mockEmail as unknown as SendEmail,
     ...overrides,
   } as Env;
 }

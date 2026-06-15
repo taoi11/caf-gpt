@@ -41,9 +41,9 @@ describe("UserAgent email routing", () => {
     expect(warn).not.toHaveBeenCalled();
   });
 
-  it("routes signed replies before falling back to direct sender routing", async () => {
+  it("routes signed replies with kebab-case agent names before direct sender routing", async () => {
     const resolver = createUserAgentResolver(env);
-    const signedHeaders = await signAgentHeaders(env.EMAIL_SECRET, "UserAgent", "signed-agent-id");
+    const signedHeaders = await signAgentHeaders(env.EMAIL_SECRET, "user-agent", "signed-agent-id");
     const message = createRoutingMessage({
       from: "test@forces.gc.ca",
       to: "agent@caf-gpt.com",
@@ -53,7 +53,7 @@ describe("UserAgent email routing", () => {
     const route = await resolver(message, env);
 
     expect(route).toEqual({
-      agentName: "UserAgent",
+      agentName: "user-agent",
       agentId: "signed-agent-id",
       _secureRouted: true,
     });

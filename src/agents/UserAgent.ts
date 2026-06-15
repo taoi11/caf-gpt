@@ -6,18 +6,22 @@
  * Top-level declarations:
  * - AGENT_EMAIL_ROUTING_NAME: Agents SDK routing name used in signed reply headers
  * - UserAgentState: Persistent per-user state stored by the Agents runtime
- * - InboundReplyMessage: Raw MIME data for an inbound Email Worker reply
  * - MemoryUpdateTask: Scheduled memory update payload
  * - UserAgent: Durable Object-backed email agent with AI response and memory scheduling
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
  */
 
 import { Agent } from "agents";
-import { type AgentEmail, signAgentHeaders } from "agents/email";
+import type { AgentEmail } from "agents/email";
 import PostalMime, { type Address } from "postal-mime";
 import type { AppConfig } from "../config";
 import { createConfig } from "../config";
-import { EmailComposer, HtmlEmailComposer } from "../email/components";
+import {
+  EmailComposer,
+  HtmlEmailComposer,
+  InboundReplyComposer,
+  type InboundReplyMessage,
+} from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
@@ -34,24 +38,11 @@ import { AgentCoordinator } from "./AgentCoordinator";
 import { MemoryFooAgent } from "./sub-agents";
 
 const AGENT_EMAIL_ROUTING_NAME = "user-agent";
-const EMAIL_DISPLAY_NAME = "CAF-GPT";
 const MEMORY_MAX_CONTENT_LENGTH = 4000;
 const REFERENCES_MAX_LENGTH = 1000;
 
 export interface UserAgentState {
   memory: string;
-}
-
-interface InboundReplyMessage {
-  fromAddress: string;
-  toAddress: string;
-  subject: string;
-  text: string;
-  html?: string;
-  threadingOptions: {
-    inReplyTo?: string;
-    headers?: Record<string, string>;
-  };
 }
 
 interface MemoryUpdateTask {
@@ -71,6 +62,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   private readonly logger = Logger.getInstance();
   private readonly emailComposer = new EmailComposer();
   private readonly htmlEmailComposer = new HtmlEmailComposer();
+  private readonly inboundReplyComposer = new InboundReplyComposer();
   private agentCoordinator?: AgentCoordinator;
 
   /** Handles inbound email routed by the Agents SDK. */
@@ -455,109 +447,16 @@ ${parsedEmail.body}`;
     originalEmail: AgentEmail,
     message: InboundReplyMessage
   ): Promise<void> {
-    const raw = await this.buildInboundReplyRawMessage(message);
+    const raw = await this.inboundReplyComposer.composeRawReply(message, {
+      secret: this.env.EMAIL_SECRET,
+      agentName: AGENT_EMAIL_ROUTING_NAME,
+      agentId: this.name,
+    });
     await originalEmail.reply({
       from: message.fromAddress,
       to: message.toAddress,
       raw,
     });
-  }
-
-  /** Builds a raw RFC 5322 reply with signed Agents SDK routing headers. */
-  private async buildInboundReplyRawMessage(message: InboundReplyMessage): Promise<string> {
-    const messageId = `<${crypto.randomUUID()}@${this.getEmailDomain(message.fromAddress)}>`;
-    const signedHeaders = await signAgentHeaders(
-      this.env.EMAIL_SECRET,
-      AGENT_EMAIL_ROUTING_NAME,
-      this.name
-    );
-    const headers = [
-      this.formatHeader("From", this.formatMailbox(message.fromAddress, EMAIL_DISPLAY_NAME)),
-      this.formatHeader("To", this.formatMailbox(message.toAddress)),
-      this.formatHeader("Subject", message.subject),
-      this.formatHeader("Message-ID", messageId),
-      this.formatHeader("Date", new Date().toUTCString()),
-      this.formatHeader("MIME-Version", "1.0"),
-      ...this.formatThreadingHeaders(message.threadingOptions),
-      ...Object.entries(signedHeaders).map(([name, value]) => this.formatHeader(name, value)),
-    ];
-
-    if (!message.html) {
-      return [
-        ...headers,
-        this.formatHeader("Content-Type", "text/plain; charset=utf-8"),
-        this.formatHeader("Content-Transfer-Encoding", "8bit"),
-        "",
-        this.normalizeMimeBody(message.text),
-      ].join("\r\n");
-    }
-
-    const boundary = `caf-gpt-${crypto.randomUUID()}`;
-    return [
-      ...headers,
-      this.formatHeader("Content-Type", `multipart/alternative; boundary="${boundary}"`),
-      "",
-      `--${boundary}`,
-      this.formatHeader("Content-Type", "text/plain; charset=utf-8"),
-      this.formatHeader("Content-Transfer-Encoding", "8bit"),
-      "",
-      this.normalizeMimeBody(message.text),
-      `--${boundary}`,
-      this.formatHeader("Content-Type", "text/html; charset=utf-8"),
-      this.formatHeader("Content-Transfer-Encoding", "8bit"),
-      "",
-      this.normalizeMimeBody(message.html),
-      `--${boundary}--`,
-      "",
-    ].join("\r\n");
-  }
-
-  /** Formats threading headers for the raw reply. */
-  private formatThreadingHeaders(
-    threadingOptions: InboundReplyMessage["threadingOptions"]
-  ): string[] {
-    const headers: string[] = [];
-
-    if (threadingOptions.inReplyTo) {
-      headers.push(this.formatHeader("In-Reply-To", threadingOptions.inReplyTo));
-    }
-
-    for (const [name, value] of Object.entries(threadingOptions.headers ?? {})) {
-      headers.push(this.formatHeader(name, value));
-    }
-
-    return headers;
-  }
-
-  /** Formats a single MIME header while preventing header injection. */
-  private formatHeader(name: string, value: string): string {
-    return `${name}: ${this.sanitizeHeaderValue(value)}`;
-  }
-
-  /** Formats a mailbox header value. */
-  private formatMailbox(address: string, displayName?: string): string {
-    const mailbox = `<${normalizeEmailAddress(address)}>`;
-
-    if (!displayName) {
-      return mailbox;
-    }
-
-    return `"${displayName.replace(/["\\]/g, "\\$&")}" ${mailbox}`;
-  }
-
-  /** Normalizes body line endings for raw MIME output. */
-  private normalizeMimeBody(content: string): string {
-    return content.replace(/\r?\n/g, "\r\n");
-  }
-
-  /** Sanitizes a MIME header value. */
-  private sanitizeHeaderValue(value: string): string {
-    return value.replace(/[\r\n]+/g, " ").trim();
-  }
-
-  /** Extracts the domain used for generated Message-ID values. */
-  private getEmailDomain(address: string): string {
-    return normalizeEmailAddress(address).split("@")[1] ?? "caf-gpt.com";
   }
 
   /** Resolves the sender identity for replies from the inbound monitored recipient. */

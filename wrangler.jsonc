@@ -43,13 +43,6 @@
       "bucket_name": "policies"
     }
   ],
-  "send_email": [
-    {
-      "name": "EMAIL",
-      "remote": true,
-      "allowed_sender_addresses": ["agent@caf-gpt.com", "pacenote@caf-gpt.com"]
-    }
-  ],
   "durable_objects": {
     "bindings": [
       {

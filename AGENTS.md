@@ -36,9 +36,9 @@ wrangler types --env-interface CloudflareBindings  # Generate TypeScript types
 Emails are processed through **Cloudflare Email Workers**:
 
 1. **Inbound Trigger**: Worker `email()` handler in `src/index.ts`.
-2. **Validation**: `CloudflareEmailWorkerHandler` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
-3. **Parsing**: MIME content parsed with `postal-mime` into `ParsedEmailData`.
-4. **Agent Processing**: `SimpleEmailHandler.processEmail()` routes to `AgentCoordinator.processWithPrimeFoo()`.
+2. **Validation**: `createUserAgentResolver()` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
+3. **Parsing**: `UserAgent` parses MIME content with `postal-mime` into `ParsedEmailData`.
+4. **Agent Processing**: `UserAgent` routes parsed email context to `AgentCoordinator.processWithPrimeFoo()`.
 5. **Reply**: `UserAgent` sends AI-generated sender-only responses via the original inbound `AgentEmail.reply()` envelope, preserving threading headers and signed Agents SDK routing headers.
 
 ### AI SDK Tool-Calling Workflow
@@ -53,7 +53,7 @@ Emails are processed through **Cloudflare Email Workers**:
   - PaceFooAgent loads competencies from R2 (`paceNote/{rank}.md`) and generates feedback.
   - Rank files: `cpl.md`, `mcpl.md`, `sgt.md`, `wo.md`.
 - **Circuit breaker**: `stopWhen: stepCountIs(3)` limits the Prime Foo tool loop to 3 model steps.
-- `MemoryFooAgent` runs from `SimpleEmailHandler` around the main response path to retrieve and update user memory.
+- `MemoryFooAgent` runs from `UserAgent` around the main response path to update user memory after successful replies.
 
 ### Structured Output with Zod
 
@@ -154,14 +154,14 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 
 ### Threading & Concurrency
 
-- `SimpleEmailHandler` handles each email as an independent Cloudflare Worker event
+- `UserAgent` handles each email as an independent Cloudflare Worker event
 - No background polling - emails are processed via Cloudflare Email Worker events
 - Each email request is processed synchronously without concurrency concerns
 - Failed processing results are logged but don't leave emails "unread" in the traditional sense
 
 ### Email Threading Headers
 
-`EmailThreadManager` builds proper threading headers:
+`UserAgent` builds proper threading headers:
 
 - `In-Reply-To`: original message-id
 - `References`: all parent message-ids
@@ -170,7 +170,7 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 ### Email Replies
 
 - Inbound replies are sent via `AgentEmail.reply()` using the original Email Worker message so arbitrary inbound senders do not need to be verified Cloudflare Email Service destinations
-- Normal replies and error responses are sender-only; do not use `env.EMAIL.send()` for direct inbound replies unless every destination is known to be verified/allowed
+- Normal replies and error responses are sender-only
 - Threading headers preserved: `In-Reply-To`, `References`
 - Quoted content formatted using `EmailComposer.formatQuotedContent()`
 

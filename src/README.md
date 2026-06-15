@@ -13,8 +13,7 @@ src/
 │   │   └── index.ts             # Component exports
 │   ├── utils/                   # Email utilities
 │   │   ├── EmailValidator.ts    # Email validation
-│   │   ├── EmailNormalizer.ts   # Email address normalization
-│   │   └── ReplyRecipients.ts   # Safe reply-all recipient filtering for send_email flows
+│   │   └── EmailNormalizer.ts   # Email address normalization
 │   └── types.ts                 # Email type definitions
 ├── agents/
 │   ├── UserAgent.ts             # Durable Object-backed per-user email agent
@@ -45,7 +44,6 @@ src/
 - **R2_BUCKET**: R2 bucket for document storage (policies, prompts)
 - **UserAgent**: Durable Object binding for per-user Agent state and scheduled memory updates
 - **ASSETS**: Static assets binding for prompt templates
-- **EMAIL**: Cloudflare Email Service send_email binding for outbound/proactive email, not direct inbound replies
 
 ## Environment Variables (Secrets)
 

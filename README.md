@@ -61,11 +61,10 @@ wrangler secret put EMAIL_SECRET
 npm run deploy
 ```
 
-### 4. Configure Cloudflare Email Service
+### 4. Configure Cloudflare Email Routing
 
 1. In Cloudflare Email Routing, route `agent@caf-gpt.com` and `pacenote@caf-gpt.com` to this Worker.
-2. In Cloudflare Email Sending, onboard `caf-gpt.com` and verify the sending DNS records.
-3. Ensure the Worker has the Email event handler enabled (already exported in `src/index.ts`).
+2. Ensure the Worker has the Email event handler enabled (already exported in `src/index.ts`).
 
 [For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
 
