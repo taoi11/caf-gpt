@@ -10,21 +10,30 @@ This file tracks project-level work that should survive across coding sessions a
 
 ## Active TODOs
 
-No active TODOs.
+None.
 
 ## Parking Lot
 
-- [ ] 1. Plan manual document chunking and migration from R2-only retrieval to Neon pgvector.
+- [ ] 1. Rework DOAD and QR&O indexes into a shared manifest table shape.
+  - Context: Standardize the separate sub-agent indexes to a clean markdown table with `| Id | Title | File |`. This is intentionally deferred until after the one-agent tool-reading pattern is in place.
+  - Likely files: DOAD index asset, QR&O index document, selector/tool-reading prompts, any manifest parsing helpers.
+  - Done when: Both domain indexes use the same table shape, DOAD and QR&O file validation can use a common manifest parser, and agent behavior is unchanged except for simpler index handling.
+
+- [ ] 2. Plan manual document chunking and migration from R2-only retrieval to Neon pgvector.
   - Context: Keep R2 path-based retrieval for now. Future work should manually chunk CAF policy docs, store embeddings in Neon pgvector, and decide whether R2 remains the source of truth for full documents.
-  - Likely files: `src/storage/DocumentRetriever.ts`, `src/agents/utils/TwoCallAgent.ts`, `src/agents/sub-agents/*`, future database migration/seed scripts
+  - Likely files: `src/storage/DocumentRetriever.ts`, `src/agents/utils/ToolReadingAgent.ts`, `src/agents/sub-agents/*`, future database migration/seed scripts
   - Done when: Chunking strategy, schema, embedding model, retrieval ranking, citation format, and backfill process are designed before implementation begins.
 
-- [ ] 2. Revisit no-degraded-mode boundaries after memory and email rewrites.
+- [ ] 3. Revisit no-degraded-mode boundaries after memory and email rewrites.
   - Context: The project rule is no degraded behavior within logic modules. Outer orchestration may intentionally skip optional modules only when explicit, tested, and documented.
   - Likely files: `AGENTS.md`, `src/agents/UserAgent.ts`, tests around memory failure handling
   - Done when: Module-level failure contracts are documented in code/tests and orchestration-level optional behavior is named rather than accidental.
 
 ## Log
+
+### 2026-06-15
+
+- Replaced the DOAD/QR&O selector-loader-answer flow with a one-call tool-reading pattern: each specialist now receives its index up front, validates `read_file` requests against that index, caps reads at three successful documents and five total attempts, and fails cleanly after the correction budget is exhausted.
 
 ### 2026-06-03
 

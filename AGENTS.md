@@ -49,21 +49,23 @@ Emails are processed through **Cloudflare Email Workers**:
 - `batch_research` accepts leave, DOAD, and QR&O query arrays, then runs the requested sub-agent research calls concurrently.
   - Research sub-agents are `LeaveFooAgent`, `DoadFooAgent`, and `QroFooAgent`.
   - Each domain accepts up to 3 questions per `batch_research` call.
+  - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent` and use one bounded `generateText()` tool loop to select and read indexed documents.
+  - Their `read_file` tool allows at most 5 attempts, 3 successful reads, and 2 correctable bad calls. Successful-read slots are reserved before asynchronous loads so concurrent tool execution cannot exceed the cap.
+  - DOAD identifiers come from the DOAD Markdown table. QR&O paths come from actual Markdown list/table entries in `qro/index.md`; its allowlist parser rejects absolute paths, dot or empty segments, backslashes, and traversal.
 - `generate_feedback_note` delegates to `PaceFooAgent.generateNote(rank, context)`.
   - PaceFooAgent loads competencies from R2 (`paceNote/{rank}.md`) and generates feedback.
   - Rank files: `cpl.md`, `mcpl.md`, `sgt.md`, `wo.md`.
 - **Circuit breaker**: `stopWhen: stepCountIs(3)` limits the Prime Foo tool loop to 3 model steps.
 - `MemoryFooAgent` runs from `UserAgent` around the main response path to update user memory after successful replies.
 
-### Structured Output with Zod
+### Tool Input Validation with Zod
 
-Selector and memory agents use `callLangChainStructured()` with Zod schema validation:
+AI SDK tool inputs are validated with Zod schemas:
 
-- Define response schema using Zod (see `src/schemas.ts`)
-- LLM returns JSON matching schema via AI SDK's `generateObject()` with structured output
-- AI SDK automatically validates and parses response using the Zod schema
-- Zod throws `ValidationError` if response doesn't match schema
-- AI SDK's built-in error handling catches API failures and timeout errors
+- Prime Foo defines its tool input schemas inline in `AgentCoordinator`.
+- `ToolReadingAgent` defines the `read_file` input schema inline and validates file values against the domain index allowlist before loading R2.
+- `MemoryFooAgent` uses `MemoryUpdateToolInputSchema` and `MemoryUnchangedToolInputSchema` from `src/schemas.ts` with a required `generateText()` tool call.
+- AI SDK validates tool inputs before execution; agents additionally validate recognized tool names and domain-specific values.
 
 ### Strict Failure Mode (No Degraded State Within Logic Modules)
 
@@ -78,7 +80,7 @@ Business logic modules must be designed to either succeed completely or fail cle
 
 R2 organization: `${category}/${filename}`
 
-- Categories: `leave/` (policy docs), `paceNote/` (rank competencies), `qro/` (QR&O chapters)
+- Categories: `leave/` (policy docs), `doad/` (DOAD policies), `paceNote/` (rank competencies), `qro/` (QR&O chapters and index)
 - Access via: `documentRetriever.getDocument("paceNote", "mcpl.md")`
 - All documents are UTF-8 encoded markdown files
 - Current retrieval is R2 path-based document loading. Planned semantic retrieval work belongs in `TODO.md` until a pgvector/Neon migration is designed.
@@ -89,10 +91,10 @@ The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudfla
 
 **Key points:**
 
-- Agents use `callLangChain()` and `callLangChainStructured()` methods in `src/agents/utils/BaseAgent.ts`
+- Simple text agents use `callLangChain()`; tool-backed agents call AI SDK `generateText()` directly.
 - **Prompt templating**: Uses `PromptManager` with `{variable}` syntax for template rendering
-- **Structured output**: Uses `generateObject()` with Zod schemas (defined in `src/schemas.ts`) for automatic JSON validation
-- **Tool calling**: Prime Foo uses AI SDK `generateText()` with tools in `src/agents/AgentCoordinator.ts`
+- **Tool validation**: Uses Zod input schemas for Prime Foo, memory, and `read_file` tool calls
+- **Tool calling**: Prime Foo, Memory Foo, and indexed policy agents use AI SDK `generateText()` tools
 - **AI Gateway**: Routes through Cloudflare AI Gateway via `ai-gateway-provider` with the unified provider — current code requires the `CF_AIG_AUTH` secret
 - **Models**: `@cf/moonshotai/kimi-k2.7-code` (orchestrator), `google-ai-studio/gemini-3.1-flash-lite-preview` (specialists)
 - **Streaming is disabled** for CPU efficiency in Cloudflare Workers
@@ -106,19 +108,18 @@ The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudfla
 3. Add prompt file: `public/prompts/your_agent.md`
 4. Add model config: add `yourAgent` to `LLMConfig.models` in `src/config.ts`
 
-### Two-Call Pattern Agents (Selector → Answer)
+### Indexed Tool-Reading Agents (One Call)
 
-For agents that need to select from an index before answering (like `DoadFooAgent`, `QroFooAgent`):
+For agents that select and read documents from an index (like `DoadFooAgent` and `QroFooAgent`):
 
-1. Create agent class extending `BaseAgent`
-2. Implement `research()` method that:
-   - Calls `_selectFiles()` - loads index from R2, uses selector prompt to identify relevant documents
-   - Calls `_loadFiles()` - loads selected documents from R2
-   - Calls `_answerQuery()` - uses answer prompt with loaded content to generate response
-3. Create two prompt files:
-   - `your_agent_selector.md` - selects relevant files, returns `<files>path1,path2</files>`
-   - `your_agent_answer.md` - answers query using loaded documents
-4. Add model config in `src/config.ts`
+1. Create an agent class extending `ToolReadingAgent`.
+2. Configure its category, model key, prompt name, index variable, and read limits.
+3. Implement `getIndexContent()`, `getAllowedFiles()`, `getFilePath()`, and `formatDocumentTag()`.
+4. Parse only explicit manifest entries into the allowlist and validate identifiers or safe relative paths before any R2 read.
+5. Add one tool-reader prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md`. The model chooses files, calls the bounded `read_file` tool, and answers in the same `generateText()` run.
+6. Add model config in `src/config.ts`.
+
+The current policy prompt assets are `DOAD_Table.md`, `doad_foo_tool_reader.md`, `qro_foo_tool_reader.md`, and `leave_foo_research.md`. There are no separate DOAD or QR&O selector/answer prompts.
 
 ### Registering Agents
 

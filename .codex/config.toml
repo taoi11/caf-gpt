@@ -1,0 +1,6 @@
+[features]
+apps = false
+memories = false
+
+[mcp_servers.cloudflare-api]
+url = "https://mcp.cloudflare.com/mcp"
