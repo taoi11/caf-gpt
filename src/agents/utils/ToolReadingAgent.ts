@@ -120,15 +120,16 @@ export abstract class ToolReadingAgent extends BaseAgent {
 
     let totalCalls = 0;
     let successfulReads = 0;
+    let reservedReads = 0;
     let badCalls = 0;
 
     const markBadCall = (message: string): ReadFileResult => {
-      badCalls += 1;
-      if (badCalls > this.agentConfig.readLimits.badCalls) {
+      if (badCalls >= this.agentConfig.readLimits.badCalls) {
         throw new AgentValidationError(
           `${this.agentConfig.policyType} read_file correction budget exhausted: ${message}`
         );
       }
+      badCalls += 1;
       return {
         ok: false,
         content: `read_file error: ${message}. Choose a valid file from the provided index.`,
@@ -150,15 +151,14 @@ export abstract class ToolReadingAgent extends BaseAgent {
             file: z.string().min(1).describe("Exact indexed document identifier to read"),
           }),
           execute: async ({ file }) => {
-            totalCalls += 1;
-
-            if (totalCalls > this.agentConfig.readLimits.totalCalls) {
+            if (totalCalls >= this.agentConfig.readLimits.totalCalls) {
               throw new AgentValidationError(
                 `${this.agentConfig.policyType} read_file total call limit exceeded`
               );
             }
+            totalCalls += 1;
 
-            if (successfulReads >= this.agentConfig.readLimits.successfulReads) {
+            if (successfulReads + reservedReads >= this.agentConfig.readLimits.successfulReads) {
               return markBadCall("successful read limit already reached");
             }
 
@@ -166,6 +166,7 @@ export abstract class ToolReadingAgent extends BaseAgent {
               return markBadCall(`"${file}" is not in the provided index`);
             }
 
+            reservedReads += 1;
             try {
               const doc = await this.docRetriever.getDocument(
                 this.agentConfig.category,
@@ -187,6 +188,8 @@ export abstract class ToolReadingAgent extends BaseAgent {
                 ...formatError(error),
               });
               return markBadCall(`"${file}" could not be loaded`);
+            } finally {
+              reservedReads -= 1;
             }
           },
         }),

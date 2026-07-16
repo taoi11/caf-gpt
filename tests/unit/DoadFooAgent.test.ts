@@ -80,7 +80,8 @@ describe("DoadFooAgent", () => {
 |--------|-------|
 | 5019-0 | Conduct and Performance Deficiency |
 | 5031-1 | Canadian Forces Grievance Board |
-| 7023-1 | Relocation Benefits |`
+| 7023-1 | Relocation Benefits |
+| 6000-1 | Indexed but unavailable test document |`
     );
 
     mockAssets.setPrompt(
@@ -139,6 +140,46 @@ Members are entitled to relocation assistance when posted.`
 
       expect(result).toContain("three DOADs");
       expect(mockGenerateText).toHaveBeenCalledTimes(1);
+    });
+
+    it("should cap simultaneous successful DOAD reads at three", async () => {
+      let readResults: Array<{ ok: boolean; content: string }> = [];
+      mockGenerateText.mockImplementationOnce(async (options: ReadFileToolOptions) => {
+        const execute = options.tools?.read_file?.execute;
+        if (!execute) throw new Error("read_file tool not provided");
+
+        readResults = await Promise.all(
+          ["5019-0", "5031-1", "7023-1", "5019-0"].map((file) => execute({ file }))
+        );
+        return { text: "Answer based on bounded concurrent reads" };
+      });
+
+      const result = await agent.research({ question: "Tell me about CAF policies" });
+
+      expect(result).toContain("bounded concurrent reads");
+      expect(readResults.filter(({ ok }) => ok)).toHaveLength(3);
+      expect(readResults.filter(({ ok }) => !ok)).toHaveLength(1);
+    });
+
+    it("should release a reserved slot when an indexed document cannot be loaded", async () => {
+      let successfulReads = 0;
+      mockGenerateText.mockImplementationOnce(async (options: ReadFileToolOptions) => {
+        const execute = options.tools?.read_file?.execute;
+        if (!execute) throw new Error("read_file tool not provided");
+
+        const missingResult = await execute({ file: "6000-1" });
+        const availableResults = await Promise.all(
+          ["5019-0", "5031-1", "7023-1"].map((file) => execute({ file }))
+        );
+        expect(missingResult.ok).toBe(false);
+        successfulReads = availableResults.filter(({ ok }) => ok).length;
+        return { text: "Answer after a failed read" };
+      });
+
+      const result = await agent.research({ question: "Tell me about CAF policies" });
+
+      expect(result).toContain("after a failed read");
+      expect(successfulReads).toBe(3);
     });
 
     it("should include the DOAD table and question in the one model call", async () => {

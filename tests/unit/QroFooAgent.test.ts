@@ -123,6 +123,51 @@ All members must maintain high standards of conduct.`
   });
 
   describe("research", () => {
+    it("should allow files from current Markdown list and table index entries", () => {
+      const allowedFiles = (
+        agent as unknown as {
+          getAllowedFiles: (indexContent: string) => Set<string>;
+        }
+      ).getAllowedFiles(`# QR&O Index
+
+- vol-1-administration/ch-16-leave.md — Leave Regulations
+1. \`vol-1-administration/ch-19-grievances.md\` — Grievance Procedures
+
+| Chapter | File |
+| --- | --- |
+| Service Conduct | [Chapter 107](vol-2-discipline/ch-107-conduct.md) |`);
+
+      expect(allowedFiles).toEqual(
+        new Set([
+          "vol-1-administration/ch-16-leave.md",
+          "vol-1-administration/ch-19-grievances.md",
+          "vol-2-discipline/ch-107-conduct.md",
+        ])
+      );
+    });
+
+    it("should reject prose mentions and unsafe index paths", () => {
+      const allowedFiles = (
+        agent as unknown as {
+          getAllowedFiles: (indexContent: string) => Set<string>;
+        }
+      ).getAllowedFiles(`# QR&O Index
+
+For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
+- This description mentions vol-8-misleading/ch-88-not-an-entry.md in prose.
+| Notes | This cell mentions vol-7-misleading/ch-77-not-an-entry.md in prose |
+- /absolute/ch-1.md — Absolute path
+- vol-1//ch-2.md — Empty segment
+- ./vol-1/ch-3.md — Leading dot segment
+- vol-1/./ch-4.md — Dot segment
+- vol-1/../ch-5.md — Traversal
+- ../ch-6.md — Leading traversal
+- vol-1\\ch-7.md — Backslash path
+- vol-1-administration/ch-16-leave.md — Safe entry`);
+
+      expect(allowedFiles).toEqual(new Set(["vol-1-administration/ch-16-leave.md"]));
+    });
+
     it("should answer after one valid QR&O read", async () => {
       mockModelReads(
         ["vol-1-administration/ch-16-leave.md"],
