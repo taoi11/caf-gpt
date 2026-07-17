@@ -9,7 +9,11 @@
  */
 
 export interface ParsedEmailData {
+  envelopeFrom: string;
+  envelopeTo: string;
   from: string;
+  replyTo: string[];
+  replyToPresent: boolean;
   to: string[];
   cc: string[];
   subject: string;

@@ -11,8 +11,12 @@ import type { ParsedEmailData } from "../../src/email/types";
 
 export function createMockParsedEmail(overrides?: Partial<ParsedEmailData>): ParsedEmailData {
   const defaults: ParsedEmailData = {
+    envelopeFrom: "test@forces.gc.ca",
+    envelopeTo: "agent@caf-gpt.com",
     from: "test@forces.gc.ca",
-    to: ["cafgpt@test.com"],
+    replyTo: [],
+    replyToPresent: false,
+    to: ["agent@caf-gpt.com"],
     cc: [],
     subject: "Test Subject",
     headers: {},

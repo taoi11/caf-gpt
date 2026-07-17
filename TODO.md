@@ -24,12 +24,15 @@ None.
   - Likely files: `src/storage/DocumentRetriever.ts`, `src/agents/utils/ToolReadingAgent.ts`, `src/agents/sub-agents/*`, future database migration/seed scripts
   - Done when: Chunking strategy, schema, embedding model, retrieval ranking, citation format, and backfill process are designed before implementation begins.
 
-- [ ] 3. Revisit no-degraded-mode boundaries after memory and email rewrites.
-  - Context: The project rule is no degraded behavior within logic modules. Outer orchestration may intentionally skip optional modules only when explicit, tested, and documented.
-  - Likely files: `AGENTS.md`, `src/agents/UserAgent.ts`, tests around memory failure handling
-  - Done when: Module-level failure contracts are documented in code/tests and orchestration-level optional behavior is named rather than accidental.
-
 ## Log
+
+### 2026-07-16
+
+- Bound signed routes and RFC sender headers to the normalized SMTP principal, made `AUTHORIZED_SENDERS` strictly required/validated, added strict outbound header validation, and changed coordinator/specialist failures to reach the sender-only error boundary without degraded model content.
+- Added a bounded 128-entry/30-day durable at-most-once delivery ledger reserved before parsing from normalized envelope identity plus once-read raw bytes, with a stable header-based SHA-256 fallback for raw-read failures, terminal unknown send outcomes, and stable idempotent memory scheduling. The documented trade-off prefers possible response loss after ambiguous delivery or isolate termination over duplicate successful or error replies.
+- Reduced persistent application logs to safe correlation/stage/domain/count and error class/code metadata; mailbox addresses, subjects, content-bearing fields, model identifiers/output, and exception text are not emitted. Pre-existing SDK inbound observability remains a separate limitation that may contain address and subject fields when platform traces are enabled.
+- Repaired email delivery around a non-throwing inbound boundary: configuration now fails closed, successful responses use direct structured Email Service reply-all with canonical signed routing headers and deterministic authorized recipient filtering, SDK outbound email observability is bypassed, and failures attempt one ledger-guarded swallowed sender-only inbound error reply.
+- Closed the no-degraded-mode boundary review by documenting and testing that core email processing fails cleanly while post-send scheduled memory updates remain independently retryable.
 
 ### 2026-06-15
 
@@ -43,6 +46,6 @@ None.
 
 ### 2026-06-02
 
-- Reworked outbound email for Cloudflare Email Service: added the `send_email` binding, switched normal/error replies to structured `env.EMAIL.send()`, preserved inbound CC parsing, added authorization-allowlisted reply-all CC handling for normal replies, and kept error responses sender-only.
+- Reworked outbound email for Cloudflare Email Service: added the `send_email` binding, preserved inbound CC parsing, added authorization-allowlisted reply-all CC handling for normal replies, and kept error responses sender-only via inbound `AgentEmail.reply()`; the corrected direct-binding send contract is recorded in the 2026-07-16 entry above.
 - Reviewed Cloudflare Workers platform configuration before deploy: moved the compatibility date forward, kept `nodejs_compat` and assets intentionally, made observability sampling explicit, cleaned up generated-versus-manual Env typing, and documented required secrets.
 - Created the project TODO structure for cross-session task tracking.

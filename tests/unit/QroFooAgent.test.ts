@@ -70,7 +70,7 @@ describe("QroFooAgent", () => {
 
     mockEnv = createMockEnv();
 
-    const config = createConfig(undefined);
+    const config = createConfig(mockEnv);
     mockBucket = mockEnv.R2_BUCKET as unknown as MockR2Bucket;
     mockAssets = mockEnv.ASSETS as unknown as MockFetcher;
 
@@ -253,10 +253,9 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
         "Should not be trusted"
       );
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
-      expect(result).not.toContain("Should not be trusted");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "correction budget exhausted"
+      );
     });
 
     it("should fail cleanly when the model exceeds five total read attempts", async () => {
@@ -269,9 +268,9 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
         "vol-2-discipline/ch-107-conduct.md",
       ]);
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "total call limit exceeded"
+      );
     });
 
     it("should fail cleanly when the model reads more than three chapters", async () => {
@@ -284,38 +283,36 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
         "vol-2-discipline/ch-107-conduct.md",
       ]);
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "total call limit exceeded"
+      );
     });
 
     it("should reject answers when the model never reads a chapter", async () => {
       mockModelWithoutReads();
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "did not successfully read"
+      );
     });
 
     it("should reject empty questions before calling the model", async () => {
       const request: ResearchRequest = { question: "" };
 
-      const result = await agent.research(request);
-
-      expect(result).toContain("error");
+      await expect(agent.research(request)).rejects.toThrow("Empty research question");
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should fail cleanly when the QR&O index is missing", async () => {
       await mockBucket.delete("qro/index.md");
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "Document not found"
+      );
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
-    it("should treat missing QR&O chapters as bad calls", async () => {
+    it("should reject when an indexed QR&O chapter cannot be retrieved", async () => {
       mockBucket.seed(
         "qro/index.md",
         `# QR&O Index
@@ -327,9 +324,9 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
         "Recovered after missing chapter"
       );
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("Recovered");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "Document not found"
+      );
     });
   });
 });

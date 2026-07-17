@@ -7,6 +7,7 @@
  * - BaseAppError: Base error class for all application errors
  * - EmailError: Base class for email-related errors
  * - EmailCompositionError: Email composition failures
+ * - AmbiguousEmailDeliveryError: Structured send began but final delivery is unknown
  * - EmailParsingError: Email parsing failures
  * - EmailThreadingError: Email threading failures
  * - EmailValidationError: Email validation failures
@@ -42,6 +43,11 @@ export abstract class EmailError extends BaseAppError {}
 
 export class EmailCompositionError extends EmailError {
   readonly code = "EMAIL_COMPOSITION_ERROR";
+  readonly recoverable = false;
+}
+
+export class AmbiguousEmailDeliveryError extends EmailError {
+  readonly code = "EMAIL_DELIVERY_UNKNOWN";
   readonly recoverable = false;
 }
 

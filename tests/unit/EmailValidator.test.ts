@@ -13,6 +13,7 @@ import { describe, expect, it } from "vitest";
 import type { ParsedEmailData } from "../../src/email/types";
 import {
   isValidEmailAddress,
+  isValidMessageId,
   validateEmailContent,
   validateRecipients,
 } from "../../src/email/utils/EmailValidator";
@@ -44,7 +45,11 @@ describe("EmailValidator", () => {
 
   describe("validateEmailContent", () => {
     const createValidEmail = (): ParsedEmailData => ({
+      envelopeFrom: "sender@forces.gc.ca",
+      envelopeTo: "agent@caf-gpt.com",
       from: "sender@forces.gc.ca",
+      replyTo: [],
+      replyToPresent: false,
       to: ["recipient@forces.gc.ca"],
       subject: "Test Subject",
       body: "Test email body content.",
@@ -140,6 +145,25 @@ describe("EmailValidator", () => {
       expect(result.errors).toContain("Invalid Message-ID format");
     });
 
+    it.each([
+      ["subject", "subject", "Question\r\nBcc: leak@forces.gc.ca"],
+      ["message id", "messageId", "<id@forces.gc.ca>\r\nBcc: leak@forces.gc.ca"],
+      ["in reply to", "inReplyTo", "<id@forces.gc.ca>\u0000"],
+      ["references", "references", "<root@forces.gc.ca>\n<next@forces.gc.ca>"],
+    ])("rejects control characters in %s", (_label, field, value) => {
+      const email = createValidEmail();
+      Object.assign(email, { [field]: value });
+
+      expect(validateEmailContent(email).isValid).toBe(false);
+    });
+
+    it("rejects any malformed References token", () => {
+      const email = createValidEmail();
+      email.references = "<root@forces.gc.ca> malformed <next@forces.gc.ca>";
+
+      expect(validateEmailContent(email).errors).toContain("Invalid References format");
+    });
+
     it("should warn about old emails", () => {
       const email = createValidEmail();
       const oldDate = new Date();
@@ -156,6 +180,27 @@ describe("EmailValidator", () => {
       email.date = futureDate;
       const result = validateEmailContent(email);
       expect(result.warnings).toContain("Email date is in the future");
+    });
+  });
+
+  describe("isValidMessageId", () => {
+    it.each([
+      "<simple@forces.gc.ca>",
+      "<first.last+tag@mail.example>",
+      "<opaque_123@localhost>",
+    ])("accepts practical ASCII Message-ID %s", (value) => {
+      expect(isValidMessageId(value)).toBe(true);
+    });
+
+    it.each([
+      "id@forces.gc.ca",
+      "<bad space@forces.gc.ca>",
+      "<bad@-forces.gc.ca>",
+      "<bad@forces..gc.ca>",
+      " <id@forces.gc.ca>",
+      "<id@forces.gc.ca>\r\nBcc: leak@forces.gc.ca",
+    ])("rejects malformed Message-ID %s", (value) => {
+      expect(isValidMessageId(value)).toBe(false);
     });
   });
 

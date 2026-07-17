@@ -9,7 +9,7 @@
  * - renderPrompt: Renders system prompt placeholders and user input payload
  */
 
-import { formatError, Logger } from "../../Logger";
+import { getSafeErrorMetadata, Logger } from "../../Logger";
 
 interface RenderedPrompt {
   system: string;
@@ -45,7 +45,7 @@ export class PromptManager {
     } catch (error) {
       this.logger.warn("Failed to load prompt from static assets", {
         promptName,
-        ...formatError(error),
+        ...getSafeErrorMetadata(error),
       });
     }
 

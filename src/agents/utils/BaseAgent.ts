@@ -19,7 +19,7 @@ import { createUnified } from "ai-gateway-provider/providers/unified";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
 import { AgentAPIError, AgentTimeoutError, AgentValidationError } from "../../errors";
-import { formatError, Logger } from "../../Logger";
+import { getSafeErrorMetadata, Logger } from "../../Logger";
 import { DocumentRetriever } from "../../storage/DocumentRetriever";
 import { PromptManager } from "./PromptManager";
 
@@ -95,7 +95,7 @@ export abstract class BaseAgent {
     if (!cached) {
       cached = createModel(this.env, model);
       this.modelCache.set(model, cached);
-      this.logger.debug("Created and cached new AI SDK model", { model });
+      this.logger.debug("Created and cached new AI SDK model");
     }
     return cached;
   }
@@ -104,7 +104,6 @@ export abstract class BaseAgent {
   protected async callLangChain(params: LLMCallParams): Promise<string> {
     try {
       this.logger.info("Calling Workers AI via AI SDK", {
-        model: params.model,
         promptName: params.promptName,
       });
 
@@ -124,13 +123,12 @@ export abstract class BaseAgent {
         throw new AgentValidationError("AI SDK returned empty content");
       }
 
-      this.logger.info("AI SDK call successful", { model: params.model });
+      this.logger.info("AI SDK call successful");
       return result.text;
     } catch (error) {
       this.logger.error("AI SDK call failed", {
-        model: params.model,
         promptName: params.promptName,
-        ...formatError(error),
+        ...getSafeErrorMetadata(error),
       });
 
       if (error instanceof AgentValidationError) throw error;
@@ -153,7 +151,6 @@ export abstract class BaseAgent {
   ): Promise<T> {
     try {
       this.logger.info("Calling Workers AI via AI SDK with structured output", {
-        model: params.model,
         promptName: params.promptName,
         schemaName,
       });
@@ -173,17 +170,15 @@ export abstract class BaseAgent {
       });
 
       this.logger.info("AI SDK structured call successful", {
-        model: params.model,
         schemaName,
       });
 
       return result.object;
     } catch (error) {
       this.logger.error("AI SDK structured call failed", {
-        model: params.model,
         promptName: params.promptName,
         schemaName,
-        ...formatError(error),
+        ...getSafeErrorMetadata(error),
       });
 
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -212,7 +207,7 @@ export abstract class BaseAgent {
     this.logger.error(`${operation} failed`, {
       processingTime,
       ...context,
-      ...formatError(error),
+      ...getSafeErrorMetadata(error),
     });
 
     if (error instanceof Error) {

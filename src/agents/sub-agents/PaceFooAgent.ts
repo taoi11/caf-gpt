@@ -8,7 +8,7 @@
  * - generateNote: Generates a feedback note based on rank and context
  */
 
-import { StorageNotFoundError } from "../../errors";
+import { getSafeErrorMetadata } from "../../Logger";
 import { BaseAgent } from "../utils/BaseAgent";
 
 const VALID_RANKS = new Set(["cpl", "mcpl", "sgt", "wo"]);
@@ -22,7 +22,7 @@ export class PaceFooAgent extends BaseAgent {
     const startTime = Date.now();
 
     try {
-      this.logger.info("Starting pacenote generation", { rank });
+      this.logger.info("Starting pacenote generation");
 
       this.validateContext(context);
 
@@ -31,30 +31,17 @@ export class PaceFooAgent extends BaseAgent {
       const response = await this.executeGeneration(effectiveRank, context, competencies, examples);
 
       this.logger.performance("pacenote generation", startTime, {
-        rank,
         contextLength: context.length,
       });
 
       return response;
     } catch (error) {
-      // Handle storage errors gracefully
-      if (error instanceof StorageNotFoundError) {
-        this.logger.warn("Required document not found", { rank, error: error.message });
-        return "I'm sorry, but I couldn't generate the feedback note at this time.";
-      }
-
-      return this.handleAgentError(
-        "pacenote generation",
-        startTime,
-        error,
-        {
-          timeout: "I encountered a timeout while generating the feedback note.",
-          aiGateway:
-            "I encountered an issue with the AI service while generating the feedback note.",
-          generic: "I'm sorry, but I couldn't generate the feedback note at this time.",
-        },
-        { rank, contextLength: context.length }
-      );
+      this.logger.error("pacenote generation failed", {
+        processingTime: Date.now() - startTime,
+        contextLength: context.length,
+        ...getSafeErrorMetadata(error),
+      });
+      throw error;
     }
   }
 
@@ -69,21 +56,16 @@ export class PaceFooAgent extends BaseAgent {
 
   /**
    * Fetches rank-specific competencies and feedback examples concurrently from R2 storage.
-   * Returns the effective rank used (defaults to "cpl" for unknown ranks) alongside documents.
+   * Returns the validated normalized rank alongside both required documents.
    */
   private async fetchRequiredDocuments(
     rank: string
   ): Promise<{ competencies: string; examples: string; effectiveRank: string }> {
     const rankLower = rank.toLowerCase();
-    const isValidRank = VALID_RANKS.has(rankLower);
-    const effectiveRank = isValidRank ? rankLower : "cpl";
-
-    if (!isValidRank) {
-      this.logger.warn("Unknown rank, defaulting to CPL", {
-        providedRank: rank,
-        defaultRank: "cpl",
-      });
+    if (!VALID_RANKS.has(rankLower)) {
+      throw new Error("Unknown rank provided");
     }
+    const effectiveRank = rankLower;
 
     const [competencies, examples] = await Promise.all([
       this.docRetriever.getDocument("paceNote", `${effectiveRank}.md`),

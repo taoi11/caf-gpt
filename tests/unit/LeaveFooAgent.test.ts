@@ -69,7 +69,7 @@ describe("LeaveFooAgent", () => {
     mockGenerateText.mockResolvedValue({ text: "Default response" });
 
     mockEnv = createMockEnv();
-    const config = createConfig(undefined);
+    const config = createConfig(mockEnv);
     mockBucket = mockEnv.R2_BUCKET as unknown as MockR2Bucket;
     mockAssets = mockEnv.ASSETS as unknown as MockFetcher;
 
@@ -143,9 +143,7 @@ Members are entitled to:
         question: "",
       };
 
-      const result = await agent.research(request);
-
-      expect(result).toContain("error");
+      await expect(agent.research(request)).rejects.toThrow("Empty research question");
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
@@ -154,9 +152,7 @@ Members are entitled to:
         question: "   \n\t  ",
       };
 
-      const result = await agent.research(request);
-
-      expect(result).toContain("error");
+      await expect(agent.research(request)).rejects.toThrow("Empty research question");
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
@@ -167,9 +163,7 @@ Members are entitled to:
         question: "How much leave do I get?",
       };
 
-      const result = await agent.research(request);
-
-      expect(result).toContain("cannot access the leave policy document");
+      await expect(agent.research(request)).rejects.toThrow("Document not found");
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
@@ -180,9 +174,7 @@ Members are entitled to:
         question: "Test question",
       };
 
-      const result = await agent.research(request);
-
-      expect(result).toContain("issue with the AI service");
+      await expect(agent.research(request)).rejects.toThrow("AI SDK call failed");
     });
 
     it("should handle timeout errors", async () => {
@@ -192,9 +184,7 @@ Members are entitled to:
         question: "Test question",
       };
 
-      const result = await agent.research(request);
-
-      expect(result).toContain("timeout");
+      await expect(agent.research(request)).rejects.toThrow("timed out");
     });
 
     it("should truncate long questions in logs", async () => {
