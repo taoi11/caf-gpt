@@ -56,12 +56,11 @@ npm install
 ### 2. Configure Secrets
 
 ```bash
-wrangler secret put AUTHORIZED_SENDERS
 wrangler secret put CF_AIG_AUTH
 wrangler secret put EMAIL_SECRET
 ```
 
-`AUTHORIZED_SENDERS` has no production default. It must be nonblank and contain only valid comma-separated domains or exact mailboxes; missing or invalid policy rejects inbound mail before routing or AI work.
+Authorized senders are deliberately code-reviewed in `src/config.ts`: the `forces.gc.ca` domain and the exact mailbox `luffy@luffy.email`. Deployment variables cannot broaden this policy.
 
 ### 3. Deploy
 

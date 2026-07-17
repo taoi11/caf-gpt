@@ -3,7 +3,6 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  *
  * Required secrets (set with: wrangler secret put <NAME>):
- * - AUTHORIZED_SENDERS: Comma-separated list of authorized email domains/addresses
  * - CF_AIG_AUTH: Cloudflare AI Gateway authentication token
  * - EMAIL_SECRET: HMAC secret for signed Agents SDK email reply routing
  */

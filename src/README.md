@@ -49,9 +49,10 @@ src/
 
 ## Environment Variables (Secrets)
 
-- **AUTHORIZED_SENDERS**: Required, nonblank comma-separated list of valid email domains/addresses (e.g., `forces.gc.ca,test@example.com`); there is no fallback allowlist
 - **CF_AIG_AUTH**: Cloudflare AI Gateway authentication token
 - **EMAIL_SECRET**: HMAC secret for signed Agents SDK email reply routing
+
+Inbound sender authorization is a code-reviewed policy in `src/config.ts`: `forces.gc.ca` plus the exact mailbox `luffy@luffy.email`. It has no deployment-variable override.
 
 ## Email Delivery Contract
 

@@ -138,9 +138,6 @@ describe("UserAgent email routing", () => {
     ["missing secret", { EMAIL_SECRET: undefined }],
     ["empty secret", { EMAIL_SECRET: "" }],
     ["missing binding", { EMAIL: undefined }],
-    ["missing authorization", { AUTHORIZED_SENDERS: undefined }],
-    ["blank authorization", { AUTHORIZED_SENDERS: "  " }],
-    ["invalid authorization", { AUTHORIZED_SENDERS: "forces.gc.ca," }],
   ])("fails closed before routing for %s", async (_label, overrides) => {
     const message = createRoutingMessage({
       from: "test@forces.gc.ca",
