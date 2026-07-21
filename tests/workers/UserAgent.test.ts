@@ -553,6 +553,41 @@ describe("UserAgent email processing", () => {
     expect(sent.headers ?? {}).not.toHaveProperty("In-Reply-To");
     expect(sent.headers ?? {}).not.toHaveProperty("References");
   });
+
+  it("excludes an encoded control-character In-Reply-To from the structured error reply", async () => {
+    const sender = "invalid-in-reply-to@forces.gc.ca";
+    const currentMessageId = "<safe-current@forces.gc.ca>";
+    const invalidInReplyTo = "=?utf-8?Q?<forged@attacker.example>=00?=";
+    const stub = getUserAgentStub(sender);
+
+    const sent = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
+      const email = createAgentEmail({
+        envelopeFrom: sender,
+        envelopeTo: "agent@caf-gpt.com",
+        from: sender,
+        to: ["agent@caf-gpt.com"],
+        subject: "Invalid threading",
+        body: "Body",
+        messageId: currentMessageId,
+        headers: { "in-reply-to": invalidInReplyTo },
+      });
+      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
+        processWithPrimeFoo: vi.fn(),
+      };
+
+      await instance.onEmail(email);
+      return bindingSend.mock.calls[0][0];
+    });
+
+    expect(sent.headers).toMatchObject({
+      "In-Reply-To": currentMessageId,
+      References: currentMessageId,
+    });
+    expect(JSON.stringify(sent)).not.toContain("forged@attacker.example");
+    expect(JSON.stringify(sent)).not.toContain(invalidInReplyTo);
+  });
+
   it("handles each repeated invalid delivery independently", async () => {
     const stub = getUserAgentStub("repeated-invalid@forces.gc.ca");
 
