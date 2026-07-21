@@ -41,17 +41,17 @@ interface EmailConfig {
   monitoredAddresses: string[];
 }
 
-// Main model config - handles multi-turn conversations, coordination, and tool use.
+// Orchestrator model config - handles multi-turn conversations, coordination, tool use
 const ORCHESTRATOR_CONFIG: LLMModelConfig = {
-  model: "openai/gpt-5.6-terra",
-  temperature: 0,
+  model: "@cf/moonshotai/kimi-k2.7-code",
+  temperature: 0.1,
   maxOutputTokens: 16384,
 };
 
-// Small model config - focused document Q&A, selection, and generation.
+// Specialist model config - focused tasks: document Q&A, selection, generation
 const SPECIALIST_CONFIG: LLMModelConfig = {
-  model: "openai/gpt-5.6-luna",
-  temperature: 0,
+  model: "google-ai-studio/gemini-3.1-flash-lite-preview",
+  temperature: 0.1,
   maxOutputTokens: 16384,
 };
 

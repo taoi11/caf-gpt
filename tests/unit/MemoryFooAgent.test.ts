@@ -112,7 +112,7 @@ describe("MemoryFooAgent", () => {
     expect(Object.keys(lastCall?.tools ?? {})).toEqual(["update_memory", "leave_memory_unchanged"]);
   });
 
-  it("should pass high reasoning provider options for the small model", async () => {
+  it("should pass Cloudflare Unified flex provider options for the small model", async () => {
     setMockMemoryToolCall("update_memory", { content: "New memory content" });
 
     const result = await agent.updateMemory("", "Question", "Answer");
@@ -122,7 +122,7 @@ describe("MemoryFooAgent", () => {
     const lastCall = mockGenerateText.mock.calls.at(-1)?.[0];
     expect(lastCall?.providerOptions).toMatchObject({
       Unified: {
-        reasoningEffort: "high",
+        service_tier: "flex",
       },
     });
   });
