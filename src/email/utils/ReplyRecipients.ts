@@ -1,13 +1,12 @@
 /**
  * src/email/utils/ReplyRecipients.ts
  *
- * Deterministic recipient selection for authorized successful email replies
+ * Outlook-style recipient selection for successful email replies
  *
  * Top-level declarations:
- * - RecipientFilteringSummary: Counts excluded CC candidates without retaining addresses
- * - ResolvedReplyRecipients: Safe primary and CC recipients plus selection metadata
- * - resolveReplyRecipients: Selects an authorized primary recipient and filtered reply-all CCs
- * - isAuthorizedEmailAddress: Checks an address against exact email and domain allowlists
+ * - ResolvedReplyRecipients: Ordered primary and carbon-copy recipients
+ * - resolveReplyRecipients: Selects and filters reply-all recipients
+ * - isAuthorizedEmailAddress: Checks an address against the inbound authorization policy
  */
 
 import type { AppConfig, AuthorizationConfig } from "../../config";
@@ -19,97 +18,39 @@ import { isValidEmailAddress } from "./EmailValidator";
 const CAF_GPT_SERVICE_DOMAIN = "caf-gpt.com";
 const MAX_TOTAL_RECIPIENTS = 50;
 
-export interface RecipientFilteringSummary {
-  malformed: number;
-  unauthorized: number;
-  duplicate: number;
-  primaryRecipient: number;
-  envelopeSender: number;
-  headerFrom: number;
-  cafGpt: number;
-  configuredSelf: number;
-}
-
 export interface ResolvedReplyRecipients {
-  to: string;
+  to: string[];
   cc: string[];
-  primarySource: "reply-to" | "from";
-  filteringSummary: RecipientFilteringSummary;
 }
 
-/** Selects an authorized primary recipient and filtered reply-all CCs. */
+/** Selects valid Reply-To mailboxes, or From, and preserves Outlook-style reply-all order. */
 export function resolveReplyRecipients(
   email: ParsedEmailData,
   config: AppConfig
 ): ResolvedReplyRecipients {
-  const primarySource = email.replyToPresent ? "reply-to" : "from";
-  const primaryCandidates = email.replyToPresent ? email.replyTo : [email.from];
-
-  if (primaryCandidates.length !== 1) {
-    throw new EmailValidationError("Successful reply requires exactly one primary mailbox");
-  }
-
-  const primaryRecipient = normalizeEmailAddress(primaryCandidates[0]);
-  const envelopeSender = normalizeEmailAddress(email.envelopeFrom);
-  const headerFrom = normalizeEmailAddress(email.from);
-  if (headerFrom !== envelopeSender) {
-    throw new EmailValidationError("RFC From must match the SMTP envelope sender");
-  }
-  if (primaryRecipient !== envelopeSender) {
-    throw new EmailValidationError("Reply-To must match the SMTP envelope sender");
-  }
-  if (!isValidEmailAddress(primaryRecipient)) {
-    throw new EmailValidationError("Successful reply primary mailbox is malformed");
-  }
-  if (isCafGptAddress(primaryRecipient) || isConfiguredSelfAddress(primaryRecipient, config)) {
-    throw new EmailValidationError("Successful reply primary mailbox is a service address");
-  }
-  if (!isAuthorizedEmailAddress(primaryRecipient, config.authorization)) {
-    throw new EmailValidationError("Successful reply primary mailbox is not authorized");
-  }
-
-  const summary = createFilteringSummary();
-  const cc: string[] = [];
-  const seen = new Set<string>();
-  const configuredSelf = new Set(
+  const selfAddresses = new Set(
     [config.email.agentFromEmail, ...config.email.monitoredAddresses]
       .map((address) => normalizeEmailAddress(address))
       .filter(Boolean)
   );
+  const to = collectPrimaryRecipients(email, selfAddresses);
+  const excluded = new Set([
+    ...to,
+    normalizeEmailAddress(email.envelopeFrom),
+    normalizeEmailAddress(email.from),
+  ]);
+  const seen = new Set<string>();
+  const cc: string[] = [];
 
   for (const candidate of [...email.to, ...email.cc]) {
     const normalized = normalizeEmailAddress(candidate);
-
-    if (!normalized || !isValidEmailAddress(normalized)) {
-      summary.malformed++;
-      continue;
-    }
-    if (isCafGptAddress(normalized)) {
-      summary.cafGpt++;
-      continue;
-    }
-    if (!isAuthorizedEmailAddress(normalized, config.authorization)) {
-      summary.unauthorized++;
-      continue;
-    }
-    if (normalized === primaryRecipient) {
-      summary.primaryRecipient++;
-      continue;
-    }
-    if (normalized === envelopeSender) {
-      summary.envelopeSender++;
-      continue;
-    }
-    if (normalized === headerFrom) {
-      summary.headerFrom++;
-      continue;
-    }
-    if (configuredSelf.has(normalized)) {
-      summary.configuredSelf++;
-      continue;
-    }
-    if (seen.has(normalized)) {
-      summary.duplicate++;
+    if (
+      !normalized ||
+      !isValidEmailAddress(normalized) ||
+      isServiceAddress(normalized, selfAddresses) ||
+      excluded.has(normalized) ||
+      seen.has(normalized)
+    ) {
       continue;
     }
 
@@ -117,16 +58,16 @@ export function resolveReplyRecipients(
     cc.push(normalized);
   }
 
-  if (cc.length + 1 > MAX_TOTAL_RECIPIENTS) {
+  if (to.length + cc.length > MAX_TOTAL_RECIPIENTS) {
     throw new EmailValidationError(
       `Successful reply exceeds the ${MAX_TOTAL_RECIPIENTS}-recipient service limit`
     );
   }
 
-  return { to: primaryRecipient, cc, primarySource, filteringSummary: summary };
+  return { to, cc };
 }
 
-/** Checks an address against exact email and domain allowlists. */
+/** Checks an address against exact email and domain inbound authorization rules. */
 export function isAuthorizedEmailAddress(
   email: string,
   authorization: AuthorizationConfig
@@ -149,36 +90,46 @@ export function isAuthorizedEmailAddress(
   );
 }
 
-/** Creates zeroed safe filtering counters. */
-function createFilteringSummary(): RecipientFilteringSummary {
-  return {
-    malformed: 0,
-    unauthorized: 0,
-    duplicate: 0,
-    primaryRecipient: 0,
-    envelopeSender: 0,
-    headerFrom: 0,
-    cafGpt: 0,
-    configuredSelf: 0,
-  };
+/** Collects unique valid Reply-To recipients and falls back to the RFC From mailbox. */
+function collectPrimaryRecipients(email: ParsedEmailData, selfAddresses: Set<string>): string[] {
+  const replyTo = collectUniqueValidAddresses(email.replyTo, selfAddresses);
+  if (replyTo.length > 0) {
+    return replyTo;
+  }
+
+  const from = collectUniqueValidAddresses([email.from], selfAddresses);
+  if (from.length === 0) {
+    throw new EmailValidationError("Successful reply requires a valid non-service mailbox");
+  }
+
+  return from;
 }
 
-/** Checks whether an address belongs to the CAF-GPT service domain. */
-function isCafGptAddress(email: string): boolean {
-  const normalized = normalizeEmailAddress(email);
-  const domain = normalized.slice(normalized.lastIndexOf("@") + 1);
+/** Normalizes and filters a mailbox list while preserving first occurrence order. */
+function collectUniqueValidAddresses(candidates: string[], selfAddresses: Set<string>): string[] {
+  const addresses: string[] = [];
+  const seen = new Set<string>();
 
-  return domain === CAF_GPT_SERVICE_DOMAIN;
+  for (const candidate of candidates) {
+    const normalized = normalizeEmailAddress(candidate);
+    if (
+      !normalized ||
+      !isValidEmailAddress(normalized) ||
+      isServiceAddress(normalized, selfAddresses) ||
+      seen.has(normalized)
+    ) {
+      continue;
+    }
+
+    seen.add(normalized);
+    addresses.push(normalized);
+  }
+
+  return addresses;
 }
 
-/** Checks whether an address is an exact configured sender or monitored alias. */
-function isConfiguredSelfAddress(email: string, config: AppConfig): boolean {
-  const normalized = normalizeEmailAddress(email);
-  const configuredAddresses = new Set(
-    [config.email.agentFromEmail, ...config.email.monitoredAddresses].map((address) =>
-      normalizeEmailAddress(address)
-    )
-  );
-
-  return configuredAddresses.has(normalized);
+/** Checks whether an address is a configured identity or belongs to CAF-GPT's service domain. */
+function isServiceAddress(email: string, selfAddresses: Set<string>): boolean {
+  const domain = email.slice(email.lastIndexOf("@") + 1);
+  return domain === CAF_GPT_SERVICE_DOMAIN || selfAddresses.has(email);
 }

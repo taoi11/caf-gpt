@@ -36,11 +36,11 @@ wrangler types --env-interface CloudflareBindings  # Generate TypeScript types
 Emails are processed through **Cloudflare Email Workers**:
 
 1. **Inbound Trigger**: Worker `email()` handler in `src/index.ts`.
-2. **Boundary and Validation**: The top-level handler fails closed when `EMAIL_SECRET` or the `EMAIL` binding is unavailable, then `createUserAgentResolver()` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
-3. **Delivery Reservation**: `UserAgent` reads raw bytes once and reserves the normalized-envelope-plus-raw SHA-256 fingerprint before parsing, with a header-based fallback when raw reading fails.
-4. **Parsing**: `UserAgent` parses the retained MIME bytes with `postal-mime` into `ParsedEmailData`.
+2. **Boundary and Validation**: The top-level handler fails closed when the `EMAIL` binding is unavailable, then `createUserAgentResolver()` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
+3. **Sender Routing**: Every accepted message routes directly to the `UserAgent` keyed by its normalized SMTP envelope sender; inbound agent-routing headers are ignored.
+4. **Parsing**: `UserAgent` reads and parses the MIME message with `postal-mime` into `ParsedEmailData`.
 5. **Agent Processing**: `UserAgent` routes parsed email context to `AgentCoordinator.processWithPrimeFoo()`.
-6. **Reply**: Successful responses use `signAgentHeaders()` and the structured `EMAIL` binding directly, with principal-bound signed routing headers, validated threading headers, authorization-filtered reply-all recipients, and the durable at-most-once ledger. Deterministic pre-send errors use exactly one ledger-guarded sender-only inbound `AgentEmail.reply()`; ambiguous structured-send failures never send a conflicting fallback reply.
+6. **Reply**: Successful responses use the official Agents SDK `sendEmail()` helper with Outlook-style reply-all recipients and validated threading headers. Pre-send processing errors use one generic sender-only `replyToEmail()` response; failures after `sendEmail()` begins do not trigger a conflicting fallback reply.
 
 ### AI SDK Tool-Calling Workflow
 
@@ -76,7 +76,7 @@ Business logic modules must be designed to either succeed completely or fail cle
 - The system must catch the failure and respond to the user with a standardized error email using the pre-defined error templates.
 - A module should never fallback to providing partial, unverified, or degraded responses within that module's own contract.
 - Outer orchestration can intentionally skip optional modules when that behavior is explicit, tested, and documented. For example, memory retrieval may fail without preventing the core email response path if the response itself remains complete and verified.
-- The top-level email handler and `UserAgent.onEmail()` own the inbound SMTP failure boundary. They log content-free metadata, attempt the permitted rejection or sender-only error reply, and return without allowing processing or reply failures to escape. Once a structured send begins, failures remain terminal/unknown and do not issue an inbound error reply. Scheduled memory work remains retryable and may throw a generic content-free error outside the inbound invocation.
+- The top-level email handler and `UserAgent.onEmail()` own the inbound SMTP failure boundary. They record basic outcome logs, attempt the permitted rejection or sender-only error reply, and return without allowing processing or reply failures to escape. Once the normal reply attempt begins, failures do not issue an inbound error reply. Scheduled memory work remains retryable and may throw a generic error outside the inbound invocation.
 
 ## Storage & Document Retrieval
 
@@ -155,7 +155,7 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 
 ### Cloudflare Email Binding
 
-The `EMAIL` `send_email` binding permits only `agent@caf-gpt.com` and `pacenote@caf-gpt.com` as senders. It intentionally has no configured destination restriction because successful replies can include multiple authorized recipients. `EMAIL_SECRET` signs the Agents SDK routing headers.
+The `EMAIL` `send_email` binding permits only `agent@caf-gpt.com` and `pacenote@caf-gpt.com` as senders. It intentionally has no configured destination restriction because Outlook-style reply-all can include valid external recipients.
 
 ## Email Processing Details
 
@@ -176,12 +176,12 @@ The `EMAIL` `send_email` binding permits only `agent@caf-gpt.com` and `pacenote@
 
 ### Email Replies
 
-- Successful replies generate canonical routing headers with the supported `agents/email` `signAgentHeaders()` export and call `env.EMAIL.send()` directly; do not use `Agent.sendEmail()` because its SDK observability includes address and subject fields
-- RFC `From` and any single `Reply-To` must equal the normalized SMTP envelope sender; delegated header identity requires a future explicit server-side ACL
-- Reply-all CCs preserve original RFC `To` then `Cc` order, never include `Bcc`, and remove malformed, unauthorized, duplicate, sender, self, and all CAF-GPT-domain addresses
+- Successful replies use the official Agents SDK `Agent.sendEmail()` helper; generic sender-only error replies use `Agent.replyToEmail()`
+- Reply-all uses every valid, unique `Reply-To` mailbox as `To`, falling back to RFC `From` when no valid `Reply-To` mailbox remains
+- Reply-all CCs preserve original RFC `To` then `Cc` order, never include `Bcc`, and remove malformed, duplicate, primary, sender, self, and all CAF-GPT-domain addresses; valid external recipients are retained
 - The combined structured recipient limit is 50; exceeding it fails the successful response rather than truncating recipients
-- Every delivery reserves its normalized-envelope-plus-raw-byte SHA-256 fingerprint before parsing, validation, and recipient resolution; raw-read failures reserve a stable header-based fallback, and the ledger remains bounded to 128 rows/30 days
-- Deterministic pre-send error responses remain exactly one ledger-guarded plain-text, sender-only `AgentEmail.reply()` to the authorized envelope sender; error-reply failures are terminal, logged without content, and swallowed
+- Processing failures before `sendEmail()` begins receive one generic plain-text, sender-only `replyToEmail()` response; error-reply failures are logged and swallowed
+- Once `sendEmail()` is invoked, any failure is logged and processing stops without a fallback reply
 - Threading headers preserve valid `In-Reply-To` and `References`; malformed error-path threading values are omitted
 - Quoted content formatted using `EmailComposer.formatQuotedContent()`
 

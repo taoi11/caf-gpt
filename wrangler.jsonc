@@ -4,7 +4,6 @@
  *
  * Required secrets (set with: wrangler secret put <NAME>):
  * - CF_AIG_AUTH: Cloudflare AI Gateway authentication token
- * - EMAIL_SECRET: HMAC secret for signed Agents SDK email reply routing
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -29,11 +28,6 @@
       "enabled": true,
       "invocation_logs": true,
       "head_sampling_rate": 1
-    },
-    "traces": {
-      "enabled": true,
-      "persist": true,
-      "head_sampling_rate": 0.05
     }
   },
   "r2_buckets": [

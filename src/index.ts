@@ -5,7 +5,7 @@
  *
  * Top-level functions:
  * - UserAgent: Durable Object-backed per-user email agent
- * - createUserAgentResolver: Creates the Agents SDK email resolver for direct and signed reply routing
+ * - createUserAgentResolver: Creates the sender-keyed Agents SDK email resolver
  * - isAuthorizedSender: Checks configured sender allow list
  * - isMonitoredRecipient: Checks monitored recipient addresses
  * - getEmailDomain: Extracts safe normalized sender-domain metadata
@@ -16,7 +16,7 @@
  */
 
 import { routeAgentEmail } from "agents";
-import { createSecureReplyEmailResolver, type EmailResolver } from "agents/email";
+import type { EmailResolver } from "agents/email";
 import { getUserAgentId, UserAgent } from "./agents/UserAgent";
 import { createConfig } from "./config";
 import { normalizeEmailAddress } from "./email/utils/EmailNormalizer";
@@ -25,29 +25,11 @@ import { getSafeErrorMetadata, Logger } from "./Logger";
 
 export { UserAgent };
 
-/** Creates the Agents SDK email resolver for direct and signed reply routing. */
+/** Creates the Agents SDK email resolver for authorized sender-keyed routing. */
 export function createUserAgentResolver(env: Env, config = createConfig(env)): EmailResolver<Env> {
   const logger = Logger.getInstance();
-  const secureReplyResolver = createSecureReplyEmailResolver<Env>(env.EMAIL_SECRET, {
-    onInvalidSignature: (emailMessage, reason) => {
-      if (reason === "missing_headers") {
-        logger.warn("Incomplete signed email routing headers", {
-          senderDomain: getEmailDomain(emailMessage.from),
-          receivingDomain: getEmailDomain(emailMessage.to),
-          reason,
-        });
-        return;
-      }
 
-      logger.warn("Invalid signed email routing headers", {
-        senderDomain: getEmailDomain(emailMessage.from),
-        receivingDomain: getEmailDomain(emailMessage.to),
-        reason,
-      });
-    },
-  });
-
-  return async (emailMessage, resolverEnv) => {
+  return async (emailMessage) => {
     const senderEmail = normalizeEmailAddress(emailMessage.from);
     if (!isAuthorizedSender(senderEmail, config)) {
       logger.info("Email ignored - sender not authorized", {
@@ -64,27 +46,6 @@ export function createUserAgentResolver(env: Env, config = createConfig(env)): E
         receivingDomain: getEmailDomain(recipientEmail),
       });
       return null;
-    }
-
-    const signedHeaderNames = ["x-agent-name", "x-agent-id", "x-agent-sig", "x-agent-sig-ts"];
-    const hasAnySignedHeader = signedHeaderNames.some((name) => emailMessage.headers.has(name));
-
-    if (hasAnySignedHeader) {
-      const signedRoute = await secureReplyResolver(emailMessage, resolverEnv);
-      const expectedAgentId = getUserAgentId(senderEmail);
-      if (
-        !signedRoute ||
-        signedRoute.agentName !== "user-agent" ||
-        signedRoute.agentId !== expectedAgentId
-      ) {
-        logger.warn("Signed email route rejected", {
-          senderDomain: getEmailDomain(senderEmail),
-          receivingDomain: getEmailDomain(recipientEmail),
-          reason: signedRoute ? "principal_mismatch" : "invalid_headers",
-        });
-        return null;
-      }
-      return signedRoute;
     }
 
     return {
@@ -187,22 +148,16 @@ async function email(
   env: Env,
   _ctx: ExecutionContext
 ): Promise<void> {
-  const startedAt = Date.now();
-  const correlationId = crypto.randomUUID();
   const logger = Logger.getInstance();
   const metadata = {
-    correlationId,
     senderDomain: getEmailDomain(message.from),
     receivingDomain: getEmailDomain(message.to),
   };
 
-  if (!env.EMAIL_SECRET?.trim() || !env.EMAIL) {
+  if (!env.EMAIL) {
     logger.error("Email service configuration unavailable", {
       ...metadata,
-      stage: "configuration",
-      missingEmailSecret: !env.EMAIL_SECRET?.trim(),
       missingEmailBinding: !env.EMAIL,
-      elapsedMs: Date.now() - startedAt,
     });
     rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
     return;
@@ -214,9 +169,7 @@ async function email(
   } catch (error) {
     logger.error("Email authorization configuration unavailable", {
       ...metadata,
-      stage: "configuration",
       ...getSafeErrorMetadata(error),
-      elapsedMs: Date.now() - startedAt,
     });
     rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
     return;
@@ -228,7 +181,6 @@ async function email(
       onNoRoute: (emailMessage) => {
         logger.warn("Email rejected - no UserAgent route", {
           ...metadata,
-          stage: "routing",
         });
         rejectEmailSafely(
           emailMessage,
@@ -243,10 +195,8 @@ async function email(
       error instanceof Error ? (error as Error & { code?: unknown }).code : undefined;
     logger.error("Top-level email routing failed", {
       ...metadata,
-      stage: "routing",
       errorName: error instanceof Error ? error.name : "UnknownError",
       ...(typeof platformCode === "string" ? { errorCode: platformCode } : {}),
-      elapsedMs: Date.now() - startedAt,
     });
     rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
   }

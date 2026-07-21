@@ -4,26 +4,18 @@
  * Durable Cloudflare Agents SDK email agent for per-user CAF-GPT processing
  *
  * Top-level declarations:
- * - AGENT_EMAIL_ROUTING_NAME: Agents SDK routing name used in signed reply headers
  * - UserAgentState: Persistent per-user state stored by the Agents runtime
  * - MemoryUpdateTask: Scheduled memory update payload
- * - DeliveryLedgerStatus: Durable at-most-once delivery states
- * - EmailProcessingStage: Safe processing-stage labels used in structured logs
  * - UserAgent: Durable Object-backed email agent with AI response and memory scheduling
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
  */
 
 import { Agent } from "agents";
-import { type AgentEmail, signAgentHeaders } from "agents/email";
+import type { AgentEmail } from "agents/email";
 import PostalMime, { type Address } from "postal-mime";
 import type { AppConfig } from "../config";
 import { createConfig } from "../config";
-import {
-  EmailComposer,
-  HtmlEmailComposer,
-  InboundReplyComposer,
-  type InboundReplyMessage,
-} from "../email/components";
+import { EmailComposer, HtmlEmailComposer } from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
@@ -35,16 +27,13 @@ import {
   type ResolvedReplyRecipients,
   resolveReplyRecipients,
 } from "../email/utils/ReplyRecipients";
-import { AmbiguousEmailDeliveryError, EmailValidationError } from "../errors";
+import { EmailValidationError } from "../errors";
 import { getSafeErrorMetadata, Logger } from "../Logger";
 import { AgentCoordinator } from "./AgentCoordinator";
 import { MemoryFooAgent } from "./sub-agents";
 
-const AGENT_EMAIL_ROUTING_NAME = "user-agent";
 const MEMORY_MAX_CONTENT_LENGTH = 4000;
 const REFERENCES_MAX_LENGTH = 1000;
-const DELIVERY_LEDGER_MAX_ENTRIES = 128;
-const DELIVERY_LEDGER_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 export interface UserAgentState {
   memory: string;
@@ -53,30 +42,7 @@ export interface UserAgentState {
 interface MemoryUpdateTask {
   emailContext: string;
   agentReply: string;
-  deliveryFingerprint: string;
 }
-
-type DeliveryLedgerStatus =
-  | "processing"
-  | "no_response"
-  | "send_started"
-  | "sent"
-  | "send_unknown"
-  | "error_reply_started"
-  | "error_replied"
-  | "error_reply_unknown";
-
-type EmailProcessingStage =
-  | "configuration"
-  | "raw-read"
-  | "deduplication"
-  | "parsing"
-  | "suppression"
-  | "validation"
-  | "recipient-resolution"
-  | "ai"
-  | "successful-send"
-  | "memory-schedule";
 
 /** Converts a normalized sender email into a stable Agent instance id. */
 export function getUserAgentId(senderEmail: string): string {
@@ -86,140 +52,67 @@ export function getUserAgentId(senderEmail: string): string {
 /** Durable Object-backed email agent with AI response and memory scheduling. */
 export class UserAgent extends Agent<Env, UserAgentState> {
   initialState: UserAgentState = { memory: "" };
+  override observability = undefined;
 
   private readonly logger = Logger.getInstance();
   private readonly emailComposer = new EmailComposer();
   private readonly htmlEmailComposer = new HtmlEmailComposer();
-  private readonly inboundReplyComposer = new InboundReplyComposer();
   private agentCoordinator?: AgentCoordinator;
-  private deliveryLedgerReady = false;
+
+  /** Rethrows SDK errors without the default detailed console output. */
+  override onError(connectionOrError: unknown, error?: unknown): never {
+    throw error ?? connectionOrError;
+  }
 
   /** Handles inbound email routed by the Agents SDK. */
   async onEmail(email: AgentEmail): Promise<void> {
-    const startedAt = Date.now();
-    const correlationId = crypto.randomUUID();
-    let stage: EmailProcessingStage = "configuration";
     let config: AppConfig | undefined;
     let parsedEmail = this.buildEnvelopeEmailData(email);
-    let deliveryFingerprint: string | undefined;
+    let sendAttempted = false;
 
     try {
       config = createConfig(this.env);
       parsedEmail = this.buildFallbackEmailData(email);
-
-      stage = "raw-read";
-      let rawEmail: Uint8Array;
-      try {
-        rawEmail = await email.getRaw();
-        deliveryFingerprint = await this.createRawDeliveryFingerprint(email, rawEmail);
-      } catch (error) {
-        deliveryFingerprint = await this.createFallbackDeliveryFingerprint(email);
-        stage = "deduplication";
-        if (!this.reserveDelivery(deliveryFingerprint)) {
-          this.logDuplicateDelivery(parsedEmail, correlationId, stage);
-          return;
-        }
-        throw error;
-      }
-
-      stage = "deduplication";
-      if (!this.reserveDelivery(deliveryFingerprint)) {
-        this.logDuplicateDelivery(parsedEmail, correlationId, stage);
-        return;
-      }
-
-      stage = "parsing";
+      const rawEmail = await email.getRaw();
       parsedEmail = await this.parseEmail(email, rawEmail);
 
-      stage = "suppression";
       if (this.guardAgainstSelfLoop(parsedEmail, config)) {
-        this.transitionDelivery(deliveryFingerprint, "processing", "no_response");
         return;
       }
 
       const autoReplyDetection = detectAutoReply(parsedEmail);
       if (autoReplyDetection.ignore) {
         this.logger.info("Ignoring auto-reply or bounce email", {
-          correlationId,
-          stage,
-          senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-          receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
           reasonCount: autoReplyDetection.reasons.length,
-          elapsedMs: Date.now() - startedAt,
         });
-        this.transitionDelivery(deliveryFingerprint, "processing", "no_response");
         return;
       }
 
-      stage = "validation";
       this.validateEmail(parsedEmail);
-
-      stage = "recipient-resolution";
       const recipients = resolveReplyRecipients(parsedEmail, config);
-      this.logger.info("Successful reply recipients resolved", {
-        correlationId,
-        stage,
-        senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-        receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
-        primaryRecipientSource: recipients.primarySource,
-        toCount: 1,
-        ccCount: recipients.cc.length,
-        filteredCounts: recipients.filteringSummary,
-      });
-
       const emailContext = this.buildEmailContext(parsedEmail);
-      stage = "ai";
       const response = await this.getAIResponse(emailContext, config);
 
-      if (response.shouldRespond && response.content?.trim()) {
-        stage = "successful-send";
-        await this.sendReply(
-          parsedEmail,
-          response.content,
-          config,
-          recipients,
-          deliveryFingerprint,
-          correlationId
-        );
-        stage = "memory-schedule";
-        await this.scheduleMemoryUpdate(emailContext, response.content, deliveryFingerprint);
-      } else {
-        this.transitionDelivery(deliveryFingerprint, "processing", "no_response");
+      if (!response.shouldRespond || !response.content?.trim()) {
+        this.logger.info("Inbound email completed without a reply");
+        return;
       }
 
-      this.logger.info("Inbound email processing completed", {
-        correlationId,
-        stage,
-        senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-        receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
-        elapsedMs: Date.now() - startedAt,
+      await this.sendReply(parsedEmail, response.content, config, recipients, () => {
+        sendAttempted = true;
+      });
+      await this.scheduleMemoryUpdate(emailContext, response.content);
+      this.logger.info("Inbound email reply accepted", {
+        toCount: recipients.to.length,
+        ccCount: recipients.cc.length,
       });
     } catch (error) {
-      this.logProcessingFailure(error, parsedEmail, correlationId, stage, startedAt);
-      if (error instanceof AmbiguousEmailDeliveryError) {
+      this.logger.error("Email processing failed", getSafeErrorMetadata(error));
+      if (sendAttempted || !config) {
         return;
       }
-      if (!config || !deliveryFingerprint) {
-        return;
-      }
-      try {
-        await this.handleProcessingError(
-          email,
-          error,
-          parsedEmail,
-          config,
-          correlationId,
-          deliveryFingerprint
-        );
-      } catch (boundaryError) {
-        this.logger.error("Error fallback boundary failed", {
-          correlationId,
-          stage: "error-reply",
-          senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-          receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
-          ...getSafeErrorMetadata(boundaryError),
-        });
-      }
+
+      await this.handleProcessingError(email, error, parsedEmail, config);
     }
   }
 
@@ -283,42 +176,10 @@ export class UserAgent extends Agent<Env, UserAgentState> {
     };
   }
 
-  /** Logs duplicate suppression without exposing fingerprint inputs or content. */
-  private logDuplicateDelivery(
-    parsedEmail: ParsedEmailData,
-    correlationId: string,
-    stage: EmailProcessingStage
-  ): void {
-    this.logger.info("Duplicate inbound delivery suppressed", {
-      correlationId,
-      stage,
-      senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-      receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
-    });
-  }
-
-  /** Logs processing failures with consistent context. */
-  private logProcessingFailure(
-    error: unknown,
-    parsedEmail: ParsedEmailData,
-    correlationId: string,
-    stage: EmailProcessingStage,
-    startedAt: number
-  ): void {
-    this.logger.error("Email processing failed", {
-      correlationId,
-      stage,
-      senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-      receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
-      elapsedMs: Date.now() - startedAt,
-      ...getSafeErrorMetadata(error),
-    });
-  }
-
   /** Checks if email is from CAF-GPT itself to prevent loops. */
   private guardAgainstSelfLoop(parsedEmail: ParsedEmailData, config: AppConfig): boolean {
     if (!parsedEmail.envelopeFrom) {
-      this.logger.warn("Email sender is missing, ignoring email to prevent processing errors");
+      this.logger.warn("Email sender is missing, ignoring email");
       return true;
     }
 
@@ -330,22 +191,18 @@ export class UserAgent extends Agent<Env, UserAgentState> {
     );
 
     if (selfAddresses.has(normalizedFrom)) {
-      this.logger.info("Ignoring email from self", {
-        senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-        receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
-      });
+      this.logger.info("Ignoring email from self");
       return true;
     }
     return false;
   }
 
-  /** Validates inbound content before recipient policy handles To/Cc candidates. */
+  /** Validates inbound content before recipient policy handles reply-all candidates. */
   private validateEmail(parsedEmail: ParsedEmailData): void {
     const contentValidation = validateEmailContent(parsedEmail);
     if (!contentValidation.isValid) {
       this.logger.error("Email content validation failed", {
         errorCount: contentValidation.errors.length,
-        senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
       });
       throw new EmailValidationError("Inbound email content failed validation");
     }
@@ -375,90 +232,51 @@ ${parsedEmail.body}`;
     config: AppConfig
   ): Promise<{ shouldRespond: boolean; content?: string }> {
     if (!this.agentCoordinator) {
-      this.logger.info("Creating new AgentCoordinator instance");
       this.agentCoordinator = await AgentCoordinator.create(this.env, config);
     }
     return await this.agentCoordinator.processWithPrimeFoo(emailContext, this.state.memory);
   }
 
-  /** Sends a normal signed reply through the structured Email Service binding. */
+  /** Sends a normal reply through the Agents SDK and Email Service binding. */
   private async sendReply(
     parsedEmail: ParsedEmailData,
     content: string,
     config: AppConfig,
     recipients: ResolvedReplyRecipients,
-    deliveryFingerprint: string,
-    correlationId: string
+    markSendAttempted: () => void
   ): Promise<void> {
     const quotedContent = this.emailComposer.formatQuotedContent(parsedEmail);
     const replyText = htmlToText(content);
-    const fullTextContent = (replyText ? replyText : content.trim()) + quotedContent;
+    const fullTextContent = (replyText || content.trim()) + quotedContent;
     const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());
-    const subject = parsedEmail.subject.startsWith("Re:")
+    const subject = /^re:/i.test(parsedEmail.subject)
       ? parsedEmail.subject
       : `Re: ${parsedEmail.subject}`;
     const threadingOptions = this.buildThreadingOptions(parsedEmail);
     const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
-    const signedHeaders = await signAgentHeaders(
-      this.env.EMAIL_SECRET,
-      AGENT_EMAIL_ROUTING_NAME,
-      this.name
-    );
-    const headers = {
-      ...threadingOptions.headers,
-      ...(threadingOptions.inReplyTo ? { "In-Reply-To": threadingOptions.inReplyTo } : {}),
-      ...signedHeaders,
-    };
 
-    if (!this.transitionDelivery(deliveryFingerprint, "processing", "send_started")) {
-      throw new AmbiguousEmailDeliveryError("Delivery ledger was not sendable");
-    }
-
-    try {
-      await this.env.EMAIL.send({
-        to: recipients.to,
-        ...(recipients.cc.length > 0 ? { cc: recipients.cc } : {}),
-        from: { email: replyFromAddress, name: "CAF-GPT" },
-        replyTo: replyFromAddress,
-        subject,
-        text: fullTextContent,
-        html: htmlContent,
-        headers,
-      });
-
-      this.transitionDelivery(deliveryFingerprint, "send_started", "sent");
-
-      this.logger.info("Reply accepted by Email Service", {
-        correlationId,
-        stage: "successful-send",
-        senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-        receivingDomain: this.getEmailDomain(replyFromAddress),
-        toCount: 1,
-        ccCount: recipients.cc.length,
-      });
-    } catch (error) {
-      this.transitionDelivery(deliveryFingerprint, "send_started", "send_unknown");
-      this.logger.error("Failed to send reply via Email Service", {
-        correlationId,
-        stage: "successful-send",
-        senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-        ...getSafeErrorMetadata(error),
-      });
-      throw new AmbiguousEmailDeliveryError("Structured successful reply outcome is unknown");
-    }
+    markSendAttempted();
+    await this.sendEmail({
+      binding: this.env.EMAIL,
+      to: recipients.to,
+      ...(recipients.cc.length > 0 ? { cc: recipients.cc } : {}),
+      from: { email: replyFromAddress, name: "CAF-GPT" },
+      replyTo: replyFromAddress,
+      subject,
+      text: fullTextContent,
+      html: htmlContent,
+      inReplyTo: threadingOptions.inReplyTo,
+      headers: threadingOptions.headers,
+    });
   }
 
   /** Schedules a durable memory update after the user-visible reply succeeds. */
-  private async scheduleMemoryUpdate(
-    emailContext: string,
-    agentReply: string,
-    deliveryFingerprint: string
-  ): Promise<void> {
+  private async scheduleMemoryUpdate(emailContext: string, agentReply: string): Promise<void> {
     try {
       await this.schedule<MemoryUpdateTask>(
         1,
         "runMemoryUpdate",
-        { emailContext, agentReply, deliveryFingerprint },
+        { emailContext, agentReply },
         { retry: { maxAttempts: 3 }, idempotent: true }
       );
     } catch (error) {
@@ -466,73 +284,32 @@ ${parsedEmail.body}`;
     }
   }
 
-  /** Attempts exactly one sender-only error reply and swallows every reply failure. */
+  /** Attempts one sender-only SDK error reply and swallows every reply failure. */
   private async handleProcessingError(
-    originalEmail: AgentEmail,
-    error: unknown,
-    parsedEmail: ParsedEmailData,
-    config: AppConfig,
-    correlationId: string,
-    deliveryFingerprint: string
-  ): Promise<void> {
-    const envelopeSender = normalizeEmailAddress(parsedEmail.envelopeFrom);
-    if (!isAuthorizedEmailAddress(envelopeSender, config.authorization)) {
-      this.logger.warn("Skipping error reply to unauthorized or malformed envelope sender", {
-        correlationId,
-        senderDomain: this.getEmailDomain(envelopeSender),
-        receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
-      });
-      return;
-    }
-
-    if (!this.transitionDelivery(deliveryFingerprint, "processing", "error_reply_started")) {
-      this.logger.info("Error reply suppressed by delivery ledger", {
-        correlationId,
-        stage: "error-reply",
-        senderDomain: this.getEmailDomain(envelopeSender),
-      });
-      return;
-    }
-
-    try {
-      await this.sendErrorResponse(originalEmail, error, parsedEmail, config);
-      this.transitionDelivery(deliveryFingerprint, "error_reply_started", "error_replied");
-    } catch (replyError) {
-      this.transitionDelivery(deliveryFingerprint, "error_reply_started", "error_reply_unknown");
-      this.logger.error("Failed to send error reply", {
-        correlationId,
-        senderDomain: this.getEmailDomain(envelopeSender),
-        receivingDomain: this.getEmailDomain(parsedEmail.envelopeTo),
-        ...getSafeErrorMetadata(replyError),
-      });
-    }
-  }
-
-  /** Sends a signed sender-only error response through the inbound Email Worker reply envelope. */
-  private async sendErrorResponse(
     originalEmail: AgentEmail,
     error: unknown,
     parsedEmail: ParsedEmailData,
     config: AppConfig
   ): Promise<void> {
-    const errorMessage = this.getErrorResponseMessage(error);
-    const threadingOptions = this.buildThreadingOptions(parsedEmail);
-    const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
+    const envelopeSender = normalizeEmailAddress(parsedEmail.envelopeFrom);
+    if (!isAuthorizedEmailAddress(envelopeSender, config.authorization)) {
+      this.logger.warn("Skipping error reply to unauthorized or malformed envelope sender");
+      return;
+    }
 
-    await this.replyToInboundEmail(originalEmail, {
-      fromAddress: replyFromAddress,
-      toAddress: normalizeEmailAddress(parsedEmail.envelopeFrom),
-      subject: "Error Processing Email",
-      text: errorMessage,
-      threadingOptions,
-    });
-
-    this.logger.info("Sender-only error reply sent", {
-      senderDomain: this.getEmailDomain(parsedEmail.envelopeFrom),
-      receivingDomain: this.getEmailDomain(replyFromAddress),
-      toCount: 1,
-      ccCount: 0,
-    });
+    try {
+      const threadingOptions = this.buildThreadingOptions(parsedEmail);
+      await this.replyToEmail(originalEmail, {
+        fromName: "CAF-GPT",
+        subject: "Error Processing Email",
+        body: this.getErrorResponseMessage(error),
+        contentType: "text/plain",
+        headers: threadingOptions.headers,
+      });
+      this.logger.info("Sender-only error reply sent");
+    } catch (replyError) {
+      this.logger.error("Failed to send error reply", getSafeErrorMetadata(replyError));
+    }
   }
 
   /** Gets a user-friendly error response message. */
@@ -541,23 +318,6 @@ ${parsedEmail.body}`;
       ERROR_RESPONSE_TEMPLATES.find((entry) => entry.match(error)) ??
       ERROR_RESPONSE_TEMPLATES[ERROR_RESPONSE_TEMPLATES.length - 1];
     return template.lines.join("\n");
-  }
-
-  /** Sends a raw MIME reply using the original inbound Email Worker message. */
-  private async replyToInboundEmail(
-    originalEmail: AgentEmail,
-    message: InboundReplyMessage
-  ): Promise<void> {
-    const raw = await this.inboundReplyComposer.composeRawReply(message, {
-      secret: this.env.EMAIL_SECRET,
-      agentName: AGENT_EMAIL_ROUTING_NAME,
-      agentId: this.name,
-    });
-    await originalEmail.reply({
-      from: message.fromAddress,
-      to: message.toAddress,
-      raw,
-    });
   }
 
   /** Resolves the sender identity for replies from the inbound monitored recipient. */
@@ -572,7 +332,7 @@ ${parsedEmail.body}`;
       : normalizeEmailAddress(config.email.agentFromEmail);
   }
 
-  /** Builds threading options for reply MIME headers. */
+  /** Builds valid threading headers for an email reply. */
   private buildThreadingOptions(parsedEmail: ParsedEmailData): {
     inReplyTo?: string;
     headers?: Record<string, string>;
@@ -611,7 +371,6 @@ ${parsedEmail.body}`;
   /** Trims long References chains while keeping the most recent valid message IDs. */
   private trimReferences(references: string, maxLength: number): string {
     const trimmedReferences = references.trim();
-
     if (trimmedReferences.length <= maxLength) {
       return trimmedReferences;
     }
@@ -625,7 +384,6 @@ ${parsedEmail.body}`;
     for (let index = messageIds.length - 1; index >= 0; index--) {
       const messageId = messageIds[index];
       const neededLength = currentLength + (kept.length > 0 ? 1 : 0) + messageId.length;
-
       if (neededLength > maxLength) {
         break;
       }
@@ -635,110 +393,6 @@ ${parsedEmail.body}`;
     }
 
     return kept.join(" ");
-  }
-
-  /** Creates an opaque fingerprint from normalized envelope identity and retained raw bytes. */
-  private async createRawDeliveryFingerprint(
-    email: AgentEmail,
-    rawEmail: Uint8Array
-  ): Promise<string> {
-    const envelope = this.encodeFingerprintEnvelope(email);
-    const input = new Uint8Array(envelope.length + rawEmail.length);
-    input.set(envelope);
-    input.set(rawEmail, envelope.length);
-    return await this.sha256Hex(input);
-  }
-
-  /** Creates the best stable fingerprint available when inbound raw bytes cannot be read. */
-  private async createFallbackDeliveryFingerprint(email: AgentEmail): Promise<string> {
-    const headerEntries = Array.from(email.headers.entries())
-      .map(([name, value]) => [name.toLowerCase(), value] as const)
-      .sort(([leftName, leftValue], [rightName, rightValue]) =>
-        leftName === rightName
-          ? leftValue.localeCompare(rightValue)
-          : leftName.localeCompare(rightName)
-      );
-    const fallback = JSON.stringify({
-      envelope: [normalizeEmailAddress(email.from), normalizeEmailAddress(email.to)],
-      rawSize: email.rawSize,
-      headers: headerEntries,
-    });
-    return await this.sha256Hex(new TextEncoder().encode(fallback));
-  }
-
-  /** Encodes normalized envelope identity with a length boundary before raw fingerprint bytes. */
-  private encodeFingerprintEnvelope(email: AgentEmail): Uint8Array {
-    const identity = JSON.stringify([
-      normalizeEmailAddress(email.from),
-      normalizeEmailAddress(email.to),
-    ]);
-    return new TextEncoder().encode(`${identity.length}:${identity}`);
-  }
-
-  /** Returns a lowercase hexadecimal SHA-256 digest. */
-  private async sha256Hex(input: Uint8Array): Promise<string> {
-    const digest = await crypto.subtle.digest("SHA-256", input);
-    return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join(
-      ""
-    );
-  }
-
-  /** Atomically reserves a new delivery and prunes expired/excess ledger rows. */
-  private reserveDelivery(deliveryFingerprint: string): boolean {
-    this.ensureDeliveryLedger();
-    const now = Date.now();
-    const expiresBefore = now - DELIVERY_LEDGER_TTL_MS;
-    this.sql`DELETE FROM caf_email_delivery_ledger WHERE updated_at < ${expiresBefore}`;
-    this.sql`
-      DELETE FROM caf_email_delivery_ledger
-      WHERE fingerprint IN (
-        SELECT fingerprint FROM caf_email_delivery_ledger
-        ORDER BY updated_at DESC, fingerprint DESC
-        LIMIT -1 OFFSET ${DELIVERY_LEDGER_MAX_ENTRIES - 1}
-      )
-    `;
-    const inserted = this.sql<{ fingerprint: string }>`
-      INSERT INTO caf_email_delivery_ledger (fingerprint, status, updated_at)
-      VALUES (${deliveryFingerprint}, ${"processing"}, ${now})
-      ON CONFLICT(fingerprint) DO NOTHING
-      RETURNING fingerprint
-    `;
-    return inserted.length === 1;
-  }
-
-  /** Performs a guarded durable delivery-state transition. */
-  private transitionDelivery(
-    deliveryFingerprint: string,
-    from: DeliveryLedgerStatus,
-    to: DeliveryLedgerStatus
-  ): boolean {
-    this.ensureDeliveryLedger();
-    const updated = this.sql<{ fingerprint: string }>`
-      UPDATE caf_email_delivery_ledger
-      SET status = ${to}, updated_at = ${Date.now()}
-      WHERE fingerprint = ${deliveryFingerprint} AND status = ${from}
-      RETURNING fingerprint
-    `;
-    return updated.length === 1;
-  }
-
-  /** Creates the application-owned delivery ledger table once per Agent isolate. */
-  private ensureDeliveryLedger(): void {
-    if (this.deliveryLedgerReady) {
-      return;
-    }
-    this.sql`
-      CREATE TABLE IF NOT EXISTS caf_email_delivery_ledger (
-        fingerprint TEXT PRIMARY KEY,
-        status TEXT NOT NULL,
-        updated_at INTEGER NOT NULL
-      )
-    `;
-    this.sql`
-      CREATE INDEX IF NOT EXISTS idx_caf_email_delivery_ledger_updated
-      ON caf_email_delivery_ledger(updated_at)
-    `;
-    this.deliveryLedgerReady = true;
   }
 
   /** Extracts normalized mailbox addresses from parsed MIME address groups. */
@@ -783,23 +437,13 @@ ${parsedEmail.body}`;
     };
   }
 
-  /** Extracts a normalized domain for structured sender metadata. */
-  private getEmailDomain(address: string): string {
-    const normalized = normalizeEmailAddress(address);
-    return normalized.includes("@") ? normalized.slice(normalized.lastIndexOf("@") + 1) : "";
-  }
-
   /** Builds a normalized header map with lowercase keys. */
   private buildHeaderMap(headers: Headers): Record<string, string> {
     const normalized: Record<string, string> = {};
 
     headers.forEach((value, key) => {
       const lowerKey = key.toLowerCase();
-      if (normalized[lowerKey]) {
-        normalized[lowerKey] = `${normalized[lowerKey]}, ${value}`;
-        return;
-      }
-      normalized[lowerKey] = value;
+      normalized[lowerKey] = normalized[lowerKey] ? `${normalized[lowerKey]}, ${value}` : value;
     });
 
     return normalized;

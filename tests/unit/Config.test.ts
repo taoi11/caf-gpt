@@ -18,10 +18,11 @@ describe("createConfig", () => {
     expect(config.authorization.authorizedEmails).toEqual(["luffy@luffy.email"]);
   });
 
-  it("does not allow an environment variable to broaden authorization", () => {
-    const config = createConfig({
-      AUTHORIZED_SENDERS: "example.com,attacker@example.com",
-    } as Env);
+  it("does not allow a legacy runtime value to broaden authorization", () => {
+    const legacyEnv = {
+      AUTHORIZED_SENDERS: "evil.com,attacker@example.com",
+    } as unknown as Env;
+    const config = createConfig(legacyEnv);
 
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);
     expect(config.authorization.authorizedEmails).toEqual(["luffy@luffy.email"]);

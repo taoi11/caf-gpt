@@ -19,9 +19,7 @@ export default defineConfig({
       },
       miniflare: {
         bindings: {
-          AUTHORIZED_SENDERS: "forces.gc.ca,admin@test.com",
           CF_AIG_AUTH: "test-token",
-          EMAIL_SECRET: "test-secret",
         },
       },
     }),

@@ -16,14 +16,14 @@ npm run deploy
 
 - **Email Processing**: Receives emails via Cloudflare Email Workers
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
-- **Safe Reply-All**: Sends structured, signed replies to an authorized primary recipient and filtered authorized To/Cc recipients
+- **Outlook-Style Reply-All**: Replies to valid Reply-To/From mailboxes and filtered original To/Cc recipients, including external participants
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
 - **Memory Management**: Per-user context stored in Cloudflare Agents Durable Object state
 
 ## Architecture
 
 ```text
-Email → Cloudflare Email Routing → routeAgentEmail
+Email → Cloudflare Email Routing → sender-based Agent resolver
                                       ↓
                          UserAgent Durable Object
                          (per normalized sender email)
@@ -34,16 +34,14 @@ Email → Cloudflare Email Routing → routeAgentEmail
                          /        |         \
            LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
                                       ↓
-              Signed structured reply through Email Service
+                Agents SDK sendEmail through Email Service
                                       ↓
-                     Authorized To/Cc recipients
+                      Reply-all participants
 ```
 
-Successful responses call the structured Email Service binding directly after generating canonical signed routing headers with the supported Agents SDK email export. The SDK `Agent.sendEmail()` helper is intentionally bypassed so CAF-GPT does not emit its outbound `email:send` observability event containing address and subject fields. The SMTP envelope sender, RFC `From`, optional `Reply-To`, signed route, and per-user Durable Object are bound to the same normalized principal. Errors before a structured send attempt remain one plain-text, sender-only reply through the original inbound Email Worker event. `Bcc` is never propagated.
+Authorized inbound messages route directly to the `UserAgent` keyed by the normalized SMTP envelope sender; unsigned or stale agent-routing headers do not change that identity. Successful responses use the official Agents SDK `Agent.sendEmail()` helper. Reply-all sends to every valid, unique `Reply-To` mailbox, or RFC `From` when no valid `Reply-To` mailbox remains, then preserves original `To` followed by `Cc` as filtered CC recipients. It excludes `Bcc`, malformed or duplicate addresses, sender and primary identities, and CAF-GPT/self addresses, while retaining valid external participants.
 
-Inbound delivery uses a bounded 128-entry, 30-day durable fingerprint ledger. Raw bytes are read once and combined with normalized envelope identity into an opaque SHA-256 fingerprint, which is reserved before MIME parsing, validation, or recipient resolution. If raw reading fails, a stable SHA-256 fallback uses normalized envelope identity, raw size, and available header entries without logging or storing those inputs. A delivery is moved to `send_started` before Email Service is called; any exception after that point remains terminal/unknown and never triggers a conflicting error reply. This is intentionally at-most-once: a retry after an ambiguous send or isolate failure can lose a reply, but cannot duplicate any successful or sender-only error reply while its ledger entry is retained.
-
-Application-owned `Logger` output excludes mailbox addresses, subjects, message/header content, model identifiers and output, secrets, and exception text. Separately, the Agents SDK's pre-existing inbound `email:receive` observability may include `from`, `to`, and `subject` when platform traces are enabled; this limitation is outside the application logger and is not expanded by the direct outbound binding path.
+Processing failures before the normal send attempt receive one generic sender-only reply through `Agent.replyToEmail()`. Once `sendEmail()` is invoked, a failure is logged and processing stops without a second fallback message. The application keeps basic operational logs and disables Agents SDK email event emission; it does not maintain a delivery ledger or detailed tracing pipeline.
 
 ## Setup
 
@@ -57,7 +55,6 @@ npm install
 
 ```bash
 wrangler secret put CF_AIG_AUTH
-wrangler secret put EMAIL_SECRET
 ```
 
 Authorized senders are deliberately code-reviewed in `src/config.ts`: the `forces.gc.ca` domain and the exact mailbox `luffy@luffy.email`. Deployment variables cannot broaden this policy.

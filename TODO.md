@@ -26,12 +26,15 @@ None.
 
 ## Log
 
+### 2026-07-20
+
+- Simplified email delivery for the hobby-project scope: authorized inbound mail now routes directly by normalized envelope sender, successful responses use the official Agents SDK `sendEmail()` helper, and generic pre-send error responses use `replyToEmail()`.
+- Reworked reply-all to mirror normal email clients: valid `Reply-To` mailboxes are primary recipients, original `To` then `Cc` participants are preserved after safety filtering, and valid external recipients are allowed.
+- Removed signed routing, the durable delivery ledger, fingerprint-bearing memory tasks, detailed tracing, and failover state machinery. Duplicate inbound delivery is now an accepted tradeoff.
+
 ### 2026-07-16
 
-- Bound signed routes and RFC sender headers to the normalized SMTP principal, kept sender authorization as a code-reviewed non-overridable policy, added strict outbound header validation, and changed coordinator/specialist failures to reach the sender-only error boundary without degraded model content.
-- Added a bounded 128-entry/30-day durable at-most-once delivery ledger reserved before parsing from normalized envelope identity plus once-read raw bytes, with a stable header-based SHA-256 fallback for raw-read failures, terminal unknown send outcomes, and stable idempotent memory scheduling. The documented trade-off prefers possible response loss after ambiguous delivery or isolate termination over duplicate successful or error replies.
-- Reduced persistent application logs to safe correlation/stage/domain/count and error class/code metadata; mailbox addresses, subjects, content-bearing fields, model identifiers/output, and exception text are not emitted. Pre-existing SDK inbound observability remains a separate limitation that may contain address and subject fields when platform traces are enabled.
-- Repaired email delivery around a non-throwing inbound boundary: configuration now fails closed, successful responses use direct structured Email Service reply-all with canonical signed routing headers and deterministic authorized recipient filtering, SDK outbound email observability is bypassed, and failures attempt one ledger-guarded swallowed sender-only inbound error reply.
+- Kept sender authorization as a code-reviewed non-overridable policy, added strict outbound header validation, and changed coordinator/specialist failures to reach the sender-only error boundary without degraded model content.
 - Closed the no-degraded-mode boundary review by documenting and testing that core email processing fails cleanly while post-send scheduled memory updates remain independently retryable.
 
 ### 2026-06-15
@@ -40,12 +43,12 @@ None.
 
 ### 2026-06-03
 
-- Migrated the email spine to Cloudflare Agents SDK: added `UserAgent` as a Durable Object-backed per-user agent keyed by normalized full sender email, routed inbound mail through `routeAgentEmail`, and signed replies with `EMAIL_SECRET`.
+- Migrated the email spine to Cloudflare Agents SDK: added `UserAgent` as a Durable Object-backed per-user agent keyed by normalized full sender email and routed inbound mail through `routeAgentEmail`.
 - Moved user memory from Hyperdrive/Postgres to Agent state, replaced `ctx.waitUntil` memory writes with durable `this.schedule("runMemoryUpdate")`, removed Hyperdrive/Postgres code and bindings, and chose lazy memory rebuild with no Neon backfill.
-- Removed unwired tool factories, legacy iteration middleware, stale email sender/threading handlers, and stale test mocks; added Workers-pool Durable Object tests for routing, signed replies, scheduling, and state updates.
+- Removed unwired tool factories, legacy iteration middleware, stale email sender/threading handlers, and stale test mocks; added Workers-pool Durable Object tests for routing, reply sending, scheduling, and state updates.
 
 ### 2026-06-02
 
-- Reworked outbound email for Cloudflare Email Service: added the `send_email` binding, preserved inbound CC parsing, added authorization-allowlisted reply-all CC handling for normal replies, and kept error responses sender-only via inbound `AgentEmail.reply()`; the corrected direct-binding send contract is recorded in the 2026-07-16 entry above.
-- Reviewed Cloudflare Workers platform configuration before deploy: moved the compatibility date forward, kept `nodejs_compat` and assets intentionally, made observability sampling explicit, cleaned up generated-versus-manual Env typing, and documented required secrets.
+- Reworked outbound email for Cloudflare Email Service: added the `send_email` binding, preserved inbound CC parsing, added reply-all CC handling for normal replies, and kept error responses sender-only.
+- Reviewed Cloudflare Workers platform configuration before deploy: moved the compatibility date forward, kept `nodejs_compat` and assets intentionally, cleaned up generated-versus-manual Env typing, and documented required secrets.
 - Created the project TODO structure for cross-session task tracking.

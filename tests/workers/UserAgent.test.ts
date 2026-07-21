@@ -4,8 +4,8 @@
  * Workers runtime integration tests for the UserAgent Durable Object and top-level email boundary
  *
  * Top-level declarations:
- * - UserAgent routing suite: Verifies direct and signed routing plus fail-closed configuration
- * - UserAgent processing suite: Verifies structured success, sender-only errors, and memory timing
+ * - UserAgent routing suite: Verifies sender-keyed routing and fail-closed configuration
+ * - UserAgent processing suite: Verifies SDK reply-all, sender-only errors, and memory timing
  * - getUserAgentStub: Gets a per-sender UserAgent Durable Object stub
  * - getEmailBinding: Gets the UserAgent's structured Email Service binding
  * - createAgentEmail: Builds a mock AgentEmail with configurable RFC and envelope recipients
@@ -17,7 +17,7 @@
 
 import { reset, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import { type AgentEmail, signAgentHeaders } from "agents/email";
+import type { AgentEmail } from "agents/email";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const { mockGenerateText } = vi.hoisted(() => ({
@@ -53,75 +53,23 @@ describe("UserAgent email routing", () => {
     });
   });
 
-  it("routes a signed reply only to the envelope sender's canonical UserAgent id", async () => {
+  it("ignores agent routing headers and routes by the authorized envelope sender", async () => {
     const resolver = createUserAgentResolver(env);
-    const signedHeaders = await signAgentHeaders(
-      env.EMAIL_SECRET,
-      "user-agent",
-      getUserAgentId("test@forces.gc.ca")
-    );
     const message = createRoutingMessage({
       from: "test@forces.gc.ca",
       to: "agent@caf-gpt.com",
-      headers: signedHeaders,
+      headers: {
+        "X-Agent-Name": "other-agent",
+        "X-Agent-ID": getUserAgentId("victim@forces.gc.ca"),
+        "X-Agent-Sig": "forged",
+        "X-Agent-Sig-Ts": "1",
+      },
     });
 
     await expect(resolver(message, env)).resolves.toEqual({
-      agentName: "user-agent",
+      agentName: "UserAgent",
       agentId: getUserAgentId("test@forces.gc.ca"),
-      _secureRouted: true,
     });
-  });
-
-  it("rejects replay of another authorized sender's valid signed route", async () => {
-    const resolver = createUserAgentResolver(env);
-    const signedHeaders = await signAgentHeaders(
-      env.EMAIL_SECRET,
-      "user-agent",
-      getUserAgentId("victim@forces.gc.ca")
-    );
-
-    await expect(
-      resolver(
-        createRoutingMessage({
-          from: "test@forces.gc.ca",
-          to: "agent@caf-gpt.com",
-          headers: signedHeaders,
-        }),
-        env
-      )
-    ).resolves.toBeNull();
-  });
-
-  it("rejects partial signed routing headers without direct fallback", async () => {
-    const resolver = createUserAgentResolver(env);
-    const message = createRoutingMessage({
-      from: "test@forces.gc.ca",
-      to: "agent@caf-gpt.com",
-      headers: { "X-Agent-Name": "user-agent" },
-    });
-
-    await expect(resolver(message, env)).resolves.toBeNull();
-  });
-
-  it("rejects a valid signature for a noncanonical agent name", async () => {
-    const resolver = createUserAgentResolver(env);
-    const headers = await signAgentHeaders(
-      env.EMAIL_SECRET,
-      "UserAgent",
-      getUserAgentId("test@forces.gc.ca")
-    );
-
-    await expect(
-      resolver(
-        createRoutingMessage({
-          from: "test@forces.gc.ca",
-          to: "agent@caf-gpt.com",
-          headers,
-        }),
-        env
-      )
-    ).resolves.toBeNull();
   });
 
   it("drops unauthorized direct mail before it reaches an Agent", async () => {
@@ -134,16 +82,12 @@ describe("UserAgent email routing", () => {
     await expect(resolver(message, env)).resolves.toBeNull();
   });
 
-  it.each([
-    ["missing secret", { EMAIL_SECRET: undefined }],
-    ["empty secret", { EMAIL_SECRET: "" }],
-    ["missing binding", { EMAIL: undefined }],
-  ])("fails closed before routing for %s", async (_label, overrides) => {
+  it("fails closed before routing when the email binding is missing", async () => {
     const message = createRoutingMessage({
       from: "test@forces.gc.ca",
       to: "agent@caf-gpt.com",
     });
-    const boundaryEnv = { ...env, ...overrides } as unknown as Env;
+    const boundaryEnv = { ...env, EMAIL: undefined } as unknown as Env;
 
     await expect(
       worker.email(message, boundaryEnv, createExecutionContext())
@@ -168,7 +112,7 @@ describe("UserAgent email routing", () => {
 });
 
 describe("UserAgent email processing", () => {
-  it("sends structured signed reply-all directly through the binding and never inbound reply", async () => {
+  it("uses Agent.sendEmail for Outlook-style reply-all and schedules memory", async () => {
     const stub = getUserAgentStub("test@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
@@ -182,10 +126,10 @@ describe("UserAgent email processing", () => {
       const email = createAgentEmail({
         envelopeFrom: "test@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
-        from: "Test Member <test@forces.gc.ca>",
-        replyTo: ["TEST@forces.gc.ca"],
+        from: "Test Member <delegate@example.com>",
+        replyTo: ["TEST@forces.gc.ca", "outside@example.com"],
         to: ["agent@caf-gpt.com", "test@forces.gc.ca", "ally@forces.gc.ca"],
-        cc: ["outsider@example.com", "not-an-address", "ALLY@forces.gc.ca", "second@forces.gc.ca"],
+        cc: ["external@example.com", "not-an-address", "ALLY@forces.gc.ca", "second@forces.gc.ca"],
         bcc: ["hidden@forces.gc.ca"],
         subject: "Leave question",
         body: "Can I take annual leave next week?",
@@ -223,25 +167,20 @@ describe("UserAgent email processing", () => {
 
     expect(result.primeFooCalls[0][1]).toBe("remembered preference");
     expect(result.inboundReplyCount).toBe(0);
-    expect(result.agentSendCalls).toBe(0);
+    expect(result.agentSendCalls).toBe(1);
     expect(result.rawReadCalls).toBe(1);
     expect(result.sentMessages).toHaveLength(1);
     expect(result.sentMessages[0]).toMatchObject({
-      to: "test@forces.gc.ca",
-      cc: ["ally@forces.gc.ca", "second@forces.gc.ca"],
+      to: ["test@forces.gc.ca", "outside@example.com"],
+      cc: ["ally@forces.gc.ca", "external@example.com", "second@forces.gc.ca"],
       from: { email: "agent@caf-gpt.com", name: "CAF-GPT" },
       replyTo: "agent@caf-gpt.com",
       subject: "Re: Leave question",
       headers: {
-        "X-Agent-Name": "user-agent",
-        "X-Agent-ID": getUserAgentId("test@forces.gc.ca"),
         "In-Reply-To": "<msg-1@forces.gc.ca>",
         References: "<root@forces.gc.ca> <parent@forces.gc.ca> <msg-1@forces.gc.ca>",
       },
     });
-    const sentHeaders = (result.sentMessages[0] as { headers: Record<string, string> }).headers;
-    expect(sentHeaders["X-Agent-Sig"]).toBeTruthy();
-    expect(sentHeaders["X-Agent-Sig-Ts"]).toBeTruthy();
     expect(JSON.stringify(result.sentMessages[0])).not.toContain("hidden@forces.gc.ca");
     expect(result.schedules).toEqual([
       [
@@ -250,7 +189,6 @@ describe("UserAgent email processing", () => {
         {
           emailContext: result.primeFooCalls[0][0],
           agentReply: "<p>AI response</p>",
-          deliveryFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
         },
         { retry: { maxAttempts: 3 }, idempotent: true },
       ],
@@ -332,13 +270,13 @@ describe("UserAgent email processing", () => {
     expect(result.sentMessages[0]).toMatchObject({
       from: { email: "pacenote@caf-gpt.com", name: "CAF-GPT" },
       replyTo: "pacenote@caf-gpt.com",
-      to: "pacenote-user@forces.gc.ca",
+      to: ["pacenote-user@forces.gc.ca"],
       cc: ["forwarder@forces.gc.ca"],
     });
   });
 
-  it("generates canonical signed routing and threading headers without Agent.sendEmail", async () => {
-    const stub = getUserAgentStub("signed-output@forces.gc.ca");
+  it("passes canonical threading through Agent.sendEmail without signatures", async () => {
+    const stub = getUserAgentStub("threaded-output@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
       let message: unknown;
@@ -359,11 +297,11 @@ describe("UserAgent email processing", () => {
 
       await instance.onEmail(
         createAgentEmail({
-          envelopeFrom: "signed-output@forces.gc.ca",
+          envelopeFrom: "threaded-output@forces.gc.ca",
           envelopeTo: "agent@caf-gpt.com",
-          from: "signed-output@forces.gc.ca",
+          from: "threaded-output@forces.gc.ca",
           to: ["agent@caf-gpt.com"],
-          subject: "Signed",
+          subject: "Threaded",
           body: "Body",
           messageId: "<original@forces.gc.ca>",
           headers: { references: "<root@forces.gc.ca>" },
@@ -377,16 +315,14 @@ describe("UserAgent email processing", () => {
       };
     });
 
-    expect(result.agentSendCalls).toBe(0);
+    expect(result.agentSendCalls).toBe(1);
     expect(result.bindingSendCalls).toBe(1);
     expect(result.delivered.headers).toMatchObject({
-      "X-Agent-Name": "user-agent",
-      "X-Agent-ID": getUserAgentId("signed-output@forces.gc.ca"),
       "In-Reply-To": "<original@forces.gc.ca>",
       References: "<root@forces.gc.ca> <original@forces.gc.ca>",
     });
-    expect(result.delivered.headers["X-Agent-Sig"]).toBeTruthy();
-    expect(result.delivered.headers["X-Agent-Sig-Ts"]).toBeTruthy();
+    expect(result.delivered.headers["X-Agent-Sig"]).toBeUndefined();
+    expect(result.delivered.headers["X-Agent-Sig-Ts"]).toBeUndefined();
   });
 
   it.each([
@@ -472,19 +408,14 @@ describe("UserAgent email processing", () => {
       const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
 
       await instance.onEmail(email);
-      const ledger = instance.sql<{ status: string }>`
-        SELECT status FROM caf_email_delivery_ledger
-      `;
       return {
         replies: getReplyCalls(email),
         structuredSends: bindingSend.mock.calls.length,
-        ledger,
       };
     });
 
     expect(result.structuredSends).toBe(0);
     expect(result.replies).toHaveLength(0);
-    expect(result.ledger).toEqual([{ status: "no_response" }]);
   });
 
   it.each([
@@ -526,7 +457,7 @@ describe("UserAgent email processing", () => {
       from: "agent@caf-gpt.com",
       to: `${_label}@forces.gc.ca`,
     });
-    expect(result.replies[0][0].raw).toContain("Content-Type: text/plain; charset=utf-8");
+    expect(result.replies[0][0].raw).toMatch(/Content-Type: text\/plain; charset=UTF-8/i);
     expect(result.replies[0][0].raw).not.toContain("multipart/alternative");
     expect(result.replies[0][0].raw).not.toContain("Sensitive inbound body");
     expect(result.replies[0][0].raw).not.toContain("ally@forces.gc.ca");
@@ -560,57 +491,18 @@ describe("UserAgent email processing", () => {
     expect(result).toEqual({ aiCalls: 0, replies: 1 });
   });
 
-  it.each([
-    ["RFC From", "other@forces.gc.ca", undefined],
-    ["Reply-To", "principal@forces.gc.ca", ["delegate@forces.gc.ca"]],
-  ])("rejects %s identity that differs from the envelope principal", async (_label, from, replyTo) => {
-    const stub = getUserAgentStub("principal@forces.gc.ca");
-
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const processWithPrimeFoo = vi.fn();
-      const email = createAgentEmail({
-        envelopeFrom: "principal@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from,
-        replyTo,
-        to: ["agent@caf-gpt.com"],
-        subject: "Identity check",
-        body: "Body",
-        messageId: `<identity-${_label.toLowerCase().replaceAll(" ", "-")}@forces.gc.ca>`,
-      });
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
-
-      await instance.onEmail(email);
-      return { aiCalls: processWithPrimeFoo.mock.calls.length, replies: getReplyCalls(email) };
-    });
-
-    expect(result.aiCalls).toBe(0);
-    expect(result.replies).toHaveLength(1);
-    expect(result.replies[0][0].to).toBe("principal@forces.gc.ca");
-  });
-
-  it("suppresses a duplicate malformed message before a second error reply", async () => {
-    const stub = getUserAgentStub("encoded-header@forces.gc.ca");
+  it("handles each repeated invalid delivery independently", async () => {
+    const stub = getUserAgentStub("repeated-invalid@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
       const email = createAgentEmail({
-        envelopeFrom: "encoded-header@forces.gc.ca",
+        envelopeFrom: "repeated-invalid@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
-        from: "encoded-header@forces.gc.ca",
+        from: "repeated-invalid@forces.gc.ca",
         to: ["agent@caf-gpt.com"],
-        subject: "Question",
-        body: "Body",
-        rawOverride: [
-          "From: encoded-header@forces.gc.ca",
-          "To: agent@caf-gpt.com",
-          "Subject: Question",
-          "Message-ID: =?UTF-8?Q?=3Cx@forces.gc.ca=3E=0D=0ABcc:_leak@forces.gc.ca?=",
-          "Content-Type: text/plain; charset=utf-8",
-          "",
-          "Body",
-        ].join("\r\n"),
+        subject: "Empty",
+        body: "",
+        messageId: "<repeated-invalid@forces.gc.ca>",
       });
       const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
       const processWithPrimeFoo = vi.fn();
@@ -628,10 +520,10 @@ describe("UserAgent email processing", () => {
       };
     });
 
-    expect(result).toEqual({ structuredSends: 0, aiCalls: 0, replies: 1, rawReads: 2 });
+    expect(result).toEqual({ structuredSends: 0, aiCalls: 0, replies: 2, rawReads: 2 });
   });
 
-  it("suppresses duplicate invocations before AI and outbound delivery", async () => {
+  it("processes repeated deliveries twice without a deduplication ledger", async () => {
     const stub = getUserAgentStub("duplicate@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
@@ -665,112 +557,21 @@ describe("UserAgent email processing", () => {
       };
     });
 
-    expect(result.aiCalls).toBe(1);
-    expect(result.sends).toBe(1);
-    expect(result.schedules).toHaveLength(1);
-    expect(result.schedules[0][3]).toMatchObject({ idempotent: true });
-    expect(result.schedules[0][2]).toMatchObject({
-      deliveryFingerprint: expect.stringMatching(/^[a-f0-9]{64}$/),
-    });
+    expect(result.aiCalls).toBe(2);
+    expect(result.sends).toBe(2);
+    expect(result.schedules).toHaveLength(2);
+    expect(result.schedules[0]).toEqual([
+      1,
+      "runMemoryUpdate",
+      {
+        emailContext: expect.any(String),
+        agentReply: "One response",
+      },
+      { retry: { maxAttempts: 3 }, idempotent: true },
+    ]);
   });
 
-  it("does not suppress distinct raw messages with the same envelope and Message-ID", async () => {
-    const stub = getUserAgentStub("distinct@forces.gc.ca");
-
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const processWithPrimeFoo = vi.fn(async () => ({
-        shouldRespond: true,
-        content: "Response",
-      }));
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "reply" });
-      vi.spyOn(instance, "schedule").mockResolvedValue({ id: "memory" } as never);
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
-      const shared = {
-        envelopeFrom: "distinct@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "distinct@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Same metadata",
-        messageId: "<same-id@forces.gc.ca>",
-      };
-
-      await instance.onEmail(createAgentEmail({ ...shared, body: "First body" }));
-      await instance.onEmail(createAgentEmail({ ...shared, body: "Second body" }));
-
-      return {
-        aiCalls: processWithPrimeFoo.mock.calls.length,
-        sends: bindingSend.mock.calls.length,
-      };
-    });
-
-    expect(result).toEqual({ aiCalls: 2, sends: 2 });
-  });
-
-  it("bounds the durable delivery ledger", async () => {
-    const stub = getUserAgentStub("ledger@forces.gc.ca");
-
-    const count = await runInDurableObject(stub, async (instance: UserAgent) => {
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(async () => ({ shouldRespond: false, content: "" })),
-      };
-
-      for (let index = 0; index < 140; index++) {
-        await instance.onEmail(
-          createAgentEmail({
-            envelopeFrom: "ledger@forces.gc.ca",
-            envelopeTo: "agent@caf-gpt.com",
-            from: "ledger@forces.gc.ca",
-            to: ["agent@caf-gpt.com"],
-            subject: "Ledger",
-            body: `Delivery ${index}`,
-            messageId: `<ledger-${index}@forces.gc.ca>`,
-          })
-        );
-      }
-
-      return instance.sql<{ count: number }>`
-        SELECT COUNT(*) AS count FROM caf_email_delivery_ledger
-      `[0].count;
-    });
-
-    expect(count).toBe(128);
-  });
-
-  it("expires old delivery ledger entries", async () => {
-    const stub = getUserAgentStub("expired-ledger@forces.gc.ca");
-
-    const aiCalls = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "expired-ledger@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "expired-ledger@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Expiry",
-        body: "Same delivery after retention window",
-        messageId: "<expired-ledger@forces.gc.ca>",
-      });
-      const processWithPrimeFoo = vi.fn(async () => ({ shouldRespond: false, content: "" }));
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
-
-      await instance.onEmail(email);
-      instance.sql`
-        UPDATE caf_email_delivery_ledger
-        SET updated_at = ${Date.now() - 31 * 24 * 60 * 60 * 1000}
-      `;
-      await instance.onEmail(email);
-      return processWithPrimeFoo.mock.calls.length;
-    });
-
-    expect(aiCalls).toBe(2);
-  });
-
-  it("deduplicates raw-read failures before a second fallback error reply", async () => {
+  it("sends one fallback for each repeated raw-read failure", async () => {
     const stub = getUserAgentStub("parse@forces.gc.ca");
 
     const replies = await runInDurableObject(stub, async (instance: UserAgent) => {
@@ -790,12 +591,12 @@ describe("UserAgent email processing", () => {
       return { replies: getReplyCalls(email), rawReads: getRawCalls(email).length };
     });
 
-    expect(replies.replies).toHaveLength(1);
+    expect(replies.replies).toHaveLength(2);
     expect(replies.replies[0][0].to).toBe("parse@forces.gc.ca");
     expect(replies.rawReads).toBe(2);
   });
 
-  it("keeps an ambiguous structured-send failure terminal without a second reply", async () => {
+  it("does not send a fallback or schedule memory after sendEmail fails", async () => {
     const stub = getUserAgentStub("send-failure@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
@@ -817,57 +618,13 @@ describe("UserAgent email processing", () => {
       };
 
       await instance.onEmail(email);
-      const ledger = instance.sql<{ status: string }>`
-        SELECT status FROM caf_email_delivery_ledger
-      `;
       return {
         schedules: schedule.mock.calls.length,
         replies: getReplyCalls(email).length,
-        ledger,
       };
     });
 
-    expect(result).toEqual({ schedules: 0, replies: 0, ledger: [{ status: "send_unknown" }] });
-  });
-
-  it("treats signing failure as deterministic pre-send and sends one terminal error reply", async () => {
-    const stub = getUserAgentStub("signing-failure@forces.gc.ca");
-
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "signing-failure@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "signing-failure@forces.gc.ca",
-        to: ["agent@caf-gpt.com", "ally@forces.gc.ca"],
-        cc: ["second@forces.gc.ca"],
-        subject: "Question",
-        body: "Body",
-        messageId: "<signing-failure@forces.gc.ca>",
-      });
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-      vi.spyOn(crypto.subtle, "importKey").mockRejectedValueOnce(new Error("signing unavailable"));
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(async () => ({ shouldRespond: true, content: "Response" })),
-      };
-
-      await instance.onEmail(email);
-      const ledger = instance.sql<{ status: string }>`
-        SELECT status FROM caf_email_delivery_ledger
-      `;
-      return {
-        replies: getReplyCalls(email),
-        structuredSends: bindingSend.mock.calls.length,
-        ledger,
-      };
-    });
-
-    expect(result.structuredSends).toBe(0);
-    expect(result.replies).toHaveLength(1);
-    expect(result.replies[0][0]).toMatchObject({
-      from: "agent@caf-gpt.com",
-      to: "signing-failure@forces.gc.ca",
-    });
-    expect(result.ledger).toEqual([{ status: "error_replied" }]);
+    expect(result).toEqual({ schedules: 0, replies: 0 });
   });
 
   it("swallows error-reply failures", async () => {
@@ -962,7 +719,6 @@ describe("UserAgent email processing", () => {
       await instance.runMemoryUpdate({
         emailContext: "Subject: Test\n\nUser details",
         agentReply: "Agent reply",
-        deliveryFingerprint: "memory-success",
       });
       return instance.state;
     });
@@ -981,7 +737,6 @@ describe("UserAgent email processing", () => {
         instance.runMemoryUpdate({
           emailContext: "Subject: Test\n\nUser details",
           agentReply: "Agent reply",
-          deliveryFingerprint: "memory-failure",
         })
       ).rejects.toThrow("Scheduled memory update failed");
     });

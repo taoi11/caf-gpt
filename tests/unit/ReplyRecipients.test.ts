@@ -1,7 +1,7 @@
 /**
  * tests/unit/ReplyRecipients.test.ts
  *
- * Unit tests for safe successful-response recipient resolution
+ * Unit tests for Outlook-style successful-response recipient resolution
  *
  * Top-level declarations:
  * - ReplyRecipients test suite: Verifies primary selection, filtering, ordering, and limits
@@ -35,199 +35,149 @@ const config: AppConfig = {
 };
 
 describe("resolveReplyRecipients", () => {
-  it("uses one valid authorized Reply-To as the primary recipient", () => {
-    const result = resolveReplyRecipients(
-      createMockParsedEmail({ replyTo: ["TEST@forces.gc.ca"], replyToPresent: true }),
-      config
-    );
-
-    expect(result.to).toBe("test@forces.gc.ca");
-    expect(result.primarySource).toBe("reply-to");
-  });
-
-  it("falls back to the authorized RFC From when Reply-To is absent", () => {
+  it("uses every valid unique Reply-To mailbox as a primary recipient", () => {
     const result = resolveReplyRecipients(
       createMockParsedEmail({
-        envelopeFrom: "member@forces.gc.ca",
-        from: "Member@forces.gc.ca",
-        replyTo: [],
-        replyToPresent: false,
+        replyTo: ["First@outside.example", "second@example.net", "FIRST@outside.example"],
+        replyToPresent: true,
       }),
       config
     );
 
-    expect(result.to).toBe("member@forces.gc.ca");
-    expect(result.primarySource).toBe("from");
+    expect(result).toEqual({
+      to: ["first@outside.example", "second@example.net"],
+      cc: [],
+    });
   });
 
-  it("rejects an RFC From that differs from the SMTP envelope principal", () => {
-    expect(() =>
-      resolveReplyRecipients(
-        createMockParsedEmail({
-          envelopeFrom: "test@forces.gc.ca",
-          from: "other@forces.gc.ca",
-        }),
-        config
-      )
-    ).toThrow("RFC From must match the SMTP envelope sender");
-  });
-
-  it("rejects delegated Reply-To identity without a server-side ACL", () => {
-    expect(() =>
-      resolveReplyRecipients(
-        createMockParsedEmail({
-          replyTo: ["delegate@forces.gc.ca"],
-          replyToPresent: true,
-        }),
-        config
-      )
-    ).toThrow("Reply-To must match the SMTP envelope sender");
-  });
-
-  it.each([
-    ["multiple", ["one@forces.gc.ca", "two@forces.gc.ca"]],
-    ["malformed", ["not-an-address"]],
-    ["unauthorized", ["person@example.net"]],
-    ["self-loop", ["agent@caf-gpt.com"]],
-  ])("rejects %s Reply-To values", (_label, replyTo) => {
-    expect(() =>
-      resolveReplyRecipients(createMockParsedEmail({ replyTo, replyToPresent: true }), config)
-    ).toThrow(EmailValidationError);
-  });
-
-  it("rejects a present Reply-To header that yielded no mailbox", () => {
-    expect(() =>
-      resolveReplyRecipients(createMockParsedEmail({ replyTo: [], replyToPresent: true }), config)
-    ).toThrow(EmailValidationError);
-  });
-
-  it("collects original To then Cc in stable order", () => {
+  it("ignores malformed Reply-To values when valid mailboxes remain", () => {
     const result = resolveReplyRecipients(
       createMockParsedEmail({
-        to: ["first@forces.gc.ca", "second@forces.gc.ca"],
-        cc: ["third@forces.gc.ca", "ally@example.com"],
+        replyTo: ["not-an-address", "valid@example.net"],
+        replyToPresent: true,
+      }),
+      config
+    );
+
+    expect(result.to).toEqual(["valid@example.net"]);
+  });
+
+  it("falls back to RFC From when Reply-To has no valid mailbox", () => {
+    const result = resolveReplyRecipients(
+      createMockParsedEmail({
+        envelopeFrom: "authorized@forces.gc.ca",
+        from: "External@outside.example",
+        replyTo: ["not-an-address"],
+        replyToPresent: true,
+      }),
+      config
+    );
+
+    expect(result.to).toEqual(["external@outside.example"]);
+  });
+
+  it("collects original To then Cc in stable order without authorization filtering", () => {
+    const result = resolveReplyRecipients(
+      createMockParsedEmail({
+        to: ["first@example.net", "second@outside.example"],
+        cc: ["third@example.org", "ally@example.com"],
       }),
       config
     );
 
     expect(result.cc).toEqual([
-      "first@forces.gc.ca",
-      "second@forces.gc.ca",
-      "third@forces.gc.ca",
+      "first@example.net",
+      "second@outside.example",
+      "third@example.org",
       "ally@example.com",
     ]);
   });
 
-  it("removes CAF-GPT aliases and every address on the service domain", () => {
+  it("removes service addresses, primary recipients, sender identities, and malformed values", () => {
     const result = resolveReplyRecipients(
       createMockParsedEmail({
-        to: ["agent@caf-gpt.com", "other@caf-gpt.com", "member@forces.gc.ca"],
-        cc: ["pacenote@caf-gpt.com"],
+        envelopeFrom: "envelope@forces.gc.ca",
+        from: "header@example.net",
+        replyTo: ["primary@example.org"],
+        replyToPresent: true,
+        to: [
+          "agent@caf-gpt.com",
+          "other@caf-gpt.com",
+          "primary@example.org",
+          "envelope@forces.gc.ca",
+        ],
+        cc: ["header@example.net", "not-an-address", "kept@outside.example"],
       }),
       config
     );
 
-    expect(result.cc).toEqual(["member@forces.gc.ca"]);
-    expect(result.filteringSummary.cafGpt).toBe(3);
+    expect(result).toEqual({
+      to: ["primary@example.org"],
+      cc: ["kept@outside.example"],
+    });
   });
 
-  it("removes configured sender aliases even when they use an authorized external domain", () => {
+  it("removes configured self addresses outside the CAF-GPT domain", () => {
     const externalAliasConfig: AppConfig = {
       ...config,
       email: {
         agentFromEmail: "service@forces.gc.ca",
-        monitoredAddresses: ["service@forces.gc.ca"],
+        monitoredAddresses: ["service@forces.gc.ca", "pace@example.net"],
       },
     };
     const result = resolveReplyRecipients(
-      createMockParsedEmail({ to: ["service@forces.gc.ca", "member@forces.gc.ca"] }),
+      createMockParsedEmail({
+        to: ["service@forces.gc.ca", "pace@example.net", "member@example.net"],
+      }),
       externalAliasConfig
     );
 
-    expect(result.cc).toEqual(["member@forces.gc.ca"]);
-    expect(result.filteringSummary.configuredSelf).toBe(1);
+    expect(result.cc).toEqual(["member@example.net"]);
   });
 
-  it("removes repeated instances of the bound primary principal", () => {
+  it("deduplicates recipients case-insensitively while preserving first occurrence order", () => {
     const result = resolveReplyRecipients(
       createMockParsedEmail({
-        envelopeFrom: "test@forces.gc.ca",
-        from: "test@forces.gc.ca",
-        replyTo: ["test@forces.gc.ca"],
+        replyTo: ["Primary@example.net"],
         replyToPresent: true,
-        to: ["test@forces.gc.ca", "TEST@forces.gc.ca", "kept@forces.gc.ca"],
+        to: ["First@example.net", "first@example.net"],
+        cc: ["FIRST@EXAMPLE.NET", "Second@example.net", "second@example.net"],
       }),
       config
     );
 
-    expect(result.cc).toEqual(["kept@forces.gc.ca"]);
-    expect(result.filteringSummary.primaryRecipient).toBe(2);
-  });
-
-  it("drops malformed and unauthorized candidates without leaking them", () => {
-    const result = resolveReplyRecipients(
-      createMockParsedEmail({
-        to: ["valid@forces.gc.ca", "not-an-address"],
-        cc: ["outsider@example.net"],
-      }),
-      config
-    );
-
-    expect(result.cc).toEqual(["valid@forces.gc.ca"]);
-    expect(result.filteringSummary.malformed).toBe(1);
-    expect(result.filteringSummary.unauthorized).toBe(1);
-  });
-
-  it("deduplicates case-insensitively while preserving the first occurrence", () => {
-    const result = resolveReplyRecipients(
-      createMockParsedEmail({
-        to: ["First@forces.gc.ca", "first@forces.gc.ca"],
-        cc: ["FIRST@forces.gc.ca", "second@forces.gc.ca"],
-      }),
-      config
-    );
-
-    expect(result.cc).toEqual(["first@forces.gc.ca", "second@forces.gc.ca"]);
-    expect(result.filteringSummary.duplicate).toBe(2);
+    expect(result.cc).toEqual(["first@example.net", "second@example.net"]);
   });
 
   it("cannot propagate Bcc because ParsedEmailData has no Bcc field", () => {
-    const email = createMockParsedEmail({ to: ["visible@forces.gc.ca"], cc: [] });
-    const withBcc = { ...email, bcc: ["hidden@forces.gc.ca"] };
+    const email = createMockParsedEmail({ to: ["visible@example.net"], cc: [] });
+    const withBcc = { ...email, bcc: ["hidden@example.net"] };
 
-    expect(resolveReplyRecipients(withBcc, config).cc).toEqual(["visible@forces.gc.ca"]);
+    expect(resolveReplyRecipients(withBcc, config).cc).toEqual(["visible@example.net"]);
   });
 
-  it("accepts exactly 50 combined recipients", () => {
-    const cc = Array.from({ length: 49 }, (_, index) => `member${index}@forces.gc.ca`);
+  it("accepts exactly 50 combined To and Cc recipients", () => {
+    const replyTo = ["first@example.net", "second@example.net"];
+    const cc = Array.from({ length: 48 }, (_, index) => `member${index}@example.net`);
 
-    expect(
-      resolveReplyRecipients(createMockParsedEmail({ to: cc, cc: [] }), config).cc
-    ).toHaveLength(49);
-  });
-
-  it("rejects 51 combined recipients rather than truncating", () => {
-    const cc = Array.from({ length: 50 }, (_, index) => `member${index}@forces.gc.ca`);
-
-    expect(() => resolveReplyRecipients(createMockParsedEmail({ to: cc, cc: [] }), config)).toThrow(
-      EmailValidationError
-    );
-  });
-
-  it("matches exact authorized emails and authorized domains only", () => {
     const result = resolveReplyRecipients(
-      createMockParsedEmail({
-        to: [
-          "ally@example.com",
-          "member@forces.gc.ca",
-          "ally+tag@example.com",
-          "member@sub.forces.gc.ca",
-        ],
-      }),
+      createMockParsedEmail({ replyTo, replyToPresent: true, to: cc, cc: [] }),
       config
     );
 
-    expect(result.cc).toEqual(["ally@example.com", "member@forces.gc.ca"]);
-    expect(result.filteringSummary.unauthorized).toBe(2);
+    expect(result.to).toHaveLength(2);
+    expect(result.cc).toHaveLength(48);
+  });
+
+  it("rejects 51 combined recipients rather than truncating", () => {
+    const replyTo = ["first@example.net", "second@example.net"];
+    const cc = Array.from({ length: 49 }, (_, index) => `member${index}@example.net`);
+
+    expect(() =>
+      resolveReplyRecipients(
+        createMockParsedEmail({ replyTo, replyToPresent: true, to: cc, cc: [] }),
+        config
+      )
+    ).toThrow(EmailValidationError);
   });
 });
