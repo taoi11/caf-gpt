@@ -105,7 +105,7 @@ describe("MemoryFooAgent", () => {
     expect(Object.keys(lastCall?.tools ?? {})).toEqual(["update_memory", "leave_memory_unchanged"]);
   });
 
-  it("should pass high reasoning Responses options for the small model", async () => {
+  it("should pass high reasoning and no-store Responses options for the small model", async () => {
     setMockMemoryToolCall("update_memory", { content: "New memory content" });
 
     const result = await agent.updateMemory("", "Question", "Answer");
@@ -117,6 +117,7 @@ describe("MemoryFooAgent", () => {
       openai: {
         forceReasoning: true,
         reasoningEffort: "high",
+        store: false,
       },
     });
   });

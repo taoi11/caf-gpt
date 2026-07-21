@@ -43,6 +43,7 @@ const OPENAI_RESPONSES_OPTIONS: ModelProviderOptions = {
   openai: {
     forceReasoning: true,
     reasoningEffort: "high",
+    store: false,
   },
 };
 

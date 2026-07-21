@@ -34,6 +34,29 @@ describe("AgentCoordinator failure logging", () => {
     mockGenerateText.mockReset();
   });
 
+  it("passes ZDR-safe Responses options to the Prime Foo tool loop", async () => {
+    mockGenerateText.mockResolvedValueOnce({ text: "answer", steps: [] });
+    const testEnv = createMockEnv();
+    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv));
+
+    await expect(coordinator.processWithPrimeFoo("safe context")).resolves.toMatchObject({
+      content: expect.stringContaining("answer"),
+      shouldRespond: true,
+    });
+
+    expect(mockGenerateText).toHaveBeenCalledWith(
+      expect.objectContaining({
+        providerOptions: {
+          openai: {
+            forceReasoning: true,
+            reasoningEffort: "high",
+            store: false,
+          },
+        },
+      })
+    );
+  });
+
   it("logs only safe API call status metadata for AI_APICallError", async () => {
     const sensitiveValue = "sensitive prompt and response content";
     const apiError = new APICallError({

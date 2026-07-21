@@ -14,7 +14,7 @@ import { AgentValidationError } from "../errors";
 import { getSafeErrorMetadata, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
-import { createModel } from "./utils/BaseAgent";
+import { createModel, createProviderOptions } from "./utils/BaseAgent";
 import { PromptManager } from "./utils/PromptManager";
 
 export class AgentCoordinator {
@@ -63,14 +63,16 @@ export class AgentCoordinator {
         systemPrompt = `${systemPrompt}\n\n<memory>\n${memory}\n</memory>`;
       }
 
-      const model = createModel(this.env, this.config.llm.models.primeFoo.model);
+      const modelConfig = this.config.llm.models.primeFoo;
+      const model = createModel(this.env, modelConfig.model);
+      const providerOptions = createProviderOptions(modelConfig.model);
       const maxSteps = 3;
       const result = await generateText({
         model,
         system: systemPrompt,
         prompt: `Email context:\n\n${context}`,
-        temperature: this.config.llm.models.primeFoo.temperature,
-        maxOutputTokens: this.config.llm.models.primeFoo.maxOutputTokens,
+        temperature: modelConfig.temperature,
+        maxOutputTokens: modelConfig.maxOutputTokens,
         stopWhen: stepCountIs(maxSteps),
         onStepFinish: ({ stepNumber, toolCalls }) => {
           if (toolCalls.length > 0) {
@@ -161,6 +163,7 @@ export class AgentCoordinator {
             execute: async ({ rank, context }) => this.paceFooAgent.generateNote(rank, context),
           }),
         },
+        ...(providerOptions ? { providerOptions } : {}),
       });
 
       if (result.steps.some((step) => step.content.some((part) => part.type === "tool-error"))) {

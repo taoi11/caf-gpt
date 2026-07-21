@@ -4,7 +4,7 @@
  * Unit tests for BaseAgent OpenAI Responses provider routing
  *
  * Tests:
- * - GPT-5.6 model provider options
+ * - GPT-5.6 reasoning and zero-data-retention provider options
  * - Cloudflare AI binding/Gateway transport construction
  * - Text and structured generation call options and safe logging
  */
@@ -70,11 +70,12 @@ describe("BaseAgent OpenAI Responses routing", () => {
     mockGenerateText.mockReset();
   });
 
-  it("sets high reasoning for GPT-5.6 Terra and Luna", () => {
+  it("sets high reasoning and disables response storage for GPT-5.6 Terra and Luna", () => {
     const expected = {
       openai: {
         forceReasoning: true,
         reasoningEffort: "high",
+        store: false,
       },
     };
 
