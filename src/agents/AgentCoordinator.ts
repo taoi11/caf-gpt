@@ -7,7 +7,7 @@
  * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools and a circuit breaker (maxSteps: 3)
  */
 
-import { generateText, stepCountIs, tool } from "ai";
+import { APICallError, generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { AgentValidationError } from "../errors";
@@ -194,6 +194,12 @@ How to use CAF-GPT:<br>
       this.logger.error("Prime_foo processing failed", {
         processingTime: Date.now() - startTime,
         ...getSafeErrorMetadata(error),
+        ...(APICallError.isInstance(error)
+          ? {
+              ...(error.statusCode !== undefined ? { statusCode: error.statusCode } : {}),
+              isRetryable: error.isRetryable,
+            }
+          : {}),
       });
       throw error;
     }

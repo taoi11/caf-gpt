@@ -82,6 +82,24 @@ describe("UserAgent email routing", () => {
     await expect(resolver(message, env)).resolves.toBeNull();
   });
 
+  it("routes the exact approved external sender without authorizing its domain", async () => {
+    const resolver = createUserAgentResolver(env);
+    const approvedMessage = createRoutingMessage({
+      from: "munshi@dhaliwal.info",
+      to: "agent@caf-gpt.com",
+    });
+    const adjacentMessage = createRoutingMessage({
+      from: "other@dhaliwal.info",
+      to: "agent@caf-gpt.com",
+    });
+
+    await expect(resolver(approvedMessage, env)).resolves.toEqual({
+      agentName: "UserAgent",
+      agentId: getUserAgentId("munshi@dhaliwal.info"),
+    });
+    await expect(resolver(adjacentMessage, env)).resolves.toBeNull();
+  });
+
   it("fails closed before routing when the email binding is missing", async () => {
     const message = createRoutingMessage({
       from: "test@forces.gc.ca",
@@ -183,6 +201,8 @@ describe("UserAgent email processing", () => {
         References: "<root@forces.gc.ca> <parent@forces.gc.ca> <msg-1@forces.gc.ca>",
       },
     });
+    const sentHeaders = (result.sentMessages[0] as { headers?: Record<string, string> }).headers;
+    expect(sentHeaders ?? {}).not.toHaveProperty("Message-ID");
     expect(JSON.stringify(result.sentMessages[0])).not.toContain("hidden@forces.gc.ca");
     expect(result.schedules).toEqual([
       [
@@ -467,6 +487,7 @@ describe("UserAgent email processing", () => {
     });
     expect(sent.text).toBeTypeOf("string");
     expect(sent.html).toBeUndefined();
+    expect(sent.headers).not.toHaveProperty("Message-ID");
     expect(JSON.stringify(sent)).not.toContain("Sensitive inbound body");
     expect(JSON.stringify(sent)).not.toContain("ally@forces.gc.ca");
   });
@@ -528,9 +549,9 @@ describe("UserAgent email processing", () => {
     });
 
     expect(sent.to).toBe(sender);
-    expect(sent.headers?.["Message-ID"]).toMatch(/^<[0-9a-f-]+@caf-gpt\.com>$/);
-    expect(sent.headers).not.toHaveProperty("In-Reply-To");
-    expect(sent.headers).not.toHaveProperty("References");
+    expect(sent.headers ?? {}).not.toHaveProperty("Message-ID");
+    expect(sent.headers ?? {}).not.toHaveProperty("In-Reply-To");
+    expect(sent.headers ?? {}).not.toHaveProperty("References");
   });
   it("handles each repeated invalid delivery independently", async () => {
     const stub = getUserAgentStub("repeated-invalid@forces.gc.ca");
@@ -563,9 +584,7 @@ describe("UserAgent email processing", () => {
     });
 
     expect(result).toMatchObject({ structuredSends: 2, aiCalls: 0, replies: 0, rawReads: 2 });
-    expect(result.messageIds[0]).toMatch(/^<[0-9a-f-]+@caf-gpt\.com>$/);
-    expect(result.messageIds[1]).toMatch(/^<[0-9a-f-]+@caf-gpt\.com>$/);
-    expect(result.messageIds[0]).not.toBe(result.messageIds[1]);
+    expect(result.messageIds).toEqual([undefined, undefined]);
   });
 
   it("processes repeated deliveries twice without a deduplication ledger", async () => {

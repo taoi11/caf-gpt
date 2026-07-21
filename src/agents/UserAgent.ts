@@ -308,10 +308,7 @@ ${parsedEmail.body}`;
         subject: "Error Processing Email",
         text: this.getErrorResponseMessage(error),
         inReplyTo: threadingOptions.inReplyTo,
-        headers: {
-          ...threadingOptions.headers,
-          "Message-ID": `<${crypto.randomUUID()}@caf-gpt.com>`,
-        },
+        headers: threadingOptions.headers,
       });
       this.logger.info("Sender-only error reply sent");
     } catch (replyError) {
