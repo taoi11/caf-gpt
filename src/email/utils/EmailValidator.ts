@@ -7,13 +7,15 @@
  * - validateEmailContent: Validate email content
  * - validateRecipients: Validate email recipients
  * - isValidEmailAddress: Validate email address format using Zod
- * - isValidMessageId: Validate Message-ID format per RFC 5322
+ * - hasControlCharacters: Detects unsafe header control characters
+ * - isValidMessageId: Validates a strict practical Message-ID subset
  */
 
 import { z } from "zod";
 import type { ParsedEmailData } from "../types";
 
 const MAX_EMAIL_BODY_LENGTH = 1_000_000;
+const MAX_SUBJECT_LENGTH = 900;
 
 const emailAddressSchema = z
   .string()
@@ -51,6 +53,10 @@ export function validateEmailContent(parsedEmail: ParsedEmailData): ValidationRe
 
   if (!parsedEmail.subject) {
     warnings.push("Missing email subject");
+  } else if (hasControlCharacters(parsedEmail.subject)) {
+    errors.push("Subject must be a single control-free line");
+  } else if (parsedEmail.subject.length > MAX_SUBJECT_LENGTH) {
+    errors.push("Subject exceeds safe single-line length");
   } else if (parsedEmail.subject.length > 200) {
     warnings.push("Subject line is unusually long");
   }
@@ -78,6 +84,10 @@ export function validateEmailContent(parsedEmail: ParsedEmailData): ValidationRe
 
   if (parsedEmail.inReplyTo && !isValidMessageId(parsedEmail.inReplyTo)) {
     errors.push("Invalid In-Reply-To format");
+  }
+
+  if (parsedEmail.references && hasControlCharacters(parsedEmail.references)) {
+    errors.push("References contains control characters");
   }
 
   // Date validation
@@ -171,14 +181,30 @@ export function isValidEmailAddress(email: string): boolean {
   return emailAddressSchema.safeParse(email).success;
 }
 
-// Validate Message-ID format per RFC 5322: <local-part@domain>
-const MESSAGE_ID_REGEX = /^<[^@]+@[^>]+>$/;
+/** Detects C0/DEL control characters that cannot safely appear in structured headers. */
+export function hasControlCharacters(value: string): boolean {
+  return Array.from(value).some((character) => {
+    const code = character.charCodeAt(0);
+    return code <= 31 || code === 127;
+  });
+}
 
+const MESSAGE_ID_ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+";
+const MESSAGE_ID_LOCAL = `${MESSAGE_ID_ATOM}(?:\\.${MESSAGE_ID_ATOM})*`;
+const MESSAGE_ID_LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
+const MESSAGE_ID_REGEX = new RegExp(
+  `^<${MESSAGE_ID_LOCAL}@${MESSAGE_ID_LABEL}(?:\\.${MESSAGE_ID_LABEL})*>$`
+);
+
+/** Validates a strict ASCII dot-atom and hostname Message-ID subset. */
 export function isValidMessageId(messageId: string): boolean {
   if (!messageId || typeof messageId !== "string") {
     return false;
   }
-  return MESSAGE_ID_REGEX.test(messageId.trim());
+  if (messageId.length > 998 || messageId !== messageId.trim() || hasControlCharacters(messageId)) {
+    return false;
+  }
+  return MESSAGE_ID_REGEX.test(messageId);
 }
 
 // Pre-compile regular expressions and use a Set for O(1) lookup

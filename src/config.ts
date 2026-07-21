@@ -5,7 +5,8 @@
  *
  * Top-level declarations:
  * - AppConfig: Overall application configuration interface
- * - createConfig: Creates configuration from environment variables with overrides
+ * - STATIC_AUTHORIZATION_POLICY: Code-reviewed sender allowlist
+ * - createConfig: Creates configuration with optional test overrides
  */
 
 interface LLMModelConfig {
@@ -29,6 +30,11 @@ export interface AuthorizationConfig {
   authorizedDomains: string[];
   authorizedEmails: string[];
 }
+
+const STATIC_AUTHORIZATION_POLICY: Readonly<AuthorizationConfig> = {
+  authorizedDomains: ["forces.gc.ca"],
+  authorizedEmails: ["luffy@luffy.email"],
+};
 
 interface EmailConfig {
   agentFromEmail: string;
@@ -56,18 +62,13 @@ export interface AppConfig {
   llm: LLMConfig;
 }
 
-// Creates configuration from environment variables with overrides
-export function createConfig(env?: Env, overrides?: Partial<AppConfig>): AppConfig {
-  // Parse authorized senders from environment variable
-  let authorizedDomains = ["forces.gc.ca"];
-  let authorizedEmails: string[] = ["luffy@luffy.email"];
+/** Creates configuration from code-reviewed policy with explicit test overrides. */
+export function createConfig(_env?: Env, overrides?: Partial<AppConfig>): AppConfig {
   const llmOverride = overrides?.llm;
-
-  if (env?.AUTHORIZED_SENDERS) {
-    const senders = env.AUTHORIZED_SENDERS.split(",").map((s: string) => s.trim());
-    authorizedDomains = senders.filter((s: string) => !s.includes("@"));
-    authorizedEmails = senders.filter((s: string) => s.includes("@"));
-  }
+  const authorization = overrides?.authorization ?? {
+    authorizedDomains: [...STATIC_AUTHORIZATION_POLICY.authorizedDomains],
+    authorizedEmails: [...STATIC_AUTHORIZATION_POLICY.authorizedEmails],
+  };
 
   const defaultModels = {
     primeFoo: ORCHESTRATOR_CONFIG,
@@ -83,10 +84,7 @@ export function createConfig(env?: Env, overrides?: Partial<AppConfig>): AppConf
       agentFromEmail: "agent@caf-gpt.com",
       monitoredAddresses: ["agent@caf-gpt.com", "pacenote@caf-gpt.com"],
     },
-    authorization: overrides?.authorization ?? {
-      authorizedDomains,
-      authorizedEmails,
-    },
+    authorization,
     llm: {
       models: llmOverride?.models ?? defaultModels,
     },

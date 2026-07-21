@@ -69,7 +69,7 @@ describe("DoadFooAgent", () => {
     DocumentRetriever.clearCache();
 
     mockEnv = createMockEnv();
-    const config = createConfig(undefined);
+    const config = createConfig(mockEnv);
     mockBucket = mockEnv.R2_BUCKET as unknown as MockR2Bucket;
     mockAssets = mockEnv.ASSETS as unknown as MockFetcher;
 
@@ -161,25 +161,20 @@ Members are entitled to relocation assistance when posted.`
       expect(readResults.filter(({ ok }) => !ok)).toHaveLength(1);
     });
 
-    it("should release a reserved slot when an indexed document cannot be loaded", async () => {
-      let successfulReads = 0;
+    it("should reject when concurrent reads include an unavailable indexed document", async () => {
       mockGenerateText.mockImplementationOnce(async (options: ReadFileToolOptions) => {
         const execute = options.tools?.read_file?.execute;
         if (!execute) throw new Error("read_file tool not provided");
 
-        const missingResult = await execute({ file: "6000-1" });
-        const availableResults = await Promise.all(
-          ["5019-0", "5031-1", "7023-1"].map((file) => execute({ file }))
+        await Promise.all(
+          ["6000-1", "5019-0", "5031-1", "7023-1"].map((file) => execute({ file }))
         );
-        expect(missingResult.ok).toBe(false);
-        successfulReads = availableResults.filter(({ ok }) => ok).length;
         return { text: "Answer after a failed read" };
       });
 
-      const result = await agent.research({ question: "Tell me about CAF policies" });
-
-      expect(result).toContain("after a failed read");
-      expect(successfulReads).toBe(3);
+      await expect(agent.research({ question: "Tell me about CAF policies" })).rejects.toThrow(
+        "Document not found"
+      );
     });
 
     it("should include the DOAD table and question in the one model call", async () => {
@@ -219,10 +214,9 @@ Members are entitled to relocation assistance when posted.`
     it("should fail cleanly after the third invalid DOAD read", async () => {
       mockModelReads(["9999-9", "8888-8", "7777-7", "5019-0"], "Should not be trusted");
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
-      expect(result).not.toContain("Should not be trusted");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "correction budget exhausted"
+      );
     });
 
     it("should fail cleanly when AI SDK returns a tool-error step", async () => {
@@ -234,55 +228,50 @@ Members are entitled to relocation assistance when posted.`
         };
       });
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
-      expect(result).not.toContain("Should not be trusted");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "hard limit failed"
+      );
     });
 
     it("should fail cleanly when the model exceeds five total read attempts", async () => {
       mockModelReads(["5019-0", "5019-0", "5019-0", "9999-9", "8888-8", "5019-0"]);
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "total call limit exceeded"
+      );
     });
 
     it("should fail cleanly when the model reads more than three documents", async () => {
       mockModelReads(["5019-0", "5031-1", "7023-1", "5019-0", "5031-1", "7023-1"]);
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "total call limit exceeded"
+      );
     });
 
     it("should reject answers when the model never reads a document", async () => {
       mockModelWithoutReads();
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "did not successfully read"
+      );
     });
 
     it("should reject empty questions before calling the model", async () => {
       const request: ResearchRequest = { question: "" };
 
-      const result = await agent.research(request);
-
-      expect(result).toContain("error");
+      await expect(agent.research(request)).rejects.toThrow("Empty research question");
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should fail cleanly when the DOAD index is missing", async () => {
       mockAssets.setPrompt("DOAD_Table", "");
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("error");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow();
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
-    it("should treat missing DOAD documents as bad calls", async () => {
+    it("should reject when an indexed DOAD document cannot be retrieved", async () => {
       mockAssets.setPrompt(
         "DOAD_Table",
         `# DOAD Index
@@ -293,9 +282,9 @@ Members are entitled to relocation assistance when posted.`
       );
       mockModelReads(["9999-9", "5019-0"], "Recovered after missing document");
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("Recovered");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "Document not found"
+      );
     });
   });
 });

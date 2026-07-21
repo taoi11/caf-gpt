@@ -8,7 +8,7 @@
  * - research: Processes research requests for leave policy questions
  */
 
-import { StorageNotFoundError } from "../../errors";
+import { getSafeErrorMetadata } from "../../Logger";
 import type { ResearchRequest } from "../../types";
 import { BaseAgent } from "../utils/BaseAgent";
 
@@ -37,20 +37,17 @@ export class LeaveFooAgent extends BaseAgent {
       });
 
       this.logger.performance("leave_foo research", startTime, {
-        question: request.question?.substring(0, 100),
+        questionLength: request.question.length,
       });
 
       return response;
     } catch (error) {
-      // Handle storage errors gracefully
-      if (error instanceof StorageNotFoundError) {
-        this.logger.warn("Leave policy document not found");
-        return "I apologize, but I cannot access the leave policy document at this time.";
-      }
-
-      return this.handleResearchError("leave_foo research", startTime, error, "leave policy", {
-        question: request.question?.substring(0, 100),
+      this.logger.error("leave_foo research failed", {
+        processingTime: Date.now() - startTime,
+        questionLength: request.question?.length ?? 0,
+        ...getSafeErrorMetadata(error),
       });
+      throw error;
     }
   }
 }

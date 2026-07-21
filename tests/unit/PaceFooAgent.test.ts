@@ -59,7 +59,7 @@ describe("PaceFooAgent", () => {
     });
 
     mockEnv = createMockEnv();
-    const config = createConfig(undefined);
+    const config = createConfig(mockEnv);
     mockBucket = mockEnv.R2_BUCKET as unknown as MockR2Bucket;
 
     mockBucket.seed(
@@ -142,57 +142,43 @@ MCpl Leader effectively supervised the team during the field exercise.`;
     expect(result).toContain("supervised");
   });
 
-  it("should default to CPL for unknown rank", async () => {
-    setMockLLMResponse("Generated feedback note");
-
-    const result = await agent.generateNote("unknown_rank", "Some context");
-
-    expect(result).toBeTruthy();
-    expect(mockGenerateText).toHaveBeenCalled();
+  it("should reject unknown ranks before generation", async () => {
+    await expect(agent.generateNote("unknown_rank", "Some context")).rejects.toThrow(
+      "Unknown rank"
+    );
+    expect(mockGenerateText).not.toHaveBeenCalled();
   });
 
   it("should reject empty context", async () => {
-    const result = await agent.generateNote("cpl", "");
-
-    expect(result).toContain("couldn't generate");
+    await expect(agent.generateNote("cpl", "")).rejects.toThrow("Empty context");
   });
 
   it("should reject whitespace-only context", async () => {
-    const result = await agent.generateNote("cpl", "   \n\t  ");
-
-    expect(result).toContain("couldn't generate");
+    await expect(agent.generateNote("cpl", "   \n\t  ")).rejects.toThrow("Empty context");
   });
 
   it("should handle missing competencies document", async () => {
     mockBucket.clear();
 
-    const result = await agent.generateNote("cpl", "Test context");
-
-    expect(result).toContain("couldn't generate the feedback note");
+    await expect(agent.generateNote("cpl", "Test context")).rejects.toThrow("Document not found");
   });
 
   it("should handle missing examples document", async () => {
     await mockBucket.delete("paceNote/examples.md");
 
-    const result = await agent.generateNote("cpl", "Test context");
-
-    expect(result).toContain("couldn't generate the feedback note");
+    await expect(agent.generateNote("cpl", "Test context")).rejects.toThrow("Document not found");
   });
 
   it("should handle LLM API errors", async () => {
     setMockLLMError("API Error");
 
-    const result = await agent.generateNote("cpl", "Test context");
-
-    expect(result).toContain("issue with the AI service");
+    await expect(agent.generateNote("cpl", "Test context")).rejects.toThrow("AI SDK call failed");
   });
 
   it("should handle network errors", async () => {
     setMockLLMError("Network error");
 
-    const result = await agent.generateNote("cpl", "Test context");
-
-    expect(result).toContain("issue with the AI service");
+    await expect(agent.generateNote("cpl", "Test context")).rejects.toThrow("AI SDK call failed");
   });
 
   it("should convert rank to uppercase in prompt", async () => {

@@ -11,7 +11,7 @@
  */
 
 import { StorageConnectionError, StorageNotFoundError, StorageValidationError } from "../errors";
-import { formatError, Logger } from "../Logger";
+import { getSafeErrorMetadata, Logger } from "../Logger";
 
 // Retrieve documents from R2 bucket
 interface CacheEntry {
@@ -43,7 +43,6 @@ export class DocumentRetriever {
     try {
       this.logger.info("Retrieving document", {
         agentName,
-        filename,
       });
 
       // Input validation
@@ -65,7 +64,7 @@ export class DocumentRetriever {
           // Refresh insertion order on hit so eviction is LRU-like rather than FIFO.
           DocumentRetriever.documentCache.delete(key);
           DocumentRetriever.documentCache.set(key, entry);
-          this.logger.debug("Document retrieved from cache", { key });
+          this.logger.debug("Document retrieved from cache", { agentName });
           return entry.content;
         }
         // Cache expired, remove it
@@ -75,14 +74,14 @@ export class DocumentRetriever {
       const object = await this.r2Bucket.get(key);
 
       if (!object) {
-        this.logger.warn("Document not found", { key });
+        this.logger.warn("Document not found", { agentName });
         throw new StorageNotFoundError(`Document not found: ${key}`);
       }
 
       const content = await object.text();
 
       if (!content || content.trim().length === 0) {
-        this.logger.warn("Document is empty", { key });
+        this.logger.warn("Document is empty", { agentName });
         throw new StorageNotFoundError(`Document is empty: ${key}`);
       }
 
@@ -102,7 +101,7 @@ export class DocumentRetriever {
       }
 
       this.logger.info("Document retrieved successfully", {
-        key,
+        agentName,
         size: content.length,
       });
       return content;
@@ -119,8 +118,7 @@ export class DocumentRetriever {
       // Handle unexpected errors
       this.logger.error("Error retrieving document", {
         agentName,
-        filename,
-        ...formatError(error),
+        ...getSafeErrorMetadata(error),
       });
       throw new StorageConnectionError(
         `Failed to retrieve document: ${error instanceof Error ? error.message : String(error)}`

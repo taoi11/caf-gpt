@@ -4,7 +4,7 @@ Instructions and architecture patterns for LLM developers and AI agents.
 
 ## Project Overview
 
-CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated inbound replies via the Email Workers `reply()` API.
+CAF-GPT is a backend-only email agent platform using a multi-agent coordinator pattern, built with TypeScript and deployed on Cloudflare Workers. The system uses Cloudflare Email Routing + Email Workers for inbound email processing, routes emails to specialized AI agents (policy questions, feedback notes), retrieves context from Cloudflare R2 storage, and sends AI-generated replies through the structured Cloudflare Email Service binding.
 
 ## Development Commands
 
@@ -36,10 +36,11 @@ wrangler types --env-interface CloudflareBindings  # Generate TypeScript types
 Emails are processed through **Cloudflare Email Workers**:
 
 1. **Inbound Trigger**: Worker `email()` handler in `src/index.ts`.
-2. **Validation**: `createUserAgentResolver()` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
-3. **Parsing**: `UserAgent` parses MIME content with `postal-mime` into `ParsedEmailData`.
-4. **Agent Processing**: `UserAgent` routes parsed email context to `AgentCoordinator.processWithPrimeFoo()`.
-5. **Reply**: `UserAgent` sends AI-generated sender-only responses via the original inbound `AgentEmail.reply()` envelope, preserving threading headers and signed Agents SDK routing headers.
+2. **Boundary and Validation**: The top-level handler fails closed when the `EMAIL` binding is unavailable, then `createUserAgentResolver()` checks authorized senders (forces.gc.ca or specific addresses) and monitored recipients (`agent@caf-gpt.com`, `pacenote@caf-gpt.com`).
+3. **Sender Routing**: Every accepted message routes directly to the `UserAgent` keyed by its normalized SMTP envelope sender; inbound agent-routing headers are ignored.
+4. **Parsing**: `UserAgent` reads and parses the MIME message with `postal-mime` into `ParsedEmailData`.
+5. **Agent Processing**: `UserAgent` routes parsed email context to `AgentCoordinator.processWithPrimeFoo()`.
+6. **Reply**: Successful responses use the official Agents SDK `sendEmail()` helper with Outlook-style reply-all recipients and validated threading headers. Pre-send processing errors use one generic sender-only `replyToEmail()` response; failures after `sendEmail()` begins do not trigger a conflicting fallback reply.
 
 ### AI SDK Tool-Calling Workflow
 
@@ -75,6 +76,7 @@ Business logic modules must be designed to either succeed completely or fail cle
 - The system must catch the failure and respond to the user with a standardized error email using the pre-defined error templates.
 - A module should never fallback to providing partial, unverified, or degraded responses within that module's own contract.
 - Outer orchestration can intentionally skip optional modules when that behavior is explicit, tested, and documented. For example, memory retrieval may fail without preventing the core email response path if the response itself remains complete and verified.
+- The top-level email handler and `UserAgent.onEmail()` own the inbound SMTP failure boundary. They record basic outcome logs, attempt the permitted rejection or sender-only error reply, and return without allowing processing or reply failures to escape. Once the normal reply attempt begins, failures do not issue an inbound error reply. Scheduled memory work remains retryable and may throw a generic error outside the inbound invocation.
 
 ## Storage & Document Retrieval
 
@@ -151,6 +153,10 @@ tools: {
 
 Build and type-checking are handled by TypeScript compiler during `wrangler deploy --minify`.
 
+### Cloudflare Email Binding
+
+The `EMAIL` `send_email` binding permits only `agent@caf-gpt.com` and `pacenote@caf-gpt.com` as senders. It intentionally has no configured destination restriction because Outlook-style reply-all can include valid external recipients.
+
 ## Email Processing Details
 
 ### Threading & Concurrency
@@ -170,9 +176,13 @@ Build and type-checking are handled by TypeScript compiler during `wrangler depl
 
 ### Email Replies
 
-- Inbound replies are sent via `AgentEmail.reply()` using the original Email Worker message so arbitrary inbound senders do not need to be verified Cloudflare Email Service destinations
-- Normal replies and error responses are sender-only
-- Threading headers preserved: `In-Reply-To`, `References`
+- Successful replies use the official Agents SDK `Agent.sendEmail()` helper; generic sender-only error replies use `Agent.replyToEmail()`
+- Reply-all uses every valid, unique `Reply-To` mailbox as `To`, falling back to RFC `From` when no valid `Reply-To` mailbox remains
+- Reply-all CCs preserve original RFC `To` then `Cc` order, never include `Bcc`, and remove malformed, duplicate, primary, sender, self, and all CAF-GPT-domain addresses; valid external recipients are retained
+- The combined structured recipient limit is 50; exceeding it fails the successful response rather than truncating recipients
+- Processing failures before `sendEmail()` begins receive one generic plain-text, sender-only `replyToEmail()` response; error-reply failures are logged and swallowed
+- Once `sendEmail()` is invoked, any failure is logged and processing stops without a fallback reply
+- Threading headers preserve valid `In-Reply-To` and `References`; malformed error-path threading values are omitted
 - Quoted content formatted using `EmailComposer.formatQuotedContent()`
 
 ## Important Gotchas

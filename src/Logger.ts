@@ -8,7 +8,7 @@
  * Top-level declarations:
  * - Logger: Singleton logger using native console - Workers handles timestamps and structured logging
  * - getInstance: Returns the singleton Logger instance
- * - formatError: Extracts message and stack from unknown error types
+ * - getSafeErrorMetadata: Extracts only content-free error classification
  */
 
 interface LogContext {
@@ -63,14 +63,16 @@ export class Logger {
   }
 }
 
-export function formatError(error: unknown): { message: string; stack?: string } {
+/** Extracts safe error class/code metadata without exception text or stack content. */
+export function getSafeErrorMetadata(error: unknown): Record<string, string | boolean> {
   if (error instanceof Error) {
+    const candidate = error as Error & { code?: unknown; recoverable?: unknown };
     return {
-      message: error.message,
-      stack: error.stack,
+      errorName: error.name,
+      ...(typeof candidate.code === "string" ? { errorCode: candidate.code } : {}),
+      ...(typeof candidate.recoverable === "boolean" ? { recoverable: candidate.recoverable } : {}),
     };
   }
-  return {
-    message: String(error),
-  };
+
+  return { errorName: "UnknownError" };
 }

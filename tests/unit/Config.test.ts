@@ -1,29 +1,30 @@
 /**
  * tests/unit/Config.test.ts
  *
- * Unit tests for application configuration parsing.
+ * Unit tests for static application authorization configuration.
  *
  * Top-level declarations:
- * - createConfig test suite: Verifies authorization configuration defaults and overrides
+ * - createConfig test suite: Verifies the code-reviewed authorization policy
  */
 
 import { describe, expect, it } from "vitest";
 import { createConfig } from "../../src/config";
 
 describe("createConfig", () => {
-  it("uses forces.gc.ca and luffy email as default authorization", () => {
-    const config = createConfig(undefined);
+  it("uses the code-reviewed authorization policy", () => {
+    const config = createConfig();
 
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);
     expect(config.authorization.authorizedEmails).toEqual(["luffy@luffy.email"]);
   });
 
-  it("parses AUTHORIZED_SENDERS into domain and explicit email allowlists", () => {
-    const config = createConfig({
-      AUTHORIZED_SENDERS: "forces.gc.ca,admin@test.com",
-    } as Env);
+  it("does not allow a legacy runtime value to broaden authorization", () => {
+    const legacyEnv = {
+      AUTHORIZED_SENDERS: "evil.com,attacker@example.com",
+    } as unknown as Env;
+    const config = createConfig(legacyEnv);
 
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);
-    expect(config.authorization.authorizedEmails).toEqual(["admin@test.com"]);
+    expect(config.authorization.authorizedEmails).toEqual(["luffy@luffy.email"]);
   });
 });

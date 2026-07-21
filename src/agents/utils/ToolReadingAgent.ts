@@ -13,7 +13,7 @@ import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../../config";
 import { AgentValidationError } from "../../errors";
-import { formatError } from "../../Logger";
+import { getSafeErrorMetadata } from "../../Logger";
 import type { ResearchRequest } from "../../types";
 import { BaseAgent, createProviderOptions } from "./BaseAgent";
 
@@ -79,18 +79,17 @@ export abstract class ToolReadingAgent extends BaseAgent {
       const response = await this.runToolReadingCall(request.question, indexContent, allowedFiles);
 
       this.logger.performance(`${this.agentConfig.category}_foo tool-reading research`, startTime, {
-        question: request.question.substring(0, 100),
+        questionLength: request.question.length,
       });
 
       return response;
     } catch (error) {
-      return this.handleResearchError(
-        `${this.agentConfig.category}_foo tool-reading research`,
-        startTime,
-        error,
-        this.agentConfig.policyType,
-        { question: request.question?.substring(0, 100) }
-      );
+      this.logger.error(`${this.agentConfig.category}_foo tool-reading research failed`, {
+        processingTime: Date.now() - startTime,
+        questionLength: request.question?.length ?? 0,
+        ...getSafeErrorMetadata(error),
+      });
+      throw error;
     }
   }
 
@@ -174,7 +173,6 @@ export abstract class ToolReadingAgent extends BaseAgent {
               );
               successfulReads += 1;
               this.logger.info(`${this.agentConfig.policyType} document read through tool`, {
-                file,
                 size: doc.length,
                 successfulReads,
               });
@@ -182,12 +180,6 @@ export abstract class ToolReadingAgent extends BaseAgent {
                 ok: true,
                 content: this.formatDocumentTag(file, doc),
               };
-            } catch (error) {
-              this.logger.error(`Error reading ${this.agentConfig.policyType} document`, {
-                file,
-                ...formatError(error),
-              });
-              return markBadCall(`"${file}" could not be loaded`);
             } finally {
               reservedReads -= 1;
             }

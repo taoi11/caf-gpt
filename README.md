@@ -16,14 +16,14 @@ npm run deploy
 
 - **Email Processing**: Receives emails via Cloudflare Email Workers
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
-- **Sender-Only Email Replies**: Replies to inbound senders via Cloudflare Email Workers `reply()`
+- **Outlook-Style Reply-All**: Replies to valid Reply-To/From mailboxes and filtered original To/Cc recipients, including external participants
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
 - **Memory Management**: Per-user context stored in Cloudflare Agents Durable Object state
 
 ## Architecture
 
 ```text
-Email → Cloudflare Email Routing → routeAgentEmail
+Email → Cloudflare Email Routing → sender-based Agent resolver
                                       ↓
                          UserAgent Durable Object
                          (per normalized sender email)
@@ -34,10 +34,14 @@ Email → Cloudflare Email Routing → routeAgentEmail
                          /        |         \
            LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
                                       ↓
-                Signed raw MIME reply through inbound email
+                Agents SDK sendEmail through Email Service
                                       ↓
-                       Cloudflare Email Workers reply()
+                      Reply-all participants
 ```
+
+Authorized inbound messages route directly to the `UserAgent` keyed by the normalized SMTP envelope sender; unsigned or stale agent-routing headers do not change that identity. Successful responses use the official Agents SDK `Agent.sendEmail()` helper. Reply-all sends to every valid, unique `Reply-To` mailbox, or RFC `From` when no valid `Reply-To` mailbox remains, then preserves original `To` followed by `Cc` as filtered CC recipients. It excludes `Bcc`, malformed or duplicate addresses, sender and primary identities, and CAF-GPT/self addresses, while retaining valid external participants.
+
+Processing failures before the normal send attempt receive one generic sender-only reply through `Agent.replyToEmail()`. Once `sendEmail()` is invoked, a failure is logged and processing stops without a second fallback message. The application keeps basic operational logs and disables Agents SDK email event emission; it does not maintain a delivery ledger or detailed tracing pipeline.
 
 ## Setup
 
@@ -50,10 +54,10 @@ npm install
 ### 2. Configure Secrets
 
 ```bash
-wrangler secret put AUTHORIZED_SENDERS
 wrangler secret put CF_AIG_AUTH
-wrangler secret put EMAIL_SECRET
 ```
+
+Authorized senders are deliberately code-reviewed in `src/config.ts`: the `forces.gc.ca` domain and the exact mailbox `luffy@luffy.email`. Deployment variables cannot broaden this policy.
 
 ### 3. Deploy
 
@@ -65,6 +69,7 @@ npm run deploy
 
 1. In Cloudflare Email Routing, route `agent@caf-gpt.com` and `pacenote@caf-gpt.com` to this Worker.
 2. Ensure the Worker has the Email event handler enabled (already exported in `src/index.ts`).
+3. Enable Email Sending for `caf-gpt.com`; the committed `EMAIL` binding allows only `agent@caf-gpt.com` and `pacenote@caf-gpt.com` as sender addresses and intentionally has no destination restriction.
 
 [For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
 

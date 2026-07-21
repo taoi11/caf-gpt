@@ -24,12 +24,18 @@ None.
   - Likely files: `src/storage/DocumentRetriever.ts`, `src/agents/utils/ToolReadingAgent.ts`, `src/agents/sub-agents/*`, future database migration/seed scripts
   - Done when: Chunking strategy, schema, embedding model, retrieval ranking, citation format, and backfill process are designed before implementation begins.
 
-- [ ] 3. Revisit no-degraded-mode boundaries after memory and email rewrites.
-  - Context: The project rule is no degraded behavior within logic modules. Outer orchestration may intentionally skip optional modules only when explicit, tested, and documented.
-  - Likely files: `AGENTS.md`, `src/agents/UserAgent.ts`, tests around memory failure handling
-  - Done when: Module-level failure contracts are documented in code/tests and orchestration-level optional behavior is named rather than accidental.
-
 ## Log
+
+### 2026-07-20
+
+- Simplified email delivery for the hobby-project scope: authorized inbound mail now routes directly by normalized envelope sender, successful responses use the official Agents SDK `sendEmail()` helper, and generic pre-send error responses use `replyToEmail()`.
+- Reworked reply-all to mirror normal email clients: valid `Reply-To` mailboxes are primary recipients, original `To` then `Cc` participants are preserved after safety filtering, and valid external recipients are allowed.
+- Removed signed routing, the durable delivery ledger, fingerprint-bearing memory tasks, detailed tracing, and failover state machinery. Duplicate inbound delivery is now an accepted tradeoff.
+
+### 2026-07-16
+
+- Kept sender authorization as a code-reviewed non-overridable policy, added strict outbound header validation, and changed coordinator/specialist failures to reach the sender-only error boundary without degraded model content.
+- Closed the no-degraded-mode boundary review by documenting and testing that core email processing fails cleanly while post-send scheduled memory updates remain independently retryable.
 
 ### 2026-06-15
 
@@ -37,12 +43,12 @@ None.
 
 ### 2026-06-03
 
-- Migrated the email spine to Cloudflare Agents SDK: added `UserAgent` as a Durable Object-backed per-user agent keyed by normalized full sender email, routed inbound mail through `routeAgentEmail`, and signed replies with `EMAIL_SECRET`.
+- Migrated the email spine to Cloudflare Agents SDK: added `UserAgent` as a Durable Object-backed per-user agent keyed by normalized full sender email and routed inbound mail through `routeAgentEmail`.
 - Moved user memory from Hyperdrive/Postgres to Agent state, replaced `ctx.waitUntil` memory writes with durable `this.schedule("runMemoryUpdate")`, removed Hyperdrive/Postgres code and bindings, and chose lazy memory rebuild with no Neon backfill.
-- Removed unwired tool factories, legacy iteration middleware, stale email sender/threading handlers, and stale test mocks; added Workers-pool Durable Object tests for routing, signed replies, scheduling, and state updates.
+- Removed unwired tool factories, legacy iteration middleware, stale email sender/threading handlers, and stale test mocks; added Workers-pool Durable Object tests for routing, reply sending, scheduling, and state updates.
 
 ### 2026-06-02
 
-- Reworked outbound email for Cloudflare Email Service: added the `send_email` binding, switched normal/error replies to structured `env.EMAIL.send()`, preserved inbound CC parsing, added authorization-allowlisted reply-all CC handling for normal replies, and kept error responses sender-only.
-- Reviewed Cloudflare Workers platform configuration before deploy: moved the compatibility date forward, kept `nodejs_compat` and assets intentionally, made observability sampling explicit, cleaned up generated-versus-manual Env typing, and documented required secrets.
+- Reworked outbound email for Cloudflare Email Service: added the `send_email` binding, preserved inbound CC parsing, added reply-all CC handling for normal replies, and kept error responses sender-only.
+- Reviewed Cloudflare Workers platform configuration before deploy: moved the compatibility date forward, kept `nodejs_compat` and assets intentionally, cleaned up generated-versus-manual Env typing, and documented required secrets.
 - Created the project TODO structure for cross-session task tracking.

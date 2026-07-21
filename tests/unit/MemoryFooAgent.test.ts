@@ -69,7 +69,7 @@ describe("MemoryFooAgent", () => {
     });
 
     mockEnv = createMockEnv();
-    const config = createConfig(undefined);
+    const config = createConfig(mockEnv);
     agent = new MemoryFooAgent(mockEnv, config);
   });
 
@@ -150,9 +150,7 @@ describe("MemoryFooAgent", () => {
   it("should handle LLM API errors gracefully", async () => {
     setMockLLMError("API Error");
 
-    const result = await agent.updateMemory("Memory", "Question", "Answer");
-
-    expect(result.updated).toBe(false);
+    await expect(agent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow("API Error");
   });
 
   it("should handle malformed LLM response gracefully", async () => {
@@ -161,17 +159,15 @@ describe("MemoryFooAgent", () => {
       toolCalls: [createToolCall("unknown_memory_tool", {})],
     });
 
-    const result = await agent.updateMemory("Memory", "Question", "Answer");
-
-    expect(result.updated).toBe(false);
+    await expect(agent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
+      "recognized memory tool"
+    );
   });
 
   it("should handle invalid update memory content gracefully", async () => {
     setMockMemoryToolCall("update_memory", { content: "" });
 
-    const result = await agent.updateMemory("Memory", "Question", "Answer");
-
-    expect(result.updated).toBe(false);
+    await expect(agent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow();
   });
 
   it("should handle multiline memory content", async () => {

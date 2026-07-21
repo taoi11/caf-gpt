@@ -10,7 +10,7 @@
  */
 
 import { generateText, tool } from "ai";
-import { formatError } from "../../Logger";
+import { getSafeErrorMetadata } from "../../Logger";
 import { MemoryUnchangedToolInputSchema, MemoryUpdateToolInputSchema } from "../../schemas";
 import { BaseAgent, createProviderOptions } from "../utils/BaseAgent";
 
@@ -113,10 +113,9 @@ ${agentReply}
     } catch (error) {
       this.logger.error("Memory update analysis failed", {
         processingTime: Date.now() - startTime,
-        ...formatError(error),
+        ...getSafeErrorMetadata(error),
       });
-
-      return { updated: false };
+      throw error;
     }
   }
 }

@@ -10,7 +10,8 @@
 import { generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { formatError, Logger } from "../Logger";
+import { AgentValidationError } from "../errors";
+import { getSafeErrorMetadata, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
 import { createModel } from "./utils/BaseAgent";
@@ -162,6 +163,16 @@ export class AgentCoordinator {
         },
       });
 
+      if (result.steps.some((step) => step.content.some((part) => part.type === "tool-error"))) {
+        throw new AgentValidationError("Prime_foo tool execution failed");
+      }
+
+      if (!result.text || result.text.trim().length === 0) {
+        this.logger.info("Prime_foo chose not to respond");
+        this.logger.performance("prime_foo processing", startTime);
+        return { content: "", shouldRespond: false };
+      }
+
       const signature = `
 <div class="MsoNormal">
 <br><br>
@@ -171,25 +182,20 @@ Source Code:<br>
 How to use CAF-GPT:<br>
 <pre><code>https://caf-gpt.com</code></pre>
 </div>`;
-      const finalContent = result.text ? result.text + signature : "";
+      const finalContent = result.text + signature;
 
       this.logger.performance("prime_foo processing", startTime);
 
       return {
         content: finalContent,
-        shouldRespond: finalContent.length > 0,
+        shouldRespond: true,
       };
     } catch (error) {
       this.logger.error("Prime_foo processing failed", {
         processingTime: Date.now() - startTime,
-        ...formatError(error),
+        ...getSafeErrorMetadata(error),
       });
-
-      return {
-        content:
-          "Thank you for your email. I encountered a technical issue while processing your request. Please try again later or contact my creator at dude@caf-gpt.com directly.\n\nRegards,\nCAF-GPT",
-        shouldRespond: true,
-      };
+      throw error;
     }
   }
 }
