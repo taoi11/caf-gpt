@@ -83,6 +83,19 @@ describe("BaseAgent provider routing", () => {
     });
   });
 
+  it("should enable high reasoning for OpenAI GPT-5 models", () => {
+    expect(createProviderOptions("openai/gpt-5.4")).toEqual({
+      Unified: {
+        reasoningEffort: "high",
+      },
+    });
+    expect(createProviderOptions("openai/gpt-5.4-mini")).toEqual({
+      Unified: {
+        reasoningEffort: "high",
+      },
+    });
+  });
+
   it("should not attach Cloudflare Unified Billing options to Cloudflare native models", () => {
     expect(createProviderOptions("@cf/moonshotai/kimi-k2.7-code")).toBeUndefined();
   });

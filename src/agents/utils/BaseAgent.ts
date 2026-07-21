@@ -39,10 +39,17 @@ const CLOUDFLARE_ACCOUNT_ID = "7101c0eb0cce7925fd15056c805c97eb";
 const CLOUDFLARE_AI_GATEWAY = "caf-gpt";
 const FLEX_REQUEST_TIMEOUT_MS = 900000;
 const CLOUDFLARE_UNIFIED_BILLING_MODEL_PREFIXES = ["google-ai-studio/"];
+const OPENAI_REASONING_MODEL_PREFIX = "openai/gpt-5.";
 
 const CLOUDFLARE_UNIFIED_FLEX_OPTIONS: ModelProviderOptions = {
   Unified: {
     service_tier: "flex",
+  },
+};
+
+const OPENAI_HIGH_REASONING_OPTIONS: ModelProviderOptions = {
+  Unified: {
+    reasoningEffort: "high",
   },
 };
 
@@ -53,6 +60,9 @@ function isCloudflareUnifiedBillingModel(model: string): boolean {
 
 // Creates model-specific provider options for AI SDK calls.
 export function createProviderOptions(model: string): ModelProviderOptions | undefined {
+  if (model.startsWith(OPENAI_REASONING_MODEL_PREFIX)) {
+    return OPENAI_HIGH_REASONING_OPTIONS;
+  }
   return isCloudflareUnifiedBillingModel(model) ? CLOUDFLARE_UNIFIED_FLEX_OPTIONS : undefined;
 }
 

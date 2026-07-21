@@ -14,6 +14,14 @@ describe("createConfig", () => {
   it("uses the code-reviewed authorization policy", () => {
     const config = createConfig();
 
+    expect(config.llm.models.primeFoo).toMatchObject({
+      model: "openai/gpt-5.4",
+      temperature: 0,
+    });
+    expect(config.llm.models.leaveFoo).toMatchObject({
+      model: "openai/gpt-5.4-mini",
+      temperature: 0,
+    });
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);
     expect(config.authorization.authorizedEmails).toEqual([
       "luffy@luffy.email",
