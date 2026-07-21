@@ -112,7 +112,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         return;
       }
 
-      await this.handleProcessingError(email, error, parsedEmail, config);
+      await this.handleProcessingError(error, parsedEmail, config);
     }
   }
 
@@ -217,7 +217,8 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   /** Builds full email context string for AI processing. */
   private buildEmailContext(parsedEmail: ParsedEmailData): string {
     return `Subject: ${parsedEmail.subject}
-From: ${parsedEmail.from}
+Authenticated-Sender: ${parsedEmail.envelopeFrom}
+RFC-From: ${parsedEmail.from}
 Envelope-To: ${parsedEmail.envelopeTo}
 To: ${parsedEmail.to.join(", ")}${
       parsedEmail.cc && parsedEmail.cc.length > 0 ? `\nCC: ${parsedEmail.cc.join(", ")}` : ""
@@ -284,9 +285,8 @@ ${parsedEmail.body}`;
     }
   }
 
-  /** Attempts one sender-only SDK error reply and swallows every reply failure. */
+  /** Attempts one sender-only structured error reply and swallows every reply failure. */
   private async handleProcessingError(
-    originalEmail: AgentEmail,
     error: unknown,
     parsedEmail: ParsedEmailData,
     config: AppConfig
@@ -299,12 +299,19 @@ ${parsedEmail.body}`;
 
     try {
       const threadingOptions = this.buildThreadingOptions(parsedEmail);
-      await this.replyToEmail(originalEmail, {
-        fromName: "CAF-GPT",
+      const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
+      await this.sendEmail({
+        binding: this.env.EMAIL,
+        to: envelopeSender,
+        from: { email: replyFromAddress, name: "CAF-GPT" },
+        replyTo: replyFromAddress,
         subject: "Error Processing Email",
-        body: this.getErrorResponseMessage(error),
-        contentType: "text/plain",
-        headers: threadingOptions.headers,
+        text: this.getErrorResponseMessage(error),
+        inReplyTo: threadingOptions.inReplyTo,
+        headers: {
+          ...threadingOptions.headers,
+          "Message-ID": `<${crypto.randomUUID()}@caf-gpt.com>`,
+        },
       });
       this.logger.info("Sender-only error reply sent");
     } catch (replyError) {

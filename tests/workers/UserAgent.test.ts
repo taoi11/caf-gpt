@@ -126,7 +126,7 @@ describe("UserAgent email processing", () => {
       const email = createAgentEmail({
         envelopeFrom: "test@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
-        from: "Test Member <delegate@example.com>",
+        from: "Spoofed Admin <luffy@luffy.email>",
         replyTo: ["TEST@forces.gc.ca", "outside@example.com"],
         to: ["agent@caf-gpt.com", "test@forces.gc.ca", "ally@forces.gc.ca"],
         cc: ["external@example.com", "not-an-address", "ALLY@forces.gc.ca", "second@forces.gc.ca"],
@@ -166,6 +166,8 @@ describe("UserAgent email processing", () => {
     });
 
     expect(result.primeFooCalls[0][1]).toBe("remembered preference");
+    expect(result.primeFooCalls[0][0]).toContain("Authenticated-Sender: test@forces.gc.ca");
+    expect(result.primeFooCalls[0][0]).toContain("RFC-From: luffy@luffy.email");
     expect(result.inboundReplyCount).toBe(0);
     expect(result.agentSendCalls).toBe(1);
     expect(result.rawReadCalls).toBe(1);
@@ -448,19 +450,25 @@ describe("UserAgent email processing", () => {
       const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
 
       await instance.onEmail(email);
-      return { replies: getReplyCalls(email), structuredSends: bindingSend.mock.calls.length };
+      return { replies: getReplyCalls(email), structuredSends: bindingSend.mock.calls };
     });
 
-    expect(result.structuredSends).toBe(0);
-    expect(result.replies).toHaveLength(1);
-    expect(result.replies[0][0]).toMatchObject({
-      from: "agent@caf-gpt.com",
+    expect(result.structuredSends).toHaveLength(1);
+    expect(result.replies).toHaveLength(0);
+    const sent = result.structuredSends[0][0];
+    expect(sent).toMatchObject({
+      from: { email: "agent@caf-gpt.com", name: "CAF-GPT" },
       to: `${_label}@forces.gc.ca`,
+      subject: "Error Processing Email",
+      headers: {
+        "In-Reply-To": `<${_label}@forces.gc.ca>`,
+        References: `<${_label}@forces.gc.ca>`,
+      },
     });
-    expect(result.replies[0][0].raw).toMatch(/Content-Type: text\/plain; charset=UTF-8/i);
-    expect(result.replies[0][0].raw).not.toContain("multipart/alternative");
-    expect(result.replies[0][0].raw).not.toContain("Sensitive inbound body");
-    expect(result.replies[0][0].raw).not.toContain("ally@forces.gc.ca");
+    expect(sent.text).toBeTypeOf("string");
+    expect(sent.html).toBeUndefined();
+    expect(JSON.stringify(sent)).not.toContain("Sensitive inbound body");
+    expect(JSON.stringify(sent)).not.toContain("ally@forces.gc.ca");
   });
 
   it("resolves validation failures without AI work", async () => {
@@ -477,6 +485,7 @@ describe("UserAgent email processing", () => {
         body: "",
         messageId: "<invalid@forces.gc.ca>",
       });
+      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
       (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
         processWithPrimeFoo,
       };
@@ -485,12 +494,44 @@ describe("UserAgent email processing", () => {
       return {
         aiCalls: processWithPrimeFoo.mock.calls.length,
         replies: getReplyCalls(email).length,
+        sends: bindingSend.mock.calls.length,
       };
     });
 
-    expect(result).toEqual({ aiCalls: 0, replies: 1 });
+    expect(result).toEqual({ aiCalls: 0, replies: 0, sends: 1 });
   });
 
+  it.each([
+    ["missing", undefined],
+    ["malformed", "not-a-message-id"],
+  ])("omits %s threading values from structured error replies", async (label, messageId) => {
+    const sender = `${label}@forces.gc.ca`;
+    const stub = getUserAgentStub(sender);
+
+    const sent = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
+      const email = createAgentEmail({
+        envelopeFrom: sender,
+        envelopeTo: "agent@caf-gpt.com",
+        from: sender,
+        to: ["agent@caf-gpt.com"],
+        subject: "Invalid",
+        body: "",
+        messageId,
+      });
+      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
+        processWithPrimeFoo: vi.fn(),
+      };
+
+      await instance.onEmail(email);
+      return bindingSend.mock.calls[0][0];
+    });
+
+    expect(sent.to).toBe(sender);
+    expect(sent.headers?.["Message-ID"]).toMatch(/^<[0-9a-f-]+@caf-gpt\.com>$/);
+    expect(sent.headers).not.toHaveProperty("In-Reply-To");
+    expect(sent.headers).not.toHaveProperty("References");
+  });
   it("handles each repeated invalid delivery independently", async () => {
     const stub = getUserAgentStub("repeated-invalid@forces.gc.ca");
 
@@ -514,13 +555,17 @@ describe("UserAgent email processing", () => {
       await instance.onEmail(email);
       return {
         structuredSends: bindingSend.mock.calls.length,
+        messageIds: bindingSend.mock.calls.map(([message]) => message.headers?.["Message-ID"]),
         aiCalls: processWithPrimeFoo.mock.calls.length,
         replies: getReplyCalls(email).length,
         rawReads: getRawCalls(email).length,
       };
     });
 
-    expect(result).toEqual({ structuredSends: 0, aiCalls: 0, replies: 2, rawReads: 2 });
+    expect(result).toMatchObject({ structuredSends: 2, aiCalls: 0, replies: 0, rawReads: 2 });
+    expect(result.messageIds[0]).toMatch(/^<[0-9a-f-]+@caf-gpt\.com>$/);
+    expect(result.messageIds[1]).toMatch(/^<[0-9a-f-]+@caf-gpt\.com>$/);
+    expect(result.messageIds[0]).not.toBe(result.messageIds[1]);
   });
 
   it("processes repeated deliveries twice without a deduplication ledger", async () => {
@@ -571,10 +616,10 @@ describe("UserAgent email processing", () => {
     ]);
   });
 
-  it("sends one fallback for each repeated raw-read failure", async () => {
+  it("sends one structured error for each repeated raw-read failure", async () => {
     const stub = getUserAgentStub("parse@forces.gc.ca");
 
-    const replies = await runInDurableObject(stub, async (instance: UserAgent) => {
+    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
       const email = createAgentEmail({
         envelopeFrom: "parse@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
@@ -585,15 +630,16 @@ describe("UserAgent email processing", () => {
         messageId: "<parse@forces.gc.ca>",
         rawFailure: new Error("raw read failed"),
       });
+      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
 
       await instance.onEmail(email);
       await instance.onEmail(email);
-      return { replies: getReplyCalls(email), rawReads: getRawCalls(email).length };
+      return { sends: bindingSend.mock.calls, rawReads: getRawCalls(email).length };
     });
 
-    expect(replies.replies).toHaveLength(2);
-    expect(replies.replies[0][0].to).toBe("parse@forces.gc.ca");
-    expect(replies.rawReads).toBe(2);
+    expect(result.sends).toHaveLength(2);
+    expect(result.sends[0][0].to).toBe("parse@forces.gc.ca");
+    expect(result.rawReads).toBe(2);
   });
 
   it("does not send a fallback or schedule memory after sendEmail fails", async () => {
@@ -639,8 +685,10 @@ describe("UserAgent email processing", () => {
         subject: "Question",
         body: "Body",
         messageId: "<reply-failure@forces.gc.ca>",
-        replyFailure: new Error("reply rejected"),
       });
+      const bindingSend = vi
+        .spyOn(getEmailBinding(instance), "send")
+        .mockRejectedValue(new Error("reply rejected"));
       (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
         processWithPrimeFoo: vi.fn(async () => {
           throw new Error("model down");
@@ -648,6 +696,8 @@ describe("UserAgent email processing", () => {
       };
 
       await expect(instance.onEmail(email)).resolves.toBeUndefined();
+      expect(bindingSend).toHaveBeenCalledOnce();
+      expect(getReplyCalls(email)).toHaveLength(0);
     });
   });
 
