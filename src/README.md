@@ -37,7 +37,7 @@ src/
 
 - **postal-mime**: MIME parser for Cloudflare Email Worker inbound messages
 - **agents**: Cloudflare Agents SDK for Durable Object-backed email routing, sending, state, and scheduling
-- **ai** + **ai-gateway-provider**: Vercel AI SDK with Cloudflare AI Gateway provider
+- **ai** + **@ai-sdk/openai** + **workers-ai-provider**: Vercel AI SDK OpenAI Responses provider routed through the Cloudflare AI binding/Gateway
 - **zod**: Schema validation for structured agent responses
 
 ## Cloudflare Bindings
@@ -47,9 +47,13 @@ src/
 - **ASSETS**: Static assets binding for prompt templates
 - **EMAIL**: Email Service binding used by `Agent.sendEmail()`; sender-restricted with no destination restriction
 
+## Cloudflare AI Binding
+
+- **AI**: Worker AI binding used by `workers-ai-provider/gateway` to route native OpenAI Responses requests through the `caf-gpt` AI Gateway
+
 ## Environment Variables (Secrets)
 
-- **CF_AIG_AUTH**: Cloudflare AI Gateway authentication token
+No Cloudflare REST API token is required; the legacy `CF_AIG_AUTH` Gateway secret is not used.
 
 Inbound sender authorization is a code-reviewed policy in `src/config.ts`: `forces.gc.ca` plus the exact mailbox `luffy@luffy.email`. It has no deployment-variable override.
 

@@ -51,13 +51,9 @@ Processing failures before the normal send attempt receive one generic sender-on
 npm install
 ```
 
-### 2. Configure Secrets
+### 2. Configure Cloudflare AI Binding
 
-```bash
-wrangler secret put CF_AIG_AUTH
-```
-
-Authorized senders are deliberately code-reviewed in `src/config.ts`: the `forces.gc.ca` domain and the exact mailbox `luffy@luffy.email`. Deployment variables cannot broaden this policy.
+The committed `wrangler.jsonc` configures the `AI` Worker binding and routes OpenAI Responses requests through the `caf-gpt` AI Gateway. No Cloudflare REST API token is required.
 
 ### 3. Deploy
 

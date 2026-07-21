@@ -168,7 +168,7 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
   return {
     R2_BUCKET: mockR2 as unknown as R2Bucket,
     ASSETS: mockAssets as unknown as Fetcher,
-    CF_AIG_AUTH: "test-token",
+    AI: {} as Ai,
     EMAIL: {
       send: async () => ({ messageId: "mock-email" }),
     } as SendEmail,

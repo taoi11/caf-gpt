@@ -1,37 +1,32 @@
 /**
  * tests/unit/BaseAgent.test.ts
  *
- * Unit tests for BaseAgent provider routing utilities
+ * Unit tests for BaseAgent OpenAI Responses provider routing
  *
  * Tests:
- * - Cloudflare Unified Billing provider options for Gemini models
- * - Provider selection for Cloudflare Unified models
- * - TestBaseAgent: Exposes protected generation wrappers for logging-contract tests
+ * - GPT-5.6 model provider options
+ * - Cloudflare AI binding/Gateway transport construction
+ * - Text and structured generation call options and safe logging
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createMockEnv } from "../mocks";
 
-const { mockCreateAiGateway, mockCreateUnified, mockGenerateObject, mockGenerateText } = vi.hoisted(
-  () => ({
-    mockCreateAiGateway: vi.fn(),
-    mockCreateUnified: vi.fn(),
+const { mockCreateGatewayFetch, mockCreateOpenAI, mockGenerateObject, mockGenerateText } =
+  vi.hoisted(() => ({
+    mockCreateGatewayFetch: vi.fn(),
+    mockCreateOpenAI: vi.fn(),
     mockGenerateObject: vi.fn(),
     mockGenerateText: vi.fn(),
-  })
-);
+  }));
 
 vi.mock("ai", async (importOriginal) => {
   const actual = await importOriginal<typeof import("ai")>();
   return { ...actual, generateObject: mockGenerateObject, generateText: mockGenerateText };
 });
-vi.mock("ai-gateway-provider", () => ({
-  createAiGateway: mockCreateAiGateway,
-}));
-vi.mock("ai-gateway-provider/providers/unified", () => ({
-  createUnified: mockCreateUnified,
-}));
+vi.mock("@ai-sdk/openai", () => ({ createOpenAI: mockCreateOpenAI }));
+vi.mock("workers-ai-provider/gateway", () => ({ createGatewayFetch: mockCreateGatewayFetch }));
 
 import { BaseAgent, createModel, createProviderOptions } from "../../src/agents/utils/BaseAgent";
 import { PromptManager } from "../../src/agents/utils/PromptManager";
@@ -67,64 +62,86 @@ class TestBaseAgent extends BaseAgent {
   }
 }
 
-describe("BaseAgent provider routing", () => {
+describe("BaseAgent OpenAI Responses routing", () => {
   beforeEach(() => {
-    mockCreateAiGateway.mockReset();
-    mockCreateUnified.mockReset();
+    mockCreateGatewayFetch.mockReset().mockReturnValue(vi.fn());
+    mockCreateOpenAI.mockReset();
     mockGenerateObject.mockReset();
     mockGenerateText.mockReset();
   });
 
-  it("should enable Cloudflare Unified flex options for Gemini models", () => {
-    expect(createProviderOptions("google-ai-studio/gemini-3.1-flash-lite-preview")).toMatchObject({
-      Unified: {
-        service_tier: "flex",
+  it("sets high reasoning for GPT-5.6 Terra and Luna", () => {
+    const expected = {
+      openai: {
+        forceReasoning: true,
+        reasoningEffort: "high",
       },
-    });
+    };
+
+    expect(createProviderOptions("openai/gpt-5.6-terra")).toEqual(expected);
+    expect(createProviderOptions("openai/gpt-5.6-luna")).toEqual(expected);
   });
 
-  it("should not attach Cloudflare Unified Billing options to Cloudflare native models", () => {
+  it("does not attach GPT-5.6 options to unrelated models", () => {
+    expect(createProviderOptions("gpt-5.4")).toBeUndefined();
     expect(createProviderOptions("@cf/moonshotai/kimi-k2.7-code")).toBeUndefined();
   });
 
-  it("should route Gemini models through Cloudflare AI Gateway Unified Billing", () => {
-    const gatewayModel = { provider: "gateway", modelId: "wrapped" };
-    const unifiedModel = {
-      provider: "Unified.chat",
-      modelId: "google-ai-studio/gemini-3.1-flash-lite-preview",
-    };
-    const mockUnified = vi.fn(() => unifiedModel);
-    mockCreateAiGateway.mockReturnValueOnce(vi.fn(() => gatewayModel));
-    mockCreateUnified.mockReturnValueOnce(mockUnified);
+  it("builds an OpenAI Responses model through the Worker AI Gateway binding", () => {
+    const gatewayFetch = vi.fn();
+    const responsesModel = { provider: "openai.responses", modelId: "gpt-5.6-terra" };
+    const responses = vi.fn(() => responsesModel);
+    mockCreateGatewayFetch.mockReturnValueOnce(gatewayFetch);
+    mockCreateOpenAI.mockReturnValueOnce({ responses });
 
-    const env = createMockEnv();
-    const result = createModel(env, "google-ai-studio/gemini-3.1-flash-lite-preview");
+    const env = createMockEnv({ AI: {} as Ai });
+    const result = createModel(env, "openai/gpt-5.6-terra");
 
-    expect(result).toBe(gatewayModel);
-    expect(mockCreateUnified).toHaveBeenCalledWith({ supportsStructuredOutputs: true });
-    expect(mockUnified).toHaveBeenCalledWith("google-ai-studio/gemini-3.1-flash-lite-preview");
+    expect(result).toBe(responsesModel);
+    expect(mockCreateGatewayFetch).toHaveBeenCalledWith({
+      binding: env.AI,
+      gateway: "caf-gpt",
+    });
+    expect(mockCreateOpenAI).toHaveBeenCalledWith({
+      apiKey: "unused",
+      fetch: gatewayFetch,
+    });
+    expect(responses).toHaveBeenCalledWith("gpt-5.6-terra");
   });
 
-  it("should route Cloudflare native models through the Unified provider", () => {
-    const gatewayModel = { provider: "gateway", modelId: "wrapped" };
-    const unifiedModel = { provider: "Unified.chat", modelId: "@cf/model" };
-    const mockUnified = vi.fn(() => unifiedModel);
-    mockCreateAiGateway.mockReturnValueOnce(vi.fn(() => gatewayModel));
-    mockCreateUnified.mockReturnValueOnce(mockUnified);
+  it("preserves Responses options for text and structured generation", async () => {
+    const modelIdentifier = "openai/gpt-5.6-luna";
+    const gatewayModel = { provider: "openai.responses", modelId: "gpt-5.6-luna" };
+    mockCreateOpenAI.mockReturnValue({ responses: vi.fn(() => gatewayModel) });
+    vi.spyOn(PromptManager.prototype, "renderPrompt").mockResolvedValue({
+      system: "system",
+      user: "question",
+    });
+    mockGenerateText.mockResolvedValueOnce({ text: "answer" });
+    mockGenerateObject.mockResolvedValueOnce({ object: { answer: "structured" } });
 
-    const env = createMockEnv();
-    const result = createModel(env, "@cf/moonshotai/kimi-k2.7-code");
+    const testEnv = createMockEnv({ AI: {} as Ai });
+    const agent = new TestBaseAgent(testEnv, createConfig(testEnv));
 
-    expect(result).toBe(gatewayModel);
-    expect(mockCreateUnified).toHaveBeenCalledWith({ supportsStructuredOutputs: false });
-    expect(mockUnified).toHaveBeenCalledWith("@cf/moonshotai/kimi-k2.7-code");
+    await expect(agent.callText(modelIdentifier)).resolves.toBe("answer");
+    await expect(agent.callStructured(modelIdentifier)).resolves.toEqual({ answer: "structured" });
+
+    expect(mockGenerateText.mock.calls[0]?.[0]).toMatchObject({
+      temperature: 0,
+      maxOutputTokens: 10,
+      providerOptions: createProviderOptions(modelIdentifier),
+    });
+    expect(mockGenerateObject.mock.calls[0]?.[0]).toMatchObject({
+      temperature: 0,
+      maxOutputTokens: 10,
+      providerOptions: createProviderOptions(modelIdentifier),
+    });
   });
 
   it("omits model fields and identifiers from all generation log contexts", async () => {
-    const modelIdentifier = "private-provider/private-model-identifier";
-    const gatewayModel = { provider: "gateway", modelId: "wrapped" };
-    mockCreateAiGateway.mockReturnValue(vi.fn(() => gatewayModel));
-    mockCreateUnified.mockReturnValue(vi.fn((model: string) => model));
+    const modelIdentifier = "openai/private-model-identifier";
+    const gatewayModel = { provider: "openai.responses", modelId: "private-model-identifier" };
+    mockCreateOpenAI.mockReturnValue({ responses: vi.fn(() => gatewayModel) });
     vi.spyOn(PromptManager.prototype, "renderPrompt").mockResolvedValue({
       system: "system",
       user: "question",
@@ -139,7 +156,7 @@ describe("BaseAgent provider routing", () => {
       vi.spyOn(logger, "warn"),
       vi.spyOn(logger, "error"),
     ];
-    const testEnv = createMockEnv();
+    const testEnv = createMockEnv({ AI: {} as Ai });
     const agent = new TestBaseAgent(testEnv, createConfig(testEnv));
 
     await expect(agent.callText(modelIdentifier)).resolves.toBe("answer");

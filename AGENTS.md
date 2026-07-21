@@ -89,7 +89,7 @@ R2 organization: `${category}/${filename}`
 
 ## LLM Integration
 
-The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudflare AI Gateway for all LLM interactions.
+The codebase uses **Vercel AI SDK** (`ai` + `@ai-sdk/openai`) with the OpenAI Responses provider routed through Cloudflare AI Gateway via the Worker AI binding.
 
 **Key points:**
 
@@ -97,8 +97,8 @@ The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudfla
 - **Prompt templating**: Uses `PromptManager` with `{variable}` syntax for template rendering
 - **Tool validation**: Uses Zod input schemas for Prime Foo, memory, and `read_file` tool calls
 - **Tool calling**: Prime Foo, Memory Foo, and indexed policy agents use AI SDK `generateText()` tools
-- **AI Gateway**: Routes through Cloudflare AI Gateway via `ai-gateway-provider` with the unified provider — current code requires the `CF_AIG_AUTH` secret
-- **Models**: `@cf/moonshotai/kimi-k2.7-code` (orchestrator), `google-ai-studio/gemini-3.1-flash-lite-preview` (specialists)
+- **AI Gateway**: Routes OpenAI Responses requests through the `AI` Worker binding using `workers-ai-provider/gateway`; no Cloudflare REST API token is used
+- **Models**: `openai/gpt-5.6-terra` (orchestrator), `openai/gpt-5.6-luna` (specialists); both use temperature 0 and high reasoning effort
 - **Streaming is disabled** for CPU efficiency in Cloudflare Workers
 
 ## Adding New Agents/Sub-agents

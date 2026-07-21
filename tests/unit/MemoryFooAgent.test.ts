@@ -27,13 +27,6 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
-vi.mock("ai-gateway-provider", () => ({
-  createAiGateway: vi.fn(() => vi.fn((model: unknown) => model)),
-}));
-vi.mock("ai-gateway-provider/providers/unified", () => ({
-  createUnified: vi.fn(() => vi.fn((model: string) => model)),
-}));
-
 import { MemoryFooAgent } from "../../src/agents/sub-agents/MemoryFooAgent";
 import { createConfig } from "../../src/config";
 
@@ -112,7 +105,7 @@ describe("MemoryFooAgent", () => {
     expect(Object.keys(lastCall?.tools ?? {})).toEqual(["update_memory", "leave_memory_unchanged"]);
   });
 
-  it("should pass Cloudflare Unified flex provider options for the small model", async () => {
+  it("should pass high reasoning Responses options for the small model", async () => {
     setMockMemoryToolCall("update_memory", { content: "New memory content" });
 
     const result = await agent.updateMemory("", "Question", "Answer");
@@ -121,8 +114,9 @@ describe("MemoryFooAgent", () => {
     expect(result.content).toBe("New memory content");
     const lastCall = mockGenerateText.mock.calls.at(-1)?.[0];
     expect(lastCall?.providerOptions).toMatchObject({
-      Unified: {
-        service_tier: "flex",
+      openai: {
+        forceReasoning: true,
+        reasoningEffort: "high",
       },
     });
   });

@@ -25,13 +25,6 @@ vi.mock("ai", async (importOriginal) => {
   };
 });
 
-vi.mock("ai-gateway-provider", () => ({
-  createAiGateway: vi.fn(() => vi.fn((model: unknown) => model)),
-}));
-vi.mock("ai-gateway-provider/providers/unified", () => ({
-  createUnified: vi.fn(() => vi.fn((model: string) => model)),
-}));
-
 import { LeaveFooAgent } from "../../src/agents/sub-agents/LeaveFooAgent";
 import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";

@@ -17,11 +17,6 @@ export default defineConfig({
       wrangler: {
         configPath: "./wrangler.jsonc",
       },
-      miniflare: {
-        bindings: {
-          CF_AIG_AUTH: "test-token",
-        },
-      },
     }),
   ],
   test: {
