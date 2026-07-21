@@ -157,11 +157,11 @@ describe("EmailValidator", () => {
       expect(validateEmailContent(email).isValid).toBe(false);
     });
 
-    it("rejects any malformed References token", () => {
+    it("allows malformed non-control References tokens for outbound filtering", () => {
       const email = createValidEmail();
       email.references = "<root@forces.gc.ca> malformed <next@forces.gc.ca>";
 
-      expect(validateEmailContent(email).errors).toContain("Invalid References format");
+      expect(validateEmailContent(email).isValid).toBe(true);
     });
 
     it("should warn about old emails", () => {

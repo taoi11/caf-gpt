@@ -168,7 +168,9 @@ export class AgentCoordinator {
       }
 
       if (!result.text || result.text.trim().length === 0) {
-        throw new AgentValidationError("Prime_foo returned empty content");
+        this.logger.info("Prime_foo chose not to respond");
+        this.logger.performance("prime_foo processing", startTime);
+        return { content: "", shouldRespond: false };
       }
 
       const signature = `

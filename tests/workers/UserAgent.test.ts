@@ -294,21 +294,22 @@ describe("UserAgent email processing", () => {
     expect(result).toEqual({ sends: 1, schedules: 1, replies: 0 });
   });
 
-  it("uses the pacenote inbound alias as sender and Reply-To", async () => {
+  it("uses the pacenote envelope recipient as sender, Reply-To, and AI context", async () => {
     const stub = getUserAgentStub("pacenote-user@forces.gc.ca");
 
-    const sent = await runInDurableObject(stub, async (instance: UserAgent) => {
+    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
       const sentMessages: unknown[] = [];
+      const processWithPrimeFoo = vi.fn(async (_context: string) => ({
+        shouldRespond: true,
+        content: "<p>Feedback note</p>",
+      }));
       vi.spyOn(getEmailBinding(instance), "send").mockImplementation(async (message) => {
         sentMessages.push(message);
         return { messageId: "structured-reply" };
       });
       vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
       (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(async () => ({
-          shouldRespond: true,
-          content: "<p>Feedback note</p>",
-        })),
+        processWithPrimeFoo,
       };
 
       await instance.onEmail(
@@ -316,20 +317,23 @@ describe("UserAgent email processing", () => {
           envelopeFrom: "pacenote-user@forces.gc.ca",
           envelopeTo: "pacenote@caf-gpt.com",
           from: "pacenote-user@forces.gc.ca",
-          to: ["pacenote@caf-gpt.com"],
+          to: ["forwarder@forces.gc.ca"],
           subject: "Feedback note",
           body: "Write a feedback note.",
           messageId: "<pacenote-1@forces.gc.ca>",
         })
       );
 
-      return sentMessages;
+      return { sentMessages, primeFooCalls: processWithPrimeFoo.mock.calls };
     });
 
-    expect(sent[0]).toMatchObject({
+    expect(result.primeFooCalls[0][0]).toContain("Envelope-To: pacenote@caf-gpt.com");
+    expect(result.primeFooCalls[0][0]).toContain("To: forwarder@forces.gc.ca");
+    expect(result.sentMessages[0]).toMatchObject({
       from: { email: "pacenote@caf-gpt.com", name: "CAF-GPT" },
       replyTo: "pacenote@caf-gpt.com",
       to: "pacenote-user@forces.gc.ca",
+      cc: ["forwarder@forces.gc.ca"],
     });
   });
 
@@ -410,6 +414,13 @@ describe("UserAgent email processing", () => {
       "<deduplicate-current@forces.gc.ca>",
       "<root@forces.gc.ca> <deduplicate-current@forces.gc.ca>",
     ],
+    [
+      "filters malformed References tokens without rejecting the email",
+      "thread-filter@forces.gc.ca",
+      { references: "<root@forces.gc.ca> malformed <next@forces.gc.ca>" },
+      "<filter-current@forces.gc.ca>",
+      "<root@forces.gc.ca> <next@forces.gc.ca> <filter-current@forces.gc.ca>",
+    ],
   ])("%s", async (_label, sender, headers, messageId, expectedReferences) => {
     const stub = getUserAgentStub(sender);
 
@@ -443,7 +454,7 @@ describe("UserAgent email processing", () => {
     expect(delivered.headers.References).toBe(expectedReferences);
   });
 
-  it("routes blank real-coordinator output to one sender-only terminal error reply", async () => {
+  it("treats blank real-coordinator output as an intentional no-response decision", async () => {
     const stub = getUserAgentStub("blank-output@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
@@ -472,14 +483,8 @@ describe("UserAgent email processing", () => {
     });
 
     expect(result.structuredSends).toBe(0);
-    expect(result.replies).toHaveLength(1);
-    expect(result.replies[0][0]).toMatchObject({
-      from: "agent@caf-gpt.com",
-      to: "blank-output@forces.gc.ca",
-    });
-    expect(result.replies[0][0].raw).not.toContain("ally@forces.gc.ca");
-    expect(result.replies[0][0].raw).not.toContain("second@forces.gc.ca");
-    expect(result.ledger).toEqual([{ status: "error_replied" }]);
+    expect(result.replies).toHaveLength(0);
+    expect(result.ledger).toEqual([{ status: "no_response" }]);
   });
 
   it.each([

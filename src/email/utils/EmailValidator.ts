@@ -86,15 +86,8 @@ export function validateEmailContent(parsedEmail: ParsedEmailData): ValidationRe
     errors.push("Invalid In-Reply-To format");
   }
 
-  if (parsedEmail.references) {
-    if (hasControlCharacters(parsedEmail.references)) {
-      errors.push("References contains control characters");
-    } else {
-      const references = parsedEmail.references.trim().split(/ +/);
-      if (references.some((reference) => !isValidMessageId(reference))) {
-        errors.push("Invalid References format");
-      }
-    }
+  if (parsedEmail.references && hasControlCharacters(parsedEmail.references)) {
+    errors.push("References contains control characters");
   }
 
   // Date validation

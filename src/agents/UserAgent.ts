@@ -361,6 +361,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   private buildEmailContext(parsedEmail: ParsedEmailData): string {
     return `Subject: ${parsedEmail.subject}
 From: ${parsedEmail.from}
+Envelope-To: ${parsedEmail.envelopeTo}
 To: ${parsedEmail.to.join(", ")}${
       parsedEmail.cc && parsedEmail.cc.length > 0 ? `\nCC: ${parsedEmail.cc.join(", ")}` : ""
     }
