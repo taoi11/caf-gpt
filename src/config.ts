@@ -43,14 +43,14 @@ interface EmailConfig {
 
 // Main model config - handles multi-turn conversations, coordination, and tool use.
 const ORCHESTRATOR_CONFIG: LLMModelConfig = {
-  model: "openai/gpt-5.4",
+  model: "openai/gpt-5.6-terra",
   temperature: 0,
   maxOutputTokens: 16384,
 };
 
 // Small model config - focused document Q&A, selection, and generation.
 const SPECIALIST_CONFIG: LLMModelConfig = {
-  model: "openai/gpt-5.4-mini",
+  model: "openai/gpt-5.6-luna",
   temperature: 0,
   maxOutputTokens: 16384,
 };

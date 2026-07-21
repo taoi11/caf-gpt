@@ -15,11 +15,11 @@ describe("createConfig", () => {
     const config = createConfig();
 
     expect(config.llm.models.primeFoo).toMatchObject({
-      model: "openai/gpt-5.4",
+      model: "openai/gpt-5.6-terra",
       temperature: 0,
     });
     expect(config.llm.models.leaveFoo).toMatchObject({
-      model: "openai/gpt-5.4-mini",
+      model: "openai/gpt-5.6-luna",
       temperature: 0,
     });
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);

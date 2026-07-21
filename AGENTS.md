@@ -98,7 +98,7 @@ The codebase uses **Vercel AI SDK** (`ai` + `ai-gateway-provider`) with Cloudfla
 - **Tool validation**: Uses Zod input schemas for Prime Foo, memory, and `read_file` tool calls
 - **Tool calling**: Prime Foo, Memory Foo, and indexed policy agents use AI SDK `generateText()` tools
 - **AI Gateway**: Routes through Cloudflare AI Gateway via `ai-gateway-provider` with the unified provider — current code requires the `CF_AIG_AUTH` secret
-- **Models**: `@cf/moonshotai/kimi-k2.7-code` (orchestrator), `google-ai-studio/gemini-3.1-flash-lite-preview` (specialists)
+- **Models**: `openai/gpt-5.6-terra` (orchestrator), `openai/gpt-5.6-luna` (specialists); both use high reasoning through Cloudflare AI Gateway Unified Billing.
 - **Streaming is disabled** for CPU efficiency in Cloudflare Workers
 
 ## Adding New Agents/Sub-agents

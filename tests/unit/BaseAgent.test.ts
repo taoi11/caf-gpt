@@ -84,12 +84,12 @@ describe("BaseAgent provider routing", () => {
   });
 
   it("should enable high reasoning for OpenAI GPT-5 models", () => {
-    expect(createProviderOptions("openai/gpt-5.4")).toEqual({
+    expect(createProviderOptions("openai/gpt-5.6-terra")).toEqual({
       Unified: {
         reasoningEffort: "high",
       },
     });
-    expect(createProviderOptions("openai/gpt-5.4-mini")).toEqual({
+    expect(createProviderOptions("openai/gpt-5.6-luna")).toEqual({
       Unified: {
         reasoningEffort: "high",
       },
