@@ -106,7 +106,7 @@ function hasAnyHeader(headers: Record<string, string>, headerNames: string[]): b
 }
 
 // Normalize header keys to lowercase for consistent lookups
-function normalizeHeaders(headers?: Record<string, string>): Record<string, string> {
+function normalizeHeaders(headers?: Record<string, string>) {
   const normalized: Record<string, string> = {};
 
   if (!headers) {
