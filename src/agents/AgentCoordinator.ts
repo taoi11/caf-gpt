@@ -4,6 +4,7 @@
  * Agent coordinator for prime_foo using AI SDK built-in tool orchestration
  *
  * Top-level declarations:
+ * - AgentCoordinatorDependencies: Injectable model and generation functions for Prime Foo
  * - PrimeFooStepFinishEvent: Minimal step metadata consumed by circuit-breaker logging
  * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools and a circuit breaker (maxSteps: 3)
  */
@@ -23,6 +24,12 @@ interface PrimeFooStepFinishEvent {
   toolCalls: readonly object[];
 }
 
+// Injectable AI SDK functions used by the Prime Foo coordinator.
+export interface AgentCoordinatorDependencies {
+  createModel: typeof createModel;
+  generateText: typeof generateText;
+}
+
 export class AgentCoordinator {
   private logger: Logger;
   private promptManager: PromptManager;
@@ -34,13 +41,18 @@ export class AgentCoordinator {
     private leaveFooAgent: LeaveFooAgent,
     private doadFooAgent: DoadFooAgent,
     private qroFooAgent: QroFooAgent,
-    private paceFooAgent: PaceFooAgent
+    private paceFooAgent: PaceFooAgent,
+    private dependencies: AgentCoordinatorDependencies
   ) {
     this.logger = Logger.getInstance();
     this.promptManager = promptManager;
   }
 
-  static async create(env: Env, config: AppConfig): Promise<AgentCoordinator> {
+  static async create(
+    env: Env,
+    config: AppConfig,
+    dependencies: Partial<AgentCoordinatorDependencies> = {}
+  ): Promise<AgentCoordinator> {
     const promptManager = new PromptManager(env.ASSETS);
     return new AgentCoordinator(
       env,
@@ -49,7 +61,8 @@ export class AgentCoordinator {
       new LeaveFooAgent(env, config),
       new DoadFooAgent(env, config),
       new QroFooAgent(env, config),
-      new PaceFooAgent(env, config)
+      new PaceFooAgent(env, config),
+      { createModel, generateText, ...dependencies }
     );
   }
 
@@ -70,7 +83,7 @@ export class AgentCoordinator {
       }
 
       const modelConfig = this.config.llm.models.primeFoo;
-      const model = createModel(this.env, modelConfig.model);
+      const model = this.dependencies.createModel(this.env, modelConfig.model);
       const providerOptions = createProviderOptions(modelConfig.model);
       const maxSteps = 3;
       const generationOptions = {
@@ -173,7 +186,7 @@ export class AgentCoordinator {
       if (providerOptions) {
         Object.assign(generationOptions, { providerOptions });
       }
-      const result = await generateText(generationOptions);
+      const result = await this.dependencies.generateText(generationOptions);
 
       if (result.steps.some((step) => step.content.some((part) => part.type === "tool-error"))) {
         throw new AgentValidationError("Prime_foo tool execution failed");

@@ -12,24 +12,12 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
-import type { MockR2Bucket } from "../mocks/cloudflare";
+import { MockR2Bucket } from "../mocks/cloudflare";
 
-// Use vi.hoisted to define mock function BEFORE module imports
-const { mockGenerateText } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return {
-    ...actual,
-    generateText: mockGenerateText,
-  };
-});
-
-// Import modules AFTER mocks
 import { PaceFooAgent } from "../../src/agents/sub-agents/PaceFooAgent";
 import { createConfig } from "../../src/config";
+
+const mockGenerateText = vi.fn();
 
 function setMockLLMResponse(response: string) {
   mockGenerateText.mockResolvedValueOnce({ text: response });
@@ -51,9 +39,9 @@ describe("PaceFooAgent", () => {
       text: "Default response",
     });
 
-    mockEnv = createMockEnv();
+    mockBucket = new MockR2Bucket();
+    mockEnv = Object.assign(createMockEnv(), { R2_BUCKET: mockBucket });
     const config = createConfig(mockEnv);
-    mockBucket = mockEnv.R2_BUCKET as unknown as MockR2Bucket;
 
     mockBucket.seed(
       "paceNote/cpl.md",
@@ -90,7 +78,7 @@ MCpl Smith demonstrated excellent leadership during Exercise MAPLE RESOLVE.
 Cpl Jones showed initiative by completing additional training.`
     );
 
-    agent = new PaceFooAgent(mockEnv, config);
+    agent = new PaceFooAgent(mockEnv, config, { generateText: mockGenerateText });
   });
 
   it("should generate feedback note for CPL rank", async () => {

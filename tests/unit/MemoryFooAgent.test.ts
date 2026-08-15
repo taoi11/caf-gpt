@@ -12,25 +12,20 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { z } from "zod";
 import { createMockEnv } from "../mocks";
-
-// Use vi.hoisted to define mock function BEFORE module imports
-const { mockGenerateText } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return {
-    ...actual,
-    generateText: mockGenerateText,
-  };
-});
 
 import { MemoryFooAgent } from "../../src/agents/sub-agents/MemoryFooAgent";
 import { createConfig } from "../../src/config";
+import { MemoryUnchangedToolInputSchema, MemoryUpdateToolInputSchema } from "../../src/schemas";
 
-function createToolCall(toolName: string, input: unknown) {
+type MemoryToolInput =
+  | z.input<typeof MemoryUpdateToolInputSchema>
+  | z.input<typeof MemoryUnchangedToolInputSchema>;
+
+const mockGenerateText = vi.fn();
+
+function createToolCall(toolName: string, input: MemoryToolInput) {
   return {
     type: "tool-call",
     toolCallId: "memory-tool-call",
@@ -39,7 +34,7 @@ function createToolCall(toolName: string, input: unknown) {
   };
 }
 
-function setMockMemoryToolCall(toolName: string, input: unknown = {}) {
+function setMockMemoryToolCall(toolName: string, input: MemoryToolInput = {}) {
   mockGenerateText.mockResolvedValueOnce({
     text: "",
     toolCalls: [createToolCall(toolName, input)],
@@ -63,7 +58,7 @@ describe("MemoryFooAgent", () => {
 
     mockEnv = createMockEnv();
     const config = createConfig(mockEnv);
-    agent = new MemoryFooAgent(mockEnv, config);
+    agent = new MemoryFooAgent(mockEnv, config, { generateText: mockGenerateText });
   });
 
   it("should return updated memory when LLM provides new content", async () => {

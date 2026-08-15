@@ -7,25 +7,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentRetriever } from "../../src/storage/DocumentRetriever";
 import { createMockEnv } from "../mocks";
-import type { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
-
-const { mockGenerateText, mockGenerateObject } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn(),
-  mockGenerateObject: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return {
-    ...actual,
-    generateText: mockGenerateText,
-    generateObject: mockGenerateObject,
-  };
-});
+import { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
 import { QroFooAgent } from "../../src/agents/sub-agents/QroFooAgent";
 import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";
+
+const mockGenerateText = vi.fn();
+const mockGenerateObject = vi.fn();
 
 interface ReadFileToolOptions {
   system?: string;
@@ -50,8 +39,16 @@ function mockModelWithoutReads(answer = "Unsupported answer") {
   mockGenerateText.mockResolvedValueOnce({ text: answer });
 }
 
+/** Exposes QR&O index parsing for direct allowlist assertions. */
+class TestQroFooAgent extends QroFooAgent {
+  /** Parses an index through the production protected implementation. */
+  getAllowedFilesForTest(indexContent: string): Set<string> {
+    return this.getAllowedFiles(indexContent);
+  }
+}
+
 describe("QroFooAgent", () => {
-  let agent: QroFooAgent;
+  let agent: TestQroFooAgent;
   let mockEnv: ReturnType<typeof createMockEnv>;
   let mockBucket: MockR2Bucket;
   let mockAssets: MockFetcher;
@@ -61,11 +58,14 @@ describe("QroFooAgent", () => {
     mockGenerateObject.mockReset();
     DocumentRetriever.clearCache();
 
-    mockEnv = createMockEnv();
+    mockBucket = new MockR2Bucket();
+    mockAssets = new MockFetcher();
+    mockEnv = Object.assign(createMockEnv(), {
+      R2_BUCKET: mockBucket,
+      ASSETS: mockAssets,
+    });
 
     const config = createConfig(mockEnv);
-    mockBucket = mockEnv.R2_BUCKET as unknown as MockR2Bucket;
-    mockAssets = mockEnv.ASSETS as unknown as MockFetcher;
 
     mockBucket.seed(
       "qro/index.md",
@@ -112,16 +112,12 @@ Members may submit grievances through the chain of command.`
 All members must maintain high standards of conduct.`
     );
 
-    agent = new QroFooAgent(mockEnv, config);
+    agent = new TestQroFooAgent(mockEnv, config, { generateText: mockGenerateText });
   });
 
   describe("research", () => {
     it("should allow files from current Markdown list and table index entries", () => {
-      const allowedFiles = (
-        agent as unknown as {
-          getAllowedFiles: (indexContent: string) => Set<string>;
-        }
-      ).getAllowedFiles(`# QR&O Index
+      const allowedFiles = agent.getAllowedFilesForTest(`# QR&O Index
 
 - vol-1-administration/ch-16-leave.md — Leave Regulations
 1. \`vol-1-administration/ch-19-grievances.md\` — Grievance Procedures
@@ -140,11 +136,7 @@ All members must maintain high standards of conduct.`
     });
 
     it("should reject prose mentions and unsafe index paths", () => {
-      const allowedFiles = (
-        agent as unknown as {
-          getAllowedFiles: (indexContent: string) => Set<string>;
-        }
-      ).getAllowedFiles(`# QR&O Index
+      const allowedFiles = agent.getAllowedFilesForTest(`# QR&O Index
 
 For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 - This description mentions vol-8-misleading/ch-88-not-an-entry.md in prose.
@@ -197,6 +189,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
       await agent.research({ question: "Can I get special leave?" });
 
+      // SAFETY: This test's fake is invoked once by ToolReadingAgent with ReadFileToolOptions.
       const call = mockGenerateText.mock.calls[0][0] as ReadFileToolOptions;
       expect(call.system).toContain("QR&O Index");
       expect(call.system).toContain("ch-16-leave");

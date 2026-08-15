@@ -4,6 +4,8 @@
  * Base agent with OpenAI Responses integration routed through Cloudflare AI Gateway
  *
  * Top-level declarations:
+ * - BaseAgentDependencies: Injectable model and generation functions for BaseAgent workflows
+ * - CreateModelDependencies: Injectable provider factories for model construction
  * - BaseAgent: Base agent with AI SDK integration and template-based prompts
  * - isOpenAIResponsesModel: Checks if a model uses the OpenAI Responses provider
  * - createModel: Creates an OpenAI Responses model routed through Cloudflare AI Gateway
@@ -38,6 +40,19 @@ type AgentErrorLike = Error | string;
 type AgentLogMetadataValue = string | number | boolean | null | undefined;
 type AgentLogMetadata = Record<string, AgentLogMetadataValue>;
 
+// Injectable provider factories used to construct an OpenAI Responses model.
+export interface CreateModelDependencies {
+  createOpenAI: typeof createOpenAI;
+  createGatewayFetch: typeof createGatewayFetch;
+}
+
+// Injectable AI SDK functions used by BaseAgent and its subclasses.
+export interface BaseAgentDependencies {
+  createModel: typeof createModel;
+  generateObject: typeof generateObject;
+  generateText: typeof generateText;
+}
+
 interface AgentErrorMessages {
   timeout: string;
   aiGateway: string;
@@ -67,10 +82,14 @@ export function createProviderOptions(model: string): ModelProviderOptions | und
 }
 
 // Creates an OpenAI Responses model whose native request is routed by the AI binding Gateway API.
-export function createModel(env: Env, model: string): LanguageModel {
-  const openai = createOpenAI({
+export function createModel(
+  env: Env,
+  model: string,
+  dependencies: CreateModelDependencies = { createOpenAI, createGatewayFetch }
+): LanguageModel {
+  const openai = dependencies.createOpenAI({
     apiKey: "unused",
-    fetch: createGatewayFetch({
+    fetch: dependencies.createGatewayFetch({
       binding: env.AI,
       gateway: CLOUDFLARE_AI_GATEWAY,
     }),
@@ -86,22 +105,30 @@ export abstract class BaseAgent {
   protected config: AppConfig;
   protected promptManager: PromptManager;
   protected docRetriever: DocumentRetriever;
+  protected dependencies: BaseAgentDependencies;
   private modelCache: Map<string, LanguageModel> = new Map();
 
   constructor(
     protected env: Env,
-    config: AppConfig
+    config: AppConfig,
+    dependencies: Partial<BaseAgentDependencies> = {}
   ) {
     this.config = config;
     this.logger = Logger.getInstance();
     this.promptManager = new PromptManager(env.ASSETS);
     this.docRetriever = new DocumentRetriever(env.R2_BUCKET);
+    this.dependencies = {
+      createModel,
+      generateObject,
+      generateText,
+      ...dependencies,
+    };
   }
 
   protected getCachedModel(model: string): LanguageModel {
     let cached = this.modelCache.get(model);
     if (!cached) {
-      cached = createModel(this.env, model);
+      cached = this.dependencies.createModel(this.env, model);
       this.modelCache.set(model, cached);
       this.logger.debug("Created and cached new AI SDK model");
     }
@@ -128,7 +155,7 @@ export abstract class BaseAgent {
       if (providerOptions) {
         Object.assign(generationOptions, { providerOptions });
       }
-      const result = await generateText(generationOptions);
+      const result = await this.dependencies.generateText(generationOptions);
 
       if (!result.text || result.text.trim().length === 0) {
         throw new AgentValidationError("AI SDK returned empty content");
@@ -184,7 +211,7 @@ export abstract class BaseAgent {
       if (providerOptions) {
         Object.assign(generationOptions, { providerOptions });
       }
-      const result = await generateObject(generationOptions);
+      const result = await this.dependencies.generateObject(generationOptions);
 
       this.logger.info("AI SDK structured call successful", {
         schemaName,

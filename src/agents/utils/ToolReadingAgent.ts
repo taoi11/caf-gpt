@@ -9,12 +9,13 @@
  * - ToolReadingAgent: Base class implementing indexed, bounded document reads during generation
  */
 
-import { generateText, stepCountIs, tool } from "ai";
+import { stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../../config";
 import { AgentValidationError } from "../../errors";
 import { getSafeErrorMetadata } from "../../Logger";
 import type { ResearchRequest } from "../../types";
+import type { BaseAgentDependencies } from "./BaseAgent";
 import { BaseAgent, createProviderOptions } from "./BaseAgent";
 
 const READ_FILE_TOOL_NAME = "read_file";
@@ -51,8 +52,13 @@ interface ReadFileResult {
 export abstract class ToolReadingAgent extends BaseAgent {
   protected agentConfig: ToolReadingAgentConfig;
 
-  constructor(env: Env, config: AppConfig, agentConfig: ToolReadingAgentConfig) {
-    super(env, config);
+  constructor(
+    env: Env,
+    config: AppConfig,
+    agentConfig: ToolReadingAgentConfig,
+    dependencies: Partial<BaseAgentDependencies> = {}
+  ) {
+    super(env, config, dependencies);
     this.agentConfig = agentConfig;
   }
 
@@ -190,7 +196,7 @@ export abstract class ToolReadingAgent extends BaseAgent {
     if (providerOptions) {
       Object.assign(generationOptions, { providerOptions });
     }
-    const result = await generateText(generationOptions);
+    const result = await this.dependencies.generateText(generationOptions);
 
     if (result.steps?.some((step) => step.content.some((part) => part.type === "tool-error"))) {
       throw new AgentValidationError(`${this.agentConfig.policyType} read_file hard limit failed`);

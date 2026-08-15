@@ -9,7 +9,7 @@
  * - updateMemory: Processes email exchange and returns updated memory or unchanged signal
  */
 
-import { generateText, tool } from "ai";
+import { tool } from "ai";
 import { getSafeErrorMetadata } from "../../Logger";
 import { MemoryUnchangedToolInputSchema, MemoryUpdateToolInputSchema } from "../../schemas";
 import { BaseAgent, createProviderOptions } from "../utils/BaseAgent";
@@ -85,7 +85,7 @@ ${agentReply}
       if (providerOptions) {
         Object.assign(generationOptions, { providerOptions });
       }
-      const response = await generateText(generationOptions);
+      const response = await this.dependencies.generateText(generationOptions);
 
       const memoryToolCall = response.toolCalls.find(
         (call) =>

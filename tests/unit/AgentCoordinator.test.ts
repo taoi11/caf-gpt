@@ -7,27 +7,18 @@
  * - AgentCoordinator failure logging suite: Verifies safe AI API metadata classification
  */
 
+import { createOpenAI } from "@ai-sdk/openai";
 import { APICallError } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
 
-const { mockGenerateText } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return { ...actual, generateText: mockGenerateText };
-});
-
-vi.mock("../../src/agents/utils/BaseAgent", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("../../src/agents/utils/BaseAgent")>();
-  return { ...actual, createModel: vi.fn(() => ({ provider: "test", modelId: "test" })) };
-});
-
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
 import { createConfig } from "../../src/config";
 import { Logger } from "../../src/Logger";
+
+const mockGenerateText = vi.fn();
+const testModel = createOpenAI({ apiKey: "unused" }).responses("test");
+const createTestModel = vi.fn(() => testModel);
 
 describe("AgentCoordinator failure logging", () => {
   beforeEach(() => {
@@ -37,7 +28,10 @@ describe("AgentCoordinator failure logging", () => {
   it("passes ZDR-safe Responses options to the Prime Foo tool loop", async () => {
     mockGenerateText.mockResolvedValueOnce({ text: "answer", steps: [] });
     const testEnv = createMockEnv();
-    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv));
+    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
+      createModel: createTestModel,
+      generateText: mockGenerateText,
+    });
 
     await expect(coordinator.processWithPrimeFoo("safe context")).resolves.toMatchObject({
       content: expect.stringContaining("answer"),
@@ -72,7 +66,10 @@ describe("AgentCoordinator failure logging", () => {
     mockGenerateText.mockRejectedValueOnce(apiError);
     const loggerError = vi.spyOn(Logger.getInstance(), "error");
     const testEnv = createMockEnv();
-    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv));
+    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
+      createModel: createTestModel,
+      generateText: mockGenerateText,
+    });
 
     await expect(coordinator.processWithPrimeFoo("safe context")).rejects.toBe(apiError);
 
@@ -98,7 +95,10 @@ describe("AgentCoordinator failure logging", () => {
     mockGenerateText.mockRejectedValueOnce(ordinaryError);
     const loggerError = vi.spyOn(Logger.getInstance(), "error");
     const testEnv = createMockEnv();
-    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv));
+    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
+      createModel: createTestModel,
+      generateText: mockGenerateText,
+    });
 
     await expect(coordinator.processWithPrimeFoo("safe context")).rejects.toBe(ordinaryError);
 

@@ -9,29 +9,22 @@
  * - Text and structured generation call options and safe logging
  */
 
+import { createOpenAI as createRealOpenAI } from "@ai-sdk/openai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { createGatewayFetch as createRealGatewayFetch } from "workers-ai-provider/gateway";
 import { z } from "zod";
 import { createMockEnv } from "../mocks";
-
-const { mockCreateGatewayFetch, mockCreateOpenAI, mockGenerateObject, mockGenerateText } =
-  vi.hoisted(() => ({
-    mockCreateGatewayFetch: vi.fn(),
-    mockCreateOpenAI: vi.fn(),
-    mockGenerateObject: vi.fn(),
-    mockGenerateText: vi.fn(),
-  }));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return { ...actual, generateObject: mockGenerateObject, generateText: mockGenerateText };
-});
-vi.mock("@ai-sdk/openai", () => ({ createOpenAI: mockCreateOpenAI }));
-vi.mock("workers-ai-provider/gateway", () => ({ createGatewayFetch: mockCreateGatewayFetch }));
 
 import { BaseAgent, createModel, createProviderOptions } from "../../src/agents/utils/BaseAgent";
 import { PromptManager } from "../../src/agents/utils/PromptManager";
 import { createConfig } from "../../src/config";
 import { Logger } from "../../src/Logger";
+
+const mockCreateGatewayFetch = vi.fn<typeof createRealGatewayFetch>();
+const mockCreateOpenAI = vi.fn<typeof createRealOpenAI>();
+const mockGenerateObject = vi.fn();
+const mockGenerateText = vi.fn();
+const testModel = createRealOpenAI({ apiKey: "unused" }).responses("test");
 
 /** Exposes BaseAgent generation wrappers for observable logging assertions. */
 class TestBaseAgent extends BaseAgent {
@@ -89,14 +82,18 @@ describe("BaseAgent OpenAI Responses routing", () => {
   });
 
   it("builds an OpenAI Responses model through the Worker AI Gateway binding", () => {
-    const gatewayFetch = vi.fn();
-    const responsesModel = { provider: "openai.responses", modelId: "gpt-5.6-terra" };
-    const responses = vi.fn(() => responsesModel);
+    const env = createMockEnv();
+    const gatewayFetch = createRealGatewayFetch({ binding: env.AI, gateway: "test" });
+    const responsesModel = createRealOpenAI({ apiKey: "unused" }).responses("gpt-5.6-terra");
+    const openai = createRealOpenAI({ apiKey: "unused" });
+    const responses = vi.spyOn(openai, "responses").mockReturnValue(responsesModel);
     mockCreateGatewayFetch.mockReturnValueOnce(gatewayFetch);
-    mockCreateOpenAI.mockReturnValueOnce({ responses });
+    mockCreateOpenAI.mockReturnValueOnce(openai);
 
-    const env = createMockEnv({ AI: {} as Ai });
-    const result = createModel(env, "openai/gpt-5.6-terra");
+    const result = createModel(env, "openai/gpt-5.6-terra", {
+      createGatewayFetch: mockCreateGatewayFetch,
+      createOpenAI: mockCreateOpenAI,
+    });
 
     expect(result).toBe(responsesModel);
     expect(mockCreateGatewayFetch).toHaveBeenCalledWith({
@@ -112,8 +109,6 @@ describe("BaseAgent OpenAI Responses routing", () => {
 
   it("preserves Responses options for text and structured generation", async () => {
     const modelIdentifier = "openai/gpt-5.6-luna";
-    const gatewayModel = { provider: "openai.responses", modelId: "gpt-5.6-luna" };
-    mockCreateOpenAI.mockReturnValue({ responses: vi.fn(() => gatewayModel) });
     vi.spyOn(PromptManager.prototype, "renderPrompt").mockResolvedValue({
       system: "system",
       user: "question",
@@ -121,8 +116,12 @@ describe("BaseAgent OpenAI Responses routing", () => {
     mockGenerateText.mockResolvedValueOnce({ text: "answer" });
     mockGenerateObject.mockResolvedValueOnce({ object: { answer: "structured" } });
 
-    const testEnv = createMockEnv({ AI: {} as Ai });
-    const agent = new TestBaseAgent(testEnv, createConfig(testEnv));
+    const testEnv = createMockEnv();
+    const agent = new TestBaseAgent(testEnv, createConfig(testEnv), {
+      createModel: vi.fn(() => testModel),
+      generateObject: mockGenerateObject,
+      generateText: mockGenerateText,
+    });
 
     await expect(agent.callText(modelIdentifier)).resolves.toBe("answer");
     await expect(agent.callStructured(modelIdentifier)).resolves.toEqual({ answer: "structured" });
@@ -141,8 +140,6 @@ describe("BaseAgent OpenAI Responses routing", () => {
 
   it("omits model fields and identifiers from all generation log contexts", async () => {
     const modelIdentifier = "openai/private-model-identifier";
-    const gatewayModel = { provider: "openai.responses", modelId: "private-model-identifier" };
-    mockCreateOpenAI.mockReturnValue({ responses: vi.fn(() => gatewayModel) });
     vi.spyOn(PromptManager.prototype, "renderPrompt").mockResolvedValue({
       system: "system",
       user: "question",
@@ -157,8 +154,12 @@ describe("BaseAgent OpenAI Responses routing", () => {
       vi.spyOn(logger, "warn"),
       vi.spyOn(logger, "error"),
     ];
-    const testEnv = createMockEnv({ AI: {} as Ai });
-    const agent = new TestBaseAgent(testEnv, createConfig(testEnv));
+    const testEnv = createMockEnv();
+    const agent = new TestBaseAgent(testEnv, createConfig(testEnv), {
+      createModel: vi.fn(() => testModel),
+      generateObject: mockGenerateObject,
+      generateText: mockGenerateText,
+    });
 
     await expect(agent.callText(modelIdentifier)).resolves.toBe("answer");
     await expect(agent.callStructured(modelIdentifier)).resolves.toEqual({ answer: "structured" });
