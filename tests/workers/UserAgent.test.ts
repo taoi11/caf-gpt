@@ -8,6 +8,8 @@
  * - UserAgent processing suite: Verifies SDK reply-all, sender-only errors, and memory timing
  * - getUserAgentStub: Gets a per-sender UserAgent Durable Object stub
  * - getEmailBinding: Gets the UserAgent's structured Email Service binding
+ * - mockPrimeFoo: Replaces Prime Foo processing through its public method contract
+ * - mockSuccessfulSchedule: Replaces durable scheduling with a faithful delayed schedule
  * - createAgentEmail: Builds a mock AgentEmail with configurable RFC and envelope recipients
  * - createRoutingMessage: Builds a mock top-level Email Worker message
  * - buildRawEmail: Builds raw MIME fixtures without propagating Bcc into parsed data
@@ -15,23 +17,24 @@
 
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { reset, runInDurableObject } from "cloudflare:test";
+import { createExecutionContext, reset, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { AgentEmail } from "agents/email";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
 
-const { mockGenerateText } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return { ...actual, generateText: mockGenerateText };
-});
-
+import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
 import { MemoryFooAgent } from "../../src/agents/sub-agents";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
 import worker, { createUserAgentResolver } from "../../src/index";
+
+const mockGenerateText = vi.fn();
+
+beforeEach(() => {
+  const createCoordinator = AgentCoordinator.create;
+  vi.spyOn(AgentCoordinator, "create").mockImplementation((testEnv, config) =>
+    createCoordinator(testEnv, config, { generateText: mockGenerateText })
+  );
+});
 
 afterEach(async () => {
   mockGenerateText.mockReset();
@@ -105,7 +108,8 @@ describe("UserAgent email routing", () => {
       from: "test@forces.gc.ca",
       to: "agent@caf-gpt.com",
     });
-    const boundaryEnv = { ...env, EMAIL: undefined } as unknown as Env;
+    const boundaryEnv = { ...env };
+    Reflect.deleteProperty(boundaryEnv, "EMAIL");
 
     await expect(
       worker.email(message, boundaryEnv, createExecutionContext())
@@ -119,7 +123,8 @@ describe("UserAgent email routing", () => {
       from: "test@forces.gc.ca",
       to: "agent@caf-gpt.com",
     });
-    const brokenEnv = { ...env, UserAgent: undefined } as unknown as Env;
+    const brokenEnv = { ...env };
+    Reflect.deleteProperty(brokenEnv, "UserAgent");
 
     await expect(
       worker.email(message, brokenEnv, createExecutionContext())
@@ -134,13 +139,14 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub("test@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const schedules: unknown[][] = [];
-      const sentMessages: unknown[] = [];
-      const processWithPrimeFoo = vi.fn(async (_context: string, memory?: string) => ({
-        shouldRespond: true,
-        content: "<p>AI response</p>",
-        memory,
-      }));
+      const sentMessages: StructuredEmailMessage[] = [];
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(
+        async (_context, memory) => ({
+          shouldRespond: true,
+          content: "<p>AI response</p>",
+          memory,
+        })
+      );
       const email = createAgentEmail({
         envelopeFrom: "test@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
@@ -163,19 +169,14 @@ describe("UserAgent email processing", () => {
         sentMessages.push(message);
         return { messageId: "structured-reply" };
       });
-      vi.spyOn(instance, "schedule").mockImplementation(async (...args) => {
-        schedules.push(args);
-        return { id: "schedule-1" } as never;
-      });
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
+      const schedule = mockSuccessfulSchedule(instance, "schedule-1");
+      mockPrimeFoo(processWithPrimeFoo);
 
       await instance.onEmail(email);
 
       return {
         inboundReplyCount: getReplyCalls(email).length,
-        schedules,
+        schedules: schedule.mock.calls,
         sentMessages,
         primeFooCalls: processWithPrimeFoo.mock.calls,
         agentSendCalls: agentSendEmail.mock.calls.length,
@@ -201,7 +202,7 @@ describe("UserAgent email processing", () => {
         References: "<root@forces.gc.ca> <parent@forces.gc.ca> <msg-1@forces.gc.ca>",
       },
     });
-    const sentHeaders = (result.sentMessages[0] as { headers?: Record<string, string> }).headers;
+    const sentHeaders = result.sentMessages[0].headers;
     expect(sentHeaders ?? {}).not.toHaveProperty("Message-ID");
     expect(JSON.stringify(result.sentMessages[0])).not.toContain("hidden@forces.gc.ca");
     expect(result.schedules).toEqual([
@@ -236,12 +237,12 @@ describe("UserAgent email processing", () => {
       const schedule = vi
         .spyOn(instance, "schedule")
         .mockRejectedValue(new Error("schedule unavailable"));
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(async () => ({
+      mockPrimeFoo(
+        vi.fn(async () => ({
           shouldRespond: true,
           content: "Response",
-        })),
-      };
+        }))
+      );
 
       await expect(instance.onEmail(email)).resolves.toBeUndefined();
       return {
@@ -258,8 +259,8 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub("pacenote-user@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const sentMessages: unknown[] = [];
-      const processWithPrimeFoo = vi.fn(async (_context: string) => ({
+      const sentMessages: StructuredEmailMessage[] = [];
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
         shouldRespond: true,
         content: "<p>Feedback note</p>",
       }));
@@ -267,10 +268,8 @@ describe("UserAgent email processing", () => {
         sentMessages.push(message);
         return { messageId: "structured-reply" };
       });
-      vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
+      mockSuccessfulSchedule(instance, "schedule-1");
+      mockPrimeFoo(processWithPrimeFoo);
 
       await instance.onEmail(
         createAgentEmail({
@@ -301,21 +300,17 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub("threaded-output@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      let message: unknown;
       const agentSendEmail = vi.spyOn(instance, "sendEmail");
       const bindingSend = vi
         .spyOn(getEmailBinding(instance), "send")
-        .mockImplementation(async (value: unknown) => {
-          message = value;
-          return { messageId: "direct-binding" };
-        });
-      vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(async () => ({
+        .mockResolvedValue({ messageId: "direct-binding" });
+      mockSuccessfulSchedule(instance, "schedule-1");
+      mockPrimeFoo(
+        vi.fn(async () => ({
           shouldRespond: true,
           content: "Response",
-        })),
-      };
+        }))
+      );
 
       await instance.onEmail(
         createAgentEmail({
@@ -331,7 +326,7 @@ describe("UserAgent email processing", () => {
       );
 
       return {
-        delivered: message as { headers: Record<string, string> },
+        delivered: bindingSend.mock.calls[0][0],
         agentSendCalls: agentSendEmail.mock.calls.length,
         bindingSendCalls: bindingSend.mock.calls.length,
       };
@@ -343,8 +338,8 @@ describe("UserAgent email processing", () => {
       "In-Reply-To": "<original@forces.gc.ca>",
       References: "<root@forces.gc.ca> <original@forces.gc.ca>",
     });
-    expect(result.delivered.headers["X-Agent-Sig"]).toBeUndefined();
-    expect(result.delivered.headers["X-Agent-Sig-Ts"]).toBeUndefined();
+    expect(result.delivered.headers?.["X-Agent-Sig"]).toBeUndefined();
+    expect(result.delivered.headers?.["X-Agent-Sig-Ts"]).toBeUndefined();
   });
 
   it.each([
@@ -383,15 +378,11 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub(sender);
 
     const delivered = await runInDurableObject(stub, async (instance: UserAgent) => {
-      let message: unknown;
-      vi.spyOn(getEmailBinding(instance), "send").mockImplementation(async (value: unknown) => {
-        message = value;
-        return { messageId: "threaded-reply" };
-      });
-      vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(async () => ({ shouldRespond: true, content: "Response" })),
-      };
+      const bindingSend = vi
+        .spyOn(getEmailBinding(instance), "send")
+        .mockResolvedValue({ messageId: "threaded-reply" });
+      mockSuccessfulSchedule(instance, "schedule-1");
+      mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "Response" })));
 
       await instance.onEmail(
         createAgentEmail({
@@ -406,10 +397,10 @@ describe("UserAgent email processing", () => {
         })
       );
 
-      return message as { headers: Record<string, string> };
+      return bindingSend.mock.calls[0][0];
     });
 
-    expect(delivered.headers.References).toBe(expectedReferences);
+    expect(delivered.headers?.References).toBe(expectedReferences);
   });
 
   it("treats blank real-coordinator output as an intentional no-response decision", async () => {
@@ -496,7 +487,7 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub("invalid@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const processWithPrimeFoo = vi.fn();
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
       const email = createAgentEmail({
         envelopeFrom: "invalid@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
@@ -507,9 +498,7 @@ describe("UserAgent email processing", () => {
         messageId: "<invalid@forces.gc.ca>",
       });
       const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
+      mockPrimeFoo(processWithPrimeFoo);
 
       await instance.onEmail(email);
       return {
@@ -540,9 +529,7 @@ describe("UserAgent email processing", () => {
         body: "",
         messageId,
       });
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(),
-      };
+      mockPrimeFoo(vi.fn());
 
       await instance.onEmail(email);
       return bindingSend.mock.calls[0][0];
@@ -572,9 +559,7 @@ describe("UserAgent email processing", () => {
         messageId: currentMessageId,
         headers: { "in-reply-to": invalidInReplyTo },
       });
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(),
-      };
+      mockPrimeFoo(vi.fn());
 
       await instance.onEmail(email);
       return bindingSend.mock.calls[0][0];
@@ -602,10 +587,8 @@ describe("UserAgent email processing", () => {
         messageId: "<repeated-invalid@forces.gc.ca>",
       });
       const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-      const processWithPrimeFoo = vi.fn();
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
+      mockPrimeFoo(processWithPrimeFoo);
 
       await instance.onEmail(email);
       await instance.onEmail(email);
@@ -642,10 +625,8 @@ describe("UserAgent email processing", () => {
       const bindingSend = vi
         .spyOn(getEmailBinding(instance), "send")
         .mockResolvedValue({ messageId: "reply" });
-      const schedule = vi.spyOn(instance, "schedule").mockResolvedValue({ id: "memory" } as never);
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
+      const schedule = mockSuccessfulSchedule(instance, "memory");
+      mockPrimeFoo(processWithPrimeFoo);
 
       await instance.onEmail(email);
       await instance.onEmail(email);
@@ -713,9 +694,7 @@ describe("UserAgent email processing", () => {
       vi.spyOn(getEmailBinding(instance), "send").mockRejectedValue(
         new Error("email service unavailable")
       );
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(async () => ({ shouldRespond: true, content: "Response" })),
-      };
+      mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "Response" })));
 
       await instance.onEmail(email);
       return {
@@ -743,11 +722,11 @@ describe("UserAgent email processing", () => {
       const bindingSend = vi
         .spyOn(getEmailBinding(instance), "send")
         .mockRejectedValue(new Error("reply rejected"));
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo: vi.fn(async () => {
+      mockPrimeFoo(
+        vi.fn(async () => {
           throw new Error("model down");
-        }),
-      };
+        })
+      );
 
       await expect(instance.onEmail(email)).resolves.toBeUndefined();
       expect(bindingSend).toHaveBeenCalledOnce();
@@ -759,10 +738,8 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub("agent@caf-gpt.com");
 
     const aiCalls = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const processWithPrimeFoo = vi.fn();
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
+      mockPrimeFoo(processWithPrimeFoo);
 
       await instance.onEmail(
         createAgentEmail({
@@ -786,7 +763,7 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub("auto-response@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const processWithPrimeFoo = vi.fn();
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
       const email = createAgentEmail({
         envelopeFrom: "auto-response@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
@@ -797,9 +774,7 @@ describe("UserAgent email processing", () => {
         messageId: "<auto-response@forces.gc.ca>",
         headers: { "auto-submitted": "auto-replied" },
       });
-      (instance as unknown as { agentCoordinator: unknown }).agentCoordinator = {
-        processWithPrimeFoo,
-      };
+      mockPrimeFoo(processWithPrimeFoo);
 
       await instance.onEmail(email);
       return {
@@ -854,8 +829,20 @@ function getUserAgentStub(senderEmail: string): DurableObjectStub<UserAgent> {
 
 /** Gets the structured Email Service binding held by a UserAgent instance. */
 function getEmailBinding(instance: UserAgent): Env["EMAIL"] {
-  return (instance as unknown as { env: Env }).env.EMAIL;
+  // SAFETY: The Agents SDK initializes every UserAgent with its configured Env binding object.
+  const runtimeAccess = instance as UserAgent & { env: Env };
+  return runtimeAccess.env.EMAIL;
 }
+
+type StructuredEmailMessage = Parameters<Env["EMAIL"]["send"]>[0];
+type UserAgentSchedule = Awaited<ReturnType<UserAgent["schedule"]>>;
+
+type MockAgentEmail = Omit<AgentEmail, "getRaw" | "setReject" | "forward" | "reply"> & {
+  getRaw: Mock<AgentEmail["getRaw"]>;
+  setReject: Mock<AgentEmail["setReject"]>;
+  forward: Mock<AgentEmail["forward"]>;
+  reply: Mock<AgentEmail["reply"]>;
+};
 
 interface AgentEmailOptions {
   envelopeFrom: string;
@@ -877,57 +864,84 @@ interface AgentEmailOptions {
 interface PrimeCoordinatorCallOptions {
   tools?: {
     batch_research?: {
-      execute: (input: { leave_queries: string[] }) => Promise<unknown>;
+      execute: (input: { leave_queries: string[] }) => Promise<string>;
     };
   };
 }
 
+/** Replaces Prime Foo processing through the coordinator's public method contract. */
+function mockPrimeFoo(implementation: AgentCoordinator["processWithPrimeFoo"]) {
+  return vi
+    .spyOn(AgentCoordinator.prototype, "processWithPrimeFoo")
+    .mockImplementation(implementation);
+}
+
+/** Creates a faithful delayed schedule result for the Agents SDK schedule contract. */
+function createMockSchedule(id: string): UserAgentSchedule {
+  return {
+    id,
+    callback: "runMemoryUpdate",
+    payload: "",
+    type: "delayed",
+    time: 1,
+    delayInSeconds: 1,
+  };
+}
+
+/** Replaces durable scheduling with a successful delayed schedule fixture. */
+function mockSuccessfulSchedule(instance: UserAgent, id: string) {
+  const schedule = vi.spyOn(instance, "schedule");
+  // SAFETY: Vitest erases the generic schedule result to never; this fixture implements the
+  // complete delayed Schedule shape returned by the Agents SDK.
+  schedule.mockResolvedValue(createMockSchedule(id) as never);
+  return schedule;
+}
+
 /** Builds a mock AgentEmail with configurable RFC and envelope recipients. */
-function createAgentEmail(options: AgentEmailOptions): AgentEmail {
+function createAgentEmail(options: AgentEmailOptions): MockAgentEmail {
   const raw = options.rawOverride ?? buildRawEmail(options);
   const headers = new Headers({
     from: options.from,
     to: options.to.join(", "),
-    ...(options.replyTo?.length ? { "reply-to": options.replyTo.join(", ") } : {}),
-    ...(options.cc?.length ? { cc: options.cc.join(", ") } : {}),
-    ...(options.bcc?.length ? { bcc: options.bcc.join(", ") } : {}),
     subject: options.subject,
-    ...(options.messageId ? { "message-id": options.messageId } : {}),
-    ...options.headers,
   });
+  if (options.replyTo?.length) headers.set("reply-to", options.replyTo.join(", "));
+  if (options.cc?.length) headers.set("cc", options.cc.join(", "));
+  if (options.bcc?.length) headers.set("bcc", options.bcc.join(", "));
+  if (options.messageId) headers.set("message-id", options.messageId);
+  for (const [name, value] of Object.entries(options.headers ?? {})) headers.set(name, value);
+
+  const getRaw = options.rawFailure
+    ? vi.fn<AgentEmail["getRaw"]>(async () => {
+        throw options.rawFailure;
+      })
+    : vi.fn<AgentEmail["getRaw"]>(async () => new TextEncoder().encode(raw));
+  const reply = options.replyFailure
+    ? vi.fn<AgentEmail["reply"]>(async () => {
+        throw options.replyFailure;
+      })
+    : vi.fn<AgentEmail["reply"]>(async () => ({ messageId: "mock-reply" }));
 
   return {
     from: options.envelopeFrom,
     to: options.envelopeTo,
     headers,
     rawSize: raw.length,
-    getRaw: options.rawFailure
-      ? vi.fn(async () => {
-          throw options.rawFailure;
-        })
-      : vi.fn(async () => new TextEncoder().encode(raw)),
-    setReject: vi.fn(),
-    forward: vi.fn(),
-    reply: options.replyFailure
-      ? vi.fn(async () => {
-          throw options.replyFailure;
-        })
-      : vi.fn(async () => ({ messageId: "mock-reply" })),
+    getRaw,
+    setReject: vi.fn<AgentEmail["setReject"]>(),
+    forward: vi.fn<AgentEmail["forward"]>(),
+    reply,
   };
 }
 
 /** Returns the typed inbound reply calls for a mock AgentEmail. */
-function getReplyCalls(email: AgentEmail): Array<[Parameters<AgentEmail["reply"]>[0]]> {
-  return (
-    email.reply as unknown as {
-      mock: { calls: Array<[Parameters<AgentEmail["reply"]>[0]]> };
-    }
-  ).mock.calls;
+function getReplyCalls(email: MockAgentEmail): Array<[Parameters<AgentEmail["reply"]>[0]]> {
+  return email.reply.mock.calls;
 }
 
 /** Returns the recorded raw-read calls for a mock AgentEmail. */
-function getRawCalls(email: AgentEmail): unknown[][] {
-  return (email.getRaw as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+function getRawCalls(email: MockAgentEmail): Array<Parameters<AgentEmail["getRaw"]>> {
+  return email.getRaw.mock.calls;
 }
 
 /** Builds a mock top-level Email Worker message. */
@@ -935,26 +949,17 @@ function createRoutingMessage(options: {
   from: string;
   to: string;
   headers?: Record<string, string>;
-}): ForwardableEmailMessage {
+}) {
   return {
     from: options.from,
     to: options.to,
     headers: new Headers(options.headers),
-    raw: new ReadableStream(),
+    raw: new ReadableStream<Uint8Array>(),
     rawSize: 0,
-    setReject: vi.fn(),
-    forward: vi.fn(),
-    reply: vi.fn(),
-  } as unknown as ForwardableEmailMessage;
-}
-
-/** Builds a minimal ExecutionContext for direct top-level handler tests. */
-function createExecutionContext(): ExecutionContext {
-  return {
-    waitUntil: vi.fn(),
-    passThroughOnException: vi.fn(),
-    props: {},
-  } as unknown as ExecutionContext;
+    setReject: vi.fn<ForwardableEmailMessage["setReject"]>(),
+    forward: vi.fn<ForwardableEmailMessage["forward"]>(),
+    reply: vi.fn<ForwardableEmailMessage["reply"]>(),
+  } satisfies ForwardableEmailMessage;
 }
 
 /** Builds raw MIME fixtures; Bcc is present only to prove it is never propagated. */
