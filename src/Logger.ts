@@ -1,5 +1,5 @@
 /**
- * src/utils/Logger.ts
+ * src/Logger.ts
  *
  * Singleton logger using native console for Cloudflare Workers
  * Cloudflare Workers automatically captures console logs with timestamps
@@ -11,8 +11,17 @@
  * - getSafeErrorMetadata: Extracts only content-free error classification
  */
 
-interface LogContext {
-  [key: string]: unknown;
+import { z } from "zod";
+
+const ErrorMetadataDetailsSchema = z.object({
+  code: z.string().optional().catch(undefined),
+  recoverable: z.boolean().optional().catch(undefined),
+});
+
+export interface SafeErrorMetadata {
+  errorName: string;
+  errorCode?: string;
+  recoverable?: boolean;
 }
 
 // Simple logger using native console - Workers handles timestamps and structured logging
@@ -31,27 +40,31 @@ export class Logger {
     return Logger.instance;
   }
 
-  private emit(method: "log" | "warn" | "error" | "debug", data: Record<string, unknown>): void {
+  private emit<Data extends object>(method: "log" | "warn" | "error" | "debug", data: Data): void {
     console[method](JSON.stringify(data));
   }
 
-  info(message: string, context?: LogContext): void {
+  info<Context extends object>(message: string, context?: Context): void {
     this.emit("log", { message, level: "info", ...context });
   }
 
-  warn(message: string, context?: LogContext): void {
+  warn<Context extends object>(message: string, context?: Context): void {
     this.emit("warn", { message, level: "warn", ...context });
   }
 
-  error(message: string, context?: LogContext): void {
+  error<Context extends object>(message: string, context?: Context): void {
     this.emit("error", { message, level: "error", ...context });
   }
 
-  debug(message: string, context?: LogContext): void {
+  debug<Context extends object>(message: string, context?: Context): void {
     this.emit("debug", { message, level: "debug", ...context });
   }
 
-  performance(operation: string, startTime: number, context?: LogContext): void {
+  performance<Context extends object>(
+    operation: string,
+    startTime: number,
+    context?: Context
+  ): void {
     const processingTime = Date.now() - startTime;
     this.emit("log", {
       message: `Performance: ${operation} completed in ${processingTime}ms`,
@@ -64,15 +77,18 @@ export class Logger {
 }
 
 /** Extracts safe error class/code metadata without exception text or stack content. */
-export function getSafeErrorMetadata(error: unknown): Record<string, string | boolean> {
-  if (error instanceof Error) {
-    const candidate = error as Error & { code?: unknown; recoverable?: unknown };
-    return {
-      errorName: error.name,
-      ...(typeof candidate.code === "string" ? { errorCode: candidate.code } : {}),
-      ...(typeof candidate.recoverable === "boolean" ? { recoverable: candidate.recoverable } : {}),
-    };
+export function getSafeErrorMetadata<ErrorValue>(error: ErrorValue): SafeErrorMetadata {
+  if (!(error instanceof Error)) {
+    return { errorName: "UnknownError" };
   }
 
-  return { errorName: "UnknownError" };
+  const details = ErrorMetadataDetailsSchema.parse(error);
+  const metadata: SafeErrorMetadata = { errorName: error.name };
+  if (details.code !== undefined) {
+    metadata.errorCode = details.code;
+  }
+  if (details.recoverable !== undefined) {
+    metadata.recoverable = details.recoverable;
+  }
+  return metadata;
 }

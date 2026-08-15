@@ -18,7 +18,7 @@ import {
 } from "../../errors";
 
 export type ErrorResponseTemplate = {
-  match: (error: unknown) => boolean;
+  match: <ErrorValue>(error: ErrorValue) => boolean;
   lines: string[];
 };
 
