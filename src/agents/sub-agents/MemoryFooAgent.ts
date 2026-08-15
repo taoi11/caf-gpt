@@ -63,7 +63,7 @@ ${agentReply}
       });
       const providerOptions = createProviderOptions(modelConfig.model);
 
-      const response = await generateText({
+      const generationOptions = {
         model: this.getCachedModel(modelConfig.model),
         system: rendered.system,
         prompt: rendered.user,
@@ -81,8 +81,11 @@ ${agentReply}
           }),
         },
         toolChoice: "required",
-        ...(providerOptions ? { providerOptions } : {}),
-      });
+      } as const;
+      if (providerOptions) {
+        Object.assign(generationOptions, { providerOptions });
+      }
+      const response = await generateText(generationOptions);
 
       const memoryToolCall = response.toolCalls.find(
         (call) =>

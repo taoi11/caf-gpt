@@ -4,6 +4,7 @@
  * Agent coordinator for prime_foo using AI SDK built-in tool orchestration
  *
  * Top-level declarations:
+ * - PrimeFooStepFinishEvent: Minimal step metadata consumed by circuit-breaker logging
  * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools and a circuit breaker (maxSteps: 3)
  */
 
@@ -16,6 +17,11 @@ import type { AgentResponse } from "../types";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
 import { createModel, createProviderOptions } from "./utils/BaseAgent";
 import { PromptManager } from "./utils/PromptManager";
+
+interface PrimeFooStepFinishEvent {
+  stepNumber: number;
+  toolCalls: readonly object[];
+}
 
 export class AgentCoordinator {
   private logger: Logger;
@@ -67,14 +73,14 @@ export class AgentCoordinator {
       const model = createModel(this.env, modelConfig.model);
       const providerOptions = createProviderOptions(modelConfig.model);
       const maxSteps = 3;
-      const result = await generateText({
+      const generationOptions = {
         model,
         system: systemPrompt,
         prompt: `Email context:\n\n${context}`,
         temperature: modelConfig.temperature,
         maxOutputTokens: modelConfig.maxOutputTokens,
         stopWhen: stepCountIs(maxSteps),
-        onStepFinish: ({ stepNumber, toolCalls }) => {
+        onStepFinish: ({ stepNumber, toolCalls }: PrimeFooStepFinishEvent) => {
           if (toolCalls.length > 0) {
             this.logger.info("Tool call tracked", { stepNumber: stepNumber + 1, maxSteps });
             if (stepNumber + 1 >= maxSteps) {
@@ -163,8 +169,11 @@ export class AgentCoordinator {
             execute: async ({ rank, context }) => this.paceFooAgent.generateNote(rank, context),
           }),
         },
-        ...(providerOptions ? { providerOptions } : {}),
-      });
+      };
+      if (providerOptions) {
+        Object.assign(generationOptions, { providerOptions });
+      }
+      const result = await generateText(generationOptions);
 
       if (result.steps.some((step) => step.content.some((part) => part.type === "tool-error"))) {
         throw new AgentValidationError("Prime_foo tool execution failed");
@@ -194,16 +203,17 @@ How to use CAF-GPT:<br>
         shouldRespond: true,
       };
     } catch (error) {
-      this.logger.error("Prime_foo processing failed", {
+      const errorMetadata = {
         processingTime: Date.now() - startTime,
         ...getSafeErrorMetadata(error),
-        ...(APICallError.isInstance(error)
-          ? {
-              ...(error.statusCode !== undefined ? { statusCode: error.statusCode } : {}),
-              isRetryable: error.isRetryable,
-            }
-          : {}),
-      });
+      };
+      if (APICallError.isInstance(error)) {
+        if (error.statusCode !== undefined) {
+          Object.assign(errorMetadata, { statusCode: error.statusCode });
+        }
+        Object.assign(errorMetadata, { isRetryable: error.isRetryable });
+      }
+      this.logger.error("Prime_foo processing failed", errorMetadata);
       throw error;
     }
   }

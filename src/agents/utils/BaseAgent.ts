@@ -34,18 +34,27 @@ interface LLMCallParams {
 type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 type JsonObject = { [key: string]: JsonValue | undefined };
 type ModelProviderOptions = Record<string, JsonObject>;
+type AgentErrorLike = Error | string;
+type AgentLogMetadataValue = string | number | boolean | null | undefined;
+type AgentLogMetadata = Record<string, AgentLogMetadataValue>;
+
+interface AgentErrorMessages {
+  timeout: string;
+  aiGateway: string;
+  generic: string;
+}
 
 const CLOUDFLARE_AI_GATEWAY = "caf-gpt";
 const OPENAI_MODEL_PREFIX = "openai/";
 const GPT_56_MODEL_PREFIX = "openai/gpt-5.6-";
 
-const OPENAI_RESPONSES_OPTIONS: ModelProviderOptions = {
+const OPENAI_RESPONSES_OPTIONS = {
   openai: {
     forceReasoning: true,
     reasoningEffort: "high",
     store: false,
   },
-};
+} as const satisfies ModelProviderOptions;
 
 // Checks whether a model uses the OpenAI Responses provider through AI Gateway.
 function isOpenAIResponsesModel(model: string): boolean {
@@ -69,7 +78,7 @@ export function createModel(env: Env, model: string): LanguageModel {
   const modelId = model.startsWith(OPENAI_MODEL_PREFIX)
     ? model.slice(OPENAI_MODEL_PREFIX.length)
     : model;
-  return openai.responses(modelId) as unknown as LanguageModel;
+  return openai.responses(modelId);
 }
 
 export abstract class BaseAgent {
@@ -109,14 +118,17 @@ export abstract class BaseAgent {
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = this.getCachedModel(params.model);
       const providerOptions = createProviderOptions(params.model);
-      const result = await generateText({
+      const generationOptions = {
         model,
         system: rendered.system,
         prompt: rendered.user,
         temperature: params.temperature,
         maxOutputTokens: params.maxOutputTokens,
-        ...(providerOptions ? { providerOptions } : {}),
-      });
+      };
+      if (providerOptions) {
+        Object.assign(generationOptions, { providerOptions });
+      }
+      const result = await generateText(generationOptions);
 
       if (!result.text || result.text.trim().length === 0) {
         throw new AgentValidationError("AI SDK returned empty content");
@@ -160,7 +172,7 @@ export abstract class BaseAgent {
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = this.getCachedModel(params.model);
       const providerOptions = createProviderOptions(params.model);
-      const result = await generateObject({
+      const generationOptions = {
         model,
         schema,
         schemaName: schemaName ?? "response",
@@ -168,8 +180,11 @@ export abstract class BaseAgent {
         prompt: rendered.user,
         temperature: params.temperature,
         maxOutputTokens: params.maxOutputTokens,
-        ...(providerOptions ? { providerOptions } : {}),
-      });
+      };
+      if (providerOptions) {
+        Object.assign(generationOptions, { providerOptions });
+      }
+      const result = await generateObject(generationOptions);
 
       this.logger.info("AI SDK structured call successful", {
         schemaName,
@@ -201,9 +216,9 @@ export abstract class BaseAgent {
   protected handleAgentError(
     operation: string,
     startTime: number,
-    error: unknown,
-    errorMessages: { timeout: string; aiGateway: string; generic: string },
-    context?: Record<string, unknown>
+    error: AgentErrorLike,
+    errorMessages: AgentErrorMessages,
+    context?: AgentLogMetadata
   ): string {
     const processingTime = Date.now() - startTime;
     this.logger.error(`${operation} failed`, {
@@ -227,9 +242,9 @@ export abstract class BaseAgent {
   protected handleResearchError(
     operation: string,
     startTime: number,
-    error: unknown,
+    error: AgentErrorLike,
     policyType: string,
-    context?: Record<string, unknown>
+    context?: AgentLogMetadata
   ): string {
     return this.handleAgentError(
       operation,

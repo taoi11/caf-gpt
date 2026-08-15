@@ -135,7 +135,7 @@ export abstract class ToolReadingAgent extends BaseAgent {
       };
     };
 
-    const result = await generateText({
+    const generationOptions = {
       model: this.getCachedModel(modelConfig.model),
       system: rendered.system,
       prompt: rendered.user,
@@ -186,8 +186,11 @@ export abstract class ToolReadingAgent extends BaseAgent {
           },
         }),
       },
-      ...(providerOptions ? { providerOptions } : {}),
-    });
+    };
+    if (providerOptions) {
+      Object.assign(generationOptions, { providerOptions });
+    }
+    const result = await generateText(generationOptions);
 
     if (result.steps?.some((step) => step.content.some((part) => part.type === "tool-error"))) {
       throw new AgentValidationError(`${this.agentConfig.policyType} read_file hard limit failed`);
