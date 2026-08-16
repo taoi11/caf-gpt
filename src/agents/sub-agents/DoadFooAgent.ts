@@ -8,24 +8,30 @@
  */
 
 import type { AppConfig } from "../../config";
+import type { BaseAgentDependencies } from "../utils/BaseAgent";
 import { ToolReadingAgent } from "../utils/ToolReadingAgent";
 
 const DOAD_ID_PATTERN = /^\|\s*(\d{4}-\d{1,2})\s*\|/gm;
 
 export class DoadFooAgent extends ToolReadingAgent {
-  constructor(env: Env, config: AppConfig) {
-    super(env, config, {
-      category: "doad",
-      policyType: "DOAD policy",
-      modelKey: "doadFoo",
-      promptName: "doad_foo_tool_reader",
-      indexVariableName: "doad_table",
-      readLimits: {
-        totalCalls: 5,
-        successfulReads: 3,
-        badCalls: 2,
+  constructor(env: Env, config: AppConfig, dependencies: Partial<BaseAgentDependencies> = {}) {
+    super(
+      env,
+      config,
+      {
+        category: "doad",
+        policyType: "DOAD policy",
+        modelKey: "doadFoo",
+        promptName: "doad_foo_tool_reader",
+        indexVariableName: "doad_table",
+        readLimits: {
+          totalCalls: 5,
+          successfulReads: 3,
+          badCalls: 2,
+        },
       },
-    });
+      dependencies
+    );
   }
 
   protected async getIndexContent(): Promise<string | null> {

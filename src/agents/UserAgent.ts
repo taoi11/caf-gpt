@@ -44,6 +44,17 @@ interface MemoryUpdateTask {
   agentReply: string;
 }
 
+type ProcessingError = Error | string;
+
+interface ReplyThreadingOptions {
+  inReplyTo?: string;
+  headers?: Record<string, string>;
+}
+
+interface EmailHeaderMap {
+  [headerName: string]: string;
+}
+
 /** Converts a normalized sender email into a stable Agent instance id. */
 export function getUserAgentId(senderEmail: string): string {
   return encodeURIComponent(normalizeEmailAddress(senderEmail));
@@ -60,7 +71,10 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   private agentCoordinator?: AgentCoordinator;
 
   /** Rethrows SDK errors without the default detailed console output. */
-  override onError(connectionOrError: unknown, error?: unknown): never {
+  override onError<ConnectionOrError, ErrorValue>(
+    connectionOrError: ConnectionOrError,
+    error?: ErrorValue
+  ): never {
     throw error ?? connectionOrError;
   }
 
@@ -112,7 +126,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         return;
       }
 
-      await this.handleProcessingError(error, parsedEmail, config);
+      await this.handleProcessingError(this.parseProcessingError(error), parsedEmail, config);
     }
   }
 
@@ -152,7 +166,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
     const parsed = await parser.parse(rawEmail);
     const headers = this.buildHeaderMap(email.headers);
     const rawTextBody = parsed.text ?? "";
-    const rawHtmlBody = typeof parsed.html === "string" ? parsed.html : undefined;
+    const rawHtmlBody = parsed.html;
     const derivedBody =
       rawTextBody.trim().length > 0 ? rawTextBody : rawHtmlBody ? htmlToText(rawHtmlBody) : "";
     const fromAddresses = this.extractAddresses(parsed.from ? [parsed.from] : undefined);
@@ -257,10 +271,9 @@ ${parsedEmail.body}`;
     const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
     markSendAttempted();
-    await this.sendEmail({
+    const emailOptions = {
       binding: this.env.EMAIL,
       to: recipients.to,
-      ...(recipients.cc.length > 0 ? { cc: recipients.cc } : {}),
       from: { email: replyFromAddress, name: "CAF-GPT" },
       replyTo: replyFromAddress,
       subject,
@@ -268,7 +281,11 @@ ${parsedEmail.body}`;
       html: htmlContent,
       inReplyTo: threadingOptions.inReplyTo,
       headers: threadingOptions.headers,
-    });
+    };
+    if (recipients.cc.length > 0) {
+      Object.assign(emailOptions, { cc: recipients.cc });
+    }
+    await this.sendEmail(emailOptions);
   }
 
   /** Schedules a durable memory update after the user-visible reply succeeds. */
@@ -287,7 +304,7 @@ ${parsedEmail.body}`;
 
   /** Attempts one sender-only structured error reply and swallows every reply failure. */
   private async handleProcessingError(
-    error: unknown,
+    error: ProcessingError,
     parsedEmail: ParsedEmailData,
     config: AppConfig
   ): Promise<void> {
@@ -308,10 +325,7 @@ ${parsedEmail.body}`;
         subject: "Error Processing Email",
         text: this.getErrorResponseMessage(error),
         inReplyTo: threadingOptions.inReplyTo,
-        headers: {
-          ...threadingOptions.headers,
-          "Message-ID": `<${crypto.randomUUID()}@caf-gpt.com>`,
-        },
+        headers: threadingOptions.headers,
       });
       this.logger.info("Sender-only error reply sent");
     } catch (replyError) {
@@ -320,7 +334,7 @@ ${parsedEmail.body}`;
   }
 
   /** Gets a user-friendly error response message. */
-  private getErrorResponseMessage(error: unknown): string {
+  private getErrorResponseMessage(error: ProcessingError): string {
     const template =
       ERROR_RESPONSE_TEMPLATES.find((entry) => entry.match(error)) ??
       ERROR_RESPONSE_TEMPLATES[ERROR_RESPONSE_TEMPLATES.length - 1];
@@ -340,19 +354,24 @@ ${parsedEmail.body}`;
   }
 
   /** Builds valid threading headers for an email reply. */
-  private buildThreadingOptions(parsedEmail: ParsedEmailData): {
-    inReplyTo?: string;
-    headers?: Record<string, string>;
-  } {
+  private buildThreadingOptions(parsedEmail: ParsedEmailData): ReplyThreadingOptions {
     if (!parsedEmail.messageId || !isValidMessageId(parsedEmail.messageId)) {
       return {};
     }
 
     const references = this.buildReferencesHeader(parsedEmail);
-    return {
+    const threadingOptions: ReplyThreadingOptions = {
       inReplyTo: parsedEmail.messageId,
-      ...(references ? { headers: { References: references } } : {}),
     };
+    if (references) {
+      threadingOptions.headers = { References: references };
+    }
+    return threadingOptions;
+  }
+
+  /** Converts a caught value into the error contract used for sender-facing templates. */
+  private parseProcessingError<ErrorValue>(error: ErrorValue): ProcessingError {
+    return error instanceof Error ? error : String(error);
   }
 
   /** Builds the reply References chain from prior threading headers plus the original Message-ID. */
@@ -445,8 +464,8 @@ ${parsedEmail.body}`;
   }
 
   /** Builds a normalized header map with lowercase keys. */
-  private buildHeaderMap(headers: Headers): Record<string, string> {
-    const normalized: Record<string, string> = {};
+  private buildHeaderMap(headers: Headers): EmailHeaderMap {
+    const normalized: EmailHeaderMap = {};
 
     headers.forEach((value, key) => {
       const lowerKey = key.toLowerCase();

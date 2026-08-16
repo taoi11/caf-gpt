@@ -4,18 +4,31 @@
  * Agent coordinator for prime_foo using AI SDK built-in tool orchestration
  *
  * Top-level declarations:
+ * - AgentCoordinatorDependencies: Injectable model and generation functions for Prime Foo
+ * - PrimeFooStepFinishEvent: Minimal step metadata consumed by circuit-breaker logging
  * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools and a circuit breaker (maxSteps: 3)
  */
 
-import { generateText, stepCountIs, tool } from "ai";
+import { APICallError, generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { AgentValidationError } from "../errors";
 import { getSafeErrorMetadata, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
-import { createModel } from "./utils/BaseAgent";
+import { createModel, createProviderOptions } from "./utils/BaseAgent";
 import { PromptManager } from "./utils/PromptManager";
+
+interface PrimeFooStepFinishEvent {
+  stepNumber: number;
+  toolCalls: readonly object[];
+}
+
+// Injectable AI SDK functions used by the Prime Foo coordinator.
+export interface AgentCoordinatorDependencies {
+  createModel: typeof createModel;
+  generateText: typeof generateText;
+}
 
 export class AgentCoordinator {
   private logger: Logger;
@@ -28,13 +41,18 @@ export class AgentCoordinator {
     private leaveFooAgent: LeaveFooAgent,
     private doadFooAgent: DoadFooAgent,
     private qroFooAgent: QroFooAgent,
-    private paceFooAgent: PaceFooAgent
+    private paceFooAgent: PaceFooAgent,
+    private dependencies: AgentCoordinatorDependencies
   ) {
     this.logger = Logger.getInstance();
     this.promptManager = promptManager;
   }
 
-  static async create(env: Env, config: AppConfig): Promise<AgentCoordinator> {
+  static async create(
+    env: Env,
+    config: AppConfig,
+    dependencies: Partial<AgentCoordinatorDependencies> = {}
+  ): Promise<AgentCoordinator> {
     const promptManager = new PromptManager(env.ASSETS);
     return new AgentCoordinator(
       env,
@@ -43,7 +61,8 @@ export class AgentCoordinator {
       new LeaveFooAgent(env, config),
       new DoadFooAgent(env, config),
       new QroFooAgent(env, config),
-      new PaceFooAgent(env, config)
+      new PaceFooAgent(env, config),
+      { createModel, generateText, ...dependencies }
     );
   }
 
@@ -63,16 +82,18 @@ export class AgentCoordinator {
         systemPrompt = `${systemPrompt}\n\n<memory>\n${memory}\n</memory>`;
       }
 
-      const model = createModel(this.env, this.config.llm.models.primeFoo.model);
+      const modelConfig = this.config.llm.models.primeFoo;
+      const model = this.dependencies.createModel(this.env, modelConfig.model);
+      const providerOptions = createProviderOptions(modelConfig.model);
       const maxSteps = 3;
-      const result = await generateText({
+      const generationOptions = {
         model,
         system: systemPrompt,
         prompt: `Email context:\n\n${context}`,
-        temperature: this.config.llm.models.primeFoo.temperature,
-        maxOutputTokens: this.config.llm.models.primeFoo.maxOutputTokens,
+        temperature: modelConfig.temperature,
+        maxOutputTokens: modelConfig.maxOutputTokens,
         stopWhen: stepCountIs(maxSteps),
-        onStepFinish: ({ stepNumber, toolCalls }) => {
+        onStepFinish: ({ stepNumber, toolCalls }: PrimeFooStepFinishEvent) => {
           if (toolCalls.length > 0) {
             this.logger.info("Tool call tracked", { stepNumber: stepNumber + 1, maxSteps });
             if (stepNumber + 1 >= maxSteps) {
@@ -161,7 +182,11 @@ export class AgentCoordinator {
             execute: async ({ rank, context }) => this.paceFooAgent.generateNote(rank, context),
           }),
         },
-      });
+      };
+      if (providerOptions) {
+        Object.assign(generationOptions, { providerOptions });
+      }
+      const result = await this.dependencies.generateText(generationOptions);
 
       if (result.steps.some((step) => step.content.some((part) => part.type === "tool-error"))) {
         throw new AgentValidationError("Prime_foo tool execution failed");
@@ -191,10 +216,17 @@ How to use CAF-GPT:<br>
         shouldRespond: true,
       };
     } catch (error) {
-      this.logger.error("Prime_foo processing failed", {
+      const errorMetadata = {
         processingTime: Date.now() - startTime,
         ...getSafeErrorMetadata(error),
-      });
+      };
+      if (APICallError.isInstance(error)) {
+        if (error.statusCode !== undefined) {
+          Object.assign(errorMetadata, { statusCode: error.statusCode });
+        }
+        Object.assign(errorMetadata, { isRetryable: error.isRetryable });
+      }
+      this.logger.error("Prime_foo processing failed", errorMetadata);
       throw error;
     }
   }

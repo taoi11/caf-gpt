@@ -16,6 +16,7 @@ import type { ParsedEmailData } from "../types";
 
 const MAX_EMAIL_BODY_LENGTH = 1_000_000;
 const MAX_SUBJECT_LENGTH = 900;
+const nonEmptyStringSchema = z.string().min(1);
 
 const emailAddressSchema = z
   .string()
@@ -129,27 +130,29 @@ export function validateRecipients(to: string[], cc: string[] = []): ValidationR
   const seenRecipients = new Set<string>();
 
   for (const recipient of allRecipients) {
-    if (!recipient || typeof recipient !== "string") {
+    const parsedRecipient = nonEmptyStringSchema.safeParse(recipient);
+    if (!parsedRecipient.success) {
       invalidRecipients.push("empty or invalid recipient");
       continue;
     }
 
-    const normalizedResult = emailAddressSchema.safeParse(recipient);
+    const recipientValue = parsedRecipient.data;
+    const normalizedResult = emailAddressSchema.safeParse(recipientValue);
     if (!normalizedResult.success) {
-      invalidRecipients.push(recipient);
+      invalidRecipients.push(recipientValue);
       continue;
     }
 
     const normalizedRecipient = normalizedResult.data;
 
     if (seenRecipients.has(normalizedRecipient)) {
-      duplicateRecipients.push(recipient);
+      duplicateRecipients.push(recipientValue);
     } else {
       seenRecipients.add(normalizedRecipient);
     }
 
     if (isSuspiciousDomain(normalizedRecipient)) {
-      warnings.push(`Potentially suspicious recipient domain: ${recipient}`);
+      warnings.push(`Potentially suspicious recipient domain: ${recipientValue}`);
     }
   }
 
@@ -170,15 +173,17 @@ export function validateRecipients(to: string[], cc: string[] = []): ValidationR
 
 // Validate email address format using Zod's built-in email validator
 export function isValidEmailAddress(email: string): boolean {
-  if (!email || typeof email !== "string") {
+  const parsedEmail = nonEmptyStringSchema.safeParse(email);
+  if (!parsedEmail.success) {
     return false;
   }
 
-  if (email.length > 254) {
+  const emailValue = parsedEmail.data;
+  if (emailValue.length > 254) {
     return false;
   }
 
-  return emailAddressSchema.safeParse(email).success;
+  return emailAddressSchema.safeParse(emailValue).success;
 }
 
 /** Detects C0/DEL control characters that cannot safely appear in structured headers. */
@@ -198,13 +203,19 @@ const MESSAGE_ID_REGEX = new RegExp(
 
 /** Validates a strict ASCII dot-atom and hostname Message-ID subset. */
 export function isValidMessageId(messageId: string): boolean {
-  if (!messageId || typeof messageId !== "string") {
+  const parsedMessageId = nonEmptyStringSchema.safeParse(messageId);
+  if (!parsedMessageId.success) {
     return false;
   }
-  if (messageId.length > 998 || messageId !== messageId.trim() || hasControlCharacters(messageId)) {
+  const messageIdValue = parsedMessageId.data;
+  if (
+    messageIdValue.length > 998 ||
+    messageIdValue !== messageIdValue.trim() ||
+    hasControlCharacters(messageIdValue)
+  ) {
     return false;
   }
-  return MESSAGE_ID_REGEX.test(messageId);
+  return MESSAGE_ID_REGEX.test(messageIdValue);
 }
 
 // Pre-compile regular expressions and use a Set for O(1) lookup

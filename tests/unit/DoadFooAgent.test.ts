@@ -7,32 +7,14 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { DocumentRetriever } from "../../src/storage/DocumentRetriever";
 import { createMockEnv } from "../mocks";
-import type { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
-
-const { mockGenerateText, mockGenerateObject } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn(),
-  mockGenerateObject: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return {
-    ...actual,
-    generateText: mockGenerateText,
-    generateObject: mockGenerateObject,
-  };
-});
-
-vi.mock("ai-gateway-provider", () => ({
-  createAiGateway: vi.fn(() => vi.fn((model: unknown) => model)),
-}));
-vi.mock("ai-gateway-provider/providers/unified", () => ({
-  createUnified: vi.fn(() => vi.fn((model: string) => model)),
-}));
+import { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
 import { DoadFooAgent } from "../../src/agents/sub-agents/DoadFooAgent";
 import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";
+
+const mockGenerateText = vi.fn();
+const mockGenerateObject = vi.fn();
 
 interface ReadFileToolOptions {
   system?: string;
@@ -68,10 +50,13 @@ describe("DoadFooAgent", () => {
     mockGenerateObject.mockReset();
     DocumentRetriever.clearCache();
 
-    mockEnv = createMockEnv();
+    mockBucket = new MockR2Bucket();
+    mockAssets = new MockFetcher();
+    mockEnv = Object.assign(createMockEnv(), {
+      R2_BUCKET: mockBucket,
+      ASSETS: mockAssets,
+    });
     const config = createConfig(mockEnv);
-    mockBucket = mockEnv.R2_BUCKET as unknown as MockR2Bucket;
-    mockAssets = mockEnv.ASSETS as unknown as MockFetcher;
 
     mockAssets.setPrompt(
       "DOAD_Table",
@@ -114,7 +99,7 @@ Establishes grievance procedures.`
 Members are entitled to relocation assistance when posted.`
     );
 
-    agent = new DoadFooAgent(mockEnv, config);
+    agent = new DoadFooAgent(mockEnv, config, { generateText: mockGenerateText });
   });
 
   describe("research", () => {
@@ -182,6 +167,7 @@ Members are entitled to relocation assistance when posted.`
 
       await agent.research({ question: "What is the test policy?" });
 
+      // SAFETY: This test's fake is invoked once by ToolReadingAgent with ReadFileToolOptions.
       const call = mockGenerateText.mock.calls[0][0] as ReadFileToolOptions;
       expect(call.system).toContain("DOAD Index");
       expect(call.system).toContain("5019-0");

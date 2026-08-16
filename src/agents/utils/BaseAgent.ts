@@ -1,21 +1,23 @@
 /**
  * src/agents/utils/BaseAgent.ts
  *
- * Base agent with Cloudflare Workers AI integration via AI SDK
+ * Base agent with OpenAI Responses integration routed through Cloudflare AI Gateway
  *
  * Top-level declarations:
+ * - BaseAgentDependencies: Injectable model and generation functions for BaseAgent workflows
+ * - CreateModelDependencies: Injectable provider factories for model construction
  * - BaseAgent: Base agent with AI SDK integration and template-based prompts
- * - isCloudflareUnifiedBillingModel: Checks if a model uses Cloudflare Unified Billing
- * - createModel: Creates AI model via AI Gateway provider
+ * - isOpenAIResponsesModel: Checks if a model uses the OpenAI Responses provider
+ * - createModel: Creates an OpenAI Responses model routed through Cloudflare AI Gateway
  * - createProviderOptions: Creates model-specific provider options
  * - callLangChain: Backward-compatible wrapper for plain text model calls
  * - callLangChainStructured: Backward-compatible wrapper for structured model calls
  */
 
+import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 import { generateObject, generateText } from "ai";
-import { createAiGateway } from "ai-gateway-provider";
-import { createUnified } from "ai-gateway-provider/providers/unified";
+import { createGatewayFetch } from "workers-ai-provider/gateway";
 import type { z } from "zod";
 import type { AppConfig } from "../../config";
 import { AgentAPIError, AgentTimeoutError, AgentValidationError } from "../../errors";
@@ -34,43 +36,68 @@ interface LLMCallParams {
 type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 type JsonObject = { [key: string]: JsonValue | undefined };
 type ModelProviderOptions = Record<string, JsonObject>;
+type AgentErrorLike = Error | string;
+type AgentLogMetadataValue = string | number | boolean | null | undefined;
+type AgentLogMetadata = Record<string, AgentLogMetadataValue>;
 
-const CLOUDFLARE_ACCOUNT_ID = "7101c0eb0cce7925fd15056c805c97eb";
+// Injectable provider factories used to construct an OpenAI Responses model.
+export interface CreateModelDependencies {
+  createOpenAI: typeof createOpenAI;
+  createGatewayFetch: typeof createGatewayFetch;
+}
+
+// Injectable AI SDK functions used by BaseAgent and its subclasses.
+export interface BaseAgentDependencies {
+  createModel: typeof createModel;
+  generateObject: typeof generateObject;
+  generateText: typeof generateText;
+}
+
+interface AgentErrorMessages {
+  timeout: string;
+  aiGateway: string;
+  generic: string;
+}
+
 const CLOUDFLARE_AI_GATEWAY = "caf-gpt";
-const FLEX_REQUEST_TIMEOUT_MS = 900000;
-const CLOUDFLARE_UNIFIED_BILLING_MODEL_PREFIXES = ["google-ai-studio/"];
+const OPENAI_MODEL_PREFIX = "openai/";
+const GPT_56_MODEL_PREFIX = "openai/gpt-5.6-";
 
-const CLOUDFLARE_UNIFIED_FLEX_OPTIONS: ModelProviderOptions = {
-  Unified: {
-    service_tier: "flex",
+const OPENAI_RESPONSES_OPTIONS = {
+  openai: {
+    forceReasoning: true,
+    reasoningEffort: "high",
+    store: false,
   },
-};
+} as const satisfies ModelProviderOptions;
 
-// Checks whether a model uses Cloudflare AI Gateway Unified Billing.
-function isCloudflareUnifiedBillingModel(model: string): boolean {
-  return CLOUDFLARE_UNIFIED_BILLING_MODEL_PREFIXES.some((prefix) => model.startsWith(prefix));
+// Checks whether a model uses the OpenAI Responses provider through AI Gateway.
+function isOpenAIResponsesModel(model: string): boolean {
+  return model.startsWith(GPT_56_MODEL_PREFIX);
 }
 
 // Creates model-specific provider options for AI SDK calls.
 export function createProviderOptions(model: string): ModelProviderOptions | undefined {
-  return isCloudflareUnifiedBillingModel(model) ? CLOUDFLARE_UNIFIED_FLEX_OPTIONS : undefined;
+  return isOpenAIResponsesModel(model) ? OPENAI_RESPONSES_OPTIONS : undefined;
 }
 
-// Creates AI model via Cloudflare AI Gateway provider routing.
-export function createModel(env: Env, model: string): LanguageModel {
-  const aigateway = createAiGateway({
-    accountId: CLOUDFLARE_ACCOUNT_ID,
-    gateway: CLOUDFLARE_AI_GATEWAY,
-    apiKey: env.CF_AIG_AUTH,
-    options: {
-      requestTimeoutMs: FLEX_REQUEST_TIMEOUT_MS,
-    },
+// Creates an OpenAI Responses model whose native request is routed by the AI binding Gateway API.
+export function createModel(
+  env: Env,
+  model: string,
+  dependencies: CreateModelDependencies = { createOpenAI, createGatewayFetch }
+): LanguageModel {
+  const openai = dependencies.createOpenAI({
+    apiKey: "unused",
+    fetch: dependencies.createGatewayFetch({
+      binding: env.AI,
+      gateway: CLOUDFLARE_AI_GATEWAY,
+    }),
   });
-
-  const unified = createUnified({
-    supportsStructuredOutputs: isCloudflareUnifiedBillingModel(model),
-  });
-  return aigateway(unified(model)) as unknown as LanguageModel;
+  const modelId = model.startsWith(OPENAI_MODEL_PREFIX)
+    ? model.slice(OPENAI_MODEL_PREFIX.length)
+    : model;
+  return openai.responses(modelId);
 }
 
 export abstract class BaseAgent {
@@ -78,22 +105,30 @@ export abstract class BaseAgent {
   protected config: AppConfig;
   protected promptManager: PromptManager;
   protected docRetriever: DocumentRetriever;
+  protected dependencies: BaseAgentDependencies;
   private modelCache: Map<string, LanguageModel> = new Map();
 
   constructor(
     protected env: Env,
-    config: AppConfig
+    config: AppConfig,
+    dependencies: Partial<BaseAgentDependencies> = {}
   ) {
     this.config = config;
     this.logger = Logger.getInstance();
     this.promptManager = new PromptManager(env.ASSETS);
     this.docRetriever = new DocumentRetriever(env.R2_BUCKET);
+    this.dependencies = {
+      createModel,
+      generateObject,
+      generateText,
+      ...dependencies,
+    };
   }
 
   protected getCachedModel(model: string): LanguageModel {
     let cached = this.modelCache.get(model);
     if (!cached) {
-      cached = createModel(this.env, model);
+      cached = this.dependencies.createModel(this.env, model);
       this.modelCache.set(model, cached);
       this.logger.debug("Created and cached new AI SDK model");
     }
@@ -103,21 +138,24 @@ export abstract class BaseAgent {
   // Backward-compatible wrapper for text generation
   protected async callLangChain(params: LLMCallParams): Promise<string> {
     try {
-      this.logger.info("Calling Workers AI via AI SDK", {
+      this.logger.info("Calling OpenAI Responses via Cloudflare AI Gateway", {
         promptName: params.promptName,
       });
 
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = this.getCachedModel(params.model);
       const providerOptions = createProviderOptions(params.model);
-      const result = await generateText({
+      const generationOptions = {
         model,
         system: rendered.system,
         prompt: rendered.user,
         temperature: params.temperature,
         maxOutputTokens: params.maxOutputTokens,
-        ...(providerOptions ? { providerOptions } : {}),
-      });
+      };
+      if (providerOptions) {
+        Object.assign(generationOptions, { providerOptions });
+      }
+      const result = await this.dependencies.generateText(generationOptions);
 
       if (!result.text || result.text.trim().length === 0) {
         throw new AgentValidationError("AI SDK returned empty content");
@@ -150,15 +188,18 @@ export abstract class BaseAgent {
     schemaName?: string
   ): Promise<T> {
     try {
-      this.logger.info("Calling Workers AI via AI SDK with structured output", {
-        promptName: params.promptName,
-        schemaName,
-      });
+      this.logger.info(
+        "Calling OpenAI Responses via Cloudflare AI Gateway with structured output",
+        {
+          promptName: params.promptName,
+          schemaName,
+        }
+      );
 
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = this.getCachedModel(params.model);
       const providerOptions = createProviderOptions(params.model);
-      const result = await generateObject({
+      const generationOptions = {
         model,
         schema,
         schemaName: schemaName ?? "response",
@@ -166,8 +207,11 @@ export abstract class BaseAgent {
         prompt: rendered.user,
         temperature: params.temperature,
         maxOutputTokens: params.maxOutputTokens,
-        ...(providerOptions ? { providerOptions } : {}),
-      });
+      };
+      if (providerOptions) {
+        Object.assign(generationOptions, { providerOptions });
+      }
+      const result = await this.dependencies.generateObject(generationOptions);
 
       this.logger.info("AI SDK structured call successful", {
         schemaName,
@@ -199,9 +243,9 @@ export abstract class BaseAgent {
   protected handleAgentError(
     operation: string,
     startTime: number,
-    error: unknown,
-    errorMessages: { timeout: string; aiGateway: string; generic: string },
-    context?: Record<string, unknown>
+    error: AgentErrorLike,
+    errorMessages: AgentErrorMessages,
+    context?: AgentLogMetadata
   ): string {
     const processingTime = Date.now() - startTime;
     this.logger.error(`${operation} failed`, {
@@ -225,9 +269,9 @@ export abstract class BaseAgent {
   protected handleResearchError(
     operation: string,
     startTime: number,
-    error: unknown,
+    error: AgentErrorLike,
     policyType: string,
-    context?: Record<string, unknown>
+    context?: AgentLogMetadata
   ): string {
     return this.handleAgentError(
       operation,

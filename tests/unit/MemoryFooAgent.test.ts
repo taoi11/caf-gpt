@@ -12,32 +12,20 @@
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { z } from "zod";
 import { createMockEnv } from "../mocks";
-
-// Use vi.hoisted to define mock function BEFORE module imports
-const { mockGenerateText } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return {
-    ...actual,
-    generateText: mockGenerateText,
-  };
-});
-
-vi.mock("ai-gateway-provider", () => ({
-  createAiGateway: vi.fn(() => vi.fn((model: unknown) => model)),
-}));
-vi.mock("ai-gateway-provider/providers/unified", () => ({
-  createUnified: vi.fn(() => vi.fn((model: string) => model)),
-}));
 
 import { MemoryFooAgent } from "../../src/agents/sub-agents/MemoryFooAgent";
 import { createConfig } from "../../src/config";
+import { MemoryUnchangedToolInputSchema, MemoryUpdateToolInputSchema } from "../../src/schemas";
 
-function createToolCall(toolName: string, input: unknown) {
+type MemoryToolInput =
+  | z.input<typeof MemoryUpdateToolInputSchema>
+  | z.input<typeof MemoryUnchangedToolInputSchema>;
+
+const mockGenerateText = vi.fn();
+
+function createToolCall(toolName: string, input: MemoryToolInput) {
   return {
     type: "tool-call",
     toolCallId: "memory-tool-call",
@@ -46,7 +34,7 @@ function createToolCall(toolName: string, input: unknown) {
   };
 }
 
-function setMockMemoryToolCall(toolName: string, input: unknown = {}) {
+function setMockMemoryToolCall(toolName: string, input: MemoryToolInput = {}) {
   mockGenerateText.mockResolvedValueOnce({
     text: "",
     toolCalls: [createToolCall(toolName, input)],
@@ -70,7 +58,7 @@ describe("MemoryFooAgent", () => {
 
     mockEnv = createMockEnv();
     const config = createConfig(mockEnv);
-    agent = new MemoryFooAgent(mockEnv, config);
+    agent = new MemoryFooAgent(mockEnv, config, { generateText: mockGenerateText });
   });
 
   it("should return updated memory when LLM provides new content", async () => {
@@ -112,7 +100,7 @@ describe("MemoryFooAgent", () => {
     expect(Object.keys(lastCall?.tools ?? {})).toEqual(["update_memory", "leave_memory_unchanged"]);
   });
 
-  it("should pass Cloudflare Unified flex provider options for the small model", async () => {
+  it("should pass high reasoning and no-store Responses options for the small model", async () => {
     setMockMemoryToolCall("update_memory", { content: "New memory content" });
 
     const result = await agent.updateMemory("", "Question", "Answer");
@@ -121,8 +109,10 @@ describe("MemoryFooAgent", () => {
     expect(result.content).toBe("New memory content");
     const lastCall = mockGenerateText.mock.calls.at(-1)?.[0];
     expect(lastCall?.providerOptions).toMatchObject({
-      Unified: {
-        service_tier: "flex",
+      openai: {
+        forceReasoning: true,
+        reasoningEffort: "high",
+        store: false,
       },
     });
   });

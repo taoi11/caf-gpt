@@ -2,8 +2,8 @@
  * For more details on how to configure Wrangler, refer to:
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  *
- * Required secrets (set with: wrangler secret put <NAME>):
- * - CF_AIG_AUTH: Cloudflare AI Gateway authentication token
+ * Required bindings:
+ * - AI: Cloudflare Workers AI binding used to route OpenAI Responses requests through AI Gateway
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -22,6 +22,9 @@
     "binding": "ASSETS",
     "directory": "./public",
     "html_handling": "auto-trailing-slash"
+  },
+  "ai": {
+    "binding": "AI"
   },
   "observability": {
     "logs": {

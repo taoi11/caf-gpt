@@ -19,7 +19,7 @@ export class MockR2Object {
   ) {}
 
   async text(): Promise<string> {
-    if (typeof this.body === "string") {
+    if (!(this.body instanceof ReadableStream)) {
       return this.body;
     }
     const reader = this.body.getReader();
@@ -63,9 +63,8 @@ export class MockR2Bucket {
     objects: Array<{ key: string }>;
   }> {
     const keys = Array.from(this.storage.keys());
-    const filtered = options?.prefix
-      ? keys.filter((k) => k.startsWith(options.prefix as string))
-      : keys;
+    const prefix = options?.prefix;
+    const filtered = prefix ? keys.filter((key) => key.startsWith(prefix)) : keys;
     return { objects: filtered.map((key) => ({ key })) };
   }
 
@@ -136,7 +135,7 @@ If nothing new:
   }
 
   async fetch(request: Request | string): Promise<Response> {
-    const url = typeof request === "string" ? request : request.url;
+    const url = request instanceof Request ? request.url : request;
     const match = url.match(/\/prompts\/([^.]+)\.md$/);
 
     if (match) {
@@ -165,13 +164,17 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
   const mockR2 = new MockR2Bucket();
   const mockAssets = new MockFetcher();
 
-  return {
-    R2_BUCKET: mockR2 as unknown as R2Bucket,
-    ASSETS: mockAssets as unknown as Fetcher,
-    CF_AIG_AUTH: "test-token",
+  const bindings = {
+    R2_BUCKET: mockR2,
+    ASSETS: mockAssets,
+    AI: {},
     EMAIL: {
       send: async () => ({ messageId: "mock-email" }),
-    } as SendEmail,
+    },
     ...overrides,
-  } as Env;
+  };
+
+  // SAFETY: Unit tests only consume the four faithful binding contracts above; tests needing
+  // additional Env bindings provide them through overrides before the environment is used.
+  return bindings as Env;
 }

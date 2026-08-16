@@ -133,7 +133,9 @@ export class APIValidationError extends APIError {
 
 export type TypedAPIError = APIAuthError | APIRateLimitError | APITimeoutError | APIValidationError;
 
-export function isTypedAPIError(error: unknown): error is TypedAPIError {
+export function isTypedAPIError<ErrorValue>(
+  error: ErrorValue
+): error is ErrorValue & TypedAPIError {
   return (
     error instanceof APIAuthError ||
     error instanceof APIRateLimitError ||
