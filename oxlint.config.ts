@@ -1,8 +1,21 @@
+/**
+ * Oxlint configuration for CAF-GPT.
+ *
+ * - Registers the vendored anti-slop plugin (tools/oxlint/anti-slop) with all
+ *   rules at error severity.
+ * - Restores the explicit-any rejection previously enforced by Biome.
+ * - Excludes vendored tooling and generated bindings from lint scope.
+ */
 import { defineConfig } from "oxlint";
 
 export default defineConfig({
-  ignorePatterns: ["tools/oxlint/anti-slop/**", "worker-configuration.d.ts"],
-  jsPlugins: [{ name: "anti-slop", specifier: "./tools/oxlint/anti-slop/index.ts" }],
+  ignorePatterns: [
+    "tools/oxlint/anti-slop/**",
+    "worker-configuration.d.ts",
+  ],
+  jsPlugins: [
+    { name: "anti-slop", specifier: "./tools/oxlint/anti-slop/index.ts" },
+  ],
   rules: {
     "anti-slop/no-chained-type-assertions": "error",
     "anti-slop/no-conditional-empty-object-spread": "error",
