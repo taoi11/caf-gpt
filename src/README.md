@@ -55,7 +55,7 @@ src/
 
 No Cloudflare REST API token is required; the legacy `CF_AIG_AUTH` Gateway secret is not used.
 
-Inbound sender authorization is a code-reviewed policy in `src/config.ts`: `forces.gc.ca` plus the exact mailbox `luffy@luffy.email`. It has no deployment-variable override.
+Inbound sender authorization is a code-reviewed policy in `src/config.ts`: `forces.gc.ca` plus the exact mailboxes `luffy@luffy.email` and `munshi@dhaliwal.info`. It has no deployment-variable override.
 
 ## Email Delivery Contract
 
