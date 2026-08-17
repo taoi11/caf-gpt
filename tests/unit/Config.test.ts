@@ -9,6 +9,7 @@
 
 import { describe, expect, it } from "vitest";
 import { createConfig } from "../../src/config";
+import { createMockEnv } from "../mocks";
 
 describe("createConfig", () => {
   it("uses the code-reviewed authorization policy", () => {
@@ -30,9 +31,9 @@ describe("createConfig", () => {
   });
 
   it("does not allow a legacy runtime value to broaden authorization", () => {
-    const legacyEnv = {
+    const legacyEnv = Object.assign(createMockEnv(), {
       AUTHORIZED_SENDERS: "evil.com,attacker@example.com",
-    } as unknown as Env;
+    });
     const config = createConfig(legacyEnv);
 
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);

@@ -9,5 +9,6 @@
     "allowSyntheticDefaultImports": true,
     "lib": ["ESNext"],
     "types": ["./worker-configuration.d.ts"]
-  }
+  },
+  "exclude": ["node_modules", "tools"]
 }

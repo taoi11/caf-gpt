@@ -18,6 +18,19 @@ import {
   validateRecipients,
 } from "../../src/email/utils/EmailValidator";
 
+type InvalidEmailInput = null | undefined | number;
+
+// SAFETY: This intermediate value preserves the same function for a deliberate runtime-boundary test.
+const runtimeEmailAddressValidator = isValidEmailAddress as unknown;
+// SAFETY: The validator Zod-parses its argument before using it, so these invalid values are rejected.
+const validateUntrustedEmailAddress = runtimeEmailAddressValidator as (
+  email: InvalidEmailInput
+) => boolean;
+// SAFETY: This test intentionally supplies untrusted recipient entries at the validation boundary.
+const validateUntrustedRecipients = validateRecipients as (
+  to: unknown[]
+) => ReturnType<typeof validateRecipients>;
+
 describe("EmailValidator", () => {
   describe("isValidEmailAddress", () => {
     it("should validate correct email addresses", () => {
@@ -37,9 +50,9 @@ describe("EmailValidator", () => {
     });
 
     it("should handle edge cases", () => {
-      expect(isValidEmailAddress(null as unknown as string)).toBe(false);
-      expect(isValidEmailAddress(undefined as unknown as string)).toBe(false);
-      expect(isValidEmailAddress(123 as unknown as string)).toBe(false);
+      expect(validateUntrustedEmailAddress(null)).toBe(false);
+      expect(validateUntrustedEmailAddress(undefined)).toBe(false);
+      expect(validateUntrustedEmailAddress(123)).toBe(false);
     });
   });
 
@@ -242,11 +255,7 @@ describe("EmailValidator", () => {
     });
 
     it("should handle empty or invalid recipient entries", () => {
-      const result = validateRecipients([
-        "",
-        null as unknown as string,
-        undefined as unknown as string,
-      ]);
+      const result = validateUntrustedRecipients(["", null, undefined]);
       expect(result.isValid).toBe(false);
       expect(result.errors[0]).toContain("Invalid recipient addresses");
     });

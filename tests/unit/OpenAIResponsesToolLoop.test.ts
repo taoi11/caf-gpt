@@ -13,6 +13,23 @@ import { describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { createProviderOptions } from "../../src/agents/utils/BaseAgent";
 
+const requestBodySchema = z.object({
+  store: z.boolean().optional(),
+  reasoning: z.object({ effort: z.string().optional() }).optional(),
+  input: z
+    .array(
+      z.object({
+        type: z.string().optional(),
+        id: z.string().optional(),
+        call_id: z.string().optional(),
+        name: z.string().optional(),
+        arguments: z.string().optional(),
+        output: z.string().optional(),
+      })
+    )
+    .optional(),
+});
+
 /** Creates a minimal successful Responses API payload for a function call. */
 function createFunctionCallResponse(): Response {
   return Response.json({
@@ -58,9 +75,9 @@ function createTextResponse(): Response {
 
 describe("OpenAI Responses no-store tool loop", () => {
   it("serializes prior tool state instead of emitting an item_reference", async () => {
-    const requestBodies: Array<Record<string, unknown>> = [];
+    const requestBodies: Array<z.infer<typeof requestBodySchema>> = [];
     const mockFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      requestBodies.push(JSON.parse(String(init?.body)) as Record<string, unknown>);
+      requestBodies.push(requestBodySchema.parse(JSON.parse(String(init?.body))));
       return requestBodies.length === 1 ? createFunctionCallResponse() : createTextResponse();
     });
     const openai = createOpenAI({
@@ -94,7 +111,7 @@ describe("OpenAI Responses no-store tool loop", () => {
       reasoning: { effort: "high" },
     });
 
-    const continuationInput = requestBodies[1]?.input as Array<Record<string, unknown>>;
+    const continuationInput = requestBodies[1]?.input ?? [];
     expect(continuationInput).toContainEqual({
       type: "function_call",
       id: "function-call-item",

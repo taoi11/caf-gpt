@@ -5,6 +5,8 @@
  *
  * Top-level functions:
  * - UserAgent: Durable Object-backed per-user email agent
+ * - EmailBoundaryMetadata: Safe sender and recipient domain metadata for boundary logs
+ * - EmailRoutingFailureMetadata: Parsed error metadata for top-level routing failures
  * - createUserAgentResolver: Creates the sender-keyed Agents SDK email resolver
  * - isAuthorizedSender: Checks configured sender allow list
  * - isMonitoredRecipient: Checks monitored recipient addresses
@@ -24,6 +26,18 @@ import { isAuthorizedEmailAddress } from "./email/utils/ReplyRecipients";
 import { getSafeErrorMetadata, Logger } from "./Logger";
 
 export { UserAgent };
+
+/** Safe sender and recipient domain metadata for inbound email boundary logs. */
+interface EmailBoundaryMetadata {
+  senderDomain: string;
+  receivingDomain: string;
+}
+
+/** Parsed error metadata for a top-level inbound email routing failure. */
+interface EmailRoutingFailureMetadata extends EmailBoundaryMetadata {
+  errorName: string;
+  errorCode?: string;
+}
 
 /** Creates the Agents SDK email resolver for authorized sender-keyed routing. */
 export function createUserAgentResolver(env: Env, config = createConfig(env)): EmailResolver<Env> {
@@ -81,15 +95,10 @@ function rejectEmailSafely(
   message: ForwardableEmailMessage,
   reason: string,
   logger: Logger,
-  context: Record<string, unknown>
+  context: EmailBoundaryMetadata
 ): void {
   try {
-    const setReject = (
-      message as ForwardableEmailMessage & { setReject?: (reason: string) => void }
-    ).setReject;
-    if (typeof setReject === "function") {
-      setReject.call(message, reason);
-    }
+    message.setReject(reason);
   } catch (error) {
     logger.error("Email rejection failed", {
       ...context,
@@ -152,7 +161,7 @@ async function email(
   const metadata = {
     senderDomain: getEmailDomain(message.from),
     receivingDomain: getEmailDomain(message.to),
-  };
+  } satisfies EmailBoundaryMetadata;
 
   if (!env.EMAIL) {
     logger.error("Email service configuration unavailable", {
@@ -191,13 +200,15 @@ async function email(
       },
     });
   } catch (error) {
-    const platformCode =
-      error instanceof Error ? (error as Error & { code?: unknown }).code : undefined;
-    logger.error("Top-level email routing failed", {
+    const { errorName, errorCode } = getSafeErrorMetadata(error);
+    const failureMetadata: EmailRoutingFailureMetadata = {
       ...metadata,
-      errorName: error instanceof Error ? error.name : "UnknownError",
-      ...(typeof platformCode === "string" ? { errorCode: platformCode } : {}),
-    });
+      errorName,
+    };
+    if (errorCode !== undefined) {
+      failureMetadata.errorCode = errorCode;
+    }
+    logger.error("Top-level email routing failed", failureMetadata);
     rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
   }
 }

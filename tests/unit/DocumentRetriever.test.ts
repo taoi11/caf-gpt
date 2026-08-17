@@ -12,16 +12,16 @@
 
 import { describe, expect, it, vi } from "vitest";
 import { DocumentRetriever } from "../../src/storage/DocumentRetriever";
+import { createMockEnv } from "../mocks";
 
 const createR2Bucket = () => {
   const get = vi.fn(async (key: string) => ({
     text: vi.fn(async () => `content:${key}`),
   }));
 
-  return {
-    bucket: { get } as unknown as R2Bucket,
-    get,
-  };
+  const testEnv = Object.assign(createMockEnv(), { R2_BUCKET: { get } });
+
+  return { bucket: testEnv.R2_BUCKET, get };
 };
 
 describe("DocumentRetriever", () => {

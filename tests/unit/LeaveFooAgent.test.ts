@@ -11,23 +11,13 @@
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
-import type { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
-
-const { mockGenerateText } = vi.hoisted(() => ({
-  mockGenerateText: vi.fn(),
-}));
-
-vi.mock("ai", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("ai")>();
-  return {
-    ...actual,
-    generateText: mockGenerateText,
-  };
-});
+import { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
 import { LeaveFooAgent } from "../../src/agents/sub-agents/LeaveFooAgent";
 import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";
+
+const mockGenerateText = vi.fn();
 
 function setMockLLMResponse(response: string) {
   mockGenerateText.mockResolvedValueOnce({ text: response });
@@ -61,10 +51,13 @@ describe("LeaveFooAgent", () => {
     mockGenerateText.mockReset();
     mockGenerateText.mockResolvedValue({ text: "Default response" });
 
-    mockEnv = createMockEnv();
+    mockBucket = new MockR2Bucket();
+    mockAssets = new MockFetcher();
+    mockEnv = Object.assign(createMockEnv(), {
+      R2_BUCKET: mockBucket,
+      ASSETS: mockAssets,
+    });
     const config = createConfig(mockEnv);
-    mockBucket = mockEnv.R2_BUCKET as unknown as MockR2Bucket;
-    mockAssets = mockEnv.ASSETS as unknown as MockFetcher;
 
     mockAssets.setPrompt(
       "leave_foo_research",
@@ -95,7 +88,7 @@ Members are entitled to:
 - Up to 3 days without certificate`
     );
 
-    agent = new LeaveFooAgent(mockEnv, config);
+    agent = new LeaveFooAgent(mockEnv, config, { generateText: mockGenerateText });
   });
 
   describe("research", () => {
@@ -125,10 +118,8 @@ Members are entitled to:
 
       const capturedMessages = getCapturedMessages();
       expect(capturedMessages).not.toBeNull();
-      const messages = capturedMessages as unknown[];
-      const systemContent = (messages[0] as { content: string }).content;
-      expect(systemContent).toContain("Leave Policy 2025");
-      expect(systemContent).toContain("Medical Leave");
+      expect(capturedMessages?.[0]?.content).toContain("Leave Policy 2025");
+      expect(capturedMessages?.[0]?.content).toContain("Medical Leave");
     });
 
     it("should reject empty research question", async () => {

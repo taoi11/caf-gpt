@@ -14,7 +14,7 @@ CAF-GPT is a backend-only email agent platform using a multi-agent coordinator p
 
 ```bash
 npm run format      # Format all files with Biome
-npm run lint        # Check for lint issues (or npm run lint:fix to auto-fix)
+npm run lint        # Check for lint issues with Oxlint + anti-slop rules (or `npm run lint:fix`)
 npm run test        # Run Vitest test suite (minimal output)
 npm run test:verbose # Run tests (full console output)
 npm run test:watch   # Run tests in watch mode
