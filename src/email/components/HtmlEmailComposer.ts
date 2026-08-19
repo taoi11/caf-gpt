@@ -23,7 +23,8 @@ export class HtmlEmailComposer {
   composeHtmlReply(originalEmail: ParsedEmailData, newContent: string): string {
     const formattedContent = this.formatNewContent(newContent);
     const replyHeader = this.getReplyHeader(originalEmail);
-    const originalBody = originalEmail.html || this.wrapPlainTextAsHtml(originalEmail.body);
+    // Quote the derived plain-text body. Never re-inject inbound HTML.
+    const originalBody = this.wrapPlainTextAsHtml(originalEmail.body);
 
     return `
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns:m="http://schemas.microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40">

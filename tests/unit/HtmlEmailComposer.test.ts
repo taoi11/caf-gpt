@@ -38,8 +38,9 @@ describe("HtmlEmailComposer", () => {
       expect(html).toContain("Subject:</b>");
       expect(html).toContain("Test Subject");
 
-      // Check for original body
-      expect(html).toContain("<p>Original HTML body</p>");
+      // Quote the derived text body, not the inbound HTML
+      expect(html).toContain("<p class=MsoNormal>Original plain text body</p>");
+      expect(html).not.toContain("<p>Original HTML body</p>");
     });
 
     it("should pass through HTML content directly", () => {
@@ -89,6 +90,21 @@ describe("HtmlEmailComposer", () => {
       expect(html).toContain("Subject &amp; &quot;test&quot;");
       expect(html).toContain("<p class=MsoNormal>Line &lt;b&gt;bold&lt;/b&gt; &amp; more</p>");
       expect(html).not.toContain("<script>");
+    });
+
+    it("does not re-embed inbound HTML in the quoted original", () => {
+      const originalEmail = createMockParsedEmail({
+        body: "Safe quoted text",
+        html: '<p>looks fine</p><img src="https://evil.test/pixel.png"><script>alert(1)</script>',
+      });
+
+      const html = composer.composeHtmlReply(originalEmail, "Reply");
+
+      expect(html).toContain("<p class=MsoNormal>Safe quoted text</p>");
+      expect(html).not.toContain("<script>");
+      expect(html).not.toContain("<img");
+      expect(html).not.toContain("evil.test");
+      expect(html).not.toContain("looks fine");
     });
   });
 });
