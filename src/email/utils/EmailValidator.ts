@@ -5,7 +5,6 @@
  *
  * Top-level declarations:
  * - validateEmailContent: Validate email content
- * - validateRecipients: Validate email recipients
  * - isValidEmailAddress: Validate email address format using Zod
  * - hasControlCharacters: Detects unsafe header control characters
  * - isValidMessageId: Validates a strict practical Message-ID subset
@@ -111,66 +110,6 @@ export function validateEmailContent(parsedEmail: ParsedEmailData): ValidationRe
   };
 }
 
-// Validate email recipients
-export function validateRecipients(to: string[], cc: string[] = []): ValidationResult {
-  const errors: string[] = [];
-  const warnings: string[] = [];
-
-  const allRecipients = [...to, ...cc];
-
-  // Check for empty recipient list
-  if (allRecipients.length === 0) {
-    errors.push("No recipients specified");
-    return { isValid: false, errors, warnings };
-  }
-
-  // Validate each recipient
-  const invalidRecipients: string[] = [];
-  const duplicateRecipients: string[] = [];
-  const seenRecipients = new Set<string>();
-
-  for (const recipient of allRecipients) {
-    const parsedRecipient = nonEmptyStringSchema.safeParse(recipient);
-    if (!parsedRecipient.success) {
-      invalidRecipients.push("empty or invalid recipient");
-      continue;
-    }
-
-    const recipientValue = parsedRecipient.data;
-    const normalizedResult = emailAddressSchema.safeParse(recipientValue);
-    if (!normalizedResult.success) {
-      invalidRecipients.push(recipientValue);
-      continue;
-    }
-
-    const normalizedRecipient = normalizedResult.data;
-
-    if (seenRecipients.has(normalizedRecipient)) {
-      duplicateRecipients.push(recipientValue);
-    } else {
-      seenRecipients.add(normalizedRecipient);
-    }
-
-    if (isSuspiciousDomain(normalizedRecipient)) {
-      warnings.push(`Potentially suspicious recipient domain: ${recipientValue}`);
-    }
-  }
-
-  if (invalidRecipients.length > 0) {
-    errors.push(`Invalid recipient addresses: ${invalidRecipients.join(", ")}`);
-  }
-
-  if (duplicateRecipients.length > 0) {
-    warnings.push(`Duplicate recipients: ${duplicateRecipients.join(", ")}`);
-  }
-
-  return {
-    isValid: errors.length === 0,
-    errors,
-    warnings,
-  };
-}
-
 // Validate email address format using Zod's built-in email validator
 export function isValidEmailAddress(email: string): boolean {
   const parsedEmail = nonEmptyStringSchema.safeParse(email);
@@ -226,22 +165,7 @@ const SUSPICIOUS_PATTERNS = [
   /\b(phishing|malware|virus)\b/i,
 ];
 
-const SUSPICIOUS_DOMAINS = new Set([
-  "tempmail.org",
-  "10minutemail.com",
-  "guerrillamail.com",
-  "mailinator.com",
-]);
-
 // Check for suspicious content patterns
 function containsSuspiciousContent(content: string): boolean {
   return SUSPICIOUS_PATTERNS.some((pattern) => pattern.test(content));
-}
-
-// Check if domain is suspicious
-function isSuspiciousDomain(email: string): boolean {
-  const domain = email.split("@")[1]?.toLowerCase();
-  if (!domain) return false;
-
-  return SUSPICIOUS_DOMAINS.has(domain);
 }
