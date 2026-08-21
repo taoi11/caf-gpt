@@ -61,12 +61,12 @@ describe("DoadFooAgent", () => {
     mockAssets.setPrompt(
       "DOAD_Table",
       `# DOAD Index
-| Number | Title |
-|--------|-------|
-| 5019-0 | Conduct and Performance Deficiency |
-| 5031-1 | Canadian Forces Grievance Board |
-| 7023-1 | Relocation Benefits |
-| 6000-1 | Indexed but unavailable test document |`
+| Id | Title | File |
+|---|---|---|
+| 5019-0 | Conduct and Performance Deficiency | 5019-0.md |
+| 5031-1 | Canadian Forces Grievance Board | 5031-1.md |
+| 7023-1 | Relocation Benefits | 7023-1.md |
+| 6000-1 | Indexed but unavailable test document | 6000-1.md |`
     );
 
     mockAssets.setPrompt(
@@ -261,10 +261,10 @@ Members are entitled to relocation assistance when posted.`
       mockAssets.setPrompt(
         "DOAD_Table",
         `# DOAD Index
-| Number | Title |
-|--------|-------|
-| 9999-9 | Missing Document |
-| 5019-0 | Conduct and Performance Deficiency |`
+| Id | Title | File |
+|---|---|---|
+| 9999-9 | Missing Document | 9999-9.md |
+| 5019-0 | Conduct and Performance Deficiency | 5019-0.md |`
       );
       mockModelReads(["9999-9", "5019-0"], "Recovered after missing document");
 
