@@ -21,7 +21,6 @@ export class HtmlEmailComposer {
    * @returns The complete HTML string for the email body.
    */
   composeHtmlReply(originalEmail: ParsedEmailData, newContent: string): string {
-    const formattedContent = this.formatNewContent(newContent);
     const replyHeader = this.getReplyHeader(originalEmail);
     const originalBody = originalEmail.html || this.wrapPlainTextAsHtml(originalEmail.body);
 
@@ -70,7 +69,7 @@ div.WordSection1
 </head>
 <body lang=EN-CA link="#467886" vlink="#96607D" style='word-wrap:break-word'>
 <div class=WordSection1>
-${formattedContent}
+${newContent}
 <p class=MsoNormal><span style='font-size:12.0pt'><o:p>&nbsp;</o:p></span></p>
 <div>
 <div style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>
@@ -82,11 +81,6 @@ ${originalBody}
 </div>
 </body>
 </html>`;
-  }
-
-  private formatNewContent(content: string): string {
-    // Return content as-is, assuming it is already formatted as HTML by the agent
-    return content;
   }
 
   private getReplyHeader(originalEmail: ParsedEmailData): string {

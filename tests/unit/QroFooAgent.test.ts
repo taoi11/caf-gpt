@@ -14,7 +14,6 @@ import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";
 
 const mockGenerateText = vi.fn();
-const mockGenerateObject = vi.fn();
 
 interface ReadFileToolOptions {
   system?: string;
@@ -55,7 +54,6 @@ describe("QroFooAgent", () => {
 
   beforeEach(() => {
     mockGenerateText.mockReset();
-    mockGenerateObject.mockReset();
     DocumentRetriever.clearCache();
 
     mockBucket = new MockR2Bucket();
@@ -165,7 +163,6 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
       expect(result).toContain("annual leave");
       expect(mockGenerateText).toHaveBeenCalledTimes(1);
-      expect(mockGenerateObject).not.toHaveBeenCalled();
     });
 
     it("should allow up to three successful QR&O reads", async () => {

@@ -10,15 +10,13 @@
  * - isOpenAIResponsesModel: Checks if a model uses the OpenAI Responses provider
  * - createModel: Creates an OpenAI Responses model routed through Cloudflare AI Gateway
  * - createProviderOptions: Creates model-specific provider options
- * - callLangChain: Backward-compatible wrapper for plain text model calls
- * - callLangChainStructured: Backward-compatible wrapper for structured model calls
+ * - callLangChain: Plain-text model call used by one-call sub-agents
  */
 
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
-import { generateObject, generateText } from "ai";
+import { generateText } from "ai";
 import { createGatewayFetch } from "workers-ai-provider/gateway";
-import type { z } from "zod";
 import type { AppConfig } from "../../config";
 import { AgentAPIError, AgentTimeoutError, AgentValidationError } from "../../errors";
 import { getSafeErrorMetadata, Logger } from "../../Logger";
@@ -36,9 +34,6 @@ interface LLMCallParams {
 type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
 type JsonObject = { [key: string]: JsonValue | undefined };
 type ModelProviderOptions = Record<string, JsonObject>;
-type AgentErrorLike = Error | string;
-type AgentLogMetadataValue = string | number | boolean | null | undefined;
-type AgentLogMetadata = Record<string, AgentLogMetadataValue>;
 
 // Injectable provider factories used to construct an OpenAI Responses model.
 export interface CreateModelDependencies {
@@ -49,14 +44,7 @@ export interface CreateModelDependencies {
 // Injectable AI SDK functions used by BaseAgent and its subclasses.
 export interface BaseAgentDependencies {
   createModel: typeof createModel;
-  generateObject: typeof generateObject;
   generateText: typeof generateText;
-}
-
-interface AgentErrorMessages {
-  timeout: string;
-  aiGateway: string;
-  generic: string;
 }
 
 const CLOUDFLARE_AI_GATEWAY = "caf-gpt";
@@ -119,7 +107,6 @@ export abstract class BaseAgent {
     this.docRetriever = new DocumentRetriever(env.R2_BUCKET);
     this.dependencies = {
       createModel,
-      generateObject,
       generateText,
       ...dependencies,
     };
@@ -135,7 +122,7 @@ export abstract class BaseAgent {
     return cached;
   }
 
-  // Backward-compatible wrapper for text generation
+  // Plain-text model call used by one-call sub-agents
   protected async callLangChain(params: LLMCallParams): Promise<string> {
     try {
       this.logger.info("Calling OpenAI Responses via Cloudflare AI Gateway", {
@@ -179,110 +166,5 @@ export abstract class BaseAgent {
 
       throw new AgentAPIError(`AI SDK call failed: ${errorMessage}`);
     }
-  }
-
-  // Backward-compatible wrapper for structured generation
-  protected async callLangChainStructured<T>(
-    params: LLMCallParams,
-    schema: z.ZodType<T>,
-    schemaName?: string
-  ): Promise<T> {
-    try {
-      this.logger.info(
-        "Calling OpenAI Responses via Cloudflare AI Gateway with structured output",
-        {
-          promptName: params.promptName,
-          schemaName,
-        }
-      );
-
-      const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
-      const model = this.getCachedModel(params.model);
-      const providerOptions = createProviderOptions(params.model);
-      const generationOptions = {
-        model,
-        schema,
-        schemaName: schemaName ?? "response",
-        system: rendered.system,
-        prompt: rendered.user,
-        temperature: params.temperature,
-        maxOutputTokens: params.maxOutputTokens,
-      };
-      if (providerOptions) {
-        Object.assign(generationOptions, { providerOptions });
-      }
-      const result = await this.dependencies.generateObject(generationOptions);
-
-      this.logger.info("AI SDK structured call successful", {
-        schemaName,
-      });
-
-      return result.object;
-    } catch (error) {
-      this.logger.error("AI SDK structured call failed", {
-        promptName: params.promptName,
-        schemaName,
-        ...getSafeErrorMetadata(error),
-      });
-
-      const errorMessage = error instanceof Error ? error.message : String(error);
-
-      if (errorMessage.includes("validation") || errorMessage.includes("schema")) {
-        throw new AgentValidationError(
-          `AI SDK structured output validation failed: ${errorMessage}`
-        );
-      }
-      if (errorMessage.includes("timeout") || errorMessage.includes("timed out")) {
-        throw new AgentTimeoutError(`AI SDK structured call timed out: ${errorMessage}`);
-      }
-
-      throw new AgentAPIError(`AI SDK structured API call failed: ${errorMessage}`);
-    }
-  }
-
-  protected handleAgentError(
-    operation: string,
-    startTime: number,
-    error: AgentErrorLike,
-    errorMessages: AgentErrorMessages,
-    context?: AgentLogMetadata
-  ): string {
-    const processingTime = Date.now() - startTime;
-    this.logger.error(`${operation} failed`, {
-      processingTime,
-      ...context,
-      ...getSafeErrorMetadata(error),
-    });
-
-    if (error instanceof Error) {
-      if (error.message.includes("timeout")) {
-        return errorMessages.timeout;
-      }
-      if (error.message.includes("AI Gateway") || error.message.includes("AI SDK")) {
-        return errorMessages.aiGateway;
-      }
-    }
-
-    return errorMessages.generic;
-  }
-
-  protected handleResearchError(
-    operation: string,
-    startTime: number,
-    error: AgentErrorLike,
-    policyType: string,
-    context?: AgentLogMetadata
-  ): string {
-    return this.handleAgentError(
-      operation,
-      startTime,
-      error,
-      {
-        timeout: `I encountered a timeout while accessing ${policyType} documents.`,
-        aiGateway: `I encountered an issue with the AI service while researching your ${policyType} question.`,
-        generic: `I encountered an error while researching your ${policyType} question.`,
-      },
-      context
-    );
   }
 }

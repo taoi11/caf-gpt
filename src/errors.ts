@@ -16,9 +16,6 @@
  * - StorageError: Base class for storage errors
  * - StorageNotFoundError: Document/resource not found
  * - StorageConnectionError: Database/R2 connection failures
- * - APIError: Base class for external API errors
- * - APITimeoutError: External API timeout errors
- * - APIAuthError: External API authentication failures
  */
 
 // Base error class for all application errors
@@ -102,44 +99,4 @@ export class StorageConnectionError extends StorageError {
 export class StorageValidationError extends StorageError {
   readonly code = "STORAGE_VALIDATION_ERROR";
   readonly recoverable = false;
-}
-
-// ============================================
-// API Errors (External services)
-// ============================================
-
-// Base class for external API errors
-export abstract class APIError extends BaseAppError {}
-
-export class APITimeoutError extends APIError {
-  readonly code = "API_TIMEOUT_ERROR";
-  readonly recoverable = true;
-}
-
-export class APIAuthError extends APIError {
-  readonly code = "API_AUTH_ERROR";
-  readonly recoverable = false;
-}
-
-export class APIRateLimitError extends APIError {
-  readonly code = "API_RATE_LIMIT_ERROR";
-  readonly recoverable = true;
-}
-
-export class APIValidationError extends APIError {
-  readonly code = "API_VALIDATION_ERROR";
-  readonly recoverable = false;
-}
-
-export type TypedAPIError = APIAuthError | APIRateLimitError | APITimeoutError | APIValidationError;
-
-export function isTypedAPIError<ErrorValue>(
-  error: ErrorValue
-): error is ErrorValue & TypedAPIError {
-  return (
-    error instanceof APIAuthError ||
-    error instanceof APIRateLimitError ||
-    error instanceof APITimeoutError ||
-    error instanceof APIValidationError
-  );
 }

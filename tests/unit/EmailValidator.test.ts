@@ -6,7 +6,6 @@
  * Tests:
  * - Email address format validation
  * - Email content validation
- * - Recipient validation
  */
 
 import { describe, expect, it } from "vitest";
@@ -15,7 +14,6 @@ import {
   isValidEmailAddress,
   isValidMessageId,
   validateEmailContent,
-  validateRecipients,
 } from "../../src/email/utils/EmailValidator";
 
 type InvalidEmailInput = null | undefined | number;
@@ -26,10 +24,6 @@ const runtimeEmailAddressValidator = isValidEmailAddress as unknown;
 const validateUntrustedEmailAddress = runtimeEmailAddressValidator as (
   email: InvalidEmailInput
 ) => boolean;
-// SAFETY: This test intentionally supplies untrusted recipient entries at the validation boundary.
-const validateUntrustedRecipients = validateRecipients as (
-  to: unknown[]
-) => ReturnType<typeof validateRecipients>;
 
 describe("EmailValidator", () => {
   describe("isValidEmailAddress", () => {
@@ -214,50 +208,6 @@ describe("EmailValidator", () => {
       "<id@forces.gc.ca>\r\nBcc: leak@forces.gc.ca",
     ])("rejects malformed Message-ID %s", (value) => {
       expect(isValidMessageId(value)).toBe(false);
-    });
-  });
-
-  describe("validateRecipients", () => {
-    it("should validate single recipient", () => {
-      const result = validateRecipients(["user@forces.gc.ca"]);
-      expect(result.isValid).toBe(true);
-      expect(result.errors).toHaveLength(0);
-    });
-
-    it("should validate multiple recipients", () => {
-      const result = validateRecipients(
-        ["user1@forces.gc.ca"],
-        ["user2@forces.gc.ca", "user3@forces.gc.ca"]
-      );
-      expect(result.isValid).toBe(true);
-    });
-
-    it("should reject empty recipient list", () => {
-      const result = validateRecipients([]);
-      expect(result.isValid).toBe(false);
-      expect(result.errors).toContain("No recipients specified");
-    });
-
-    it("should reject invalid recipient addresses", () => {
-      const result = validateRecipients(["valid@forces.gc.ca", "invalid-email"]);
-      expect(result.isValid).toBe(false);
-      expect(result.errors[0]).toContain("Invalid recipient addresses");
-    });
-
-    it("should warn about duplicate recipients", () => {
-      const result = validateRecipients(["user@forces.gc.ca", "USER@forces.gc.ca"]);
-      expect(result.warnings[0]).toContain("Duplicate recipients");
-    });
-
-    it("should warn about suspicious domains", () => {
-      const result = validateRecipients(["test@tempmail.org"]);
-      expect(result.warnings[0]).toContain("Potentially suspicious recipient domain");
-    });
-
-    it("should handle empty or invalid recipient entries", () => {
-      const result = validateUntrustedRecipients(["", null, undefined]);
-      expect(result.isValid).toBe(false);
-      expect(result.errors[0]).toContain("Invalid recipient addresses");
     });
   });
 });
