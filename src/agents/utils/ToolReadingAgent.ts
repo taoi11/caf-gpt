@@ -14,6 +14,7 @@ import { z } from "zod";
 import type { AppConfig } from "../../config";
 import { AgentValidationError } from "../../errors";
 import { getSafeErrorMetadata } from "../../Logger";
+import { parseManifestTable } from "./ManifestParser";
 import type { ResearchRequest } from "../../types";
 import type { BaseAgentDependencies } from "./BaseAgent";
 import { BaseAgent, createProviderOptions } from "./BaseAgent";
@@ -77,12 +78,12 @@ export abstract class ToolReadingAgent extends BaseAgent {
         throw new Error(`${this.agentConfig.policyType} index not found`);
       }
 
-      const allowedFiles = this.getAllowedFiles(indexContent);
-      if (allowedFiles.size === 0) {
+      const manifest = parseManifestTable(indexContent);
+      if (manifest.size === 0) {
         throw new Error(`${this.agentConfig.policyType} index did not contain readable files`);
       }
 
-      const response = await this.runToolReadingCall(request.question, indexContent, allowedFiles);
+      const response = await this.runToolReadingCall(request.question, indexContent, manifest);
 
       this.logger.performance(`${this.agentConfig.category}_foo tool-reading research`, startTime, {
         questionLength: request.question.length,
@@ -102,19 +103,13 @@ export abstract class ToolReadingAgent extends BaseAgent {
   /** Get the index/table content for document selection. */
   protected abstract getIndexContent(): Promise<string | null>;
 
-  /** Extract the exact file identifiers that read_file is allowed to read. */
-  protected abstract getAllowedFiles(indexContent: string): Set<string>;
-
-  /** Convert a validated file identifier to an R2 path. */
-  protected abstract getFilePath(file: string): string;
-
   /** Format loaded document with XML-like tags. */
   protected abstract formatDocumentTag(file: string, content: string): string;
 
   private async runToolReadingCall(
     question: string,
     indexContent: string,
-    allowedFiles: Set<string>
+    manifest: Map<string, string>
   ): Promise<string> {
     const modelConfig = this.config.llm.models[this.agentConfig.modelKey];
     const rendered = await this.promptManager.renderPrompt(this.agentConfig.promptName, {
@@ -167,16 +162,14 @@ export abstract class ToolReadingAgent extends BaseAgent {
               return markBadCall("successful read limit already reached");
             }
 
-            if (!allowedFiles.has(file)) {
+            const filePath = manifest.get(file);
+            if (filePath === undefined) {
               return markBadCall(`"${file}" is not in the provided index`);
             }
 
             reservedReads += 1;
             try {
-              const doc = await this.docRetriever.getDocument(
-                this.agentConfig.category,
-                this.getFilePath(file)
-              );
+              const doc = await this.docRetriever.getDocument(this.agentConfig.category, filePath);
               successfulReads += 1;
               this.logger.info(`${this.agentConfig.policyType} document read through tool`, {
                 size: doc.length,

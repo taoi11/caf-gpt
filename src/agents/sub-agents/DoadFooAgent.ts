@@ -11,8 +11,6 @@ import type { AppConfig } from "../../config";
 import type { BaseAgentDependencies } from "../utils/BaseAgent";
 import { ToolReadingAgent } from "../utils/ToolReadingAgent";
 
-const DOAD_ID_PATTERN = /^\|\s*(\d{4}-\d{1,2})\s*\|/gm;
-
 export class DoadFooAgent extends ToolReadingAgent {
   constructor(env: Env, config: AppConfig, dependencies: Partial<BaseAgentDependencies> = {}) {
     super(
@@ -36,14 +34,6 @@ export class DoadFooAgent extends ToolReadingAgent {
 
   protected async getIndexContent(): Promise<string | null> {
     return this.promptManager.getPrompt("DOAD_Table");
-  }
-
-  protected getAllowedFiles(indexContent: string): Set<string> {
-    return new Set(Array.from(indexContent.matchAll(DOAD_ID_PATTERN), (match) => match[1]));
-  }
-
-  protected getFilePath(file: string): string {
-    return `${file}.md`;
   }
 
   protected formatDocumentTag(file: string, content: string): string {
