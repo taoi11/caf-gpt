@@ -59,7 +59,7 @@ describe("QroFooAgent", () => {
     const config = createConfig(mockEnv);
 
     mockBucket.seed(
-      "qro/index.md",
+      "qro/index_v2.md",
       `# QR&O Index
 | Id | Title | File |
 |---|---|---|
@@ -280,7 +280,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
     });
 
     it("should fail cleanly when the QR&O index is missing", async () => {
-      await mockBucket.delete("qro/index.md");
+      await mockBucket.delete("qro/index_v2.md");
 
       await expect(agent.research({ question: "Test question" })).rejects.toThrow(
         "Document not found"
@@ -290,7 +290,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
     it("should reject when an indexed QR&O chapter cannot be retrieved", async () => {
       mockBucket.seed(
-        "qro/index.md",
+        "qro/index_v2.md",
         `# QR&O Index
 | vol-99-missing/ch-999-missing.md | Missing Chapter | vol-99-missing/ch-999-missing.md |
 | vol-1-administration/ch-16-leave.md | Leave Regulations | vol-1-administration/ch-16-leave.md |`

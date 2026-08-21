@@ -33,7 +33,7 @@ export class QroFooAgent extends ToolReadingAgent {
   }
 
   protected async getIndexContent(): Promise<string | null> {
-    return this.docRetriever.getDocument("qro", "index.md");
+    return this.docRetriever.getDocument("qro", "index_v2.md");
   }
 
   protected formatDocumentTag(file: string, content: string): string {
