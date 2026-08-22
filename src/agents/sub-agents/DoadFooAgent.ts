@@ -33,7 +33,7 @@ export class DoadFooAgent extends ToolReadingAgent {
   }
 
   protected async getIndexContent(): Promise<string | null> {
-    return this.docRetriever.getDocument("doad", "index.md");
+    return this.docRetriever.getDocument("doad", "index_v2.md");
   }
 
   protected formatDocumentTag(file: string, content: string): string {

@@ -59,7 +59,7 @@ describe("DoadFooAgent", () => {
     const config = createConfig(mockEnv);
 
     mockBucket.seed(
-      "doad/index.md",
+      "doad/index_v2.md",
       `# DOAD Index
 | Id | Title | File |
 |---|---|---|
@@ -251,7 +251,7 @@ Members are entitled to relocation assistance when posted.`
     });
 
     it("should fail cleanly when the DOAD index is missing", async () => {
-      mockBucket.delete("doad/index.md");
+      mockBucket.delete("doad/index_v2.md");
 
       await expect(agent.research({ question: "Test question" })).rejects.toThrow();
       expect(mockGenerateText).not.toHaveBeenCalled();
@@ -259,7 +259,7 @@ Members are entitled to relocation assistance when posted.`
 
     it("should reject when an indexed DOAD document cannot be retrieved", async () => {
       mockBucket.seed(
-        "doad/index.md",
+        "doad/index_v2.md",
         `# DOAD Index
 | Id | Title | File |
 |---|---|---|
