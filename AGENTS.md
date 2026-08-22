@@ -52,7 +52,7 @@ Emails are processed through **Cloudflare Email Workers**:
   - Each domain accepts up to 3 questions per `batch_research` call.
   - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent` and use one bounded `generateText()` tool loop to select and read indexed documents.
   - Their `read_file` tool allows at most 5 attempts, 3 successful reads, and 2 correctable bad calls. Successful-read slots are reserved before asynchronous loads so concurrent tool execution cannot exceed the cap.
-  - DOAD identifiers come from the DOAD Markdown table. QR&O paths come from actual Markdown list/table entries in `qro/index.md`; its allowlist parser rejects absolute paths, dot or empty segments, backslashes, and traversal.
+  - DOAD and QR&O identifiers come from shared `| Id | Title | File |` manifest tables on R2 (`doad/index_v2.md`, `qro/index_v2.md`), parsed by `parseManifestTable` in `src/agents/utils/ManifestParser.ts`; it rejects absolute paths, dot or empty segments, backslashes, traversal, and non-`.md` files.
 - `generate_feedback_note` delegates to `PaceFooAgent.generateNote(rank, context)`.
   - PaceFooAgent loads competencies from R2 (`paceNote/{rank}.md`) and generates feedback.
   - Rank files: `cpl.md`, `mcpl.md`, `sgt.md`, `wo.md`.
@@ -121,7 +121,7 @@ For agents that select and read documents from an index (like `DoadFooAgent` and
 5. Add one tool-reader prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md`. The model chooses files, calls the bounded `read_file` tool, and answers in the same `generateText()` run.
 6. Add model config in `src/config.ts`.
 
-The current policy prompt assets are `DOAD_Table.md`, `doad_foo_tool_reader.md`, `qro_foo_tool_reader.md`, and `leave_foo_research.md`. There are no separate DOAD or QR&O selector/answer prompts.
+The current policy prompt assets are `doad_foo_tool_reader.md`, `qro_foo_tool_reader.md`, and `leave_foo_research.md`. The DOAD and QR&O indexes live on R2, not in `public/prompts/`. There are no separate DOAD or QR&O selector/answer prompts.
 
 ### Registering Agents
 
