@@ -10,6 +10,7 @@ import { createMockEnv } from "../mocks";
 import { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
 import { QroFooAgent } from "../../src/agents/sub-agents/QroFooAgent";
+import { parseManifestTable } from "../../src/agents/utils/ManifestParser";
 import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";
 
@@ -38,16 +39,8 @@ function mockModelWithoutReads(answer = "Unsupported answer") {
   mockGenerateText.mockResolvedValueOnce({ text: answer });
 }
 
-/** Exposes QR&O index parsing for direct allowlist assertions. */
-class TestQroFooAgent extends QroFooAgent {
-  /** Parses an index through the production protected implementation. */
-  getAllowedFilesForTest(indexContent: string): Set<string> {
-    return this.getAllowedFiles(indexContent);
-  }
-}
-
 describe("QroFooAgent", () => {
-  let agent: TestQroFooAgent;
+  let agent: QroFooAgent;
   let mockEnv: ReturnType<typeof createMockEnv>;
   let mockBucket: MockR2Bucket;
   let mockAssets: MockFetcher;
@@ -66,15 +59,13 @@ describe("QroFooAgent", () => {
     const config = createConfig(mockEnv);
 
     mockBucket.seed(
-      "qro/index.md",
+      "qro/index_v2.md",
       `# QR&O Index
-
-## Volume 1 - Administration
-- vol-1-administration/ch-16-leave.md — Leave Regulations
-- vol-1-administration/ch-19-grievances.md — Grievance Procedures
-
-## Volume 2 - Discipline
-- vol-2-discipline/ch-107-conduct.md — Service Conduct`
+| Id | Title | File |
+|---|---|---|
+| vol-1-administration/ch-16-leave.md | Leave Regulations | vol-1-administration/ch-16-leave.md |
+| vol-1-administration/ch-19-grievances.md | Grievance Procedures | vol-1-administration/ch-19-grievances.md |
+| vol-2-discipline/ch-107-conduct.md | Service Conduct | vol-2-discipline/ch-107-conduct.md |`
     );
 
     mockAssets.setPrompt(
@@ -110,47 +101,49 @@ Members may submit grievances through the chain of command.`
 All members must maintain high standards of conduct.`
     );
 
-    agent = new TestQroFooAgent(mockEnv, config, { generateText: mockGenerateText });
+    agent = new QroFooAgent(mockEnv, config, { generateText: mockGenerateText });
   });
 
-  describe("research", () => {
-    it("should allow files from current Markdown list and table index entries", () => {
-      const allowedFiles = agent.getAllowedFilesForTest(`# QR&O Index
-
-- vol-1-administration/ch-16-leave.md — Leave Regulations
-1. \`vol-1-administration/ch-19-grievances.md\` — Grievance Procedures
-
-| Chapter | File |
-| --- | --- |
-| Service Conduct | [Chapter 107](vol-2-discipline/ch-107-conduct.md) |`);
-
-      expect(allowedFiles).toEqual(
-        new Set([
-          "vol-1-administration/ch-16-leave.md",
-          "vol-1-administration/ch-19-grievances.md",
-          "vol-2-discipline/ch-107-conduct.md",
-        ])
+  describe("manifest parsing", () => {
+    it("should allow files from the current 3-column table index", () => {
+      const manifest = parseManifestTable(`| Id | Title | File |
+|---|---|---|
+| vol-1-administration/ch-16-leave.md | Leave Regulations | vol-1-administration/ch-16-leave.md |
+| vol-1-administration/ch-19-grievances.md | Grievance Procedures | vol-1-administration/ch-19-grievances.md |
+| vol-2-discipline/ch-107-conduct.md | Service Conduct | vol-2-discipline/ch-107-conduct.md |`);
+      expect(manifest.size).toBe(3);
+      expect(manifest.get("vol-1-administration/ch-16-leave.md")).toBe(
+        "vol-1-administration/ch-16-leave.md"
+      );
+      expect(manifest.get("vol-1-administration/ch-19-grievances.md")).toBe(
+        "vol-1-administration/ch-19-grievances.md"
+      );
+      expect(manifest.get("vol-2-discipline/ch-107-conduct.md")).toBe(
+        "vol-2-discipline/ch-107-conduct.md"
       );
     });
 
-    it("should reject prose mentions and unsafe index paths", () => {
-      const allowedFiles = agent.getAllowedFilesForTest(`# QR&O Index
-
+    it("should reject prose mentions, non-table lines, and unsafe index rows", () => {
+      const manifest = parseManifestTable(`# QR&O Index
 For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 - This description mentions vol-8-misleading/ch-88-not-an-entry.md in prose.
-| Notes | This cell mentions vol-7-misleading/ch-77-not-an-entry.md in prose |
-- /absolute/ch-1.md — Absolute path
-- vol-1//ch-2.md — Empty segment
-- ./vol-1/ch-3.md — Leading dot segment
-- vol-1/./ch-4.md — Dot segment
-- vol-1/../ch-5.md — Traversal
-- ../ch-6.md — Leading traversal
-- vol-1\\ch-7.md — Backslash path
-- vol-1-administration/ch-16-leave.md — Safe entry`);
-
-      expect(allowedFiles).toEqual(new Set(["vol-1-administration/ch-16-leave.md"]));
+| Id | Title | File |
+|---|---|---|
+| vol-1-administration/ch-16-leave.md | Safe entry | vol-1-administration/ch-16-leave.md |
+| /absolute/ch-1.md | Absolute path | /absolute/ch-1.md |
+| vol-1//ch-2.md | Empty segment | vol-1//ch-2.md |
+| ./vol-1/ch-3.md | Leading dot segment | ./vol-1/ch-3.md |
+| vol-1/./ch-4.md | Dot segment | vol-1/./ch-4.md |
+| vol-1/../ch-5.md | Traversal | vol-1/../ch-5.md |
+| ../ch-6.md | Leading traversal | ../ch-6.md |
+| vol-1\\\\ch-7.md | Backslash path | vol-1\\\\ch-7.md |
+| Bad-Only | Two column row |
+`);
+      expect([...manifest.keys()]).toEqual(["vol-1-administration/ch-16-leave.md"]);
     });
+  });
 
+  describe("research", () => {
     it("should answer after one valid QR&O read", async () => {
       mockModelReads(
         ["vol-1-administration/ch-16-leave.md"],
@@ -287,7 +280,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
     });
 
     it("should fail cleanly when the QR&O index is missing", async () => {
-      await mockBucket.delete("qro/index.md");
+      await mockBucket.delete("qro/index_v2.md");
 
       await expect(agent.research({ question: "Test question" })).rejects.toThrow(
         "Document not found"
@@ -297,10 +290,10 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
     it("should reject when an indexed QR&O chapter cannot be retrieved", async () => {
       mockBucket.seed(
-        "qro/index.md",
+        "qro/index_v2.md",
         `# QR&O Index
-- vol-99-missing/ch-999-missing.md — Missing Chapter
-- vol-1-administration/ch-16-leave.md — Leave Regulations`
+| vol-99-missing/ch-999-missing.md | Missing Chapter | vol-99-missing/ch-999-missing.md |
+| vol-1-administration/ch-16-leave.md | Leave Regulations | vol-1-administration/ch-16-leave.md |`
       );
       mockModelReads(
         ["vol-99-missing/ch-999-missing.md", "vol-1-administration/ch-16-leave.md"],
