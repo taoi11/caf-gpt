@@ -58,8 +58,8 @@ describe("DoadFooAgent", () => {
     });
     const config = createConfig(mockEnv);
 
-    mockAssets.setPrompt(
-      "DOAD_Table",
+    mockBucket.seed(
+      "doad/index.md",
       `# DOAD Index
 | Id | Title | File |
 |---|---|---|
@@ -251,15 +251,15 @@ Members are entitled to relocation assistance when posted.`
     });
 
     it("should fail cleanly when the DOAD index is missing", async () => {
-      mockAssets.setPrompt("DOAD_Table", "");
+      mockBucket.delete("doad/index.md");
 
       await expect(agent.research({ question: "Test question" })).rejects.toThrow();
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should reject when an indexed DOAD document cannot be retrieved", async () => {
-      mockAssets.setPrompt(
-        "DOAD_Table",
+      mockBucket.seed(
+        "doad/index.md",
         `# DOAD Index
 | Id | Title | File |
 |---|---|---|

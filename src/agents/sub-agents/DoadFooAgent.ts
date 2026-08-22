@@ -33,7 +33,7 @@ export class DoadFooAgent extends ToolReadingAgent {
   }
 
   protected async getIndexContent(): Promise<string | null> {
-    return this.promptManager.getPrompt("DOAD_Table");
+    return this.docRetriever.getDocument("doad", "index.md");
   }
 
   protected formatDocumentTag(file: string, content: string): string {
