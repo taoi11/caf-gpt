@@ -6,13 +6,12 @@
  * Tests:
  * - GPT-5.6 reasoning and zero-data-retention provider options
  * - Cloudflare AI binding/Gateway transport construction
- * - Text and structured generation call options and safe logging
+ * - Text generation call options and safe logging
  */
 
 import { createOpenAI as createRealOpenAI } from "@ai-sdk/openai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createGatewayFetch as createRealGatewayFetch } from "workers-ai-provider/gateway";
-import { z } from "zod";
 import { createMockEnv } from "../mocks";
 
 import { BaseAgent, createModel, createProviderOptions } from "../../src/agents/utils/BaseAgent";
@@ -22,7 +21,6 @@ import { Logger } from "../../src/Logger";
 
 const mockCreateGatewayFetch = vi.fn<typeof createRealGatewayFetch>();
 const mockCreateOpenAI = vi.fn<typeof createRealOpenAI>();
-const mockGenerateObject = vi.fn();
 const mockGenerateText = vi.fn();
 const testModel = createRealOpenAI({ apiKey: "unused" }).responses("test");
 
@@ -38,28 +36,12 @@ class TestBaseAgent extends BaseAgent {
       maxOutputTokens: 10,
     });
   }
-
-  /** Calls the structured-generation wrapper with a supplied model identifier. */
-  async callStructured(model: string): Promise<{ answer: string }> {
-    return await this.callLangChainStructured(
-      {
-        model,
-        promptName: "test_prompt",
-        variables: { user_input: "question" },
-        temperature: 0,
-        maxOutputTokens: 10,
-      },
-      z.object({ answer: z.string() }),
-      "test_response"
-    );
-  }
 }
 
 describe("BaseAgent OpenAI Responses routing", () => {
   beforeEach(() => {
     mockCreateGatewayFetch.mockReset().mockReturnValue(vi.fn());
     mockCreateOpenAI.mockReset();
-    mockGenerateObject.mockReset();
     mockGenerateText.mockReset();
   });
 
@@ -107,45 +89,36 @@ describe("BaseAgent OpenAI Responses routing", () => {
     expect(responses).toHaveBeenCalledWith("gpt-5.6-terra");
   });
 
-  it("preserves Responses options for text and structured generation", async () => {
+  it("preserves Responses options for text generation", async () => {
     const modelIdentifier = "openai/gpt-5.6-luna";
     vi.spyOn(PromptManager.prototype, "renderPrompt").mockResolvedValue({
       system: "system",
       user: "question",
     });
     mockGenerateText.mockResolvedValueOnce({ text: "answer" });
-    mockGenerateObject.mockResolvedValueOnce({ object: { answer: "structured" } });
 
     const testEnv = createMockEnv();
     const agent = new TestBaseAgent(testEnv, createConfig(testEnv), {
       createModel: vi.fn(() => testModel),
-      generateObject: mockGenerateObject,
       generateText: mockGenerateText,
     });
 
     await expect(agent.callText(modelIdentifier)).resolves.toBe("answer");
-    await expect(agent.callStructured(modelIdentifier)).resolves.toEqual({ answer: "structured" });
 
     expect(mockGenerateText.mock.calls[0]?.[0]).toMatchObject({
       temperature: 0,
       maxOutputTokens: 10,
       providerOptions: createProviderOptions(modelIdentifier),
     });
-    expect(mockGenerateObject.mock.calls[0]?.[0]).toMatchObject({
-      temperature: 0,
-      maxOutputTokens: 10,
-      providerOptions: createProviderOptions(modelIdentifier),
-    });
   });
 
-  it("omits model fields and identifiers from all generation log contexts", async () => {
+  it("omits model fields and identifiers from generation log contexts", async () => {
     const modelIdentifier = "openai/private-model-identifier";
     vi.spyOn(PromptManager.prototype, "renderPrompt").mockResolvedValue({
       system: "system",
       user: "question",
     });
     mockGenerateText.mockResolvedValueOnce({ text: "answer" });
-    mockGenerateObject.mockResolvedValueOnce({ object: { answer: "structured" } });
 
     const logger = Logger.getInstance();
     const logSpies = [
@@ -157,16 +130,12 @@ describe("BaseAgent OpenAI Responses routing", () => {
     const testEnv = createMockEnv();
     const agent = new TestBaseAgent(testEnv, createConfig(testEnv), {
       createModel: vi.fn(() => testModel),
-      generateObject: mockGenerateObject,
       generateText: mockGenerateText,
     });
 
     await expect(agent.callText(modelIdentifier)).resolves.toBe("answer");
-    await expect(agent.callStructured(modelIdentifier)).resolves.toEqual({ answer: "structured" });
     mockGenerateText.mockRejectedValueOnce(new Error("provider failed"));
-    mockGenerateObject.mockRejectedValueOnce(new Error("provider failed"));
     await expect(agent.callText(modelIdentifier)).rejects.toThrow();
-    await expect(agent.callStructured(modelIdentifier)).rejects.toThrow();
 
     const calls = logSpies.flatMap((spy) => spy.mock.calls);
     expect(calls.length).toBeGreaterThan(0);
