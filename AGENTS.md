@@ -85,7 +85,7 @@ R2 organization: `${category}/${filename}`
 - Categories: `leave/` (policy docs), `doad/` (DOAD policies), `paceNote/` (rank competencies), `qro/` (QR&O chapters and index)
 - Access via: `documentRetriever.getDocument("paceNote", "mcpl.md")`
 - All documents are UTF-8 encoded markdown files
-- Current retrieval is R2 path-based document loading. Planned semantic retrieval work belongs in `TODO.md` until a pgvector/Neon migration is designed.
+- Current retrieval is R2 path-based document loading.
 
 ## LLM Integration
 
