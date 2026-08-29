@@ -10,8 +10,8 @@ This file tracks project-level work that should survive across coding sessions a
 
 ## Active TODOs
 
-- [ ] 1. Artifacts memory (8k reject loop + per-user Artifacts repo).
-  - Plan: `plan-artifacts-memory.md`
+- [ ] 1. Memory: 8k reject loop + last-N DO SQLite snapshots.
+  - Plan: `plan-memory.md`
   - Likely files: listed in that plan
   - Done when: both phases in the plan are implemented. This pointer is not the work.
 
