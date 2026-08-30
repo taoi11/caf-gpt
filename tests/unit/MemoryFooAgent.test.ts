@@ -25,20 +25,30 @@ type MemoryToolInput =
 
 const mockGenerateText = vi.fn();
 
-function createToolCall(toolName: string, input: MemoryToolInput) {
-  return {
-    type: "tool-call",
-    toolCallId: "memory-tool-call",
-    toolName,
-    input,
-  };
+function parseMemoryToolInput(toolName: string, input: MemoryToolInput) {
+  if (toolName === "update_memory") {
+    return MemoryUpdateToolInputSchema.parse(input);
+  }
+  if (toolName === "leave_memory_unchanged") {
+    return MemoryUnchangedToolInputSchema.parse(input);
+  }
+  throw new Error("Memory update model did not complete a recognized memory tool");
 }
 
 function setMockMemoryToolCall(toolName: string, input: MemoryToolInput = {}) {
-  mockGenerateText.mockResolvedValueOnce({
-    text: "",
-    toolCalls: [createToolCall(toolName, input)],
-  });
+  mockGenerateText.mockImplementationOnce(
+    async (options: {
+      tools: Record<string, { execute?: (input: unknown) => Promise<unknown> }>;
+    }) => {
+      const parsed = parseMemoryToolInput(toolName, input);
+      const selected = options.tools[toolName];
+      if (!selected?.execute) {
+        throw new Error("Memory update model did not complete a recognized memory tool");
+      }
+      await selected.execute(parsed);
+      return { text: "", toolCalls: [] };
+    }
+  );
 }
 
 function setMockLLMError(message: string) {
@@ -51,10 +61,14 @@ describe("MemoryFooAgent", () => {
 
   beforeEach(() => {
     mockGenerateText.mockReset();
-    mockGenerateText.mockResolvedValue({
-      text: "",
-      toolCalls: [createToolCall("leave_memory_unchanged", {})],
-    });
+    mockGenerateText.mockImplementation(
+      async (options: {
+        tools: Record<string, { execute?: (input: unknown) => Promise<unknown> }>;
+      }) => {
+        await options.tools.leave_memory_unchanged?.execute?.({});
+        return { text: "", toolCalls: [] };
+      }
+    );
 
     mockEnv = createMockEnv();
     const config = createConfig(mockEnv);
@@ -144,10 +158,7 @@ describe("MemoryFooAgent", () => {
   });
 
   it("should handle malformed LLM response gracefully", async () => {
-    mockGenerateText.mockResolvedValueOnce({
-      text: "",
-      toolCalls: [createToolCall("unknown_memory_tool", {})],
-    });
+    mockGenerateText.mockImplementationOnce(async () => ({ text: "", toolCalls: [] }));
 
     await expect(agent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
       "recognized memory tool"
@@ -186,5 +197,28 @@ Paragraph 3: Currently focused on deployment preparation.`;
     // Memory content goes into the system prompt via template variables
     const capturedContent = (lastCall.system || "") + (lastCall.prompt || "");
     expect(capturedContent).toContain("No prior interaction history");
+  });
+
+  it("rejects memory longer than 8000 characters and accepts 8000", async () => {
+    setMockMemoryToolCall("leave_memory_unchanged");
+
+    await agent.updateMemory("Memory", "Question", "Answer");
+
+    const tools = mockGenerateText.mock.calls.at(-1)?.[0]?.tools;
+    await expect(tools.update_memory.execute({ content: "a".repeat(8001) })).rejects.toThrow(
+      "8000"
+    );
+    await expect(tools.update_memory.execute({ content: "a".repeat(8000) })).resolves.toBe(
+      "accepted"
+    );
+  });
+
+  it("passes a 3-step stopWhen breaker", async () => {
+    setMockMemoryToolCall("leave_memory_unchanged");
+
+    await agent.updateMemory("Memory", "Question", "Answer");
+
+    const lastCall = mockGenerateText.mock.calls.at(-1)?.[0];
+    expect(lastCall?.stopWhen).toHaveLength(2);
   });
 });
