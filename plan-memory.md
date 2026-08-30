@@ -1,6 +1,6 @@
 # Memory: 8k reject loop + DO SQLite snapshots
 
-Agreed 2026-08-29. Do not implement from this file until a later ask.
+Agreed 2026-08-29. Implemented 2026-08-30.
 
 **Goal:** Hard 8k cap (error, not truncate) and last-N history on the SQLite the UserAgent DO already has.
 

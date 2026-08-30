@@ -10,16 +10,17 @@ This file tracks project-level work that should survive across coding sessions a
 
 ## Active TODOs
 
-- [ ] 1. Memory: 8k reject loop + last-N DO SQLite snapshots.
-  - Plan: `plan-memory.md`
-  - Likely files: listed in that plan
-  - Done when: both phases in the plan are implemented. This pointer is not the work.
+None.
 
 ## Parking Lot
 
 None.
 
 ## Log
+
+### 2026-08-30
+
+- Implemented 8k reject loop + last-10 DO SQLite snapshots. Plan: `plan-memory.md`.
 
 ### 2026-08-29
 
