@@ -35,11 +35,11 @@ function parseMemoryToolInput(toolName: string, input: MemoryToolInput) {
   throw new Error("Memory update model did not complete a recognized memory tool");
 }
 
+type MemoryToolExecute = (input: MemoryToolInput) => Promise<string>;
+
 function setMockMemoryToolCall(toolName: string, input: MemoryToolInput = {}) {
   mockGenerateText.mockImplementationOnce(
-    async (options: {
-      tools: Record<string, { execute?: (input: unknown) => Promise<unknown> }>;
-    }) => {
+    async (options: { tools: Record<string, { execute?: MemoryToolExecute }> }) => {
       const parsed = parseMemoryToolInput(toolName, input);
       const selected = options.tools[toolName];
       if (!selected?.execute) {
@@ -62,9 +62,7 @@ describe("MemoryFooAgent", () => {
   beforeEach(() => {
     mockGenerateText.mockReset();
     mockGenerateText.mockImplementation(
-      async (options: {
-        tools: Record<string, { execute?: (input: unknown) => Promise<unknown> }>;
-      }) => {
+      async (options: { tools: Record<string, { execute?: MemoryToolExecute }> }) => {
         await options.tools.leave_memory_unchanged?.execute?.({});
         return { text: "", toolCalls: [] };
       }
