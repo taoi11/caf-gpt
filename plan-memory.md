@@ -8,8 +8,8 @@ Agreed 2026-08-29. Do not implement from this file until a later ask.
 
 ## Phase 1 — 8k reject + loop
 
-- `src/agents/UserAgent.ts`: `MEMORY_MAX_CONTENT_LENGTH` 4000 → 8000. Delete the `substring` truncate.
-- `src/agents/sub-agents/MemoryFooAgent.ts`: `execute` on `update_memory` errors if `content.length > 8000`. Loop with `stopWhen: stepCountIs(3)` (same breaker as Prime Foo). Keep `update_memory` / `leave_memory_unchanged`.
+- `src/agents/UserAgent.ts`: `MEMORY_MAX_CONTENT_LENGTH` 4000 → 8000. Delete the `substring` truncate. If MemoryFoo still returns `content.length > 8000`, do not `setState` (log, keep existing memory). Host enforces even if the loop fails.
+- `src/agents/sub-agents/MemoryFooAgent.ts`: `execute` on `update_memory` errors if `content.length > 8000`. Loop with `stopWhen: stepCountIs(3)` (same breaker as Prime Foo). Keep `update_memory` / `leave_memory_unchanged`. Do not keep the old post-hoc `toolCalls` parse beside the loop.
 - `public/prompts/memory_foo.md`: mention the 8000 cap (host still enforces).
 - Tests: `tests/unit/MemoryFooAgent.test.ts`; any `UserAgent` test that assumes truncate.
 
@@ -20,7 +20,7 @@ Agreed 2026-08-29. Do not implement from this file until a later ask.
 Reuse `this.setState`. No D1, no Artifacts, no `this.sql` table.
 
 - `UserAgentState`: `{ memory: string; versions: { ts: number; text: string }[] }`
-- On a successful under-cap write: push previous `memory` onto `versions`, set new `memory`, drop oldest past N=10.
+- On a successful under-cap write: if previous `memory` is non-empty, push it onto `versions`; set new `memory`; drop oldest past N=10. Do not snapshot `""`.
 - Prime Foo still reads only `this.state.memory`.
 - Isolation stays one DO per sender.
 
