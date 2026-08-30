@@ -32,11 +32,13 @@ import { getSafeErrorMetadata, Logger } from "../Logger";
 import { AgentCoordinator } from "./AgentCoordinator";
 import { MemoryFooAgent } from "./sub-agents";
 
-const MEMORY_MAX_CONTENT_LENGTH = 4000;
+const MEMORY_MAX_CONTENT_LENGTH = 8000;
+const MEMORY_VERSION_LIMIT = 10;
 const REFERENCES_MAX_LENGTH = 1000;
 
 export interface UserAgentState {
   memory: string;
+  versions: { ts: number; text: string }[];
 }
 
 interface MemoryUpdateTask {
@@ -62,7 +64,7 @@ export function getUserAgentId(senderEmail: string): string {
 
 /** Durable Object-backed email agent with AI response and memory scheduling. */
 export class UserAgent extends Agent<Env, UserAgentState> {
-  initialState: UserAgentState = { memory: "" };
+  initialState: UserAgentState = { memory: "", versions: [] };
   override observability = undefined;
 
   private readonly logger = Logger.getInstance();
@@ -145,14 +147,25 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         return;
       }
 
-      const memory =
-        result.content.length > MEMORY_MAX_CONTENT_LENGTH
-          ? result.content.substring(0, MEMORY_MAX_CONTENT_LENGTH)
-          : result.content;
+      if (result.content.length > MEMORY_MAX_CONTENT_LENGTH) {
+        this.logger.warn("Rejected oversize memory update", {
+          contentLength: result.content.length,
+        });
+        return;
+      }
 
-      this.setState({ ...this.state, memory });
+      const previous = this.state.memory;
+      const versions = [...(this.state.versions ?? [])];
+      if (previous.trim().length > 0) {
+        versions.push({ ts: Date.now(), text: previous });
+        if (versions.length > MEMORY_VERSION_LIMIT) {
+          versions.shift();
+        }
+      }
+
+      this.setState({ memory: result.content, versions });
       this.logger.info("User memory updated successfully", {
-        contentLength: memory.length,
+        contentLength: result.content.length,
       });
     } catch (error) {
       this.logger.error("Memory update failed", getSafeErrorMetadata(error));
