@@ -62,7 +62,7 @@ Maintain 3-5 paragraphs covering:
 
 ## Guidelines
 
-- Keep memory concise (3-5 paragraphs, under 8000 characters)
+- Keep memory concise (3-5 paragraphs, at most 8000 characters)
 - Synthesize new information into existing narrative, don't just append
 - Focus on patterns and context that help personalization
 - If the email is routine with no new user information, call `leave_memory_unchanged`

@@ -30,15 +30,18 @@ import {
 import { EmailValidationError } from "../errors";
 import { getSafeErrorMetadata, Logger } from "../Logger";
 import { AgentCoordinator } from "./AgentCoordinator";
+import {
+  MEMORY_MAX_CONTENT_LENGTH,
+  type MemoryVersion,
+  retainMemoryVersions,
+} from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
 
-const MEMORY_MAX_CONTENT_LENGTH = 8000;
-const MEMORY_VERSION_LIMIT = 10;
 const REFERENCES_MAX_LENGTH = 1000;
 
 export interface UserAgentState {
   memory: string;
-  versions: { ts: number; text: string }[];
+  versions: MemoryVersion[];
 }
 
 interface MemoryUpdateTask {
@@ -141,13 +144,25 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         task.emailContext,
         task.agentReply
       );
+      const now = Date.now();
+      const storedVersions = this.state.versions ?? [];
+      const versions = retainMemoryVersions(storedVersions, now);
+      const versionsPruned =
+        versions.length !== storedVersions.length ||
+        versions.some((version, index) => version !== storedVersions[index]);
 
       if (!result.updated || !result.content) {
+        if (versionsPruned) {
+          this.setState({ memory: this.state.memory, versions });
+        }
         this.logger.info("User memory unchanged");
         return;
       }
 
       if (result.content.length > MEMORY_MAX_CONTENT_LENGTH) {
+        if (versionsPruned) {
+          this.setState({ memory: this.state.memory, versions });
+        }
         this.logger.warn("Rejected oversize memory update", {
           contentLength: result.content.length,
         });
@@ -155,15 +170,12 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       const previous = this.state.memory;
-      const versions = [...(this.state.versions ?? [])];
-      if (previous.trim().length > 0) {
-        versions.push({ ts: Date.now(), text: previous });
-        if (versions.length > MEMORY_VERSION_LIMIT) {
-          versions.shift();
-        }
-      }
+      const nextVersions =
+        previous.trim().length > 0
+          ? retainMemoryVersions([...versions, { ts: now, text: previous }], now)
+          : versions;
 
-      this.setState({ memory: result.content, versions });
+      this.setState({ memory: result.content, versions: nextVersions });
       this.logger.info("User memory updated successfully", {
         contentLength: result.content.length,
       });

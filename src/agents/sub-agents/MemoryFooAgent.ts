@@ -12,11 +12,11 @@
 import { stepCountIs, tool } from "ai";
 import { getSafeErrorMetadata } from "../../Logger";
 import { MemoryUnchangedToolInputSchema, MemoryUpdateToolInputSchema } from "../../schemas";
+import { MEMORY_MAX_CONTENT_LENGTH } from "../memoryPolicy";
 import { BaseAgent, createProviderOptions } from "../utils/BaseAgent";
 
 const UPDATE_MEMORY_TOOL = "update_memory";
 const LEAVE_MEMORY_UNCHANGED_TOOL = "leave_memory_unchanged";
-const MEMORY_MAX_CONTENT_LENGTH = 8000;
 const MEMORY_UPDATE_MAX_STEPS = 3;
 
 // Result of memory update operation
@@ -64,8 +64,22 @@ ${agentReply}
         user_input: emailExchange,
       });
       const providerOptions = createProviderOptions(modelConfig.model);
+      const memoryProviderOptions = providerOptions
+        ? {
+            ...providerOptions,
+            openai: {
+              ...providerOptions.openai,
+              parallelToolCalls: false,
+            },
+          }
+        : undefined;
 
       let recorded: MemoryUpdateResult | undefined;
+      const assertDecisionNotRecorded = () => {
+        if (recorded !== undefined) {
+          throw new Error("Memory decision already recorded");
+        }
+      };
 
       const generationOptions = {
         model: this.getCachedModel(modelConfig.model),
@@ -80,6 +94,7 @@ ${agentReply}
               "Update the user's memory when the exchange contains new information worth remembering.",
             inputSchema: MemoryUpdateToolInputSchema,
             execute: async ({ content }: { content: string }) => {
+              assertDecisionNotRecorded();
               if (content.length > MEMORY_MAX_CONTENT_LENGTH) {
                 throw new Error(
                   `Memory content is ${content.length} characters; maximum is ${MEMORY_MAX_CONTENT_LENGTH}. Rewrite the full narrative shorter.`
@@ -93,6 +108,7 @@ ${agentReply}
             description: "Leave the user's memory unchanged when there is nothing new to remember.",
             inputSchema: MemoryUnchangedToolInputSchema,
             execute: async () => {
+              assertDecisionNotRecorded();
               recorded = { updated: false };
               return "unchanged";
             },
@@ -100,8 +116,8 @@ ${agentReply}
         },
         toolChoice: "required" as const,
       };
-      if (providerOptions) {
-        Object.assign(generationOptions, { providerOptions });
+      if (memoryProviderOptions) {
+        Object.assign(generationOptions, { providerOptions: memoryProviderOptions });
       }
       await this.dependencies.generateText(generationOptions);
 
