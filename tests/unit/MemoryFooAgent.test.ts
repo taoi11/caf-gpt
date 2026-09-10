@@ -164,13 +164,18 @@ describe("MemoryFooAgent", () => {
     });
   });
 
-  it("should reject a second terminal memory decision defensively", async () => {
-    setMockMemoryToolCall("leave_memory_unchanged");
+  it("rejects two valid memory tool calls in one real SDK step", async () => {
+    const first = toolCallResult("update_memory", { content: "First decision" }, "update");
+    const second = toolCallResult("leave_memory_unchanged", {}, "leave");
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => ({
+        ...first,
+        content: [...first.content, ...second.content],
+      }),
+    });
+    const realAgent = createRealLoopAgent(mockEnv, model);
 
-    await agent.updateMemory("Memory", "Question", "Answer");
-
-    const tools = mockGenerateText.mock.calls.at(-1)?.[0]?.tools;
-    await expect(tools.update_memory.execute({ content: "Replacement" })).rejects.toThrow(
+    await expect(realAgent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
       "already recorded"
     );
   });
@@ -240,17 +245,6 @@ Paragraph 3: Currently focused on deployment preparation.`;
     const lastCall = calls[calls.length - 1][0];
     const capturedContent = (lastCall.system || "") + (lastCall.prompt || "");
     expect(capturedContent).toContain("No prior interaction history");
-  });
-
-  it("rejects memory longer than 8000 characters and accepts 8000", async () => {
-    setMockMemoryToolCall("leave_memory_unchanged");
-
-    await agent.updateMemory("Memory", "Question", "Answer");
-
-    const tools = mockGenerateText.mock.calls.at(-1)?.[0]?.tools;
-    await expect(tools.update_memory.execute({ content: "a".repeat(8001) })).rejects.toThrow(
-      "8000"
-    );
   });
 
   it("repairs an oversize tool error with an under-cap update on the next real SDK step", async () => {

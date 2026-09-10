@@ -75,8 +75,10 @@ ${agentReply}
         : undefined;
 
       let recorded: MemoryUpdateResult | undefined;
+      let extraDecision = false;
       const assertDecisionNotRecorded = () => {
         if (recorded !== undefined) {
+          extraDecision = true;
           throw new Error("Memory decision already recorded");
         }
       };
@@ -121,6 +123,10 @@ ${agentReply}
       }
       await this.dependencies.generateText(generationOptions);
 
+      // AI SDK catches execute throws as tool-error parts and still resolves.
+      if (extraDecision) {
+        throw new Error("Memory decision already recorded");
+      }
       if (!recorded) {
         throw new Error("Memory update model did not complete a recognized memory tool");
       }

@@ -2,6 +2,9 @@
  * src/agents/memoryPolicy.ts
  *
  * Shared limits and retention rules for per-user memory.
+ *
+ * Top-level declarations:
+ * - retainMemoryVersions: Keeps recent snapshots plus the newest expired snapshot
  */
 
 export const MEMORY_MAX_CONTENT_LENGTH = 8000;
@@ -20,6 +23,9 @@ export interface MemoryVersion {
  *
  * Any future explicit forget/reset/privacy purge must clear both live memory and
  * every retained version atomically instead of relying on this retention policy.
+ *
+ * @param versions Existing snapshots, if any.
+ * @param now Epoch milliseconds used as the retention cutoff reference.
  */
 export function retainMemoryVersions(
   versions: MemoryVersion[] | undefined,
