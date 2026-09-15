@@ -9,13 +9,15 @@
  * - updateMemory: Processes email exchange and returns updated memory or unchanged signal
  */
 
-import { tool } from "ai";
+import { stepCountIs, tool } from "ai";
 import { getSafeErrorMetadata } from "../../Logger";
 import { MemoryUnchangedToolInputSchema, MemoryUpdateToolInputSchema } from "../../schemas";
+import { MEMORY_MAX_CONTENT_LENGTH } from "../memoryPolicy";
 import { BaseAgent, createProviderOptions } from "../utils/BaseAgent";
 
 const UPDATE_MEMORY_TOOL = "update_memory";
 const LEAVE_MEMORY_UNCHANGED_TOOL = "leave_memory_unchanged";
+const MEMORY_UPDATE_MAX_STEPS = 3;
 
 // Result of memory update operation
 export interface MemoryUpdateResult {
@@ -62,6 +64,24 @@ ${agentReply}
         user_input: emailExchange,
       });
       const providerOptions = createProviderOptions(modelConfig.model);
+      const memoryProviderOptions = providerOptions
+        ? {
+            ...providerOptions,
+            openai: {
+              ...providerOptions.openai,
+              parallelToolCalls: false,
+            },
+          }
+        : undefined;
+
+      let recorded: MemoryUpdateResult | undefined;
+      let extraDecision = false;
+      const assertDecisionNotRecorded = () => {
+        if (recorded !== undefined) {
+          extraDecision = true;
+          throw new Error("Memory decision already recorded");
+        }
+      };
 
       const generationOptions = {
         model: this.getCachedModel(modelConfig.model),
@@ -69,50 +89,63 @@ ${agentReply}
         prompt: rendered.user,
         temperature: modelConfig.temperature,
         maxOutputTokens: modelConfig.maxOutputTokens,
+        stopWhen: [stepCountIs(MEMORY_UPDATE_MAX_STEPS), () => recorded !== undefined],
         tools: {
           [UPDATE_MEMORY_TOOL]: tool({
             description:
               "Update the user's memory when the exchange contains new information worth remembering.",
             inputSchema: MemoryUpdateToolInputSchema,
+            execute: async ({ content }: { content: string }) => {
+              assertDecisionNotRecorded();
+              if (content.length > MEMORY_MAX_CONTENT_LENGTH) {
+                throw new Error(
+                  `Memory content is ${content.length} characters; maximum is ${MEMORY_MAX_CONTENT_LENGTH}. Rewrite the full narrative shorter.`
+                );
+              }
+              recorded = { updated: true, content };
+              return "accepted";
+            },
           }),
           [LEAVE_MEMORY_UNCHANGED_TOOL]: tool({
             description: "Leave the user's memory unchanged when there is nothing new to remember.",
             inputSchema: MemoryUnchangedToolInputSchema,
+            execute: async () => {
+              assertDecisionNotRecorded();
+              recorded = { updated: false };
+              return "unchanged";
+            },
           }),
         },
-        toolChoice: "required",
-      } as const;
-      if (providerOptions) {
-        Object.assign(generationOptions, { providerOptions });
+        toolChoice: "required" as const,
+      };
+      if (memoryProviderOptions) {
+        Object.assign(generationOptions, { providerOptions: memoryProviderOptions });
       }
-      const response = await this.dependencies.generateText(generationOptions);
+      const result = await this.dependencies.generateText(generationOptions);
 
-      const memoryToolCall = response.toolCalls.find(
-        (call) =>
-          call.toolName === UPDATE_MEMORY_TOOL || call.toolName === LEAVE_MEMORY_UNCHANGED_TOOL
+      // AI SDK catches execute throws as tool-error parts and still resolves.
+      // Oversize execute does not set recorded, so also reject >1 recognized tool call per SDK step.
+      // Mock generateText results may omit steps; skip the cardinality check in that case.
+      const hasMultipleMemoryToolsInOneStep = result.steps?.some(
+        (step) =>
+          step.toolCalls.filter(
+            (call) =>
+              call.toolName === UPDATE_MEMORY_TOOL || call.toolName === LEAVE_MEMORY_UNCHANGED_TOOL
+          ).length > 1
       );
-
-      if (!memoryToolCall) {
-        throw new Error("Memory update model did not call a recognized memory tool");
+      if (extraDecision || hasMultipleMemoryToolsInOneStep) {
+        throw new Error("Memory decision already recorded");
       }
-
-      let result: MemoryUpdateResult;
-      if (memoryToolCall.toolName === UPDATE_MEMORY_TOOL) {
-        result = {
-          updated: true,
-          content: MemoryUpdateToolInputSchema.parse(memoryToolCall.input).content,
-        };
-      } else {
-        MemoryUnchangedToolInputSchema.parse(memoryToolCall.input ?? {});
-        result = { updated: false };
+      if (!recorded) {
+        throw new Error("Memory update model did not complete a recognized memory tool");
       }
 
       this.logger.performance("memory update analysis", startTime, {
-        updated: result.updated,
-        contentLength: result.content?.length,
+        updated: recorded.updated,
+        contentLength: recorded.content?.length,
       });
 
-      return result;
+      return recorded;
     } catch (error) {
       this.logger.error("Memory update analysis failed", {
         processingTime: Date.now() - startTime,

@@ -14,12 +14,17 @@ None.
 
 ## Parking Lot
 
-- [ ] 1. Plan manual document chunking and migration from R2-only retrieval to Neon pgvector.
-  - Context: Keep R2 path-based retrieval for now. Future work should manually chunk CAF policy docs, store embeddings in Neon pgvector, and decide whether R2 remains the source of truth for full documents.
-  - Likely files: `src/storage/DocumentRetriever.ts`, `src/agents/utils/ToolReadingAgent.ts`, `src/agents/sub-agents/*`, future database migration/seed scripts
-  - Done when: Chunking strategy, schema, embedding model, retrieval ranking, citation format, and backfill process are designed before implementation begins.
+None.
 
 ## Log
+
+### 2026-08-30
+
+- Implemented 8k reject loop + last-10 DO SQLite snapshots. Plan: `plan-memory.md`.
+
+### 2026-08-29
+
+- Dropped the Neon pgvector parking-lot item. Retrieval stays R2 path-based.
 
 ### 2026-08-21
 
