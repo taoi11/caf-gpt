@@ -121,10 +121,19 @@ ${agentReply}
       if (memoryProviderOptions) {
         Object.assign(generationOptions, { providerOptions: memoryProviderOptions });
       }
-      await this.dependencies.generateText(generationOptions);
+      const result = await this.dependencies.generateText(generationOptions);
 
       // AI SDK catches execute throws as tool-error parts and still resolves.
-      if (extraDecision) {
+      // Oversize execute does not set recorded, so also reject >1 recognized tool call per SDK step.
+      // Mock generateText results may omit steps; skip the cardinality check in that case.
+      const hasMultipleMemoryToolsInOneStep = result.steps?.some(
+        (step) =>
+          step.toolCalls.filter(
+            (call) =>
+              call.toolName === UPDATE_MEMORY_TOOL || call.toolName === LEAVE_MEMORY_UNCHANGED_TOOL
+          ).length > 1
+      );
+      if (extraDecision || hasMultipleMemoryToolsInOneStep) {
         throw new Error("Memory decision already recorded");
       }
       if (!recorded) {

@@ -180,6 +180,22 @@ describe("MemoryFooAgent", () => {
     );
   });
 
+  it("rejects oversize then valid memory tool calls in one real SDK step", async () => {
+    const first = toolCallResult("update_memory", { content: "x".repeat(8001) }, "oversize");
+    const second = toolCallResult("leave_memory_unchanged", {}, "unchanged");
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => ({
+        ...first,
+        content: [...first.content, ...second.content],
+      }),
+    });
+    const realAgent = createRealLoopAgent(mockEnv, model);
+
+    await expect(realAgent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
+      "already recorded"
+    );
+  });
+
   it("should reject empty user email", async () => {
     const result = await agent.updateMemory("Memory", "", "Reply");
 
@@ -288,11 +304,7 @@ Paragraph 3: Currently focused on deployment preparation.`;
     const model = new MockLanguageModelV3({
       doGenerate: async () => {
         step += 1;
-        return toolCallResult(
-          "update_memory",
-          { content: "a".repeat(8001) },
-          `oversize-${step}`
-        );
+        return toolCallResult("update_memory", { content: "a".repeat(8001) }, `oversize-${step}`);
       },
     });
     const realAgent = createRealLoopAgent(mockEnv, model);
