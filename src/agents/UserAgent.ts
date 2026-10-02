@@ -8,6 +8,8 @@
  * - MemoryUpdateTask: Scheduled memory update payload
  * - UserAgent: Durable Object-backed email agent with AI response and memory scheduling
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
+ *
+ * Clef-flash no_reply gate runs in getAIResponse (with memory) before recipients/Prime Foo.
  */
 
 import { Agent } from "agents";
@@ -36,6 +38,7 @@ import {
   retainMemoryVersions,
 } from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
+import { decideShouldReply } from "./utils/ClefDecision";
 
 const REFERENCES_MAX_LENGTH = 1000;
 
@@ -108,7 +111,6 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       this.validateEmail(parsedEmail);
-      const recipients = resolveReplyRecipients(parsedEmail, config);
       const emailContext = this.buildEmailContext(parsedEmail);
       const response = await this.getAIResponse(emailContext, config);
 
@@ -117,6 +119,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         return;
       }
 
+      const recipients = resolveReplyRecipients(parsedEmail, config);
       await this.sendReply(parsedEmail, response.content, config, recipients, () => {
         sendAttempted = true;
       });
@@ -271,6 +274,21 @@ ${parsedEmail.body}`;
     emailContext: string,
     config: AppConfig
   ): Promise<{ shouldRespond: boolean; content?: string }> {
+    // Clef-flash is a System One decision model; cast until wrangler AiModels lists it.
+    const replyGate = await decideShouldReply(
+      {
+        run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
+      },
+      emailContext,
+      this.state.memory
+    );
+    if (!replyGate.shouldReply) {
+      this.logger.info("Clef no_reply gate skipped Prime Foo", {
+        reason: replyGate.reason,
+      });
+      return { shouldRespond: false };
+    }
+
     if (!this.agentCoordinator) {
       this.agentCoordinator = await AgentCoordinator.create(this.env, config);
     }
