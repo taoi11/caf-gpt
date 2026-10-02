@@ -22,6 +22,7 @@ export default defineConfig({
   test: {
     globals: true,
     include: ["tests/workers/**/*.test.ts"],
+    setupFiles: ["./tests/workers/setup.ts"],
     testTimeout: 10000,
     clearMocks: true,
     restoreMocks: true,
