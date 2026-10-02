@@ -163,7 +163,7 @@ describe("UserAgent email processing", () => {
         },
       });
 
-      instance.setState({ memory: "remembered preference" });
+      instance.setState({ memory: "remembered preference", versions: [] });
       const agentSendEmail = vi.spyOn(instance, "sendEmail");
       vi.spyOn(getEmailBinding(instance), "send").mockImplementation(async (message) => {
         sentMessages.push(message);
@@ -794,7 +794,7 @@ describe("UserAgent email processing", () => {
     });
 
     const state = await runInDurableObject(stub, async (instance: UserAgent) => {
-      instance.setState({ memory: "Old memory" });
+      instance.setState({ memory: "Old memory", versions: [] });
       await instance.runMemoryUpdate({
         emailContext: "Subject: Test\n\nUser details",
         agentReply: "Agent reply",
@@ -803,6 +803,79 @@ describe("UserAgent email processing", () => {
     });
 
     expect(state.memory).toBe("Updated memory content");
+    expect(state.versions).toEqual([expect.objectContaining({ text: "Old memory" })]);
+  });
+
+  it("does not persist oversize memory updates", async () => {
+    const stub = getUserAgentStub("memory-oversize@forces.gc.ca");
+    vi.spyOn(MemoryFooAgent.prototype, "updateMemory").mockResolvedValue({
+      updated: true,
+      content: "x".repeat(8001),
+    });
+
+    const state = await runInDurableObject(stub, async (instance: UserAgent) => {
+      instance.setState({ memory: "Keep me", versions: [] });
+      await instance.runMemoryUpdate({
+        emailContext: "Subject: Test\n\nUser details",
+        agentReply: "Agent reply",
+      });
+      return instance.state;
+    });
+
+    expect(state.memory).toBe("Keep me");
+    expect(state.versions).toEqual([]);
+  });
+
+  it("does not snapshot empty previous memory", async () => {
+    const stub = getUserAgentStub("memory-empty@forces.gc.ca");
+    vi.spyOn(MemoryFooAgent.prototype, "updateMemory").mockResolvedValue({
+      updated: true,
+      content: "First memory",
+    });
+
+    const state = await runInDurableObject(stub, async (instance: UserAgent) => {
+      await instance.runMemoryUpdate({
+        emailContext: "Subject: Test\n\nUser details",
+        agentReply: "Agent reply",
+      });
+      return instance.state;
+    });
+
+    expect(state.memory).toBe("First memory");
+    expect(state.versions).toEqual([]);
+  });
+
+  it("keeps the last 10 memory snapshots", async () => {
+    const stub = getUserAgentStub("memory-versions@forces.gc.ca");
+    const updateMemory = vi.spyOn(MemoryFooAgent.prototype, "updateMemory");
+
+    const state = await runInDurableObject(stub, async (instance: UserAgent) => {
+      for (let i = 1; i <= 11; i++) {
+        updateMemory.mockResolvedValueOnce({
+          updated: true,
+          content: `memory-${i}`,
+        });
+        await instance.runMemoryUpdate({
+          emailContext: "Subject: Test\n\nUser details",
+          agentReply: "Agent reply",
+        });
+      }
+      return instance.state;
+    });
+
+    expect(state.memory).toBe("memory-11");
+    expect(state.versions.map((version) => version.text)).toEqual([
+      "memory-1",
+      "memory-2",
+      "memory-3",
+      "memory-4",
+      "memory-5",
+      "memory-6",
+      "memory-7",
+      "memory-8",
+      "memory-9",
+      "memory-10",
+    ]);
   });
 
   it("rethrows memory update failures so scheduled retries can run", async () => {

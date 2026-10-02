@@ -18,6 +18,10 @@ None.
 
 ## Log
 
+### 2026-08-30
+
+- Implemented 8k reject loop + last-10 DO SQLite snapshots. Plan: `plan-memory.md`.
+
 ### 2026-08-29
 
 - Dropped the Neon pgvector parking-lot item. Retrieval stays R2 path-based.

@@ -8,9 +8,11 @@
  * - Memory unchanged response handling
  * - Input validation
  * - Error handling
- * - Response parsing
+ * - Multi-step oversize repair loop
  */
 
+import { generateText } from "ai";
+import { MockLanguageModelV3 } from "ai/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { z } from "zod";
 import { createMockEnv } from "../mocks";
@@ -24,25 +26,67 @@ type MemoryToolInput =
   | z.input<typeof MemoryUnchangedToolInputSchema>;
 
 const mockGenerateText = vi.fn();
+const MOCK_USAGE = {
+  inputTokens: { total: 10, noCache: 10, cacheRead: undefined, cacheWrite: undefined },
+  outputTokens: { total: 20, text: 20, reasoning: undefined },
+};
 
-function createToolCall(toolName: string, input: MemoryToolInput) {
-  return {
-    type: "tool-call",
-    toolCallId: "memory-tool-call",
-    toolName,
-    input,
-  };
+function parseMemoryToolInput(toolName: string, input: MemoryToolInput) {
+  if (toolName === "update_memory") {
+    return MemoryUpdateToolInputSchema.parse(input);
+  }
+  if (toolName === "leave_memory_unchanged") {
+    return MemoryUnchangedToolInputSchema.parse(input);
+  }
+  throw new Error("Memory update model did not complete a recognized memory tool");
 }
 
+type MemoryToolExecute = (input: MemoryToolInput) => Promise<string>;
+
 function setMockMemoryToolCall(toolName: string, input: MemoryToolInput = {}) {
-  mockGenerateText.mockResolvedValueOnce({
-    text: "",
-    toolCalls: [createToolCall(toolName, input)],
-  });
+  mockGenerateText.mockImplementationOnce(
+    async (options: { tools: Record<string, { execute?: MemoryToolExecute }> }) => {
+      const parsed = parseMemoryToolInput(toolName, input);
+      const selected = options.tools[toolName];
+      if (!selected?.execute) {
+        throw new Error("Memory update model did not complete a recognized memory tool");
+      }
+      await selected.execute(parsed);
+      return { text: "", toolCalls: [] };
+    }
+  );
 }
 
 function setMockLLMError(message: string) {
   mockGenerateText.mockRejectedValueOnce(new Error(message));
+}
+
+function toolCallResult(toolName: string, input: MemoryToolInput, toolCallId: string) {
+  return {
+    warnings: [],
+    usage: MOCK_USAGE,
+    finishReason: { unified: "tool-calls" as const, raw: undefined },
+    content: [
+      {
+        type: "tool-call" as const,
+        toolCallType: "function" as const,
+        toolCallId,
+        toolName,
+        input: JSON.stringify(input),
+      },
+    ],
+  };
+}
+
+function createRealLoopAgent(
+  mockEnv: ReturnType<typeof createMockEnv>,
+  model: MockLanguageModelV3
+): MemoryFooAgent {
+  const config = createConfig(mockEnv);
+  return new MemoryFooAgent(mockEnv, config, {
+    createModel: () => model,
+    generateText,
+  });
 }
 
 describe("MemoryFooAgent", () => {
@@ -51,10 +95,12 @@ describe("MemoryFooAgent", () => {
 
   beforeEach(() => {
     mockGenerateText.mockReset();
-    mockGenerateText.mockResolvedValue({
-      text: "",
-      toolCalls: [createToolCall("leave_memory_unchanged", {})],
-    });
+    mockGenerateText.mockImplementation(
+      async (options: { tools: Record<string, { execute?: MemoryToolExecute }> }) => {
+        await options.tools.leave_memory_unchanged?.execute?.({});
+        return { text: "", toolCalls: [] };
+      }
+    );
 
     mockEnv = createMockEnv();
     const config = createConfig(mockEnv);
@@ -100,7 +146,7 @@ describe("MemoryFooAgent", () => {
     expect(Object.keys(lastCall?.tools ?? {})).toEqual(["update_memory", "leave_memory_unchanged"]);
   });
 
-  it("should pass high reasoning and no-store Responses options for the small model", async () => {
+  it("should disable parallel Responses tool calls for the memory decision", async () => {
     setMockMemoryToolCall("update_memory", { content: "New memory content" });
 
     const result = await agent.updateMemory("", "Question", "Answer");
@@ -113,8 +159,41 @@ describe("MemoryFooAgent", () => {
         forceReasoning: true,
         reasoningEffort: "high",
         store: false,
+        parallelToolCalls: false,
       },
     });
+  });
+
+  it("rejects two valid memory tool calls in one real SDK step", async () => {
+    const first = toolCallResult("update_memory", { content: "First decision" }, "update");
+    const second = toolCallResult("leave_memory_unchanged", {}, "leave");
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => ({
+        ...first,
+        content: [...first.content, ...second.content],
+      }),
+    });
+    const realAgent = createRealLoopAgent(mockEnv, model);
+
+    await expect(realAgent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
+      "already recorded"
+    );
+  });
+
+  it("rejects oversize then valid memory tool calls in one real SDK step", async () => {
+    const first = toolCallResult("update_memory", { content: "x".repeat(8001) }, "oversize");
+    const second = toolCallResult("leave_memory_unchanged", {}, "unchanged");
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => ({
+        ...first,
+        content: [...first.content, ...second.content],
+      }),
+    });
+    const realAgent = createRealLoopAgent(mockEnv, model);
+
+    await expect(realAgent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
+      "already recorded"
+    );
   });
 
   it("should reject empty user email", async () => {
@@ -144,10 +223,7 @@ describe("MemoryFooAgent", () => {
   });
 
   it("should handle malformed LLM response gracefully", async () => {
-    mockGenerateText.mockResolvedValueOnce({
-      text: "",
-      toolCalls: [createToolCall("unknown_memory_tool", {})],
-    });
+    mockGenerateText.mockImplementationOnce(async () => ({ text: "", toolCalls: [] }));
 
     await expect(agent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
       "recognized memory tool"
@@ -183,8 +259,72 @@ Paragraph 3: Currently focused on deployment preparation.`;
     const calls = mockGenerateText.mock.calls;
     expect(calls.length).toBeGreaterThan(0);
     const lastCall = calls[calls.length - 1][0];
-    // Memory content goes into the system prompt via template variables
     const capturedContent = (lastCall.system || "") + (lastCall.prompt || "");
     expect(capturedContent).toContain("No prior interaction history");
+  });
+
+  it("repairs an oversize tool error with an under-cap update on the next real SDK step", async () => {
+    let step = 0;
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => {
+        step += 1;
+        return step === 1
+          ? toolCallResult("update_memory", { content: "a".repeat(8001) }, "oversize")
+          : toolCallResult("update_memory", { content: "a".repeat(8000) }, "repaired");
+      },
+    });
+    const realAgent = createRealLoopAgent(mockEnv, model);
+
+    const result = await realAgent.updateMemory("Memory", "Question", "Answer");
+
+    expect(result).toEqual({ updated: true, content: "a".repeat(8000) });
+    expect(model.doGenerateCalls).toHaveLength(2);
+  });
+
+  it("can leave memory unchanged after an oversize tool error on the next real SDK step", async () => {
+    let step = 0;
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => {
+        step += 1;
+        return step === 1
+          ? toolCallResult("update_memory", { content: "a".repeat(8001) }, "oversize")
+          : toolCallResult("leave_memory_unchanged", {}, "unchanged");
+      },
+    });
+    const realAgent = createRealLoopAgent(mockEnv, model);
+
+    const result = await realAgent.updateMemory("Memory", "Question", "Answer");
+
+    expect(result).toEqual({ updated: false });
+    expect(model.doGenerateCalls).toHaveLength(2);
+  });
+
+  it("stops after three consecutive oversize tool errors", async () => {
+    let step = 0;
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => {
+        step += 1;
+        return toolCallResult("update_memory", { content: "a".repeat(8001) }, `oversize-${step}`);
+      },
+    });
+    const realAgent = createRealLoopAgent(mockEnv, model);
+
+    await expect(realAgent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
+      "recognized memory tool"
+    );
+    expect(model.doGenerateCalls).toHaveLength(3);
+  });
+
+  it("completes a valid first tool call in one real SDK step", async () => {
+    const model = new MockLanguageModelV3({
+      doGenerate: async () =>
+        toolCallResult("update_memory", { content: "Valid memory" }, "valid-first"),
+    });
+    const realAgent = createRealLoopAgent(mockEnv, model);
+
+    const result = await realAgent.updateMemory("Memory", "Question", "Answer");
+
+    expect(result).toEqual({ updated: true, content: "Valid memory" });
+    expect(model.doGenerateCalls).toHaveLength(1);
   });
 });
