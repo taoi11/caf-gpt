@@ -7,6 +7,7 @@
  * - choiceAnswer: Builds a Clef choice answer fixture for should_reply
  * - memoryChoiceAnswer: Builds a Clef choice answer fixture for should_update_memory
  * - mockAi: Returns a ClefAiRunner whose run() resolves to the given result
+ * - shortlistManifestFiles describe block: Unit coverage for DOAD/QR&O shortlist helper
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -15,9 +16,11 @@ import {
   CLEF_FLASH_MODEL,
   CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD,
   CLEF_REPLY_CONFIDENCE_THRESHOLD,
+  CLEF_SHORTLIST_CONFIDENCE_THRESHOLD,
   type ClefAiRunner,
   decideShouldReply,
   decideShouldUpdateMemory,
+  shortlistManifestFiles,
 } from "../../src/agents/utils/ClefDecision";
 
 /** Builds a Clef choice answer fixture for should_reply. */
@@ -322,5 +325,264 @@ describe("decideShouldUpdateMemory", () => {
       shouldUpdate: false,
       reason: "clef_malformed_answer",
     });
+  });
+});
+
+describe("shortlistManifestFiles", () => {
+  const rows = [
+    { id: "5019-0", title: "Conduct", file: "5019-0.md" },
+    { id: "5031-1", title: "Grievance", file: "5031-1.md" },
+    { id: "7023-1", title: "Relocation", file: "7023-1.md" },
+  ];
+
+  /** Builds a shortlist choice answer for a pick slot. */
+  function shortlistChoice(choice: string, confidence: number) {
+    return {
+      type: "choice",
+      choice,
+      confidence,
+      probabilities: { [choice]: confidence },
+    };
+  }
+
+  it("returns allowlisted ids for high-confidence ranked picks", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: shortlistChoice("doc_2", 0.88),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "conduct policy?", rows)).resolves.toEqual({
+      ids: ["5019-0", "7023-1"],
+      reason: "clef_shortlist",
+    });
+
+    expect(ai.run).toHaveBeenCalledWith(
+      CLEF_FLASH_MODEL,
+      expect.objectContaining({
+        model: "clef-flash",
+        state: expect.stringContaining("conduct policy?"),
+        questions: expect.objectContaining({
+          pick_1: expect.objectContaining({ type: "choice" }),
+          pick_2: expect.objectContaining({ type: "choice" }),
+          pick_3: expect.objectContaining({ type: "choice" }),
+        }),
+      })
+    );
+  });
+
+  it("fails the whole shortlist when any option key is not in the allowlist map", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("not_a_real_doc", 0.99),
+        pick_2: shortlistChoice("doc_1", 0.9),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "grievance?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_invalid_choice",
+    });
+  });
+
+  it("fails when a low-confidence invented choice precedes a valid later pick", async () => {
+    const low = Math.max(0, CLEF_SHORTLIST_CONFIDENCE_THRESHOLD - 0.05);
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("invented", low),
+        pick_2: shortlistChoice("doc_1", 0.9),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "partial invent?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_invalid_choice",
+    });
+  });
+
+  it("fails when high-confidence none is followed by an invented lower rank", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("none", 0.95),
+        pick_2: shortlistChoice("invented", 0.9),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "none then invent?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_invalid_choice",
+    });
+  });
+
+  it("fails when high-confidence none is followed by a conflicting document pick", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: shortlistChoice("none", 0.9),
+        pick_3: shortlistChoice("doc_1", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "none then doc?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_conflicting_choice",
+    });
+  });
+
+  it("fails when high-confidence none is followed by a malformed lower rank", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("none", 0.95),
+        pick_2: { type: "choice", choice: "doc_1" },
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "none then malformed?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_malformed_answer",
+    });
+  });
+
+  it("does not treat invented-then-none as intentional empty", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("invented", 0.99),
+        pick_2: shortlistChoice("none", 0.95),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "noise?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_invalid_choice",
+    });
+  });
+
+  it("fails the whole shortlist when ranked picks repeat the same document", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: shortlistChoice("doc_0", 0.9),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "dup?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_duplicate_choice",
+    });
+  });
+
+  it("fails the whole shortlist when a later ranked answer is malformed", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: { type: "choice", choice: "doc_1" },
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "partial?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_malformed_answer",
+    });
+  });
+
+  it("treats high-confidence none as intentional empty after low-confidence docs", async () => {
+    const low = Math.max(0, CLEF_SHORTLIST_CONFIDENCE_THRESHOLD - 0.05);
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", low),
+        pick_2: shortlistChoice("none", 0.9),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "maybe?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_intentional_none",
+    });
+  });
+
+  it("skips low-confidence none and keeps later high-confidence docs", async () => {
+    const low = Math.max(0, CLEF_SHORTLIST_CONFIDENCE_THRESHOLD - 0.05);
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: shortlistChoice("none", low),
+        pick_3: shortlistChoice("doc_1", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "both?", rows)).resolves.toEqual({
+      ids: ["5019-0", "5031-1"],
+      reason: "clef_shortlist",
+    });
+  });
+
+  it("fails closed when every pick is rejected without a confident none", async () => {
+    const low = Math.max(0, CLEF_SHORTLIST_CONFIDENCE_THRESHOLD - 0.05);
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", low),
+        pick_2: shortlistChoice("doc_1", low),
+        pick_3: shortlistChoice("doc_2", low),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "none good?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_empty_shortlist",
+    });
+  });
+
+  it("propagates AI.run outages instead of returning an empty shortlist", async () => {
+    const ai: ClefAiRunner = {
+      run: vi.fn(async () => {
+        throw new Error("workers ai down");
+      }),
+    };
+
+    await expect(shortlistManifestFiles(ai, "question", rows)).rejects.toThrow("workers ai down");
+  });
+
+  it("fails closed on malformed answers", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {},
+      usage: { input_tokens: 1, output_tokens: 0 },
+    });
+
+    await expect(shortlistManifestFiles(ai, "question", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_malformed_answer",
+    });
+  });
+
+  it("returns empty for an empty manifest without calling AI", async () => {
+    const ai = mockAi({ model: "clef-flash", answers: {} });
+    await expect(shortlistManifestFiles(ai, "question", [])).resolves.toEqual({
+      ids: [],
+      reason: "clef_empty_manifest",
+    });
+    expect(ai.run).not.toHaveBeenCalled();
   });
 });

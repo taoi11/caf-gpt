@@ -2,19 +2,27 @@
  * src/agents/utils/ClefDecision.ts
  *
  * Thin Clef-flash decision helpers for hot-path gates (reply vs no_reply, memory update vs not)
+ * and DOAD/QR&O manifest shortlisting
  *
  * Top-level declarations:
  * - CLEF_FLASH_MODEL: Workers AI model id for Clef-flash
  * - CLEF_REPLY_CONFIDENCE_THRESHOLD: Minimum choice confidence for affirmative reply gate
  * - CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD: Minimum choice confidence for affirmative memory-update gate
+ * - CLEF_SHORTLIST_CONFIDENCE_THRESHOLD: Minimum choice confidence to accept a shortlist pick
+ * - CLEF_SHORTLIST_MAX_PICKS: Default maximum documents to shortlist
  * - ClefAiRunner: Injectable AI.run surface for unit tests
  * - ReplyGateDecision: Result of the inbound reply vs no_reply gate
  * - MemoryUpdateGateDecision: Result of the scheduled memory update vs no_update gate
+ * - ManifestShortlistDecision: Result of the DOAD/QR&O manifest shortlist
  * - isRecord: Type guard for plain object records
  * - parseChoiceAnswer: Parses a Clef choice answer from an unknown payload
  * - decideShouldReply: Asks Clef-flash whether CAF-GPT should reply; propagates AI.run failures
  * - decideShouldUpdateMemory: Asks Clef-flash whether MemoryFoo should run; propagates AI.run failures
+ * - shortlistManifestFiles: Asks Clef-flash which indexed files to prefetch; propagates AI.run failures
+ * - buildShortlistQuestions: Builds ranked Clef choice questions over allowlisted manifest rows
  */
+
+import type { ManifestRow } from "./ManifestParser";
 
 /** Workers AI model id used for latency-critical decision gates. */
 export const CLEF_FLASH_MODEL = "@cf/cloudflare/clef-flash" as const;
@@ -30,6 +38,15 @@ export const CLEF_REPLY_CONFIDENCE_THRESHOLD = 0.6;
  * Below this (or any malformed answer when Clef responded) we fail closed to no_update.
  */
 export const CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD = 0.6;
+
+/**
+ * Minimum `confidence` (0–1) required to accept a ranked shortlist pick.
+ * Below this, allowlisted/none picks are skipped; invented/malformed picks still fail the shortlist.
+ */
+export const CLEF_SHORTLIST_CONFIDENCE_THRESHOLD = 0.6;
+
+/** Default maximum number of indexed documents Clef may shortlist for prefetch. */
+export const CLEF_SHORTLIST_MAX_PICKS = 3;
 
 /** Injectable Workers AI runner used so unit tests can mock `AI.run` without Env. */
 export interface ClefAiRunner {
@@ -52,6 +69,12 @@ export interface MemoryUpdateGateDecision {
   reason: string;
 }
 
+/** Outcome of the DOAD/QR&O manifest shortlist (allowlisted ids only). */
+export interface ManifestShortlistDecision {
+  ids: string[];
+  reason: string;
+}
+
 interface ClefChoiceAnswer {
   type: "choice";
   choice: string;
@@ -64,6 +87,18 @@ interface ClefFlashResponse {
     should_reply?: unknown;
     should_update_memory?: unknown;
   };
+}
+
+interface ClefChoiceQuestion {
+  type: "choice";
+  instructions: string;
+  criteria: { [optionKey: string]: string };
+}
+
+interface ShortlistQuestionBuild {
+  questions: { [pickKey: string]: ClefChoiceQuestion };
+  keyToId: Map<string, string>;
+  pickKeys: string[];
 }
 
 const SHOULD_REPLY_QUESTION = {
@@ -86,6 +121,8 @@ const SHOULD_UPDATE_MEMORY_QUESTION = {
     no_update: "Skip MemoryFoo — leave memory unchanged",
   },
 };
+
+const NONE_OPTION = "none" as const;
 
 /** Returns true when value is a non-null plain object (not an array). */
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -258,4 +295,175 @@ ${agentReply}
     confidence: answer.confidence,
     reason: "clef_update",
   };
+}
+
+/**
+ * Builds ranked Clef choice questions that pick up to maxPicks allowlisted documents.
+ * Option keys are stable `doc_N` tokens mapped back to manifest ids (paths stay out of option keys).
+ * @param rows - Allowlisted manifest rows
+ * @param maxPicks - Maximum documents to select
+ */
+function buildShortlistQuestions(rows: ManifestRow[], maxPicks: number): ShortlistQuestionBuild {
+  const keyToId = new Map<string, string>();
+  const criteriaPairs: Array<readonly [string, string]> = [
+    [NONE_OPTION, "No additional indexed document should be loaded for this question"],
+  ];
+  for (let i = 0; i < rows.length; i++) {
+    const row = rows[i];
+    const key = `doc_${i}`;
+    keyToId.set(key, row.id);
+    const title = row.title.trim().length > 0 ? row.title.trim() : row.file;
+    criteriaPairs.push([key, `${row.id} — ${title}`]);
+  }
+  const criteria = Object.fromEntries(criteriaPairs);
+
+  const pickKeys: string[] = [];
+  const questions: ShortlistQuestionBuild["questions"] = {};
+  for (let rank = 1; rank <= maxPicks; rank++) {
+    const key = `pick_${rank}`;
+    pickKeys.push(key);
+    questions[key] = {
+      type: "choice",
+      instructions:
+        rank === 1
+          ? "Which indexed document from the options is MOST relevant to load for the user question? Choose none if none apply."
+          : `Which indexed document is the next most relevant to load (rank ${rank})? Do not repeat a document already chosen for a higher pick. Choose none if fewer documents are needed.`,
+      criteria,
+    };
+  }
+
+  return { questions, keyToId, pickKeys };
+}
+
+/**
+ * Ask Clef-flash which allowlisted manifest ids to prefetch for a policy question.
+ * Propagates AI.run failures (outages/timeouts).
+ * Fail-closed reasons: malformed → clef_malformed_*; invented → clef_invalid_choice; duplicate → clef_duplicate_choice;
+ * conflicting picks after confident none → clef_conflicting_choice; only rejected picks → clef_empty_shortlist; confident none → clef_intentional_none.
+ * Never invents paths outside the allowlist. Validate every ranked answer (including after none / low confidence).
+ * @param ai - Injectable Workers AI runner
+ * @param question - User research question
+ * @param rows - Allowlisted manifest rows (Id/Title/File)
+ * @param options - Optional max picks and confidence threshold overrides
+ */
+export async function shortlistManifestFiles(
+  ai: ClefAiRunner,
+  question: string,
+  rows: ManifestRow[],
+  options: { maxPicks?: number; confidenceThreshold?: number } = {}
+): Promise<ManifestShortlistDecision> {
+  const maxPicks = Math.max(0, options.maxPicks ?? CLEF_SHORTLIST_MAX_PICKS);
+  const confidenceThreshold = options.confidenceThreshold ?? CLEF_SHORTLIST_CONFIDENCE_THRESHOLD;
+
+  if (rows.length === 0 || maxPicks === 0) {
+    return { ids: [], reason: "clef_empty_manifest" };
+  }
+
+  const { questions, keyToId, pickKeys } = buildShortlistQuestions(rows, maxPicks);
+  const state = `<user_question>
+${question}
+</user_question>
+
+<manifest>
+| Id | Title | File |
+|---|---|---|
+${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
+</manifest>`;
+
+  const raw = await ai.run(CLEF_FLASH_MODEL, {
+    model: "clef-flash",
+    state,
+    questions,
+  });
+
+  if (!isRecord(raw)) {
+    return { ids: [], reason: "clef_malformed_response" };
+  }
+
+  const answers = raw.answers;
+  if (!isRecord(answers)) {
+    return { ids: [], reason: "clef_malformed_answer" };
+  }
+
+  const selected: string[] = [];
+  const seen = new Set<string>();
+  let sawValidAnswer = false;
+  let failureReason:
+    | "clef_malformed_answer"
+    | "clef_invalid_choice"
+    | "clef_duplicate_choice"
+    | "clef_conflicting_choice"
+    | null = null;
+  let stoppedOnHighConfidenceNone = false;
+
+  for (const pickKey of pickKeys) {
+    if (failureReason !== null) {
+      break;
+    }
+
+    const answer = parseChoiceAnswer(answers[pickKey]);
+    if (!answer) {
+      failureReason = "clef_malformed_answer";
+      break;
+    }
+    sawValidAnswer = true;
+
+    const isNone = answer.choice === NONE_OPTION;
+    const id = isNone ? undefined : keyToId.get(answer.choice);
+
+    // Allowlist every rank before confidence skips so invented options cannot partially succeed.
+    if (!isNone && id === undefined) {
+      failureReason = "clef_invalid_choice";
+      break;
+    }
+
+    // All ranks are answered independently — keep validating after a confident none.
+    if (stoppedOnHighConfidenceNone) {
+      if (!isNone) {
+        failureReason = "clef_conflicting_choice";
+        break;
+      }
+      continue;
+    }
+
+    if (answer.confidence < confidenceThreshold) {
+      // Low-confidence none or allowlisted doc — skip this rank; do not stop early.
+      continue;
+    }
+
+    if (isNone) {
+      stoppedOnHighConfidenceNone = true;
+      continue;
+    }
+
+    // High-confidence allowlisted document (id validated above when !isNone).
+    if (id === undefined) {
+      failureReason = "clef_invalid_choice";
+      break;
+    }
+    if (seen.has(id)) {
+      failureReason = "clef_duplicate_choice";
+      break;
+    }
+    seen.add(id);
+    selected.push(id);
+  }
+
+  if (failureReason !== null) {
+    return { ids: [], reason: failureReason };
+  }
+
+  if (!sawValidAnswer) {
+    return { ids: [], reason: "clef_malformed_answer" };
+  }
+
+  if (selected.length === 0) {
+    // Intentional empty only when Clef confidently chose none with no validation failures.
+    if (stoppedOnHighConfidenceNone) {
+      return { ids: [], reason: "clef_intentional_none" };
+    }
+    return { ids: [], reason: "clef_empty_shortlist" };
+  }
+
+  return { ids: selected, reason: "clef_shortlist" };
 }

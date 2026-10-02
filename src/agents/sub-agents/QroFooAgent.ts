@@ -1,18 +1,17 @@
 /**
  * src/agents/sub-agents/QroFooAgent.ts
  *
- * Sub-agent for QR&O policy research using a bounded read_file tool
+ * Sub-agent for QR&O policy research using Clef shortlist + document prefetch
  *
  * Top-level declarations:
- * - QroFooAgent: Answers QR&O policy questions using one tool-reading model call
+ * - QroFooAgent: Answers QR&O policy questions from Clef-prefetched documents
  */
 
 import type { AppConfig } from "../../config";
-import type { BaseAgentDependencies } from "../utils/BaseAgent";
-import { ToolReadingAgent } from "../utils/ToolReadingAgent";
+import { ToolReadingAgent, type ToolReadingAgentDependencies } from "../utils/ToolReadingAgent";
 
 export class QroFooAgent extends ToolReadingAgent {
-  constructor(env: Env, config: AppConfig, dependencies: Partial<BaseAgentDependencies> = {}) {
+  constructor(env: Env, config: AppConfig, dependencies: ToolReadingAgentDependencies = {}) {
     super(
       env,
       config,
@@ -21,12 +20,8 @@ export class QroFooAgent extends ToolReadingAgent {
         policyType: "QR&O policy",
         modelKey: "qroFoo",
         promptName: "qro_foo_tool_reader",
-        indexVariableName: "qro_index",
-        readLimits: {
-          totalCalls: 5,
-          successfulReads: 3,
-          badCalls: 2,
-        },
+        documentsVariableName: "prefetched_documents",
+        maxPrefetchDocuments: 3,
       },
       dependencies
     );
