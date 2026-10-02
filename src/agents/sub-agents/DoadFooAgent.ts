@@ -1,18 +1,17 @@
 /**
  * src/agents/sub-agents/DoadFooAgent.ts
  *
- * Sub-agent for DOAD policy research using a bounded read_file tool
+ * Sub-agent for DOAD policy research using Clef shortlist + document prefetch
  *
  * Top-level declarations:
- * - DoadFooAgent: Answers DOAD policy questions using one tool-reading model call
+ * - DoadFooAgent: Answers DOAD policy questions from Clef-prefetched documents
  */
 
 import type { AppConfig } from "../../config";
-import type { BaseAgentDependencies } from "../utils/BaseAgent";
-import { ToolReadingAgent } from "../utils/ToolReadingAgent";
+import { ToolReadingAgent, type ToolReadingAgentDependencies } from "../utils/ToolReadingAgent";
 
 export class DoadFooAgent extends ToolReadingAgent {
-  constructor(env: Env, config: AppConfig, dependencies: Partial<BaseAgentDependencies> = {}) {
+  constructor(env: Env, config: AppConfig, dependencies: ToolReadingAgentDependencies = {}) {
     super(
       env,
       config,
@@ -21,12 +20,8 @@ export class DoadFooAgent extends ToolReadingAgent {
         policyType: "DOAD policy",
         modelKey: "doadFoo",
         promptName: "doad_foo_tool_reader",
-        indexVariableName: "doad_table",
-        readLimits: {
-          totalCalls: 5,
-          successfulReads: 3,
-          badCalls: 2,
-        },
+        documentsVariableName: "prefetched_documents",
+        maxPrefetchDocuments: 3,
       },
       dependencies
     );

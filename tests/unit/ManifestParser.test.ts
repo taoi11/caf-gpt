@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   isSafeFilePath,
   isSafeId,
+  parseManifestRows,
   parseManifestTable,
 } from "../../src/agents/utils/ManifestParser";
 
@@ -107,5 +108,18 @@ describe("isSafeId / isSafeFilePath", () => {
     expect(isSafeFilePath("5019-0.md")).toBe(true);
     expect(isSafeFilePath("5019-0")).toBe(false);
     expect(isSafeId("5019-0")).toBe(true);
+  });
+});
+
+describe("parseManifestRows", () => {
+  it("should preserve title and order for valid rows", () => {
+    const rows = parseManifestRows(`| Id | Title | File |
+|---|---|---|
+| 5019-0 | Conduct and Performance | 5019-0.md |
+| 5031-1 | Grievance | 5031-1.md |`);
+    expect(rows).toEqual([
+      { id: "5019-0", title: "Conduct and Performance", file: "5019-0.md" },
+      { id: "5031-1", title: "Grievance", file: "5031-1.md" },
+    ]);
   });
 });
