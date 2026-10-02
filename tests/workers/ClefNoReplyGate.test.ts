@@ -57,7 +57,7 @@ describe("UserAgent Clef no_reply gate", () => {
     expect(result).toEqual({ primeFooCalls: 0, structuredSends: 0, replies: 0 });
   });
 
-  it("fails closed and skips Prime Foo when Clef AI.run throws", async () => {
+  it("propagates Clef AI.run outages to the onEmail error boundary", async () => {
     const stub = getUserAgentStub("clef-error@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
@@ -91,12 +91,133 @@ describe("UserAgent Clef no_reply gate", () => {
       await instance.onEmail(email);
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
+        structuredSends: bindingSend.mock.calls,
+        replies: email.reply.mock.calls.length,
+      };
+    });
+
+    expect(result.primeFooCalls).toBe(0);
+    expect(result.replies).toBe(0);
+    expect(result.structuredSends).toHaveLength(1);
+    expect(result.structuredSends[0][0]).toMatchObject({
+      to: "clef-error@forces.gc.ca",
+      subject: "Error Processing Email",
+    });
+  });
+
+  it("silently drops valid no_reply before recipient resolution errors", async () => {
+    const stub = getUserAgentStub("clef-many-rcpt@forces.gc.ca");
+    const manyRecipients = Array.from({ length: 51 }, (_, i) => `user${i}@forces.gc.ca`);
+
+    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
+        shouldRespond: true,
+        content: "<p>should not send</p>",
+      }));
+      vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockImplementation(
+        processWithPrimeFoo
+      );
+      mockClefChoice("no_reply", 0.95);
+
+      const email = createAgentEmail({
+        envelopeFrom: "clef-many-rcpt@forces.gc.ca",
+        envelopeTo: "agent@caf-gpt.com",
+        from: "clef-many-rcpt@forces.gc.ca",
+        to: ["agent@caf-gpt.com", ...manyRecipients],
+        subject: "FYI",
+        body: "Thanks everyone!",
+        messageId: "<clef-many-rcpt@forces.gc.ca>",
+      });
+      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
+
+      await instance.onEmail(email);
+      return {
+        primeFooCalls: processWithPrimeFoo.mock.calls.length,
         structuredSends: bindingSend.mock.calls.length,
         replies: email.reply.mock.calls.length,
       };
     });
 
     expect(result).toEqual({ primeFooCalls: 0, structuredSends: 0, replies: 0 });
+  });
+
+  it("passes user memory into the Clef gate state", async () => {
+    const stub = getUserAgentStub("clef-memory@forces.gc.ca");
+
+    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      instance.setState({
+        memory: "User previously asked to draft a leave request.",
+        versions: [],
+      });
+
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
+        shouldRespond: true,
+        content: "<p>drafted</p>",
+      }));
+      vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockImplementation(
+        processWithPrimeFoo
+      );
+
+      const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
+      const runSpy = vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
+        if (model === CLEF_FLASH_MODEL) {
+          return {
+            model: "clef-flash",
+            answers: {
+              should_reply: {
+                type: "choice",
+                choice: "reply",
+                confidence: 0.92,
+                probabilities: { reply: 0.92, no_reply: 0.08 },
+              },
+            },
+            usage: { input_tokens: 1, output_tokens: 1 },
+          };
+        }
+        throw new Error(`Unexpected AI.run model: ${String(model)}`);
+      });
+
+      vi.spyOn(instance, "schedule").mockResolvedValue({
+        id: "schedule-1",
+        callback: "runMemoryUpdate",
+        payload: "",
+        type: "delayed",
+        time: 1,
+        delayInSeconds: 1,
+      } as never);
+
+      const email = createAgentEmail({
+        envelopeFrom: "clef-memory@forces.gc.ca",
+        envelopeTo: "agent@caf-gpt.com",
+        from: "clef-memory@forces.gc.ca",
+        to: ["agent@caf-gpt.com"],
+        subject: "Re: Leave",
+        body: "Yes, please",
+        messageId: "<clef-memory@forces.gc.ca>",
+      });
+      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
+        messageId: "structured-reply",
+      });
+
+      await instance.onEmail(email);
+      const clefCall = runSpy.mock.calls.find((call) => call[0] === CLEF_FLASH_MODEL);
+      const inputs = clefCall?.[1] as { state?: string } | undefined;
+      return {
+        primeFooCalls: processWithPrimeFoo.mock.calls.length,
+        stateIncludesMemory: Boolean(inputs?.state?.includes("<memory>")),
+        stateIncludesPriorAsk: Boolean(
+          inputs?.state?.includes("User previously asked to draft a leave request.")
+        ),
+        stateIncludesBody: Boolean(inputs?.state?.includes("Yes, please")),
+      };
+    });
+
+    expect(result).toEqual({
+      primeFooCalls: 1,
+      stateIncludesMemory: true,
+      stateIncludesPriorAsk: true,
+      stateIncludesBody: true,
+    });
   });
 
   it("continues to Prime Foo when Clef chooses reply with high confidence", async () => {

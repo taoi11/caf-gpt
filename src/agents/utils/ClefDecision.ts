@@ -8,7 +8,9 @@
  * - CLEF_REPLY_CONFIDENCE_THRESHOLD: Minimum choice confidence to allow a reply (fail-closed below)
  * - ClefAiRunner: Injectable AI.run surface for unit tests
  * - ReplyGateDecision: Result of the inbound reply vs no_reply gate
- * - decideShouldReply: Asks Clef-flash whether CAF-GPT should reply; fail-closed on error/ambiguity
+ * - isRecord: Type guard for plain object records
+ * - parseChoiceAnswer: Parses a Clef choice answer from an unknown payload
+ * - decideShouldReply: Asks Clef-flash whether CAF-GPT should reply; propagates AI.run failures
  */
 
 /** Workers AI model id used for latency-critical decision gates. */
@@ -16,7 +18,7 @@ export const CLEF_FLASH_MODEL = "@cf/cloudflare/clef-flash" as const;
 
 /**
  * Minimum `confidence` (0–1) required to honor `choice === "reply"`.
- * Below this (or any malformed/thrown response) we fail closed to no_reply.
+ * Below this (or any malformed answer when Clef responded) we fail closed to no_reply.
  */
 export const CLEF_REPLY_CONFIDENCE_THRESHOLD = 0.6;
 
@@ -49,17 +51,23 @@ interface ClefFlashResponse {
 const SHOULD_REPLY_QUESTION = {
   type: "choice" as const,
   instructions:
-    "Should CAF-GPT send a reply to this inbound email? Prefer no_reply for FYI, spam-like noise, thanks-only, or nothing actionable for a CAF policy assistant.",
+    "Should CAF-GPT send a reply to this inbound email? Prefer no_reply for FYI, spam-like noise, thanks-only, or nothing actionable for a CAF policy assistant. Short contextual follow-ups (e.g. \"Yes, please\") warrant reply when <memory> supplies prior context.",
   criteria: {
     reply: "A substantive reply is warranted",
     no_reply: "Silent drop — do not reply",
   },
 };
 
+/** Returns true when value is a non-null plain object (not an array). */
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Parses a Clef choice answer from an unknown payload.
+ * @param value - Raw `answers.should_reply` value from Clef-flash
+ * @returns Parsed choice answer, or null when malformed
+ */
 function parseChoiceAnswer(value: unknown): ClefChoiceAnswer | null {
   if (!isRecord(value)) return null;
   if (value.type !== "choice") return null;
@@ -76,24 +84,30 @@ function parseChoiceAnswer(value: unknown): ClefChoiceAnswer | null {
 
 /**
  * Ask Clef-flash whether an inbound email warrants a reply.
- * Fail-closed: throws, malformed answers, `no_reply`, or low confidence → shouldReply false.
+ * Propagates AI.run failures (outages/timeouts) to the caller error boundary.
+ * Fail-closed to shouldReply false only for a valid no_reply choice, or malformed/low-confidence when Clef answered.
+ * @param ai - Injectable Workers AI runner
+ * @param emailContext - Inbound email context string
+ * @param memory - Optional user memory included in Clef state for contextual short replies
  */
 export async function decideShouldReply(
   ai: ClefAiRunner,
-  emailContext: string
+  emailContext: string,
+  memory?: string
 ): Promise<ReplyGateDecision> {
-  let raw: unknown;
-  try {
-    raw = await ai.run(CLEF_FLASH_MODEL, {
-      model: "clef-flash",
-      state: emailContext,
-      questions: {
-        should_reply: SHOULD_REPLY_QUESTION,
-      },
-    });
-  } catch {
-    return { shouldReply: false, reason: "clef_run_error" };
-  }
+  const trimmedMemory = memory?.trim() ?? "";
+  const state =
+    trimmedMemory.length > 0
+      ? `<memory>\n${trimmedMemory}\n</memory>\n\n${emailContext}`
+      : emailContext;
+
+  const raw = await ai.run(CLEF_FLASH_MODEL, {
+    model: "clef-flash",
+    state,
+    questions: {
+      should_reply: SHOULD_REPLY_QUESTION,
+    },
+  });
 
   if (!isRecord(raw)) {
     return { shouldReply: false, reason: "clef_malformed_response" };

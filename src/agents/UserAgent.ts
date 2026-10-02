@@ -9,7 +9,7 @@
  * - UserAgent: Durable Object-backed email agent with AI response and memory scheduling
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
  *
- * Clef-flash no_reply gate runs in getAIResponse before AgentCoordinator/Prime Foo.
+ * Clef-flash no_reply gate runs in getAIResponse (with memory) before recipients/Prime Foo.
  */
 
 import { Agent } from "agents";
@@ -111,7 +111,6 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       this.validateEmail(parsedEmail);
-      const recipients = resolveReplyRecipients(parsedEmail, config);
       const emailContext = this.buildEmailContext(parsedEmail);
       const response = await this.getAIResponse(emailContext, config);
 
@@ -120,6 +119,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         return;
       }
 
+      const recipients = resolveReplyRecipients(parsedEmail, config);
       await this.sendReply(parsedEmail, response.content, config, recipients, () => {
         sendAttempted = true;
       });
@@ -279,7 +279,8 @@ ${parsedEmail.body}`;
       {
         run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
       },
-      emailContext
+      emailContext,
+      this.state.memory
     );
     if (!replyGate.shouldReply) {
       this.logger.info("Clef no_reply gate skipped Prime Foo", {

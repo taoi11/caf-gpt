@@ -58,6 +58,46 @@ describe("decideShouldReply", () => {
     );
   });
 
+  it("includes non-empty user memory in Clef state", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: { should_reply: choiceAnswer("reply", 0.9) },
+      usage: { input_tokens: 10, output_tokens: 1 },
+    });
+
+    await decideShouldReply(ai, "Subject: Re\n\nYes, please", "User prefers leave drafting help.");
+
+    expect(ai.run).toHaveBeenCalledWith(
+      CLEF_FLASH_MODEL,
+      expect.objectContaining({
+        state: expect.stringContaining("<memory>\nUser prefers leave drafting help.\n</memory>"),
+      })
+    );
+    expect(ai.run).toHaveBeenCalledWith(
+      CLEF_FLASH_MODEL,
+      expect.objectContaining({
+        state: expect.stringContaining("Yes, please"),
+      })
+    );
+  });
+
+  it("omits memory tags when memory is empty", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: { should_reply: choiceAnswer("reply", 0.9) },
+      usage: { input_tokens: 10, output_tokens: 1 },
+    });
+
+    await decideShouldReply(ai, "Subject: Hi\n\nHello", "   ");
+
+    expect(ai.run).toHaveBeenCalledWith(
+      CLEF_FLASH_MODEL,
+      expect.objectContaining({
+        state: "Subject: Hi\n\nHello",
+      })
+    );
+  });
+
   it("skips when Clef chooses no_reply", async () => {
     const ai = mockAi({
       model: "clef-flash",
@@ -89,17 +129,14 @@ describe("decideShouldReply", () => {
     });
   });
 
-  it("fails closed when AI.run throws", async () => {
+  it("propagates AI.run outages instead of silent no_reply", async () => {
     const ai: ClefAiRunner = {
       run: vi.fn(async () => {
         throw new Error("workers ai down");
       }),
     };
 
-    await expect(decideShouldReply(ai, "Question")).resolves.toEqual({
-      shouldReply: false,
-      reason: "clef_run_error",
-    });
+    await expect(decideShouldReply(ai, "Question")).rejects.toThrow("workers ai down");
   });
 
   it("fails closed on malformed answers", async () => {
