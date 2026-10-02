@@ -122,6 +122,19 @@ describe("MemoryFooAgent", () => {
     expect(result.content).toBe(newMemory);
   });
 
+  it("uses the thin edit prompt when promptName is memory_foo_edit", async () => {
+    setMockMemoryToolCall("update_memory", { content: "Edited memory" });
+
+    const result = await agent.updateMemory("", "Question", "Answer", {
+      promptName: "memory_foo_edit",
+    });
+
+    expect(result.updated).toBe(true);
+    expect(result.content).toBe("Edited memory");
+    const lastCall = mockGenerateText.mock.calls.at(-1)?.[0];
+    expect(lastCall?.system).toContain("prior gate already decided");
+  });
+
   it("should return unchanged when LLM indicates no new information", async () => {
     setMockMemoryToolCall("leave_memory_unchanged");
 
