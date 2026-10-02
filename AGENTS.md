@@ -184,7 +184,7 @@ The `EMAIL` `send_email` binding permits only `agent@caf-gpt.com` and `pacenote@
 - Processing failures before `sendEmail()` begins receive one generic plain-text, sender-only `replyToEmail()` response; error-reply failures are logged and swallowed
 - Once `sendEmail()` is invoked, any failure is logged and processing stops without a fallback reply
 - Threading headers preserve valid `In-Reply-To` and `References`; malformed error-path threading values are omitted
-- Quoted content formatted using `EmailComposer.formatQuotedContent()`
+- Quoted content formatted using `formatQuotedContent()` from `src/email/components/EmailComposer.ts`
 
 ## Important Gotchas
 

@@ -19,6 +19,7 @@
  * - decideShouldReply: Asks Clef-flash whether CAF-GPT should reply; propagates AI.run failures
  * - decideShouldUpdateMemory: Asks Clef-flash whether MemoryFoo should run; propagates AI.run failures
  * - shortlistManifestFiles: Asks Clef-flash which indexed files to prefetch; propagates AI.run failures
+ * - runBinaryChoiceGate: Shared fail-closed Clef choice validation/confidence/result construction
  * - buildShortlistQuestions: Builds ranked Clef choice questions over allowlisted manifest rows
  */
 
@@ -82,17 +83,29 @@ interface ClefChoiceAnswer {
   confidence: number;
 }
 
-interface ClefFlashResponse {
-  answers?: {
-    should_reply?: unknown;
-    should_update_memory?: unknown;
-  };
-}
-
 interface ClefChoiceQuestion {
   type: "choice";
   instructions: string;
   criteria: { [optionKey: string]: string };
+}
+
+interface BinaryChoiceGateOptions {
+  questionKey: string;
+  question: ClefChoiceQuestion;
+  affirmative: string;
+  negative: string;
+  threshold: number;
+  reasons: {
+    affirmative: string;
+    negative: string;
+  };
+}
+
+interface BinaryChoiceGateResult {
+  shouldProceed: boolean;
+  choice?: string;
+  confidence?: number;
+  reason: string;
 }
 
 interface ShortlistQuestionBuild {
@@ -150,9 +163,75 @@ function parseChoiceAnswer(value: unknown): ClefChoiceAnswer | null {
 }
 
 /**
- * Ask Clef-flash whether an inbound email warrants a reply.
- * Propagates AI.run failures (outages/timeouts) to the caller error boundary.
- * Fail-closed to shouldReply false only for a valid no_reply choice, or malformed/low-confidence when Clef answered.
+ * Runs a fail-closed Clef binary choice gate: malformed/unknown/low-confidence → shouldProceed false.
+ * Propagates AI.run failures to the caller.
+ * @param ai - Injectable Workers AI runner
+ * @param state - Clef state string (email context, memory, reply text as applicable)
+ * @param options - Question key/criteria, affirmative/negative labels, threshold, and reason strings
+ */
+async function runBinaryChoiceGate(
+  ai: ClefAiRunner,
+  state: string,
+  options: BinaryChoiceGateOptions
+): Promise<BinaryChoiceGateResult> {
+  const raw = await ai.run(CLEF_FLASH_MODEL, {
+    model: "clef-flash",
+    state,
+    questions: {
+      [options.questionKey]: options.question,
+    },
+  });
+
+  if (!isRecord(raw)) {
+    return { shouldProceed: false, reason: "clef_malformed_response" };
+  }
+
+  const answers = raw.answers;
+  if (!isRecord(answers)) {
+    return { shouldProceed: false, reason: "clef_malformed_answer" };
+  }
+
+  const answer = parseChoiceAnswer(answers[options.questionKey]);
+  if (!answer) {
+    return { shouldProceed: false, reason: "clef_malformed_answer" };
+  }
+
+  if (answer.choice !== options.affirmative && answer.choice !== options.negative) {
+    return {
+      shouldProceed: false,
+      confidence: answer.confidence,
+      reason: "clef_unknown_choice",
+    };
+  }
+
+  if (answer.choice !== options.affirmative) {
+    return {
+      shouldProceed: false,
+      choice: options.negative,
+      confidence: answer.confidence,
+      reason: options.reasons.negative,
+    };
+  }
+
+  if (answer.confidence < options.threshold) {
+    return {
+      shouldProceed: false,
+      choice: options.affirmative,
+      confidence: answer.confidence,
+      reason: "clef_low_confidence",
+    };
+  }
+
+  return {
+    shouldProceed: true,
+    choice: options.affirmative,
+    confidence: answer.confidence,
+    reason: options.reasons.affirmative,
+  };
+}
+
+/**
+ * Ask Clef-flash whether an inbound email warrants a reply; fail-closed; propagates AI.run failures.
  * @param ai - Injectable Workers AI runner
  * @param emailContext - Inbound email context string
  * @param memory - Optional user memory included in Clef state for contextual short replies
@@ -168,62 +247,23 @@ export async function decideShouldReply(
       ? `<memory>\n${trimmedMemory}\n</memory>\n\n${emailContext}`
       : emailContext;
 
-  const raw = await ai.run(CLEF_FLASH_MODEL, {
-    model: "clef-flash",
-    state,
-    questions: {
-      should_reply: SHOULD_REPLY_QUESTION,
-    },
+  const gate = await runBinaryChoiceGate(ai, state, {
+    questionKey: "should_reply",
+    question: SHOULD_REPLY_QUESTION,
+    affirmative: "reply",
+    negative: "no_reply",
+    threshold: CLEF_REPLY_CONFIDENCE_THRESHOLD,
+    reasons: { affirmative: "clef_reply", negative: "clef_no_reply" },
   });
 
-  if (!isRecord(raw)) {
-    return { shouldReply: false, reason: "clef_malformed_response" };
-  }
-
-  const response = raw as ClefFlashResponse;
-  const answer = parseChoiceAnswer(response.answers?.should_reply);
-  if (!answer) {
-    return { shouldReply: false, reason: "clef_malformed_answer" };
-  }
-
-  if (answer.choice !== "reply" && answer.choice !== "no_reply") {
-    return {
-      shouldReply: false,
-      confidence: answer.confidence,
-      reason: "clef_unknown_choice",
-    };
-  }
-
-  if (answer.choice !== "reply") {
-    return {
-      shouldReply: false,
-      choice: "no_reply",
-      confidence: answer.confidence,
-      reason: "clef_no_reply",
-    };
-  }
-
-  if (answer.confidence < CLEF_REPLY_CONFIDENCE_THRESHOLD) {
-    return {
-      shouldReply: false,
-      choice: "reply",
-      confidence: answer.confidence,
-      reason: "clef_low_confidence",
-    };
-  }
-
-  return {
-    shouldReply: true,
-    choice: "reply",
-    confidence: answer.confidence,
-    reason: "clef_reply",
-  };
+  const result: ReplyGateDecision = { shouldReply: gate.shouldProceed, reason: gate.reason };
+  if (gate.choice === "reply" || gate.choice === "no_reply") result.choice = gate.choice;
+  if (gate.confidence !== undefined) result.confidence = gate.confidence;
+  return result;
 }
 
 /**
- * Ask Clef-flash whether a successful reply exchange warrants a MemoryFoo update.
- * Propagates AI.run failures (outages/timeouts) so scheduled retries can run.
- * Fail-closed to shouldUpdate false only for a valid no_update choice, or malformed/low-confidence when Clef answered.
+ * Ask Clef-flash whether a reply exchange warrants MemoryFoo; fail-closed; propagates AI.run failures.
  * @param ai - Injectable Workers AI runner
  * @param emailContext - Inbound email context string
  * @param agentReply - Outbound agent reply text that was sent
@@ -245,56 +285,22 @@ ${emailContext}
 ${agentReply}
 </agent_reply>`;
 
-  const raw = await ai.run(CLEF_FLASH_MODEL, {
-    model: "clef-flash",
-    state,
-    questions: {
-      should_update_memory: SHOULD_UPDATE_MEMORY_QUESTION,
-    },
+  const gate = await runBinaryChoiceGate(ai, state, {
+    questionKey: "should_update_memory",
+    question: SHOULD_UPDATE_MEMORY_QUESTION,
+    affirmative: "update",
+    negative: "no_update",
+    threshold: CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD,
+    reasons: { affirmative: "clef_update", negative: "clef_no_update" },
   });
 
-  if (!isRecord(raw)) {
-    return { shouldUpdate: false, reason: "clef_malformed_response" };
-  }
-
-  const response = raw as ClefFlashResponse;
-  const answer = parseChoiceAnswer(response.answers?.should_update_memory);
-  if (!answer) {
-    return { shouldUpdate: false, reason: "clef_malformed_answer" };
-  }
-
-  if (answer.choice !== "update" && answer.choice !== "no_update") {
-    return {
-      shouldUpdate: false,
-      confidence: answer.confidence,
-      reason: "clef_unknown_choice",
-    };
-  }
-
-  if (answer.choice !== "update") {
-    return {
-      shouldUpdate: false,
-      choice: "no_update",
-      confidence: answer.confidence,
-      reason: "clef_no_update",
-    };
-  }
-
-  if (answer.confidence < CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD) {
-    return {
-      shouldUpdate: false,
-      choice: "update",
-      confidence: answer.confidence,
-      reason: "clef_low_confidence",
-    };
-  }
-
-  return {
-    shouldUpdate: true,
-    choice: "update",
-    confidence: answer.confidence,
-    reason: "clef_update",
+  const result: MemoryUpdateGateDecision = {
+    shouldUpdate: gate.shouldProceed,
+    reason: gate.reason,
   };
+  if (gate.choice === "update" || gate.choice === "no_update") result.choice = gate.choice;
+  if (gate.confidence !== undefined) result.confidence = gate.confidence;
+  return result;
 }
 
 /**

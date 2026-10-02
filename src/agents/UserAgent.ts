@@ -7,6 +7,7 @@
  * - UserAgentState: Persistent per-user state stored by the Agents runtime
  * - MemoryUpdateTask: Scheduled memory update payload
  * - UserAgent: Durable Object-backed email agent with AI response and memory scheduling
+ * - persistPrunedVersions: Shared memory-version prune + conditional state write helper
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
  *
  * Clef-flash no_reply gate runs in getAIResponse (with memory) before recipients/Prime Foo.
@@ -18,7 +19,7 @@ import type { AgentEmail } from "agents/email";
 import PostalMime, { type Address } from "postal-mime";
 import type { AppConfig } from "../config";
 import { createConfig } from "../config";
-import { EmailComposer, HtmlEmailComposer } from "../email/components";
+import { formatQuotedContent, HtmlEmailComposer } from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
@@ -75,7 +76,6 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   override observability = undefined;
 
   private readonly logger = Logger.getInstance();
-  private readonly emailComposer = new EmailComposer();
   private readonly htmlEmailComposer = new HtmlEmailComposer();
   private agentCoordinator?: AgentCoordinator;
 
@@ -152,15 +152,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         this.state.memory
       );
       if (!memoryGate.shouldUpdate) {
-        const storedVersions = this.state.versions ?? [];
-        const now = Date.now();
-        const versions = retainMemoryVersions(storedVersions, now);
-        const versionsPruned =
-          versions.length !== storedVersions.length ||
-          versions.some((version, index) => version !== storedVersions[index]);
-        if (versionsPruned) {
-          this.setState({ memory: this.state.memory, versions });
-        }
+        this.persistPrunedVersions(Date.now());
         this.logger.info("Clef memory gate skipped MemoryFoo", {
           reason: memoryGate.reason,
         });
@@ -175,30 +167,23 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         { promptName: "memory_foo_edit" }
       );
       const now = Date.now();
-      const storedVersions = this.state.versions ?? [];
-      const versions = retainMemoryVersions(storedVersions, now);
-      const versionsPruned =
-        versions.length !== storedVersions.length ||
-        versions.some((version, index) => version !== storedVersions[index]);
 
       if (!result.updated || !result.content) {
-        if (versionsPruned) {
-          this.setState({ memory: this.state.memory, versions });
-        }
+        this.persistPrunedVersions(now);
         this.logger.info("User memory unchanged");
         return;
       }
 
       if (result.content.length > MEMORY_MAX_CONTENT_LENGTH) {
-        if (versionsPruned) {
-          this.setState({ memory: this.state.memory, versions });
-        }
+        this.persistPrunedVersions(now);
         this.logger.warn("Rejected oversize memory update", {
           contentLength: result.content.length,
         });
         return;
       }
 
+      // Success path: prune for nextVersions only — one setState, no intermediate write.
+      const versions = retainMemoryVersions(this.state.versions ?? [], now);
       const previous = this.state.memory;
       const nextVersions =
         previous.trim().length > 0
@@ -213,6 +198,22 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       this.logger.error("Memory update failed", getSafeErrorMetadata(error));
       throw new Error("Scheduled memory update failed");
     }
+  }
+
+  /**
+   * Prunes expired memory versions and persists when the list changed.
+   * @returns The pruned versions list for callers that continue updating state
+   */
+  private persistPrunedVersions(now: number): MemoryVersion[] {
+    const storedVersions = this.state.versions ?? [];
+    const versions = retainMemoryVersions(storedVersions, now);
+    if (
+      versions.length !== storedVersions.length ||
+      versions.some((version, index) => version !== storedVersions[index])
+    ) {
+      this.setState({ memory: this.state.memory, versions });
+    }
+    return versions;
   }
 
   /** Parses an AgentEmail into CAF-GPT's internal ParsedEmailData shape. */
@@ -330,7 +331,7 @@ ${parsedEmail.body}`;
     recipients: ResolvedReplyRecipients,
     markSendAttempted: () => void
   ): Promise<void> {
-    const quotedContent = this.emailComposer.formatQuotedContent(parsedEmail);
+    const quotedContent = formatQuotedContent(parsedEmail);
     const replyText = htmlToText(content);
     const fullTextContent = (replyText || content.trim()) + quotedContent;
     const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());

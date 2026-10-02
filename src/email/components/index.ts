@@ -4,9 +4,9 @@
  * Email components index - Export all email components
  *
  * Top-level exports:
- * - EmailComposer: Export EmailComposer from EmailComposer.ts
+ * - formatQuotedContent: Export formatQuotedContent from EmailComposer.ts
  * - HtmlEmailComposer: Export HtmlEmailComposer from HtmlEmailComposer.ts
  */
 
-export { EmailComposer } from "./EmailComposer";
+export { formatQuotedContent } from "./EmailComposer";
 export { HtmlEmailComposer } from "./HtmlEmailComposer";
