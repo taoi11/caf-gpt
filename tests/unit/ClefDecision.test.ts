@@ -173,6 +173,19 @@ describe("decideShouldReply", () => {
       reason: "clef_malformed_answer",
     });
   });
+
+  it("fails closed on out-of-range confidence", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: { should_reply: choiceAnswer("reply", 1.2) },
+      usage: { input_tokens: 1, output_tokens: 0 },
+    });
+
+    await expect(decideShouldReply(ai, "Question")).resolves.toEqual({
+      shouldReply: false,
+      reason: "clef_malformed_answer",
+    });
+  });
 });
 
 describe("decideShouldUpdateMemory", () => {
@@ -289,6 +302,19 @@ describe("decideShouldUpdateMemory", () => {
     const ai = mockAi({
       model: "clef-flash",
       answers: {},
+      usage: { input_tokens: 1, output_tokens: 0 },
+    });
+
+    await expect(decideShouldUpdateMemory(ai, "Question", "Answer")).resolves.toEqual({
+      shouldUpdate: false,
+      reason: "clef_malformed_answer",
+    });
+  });
+
+  it("fails closed on out-of-range confidence", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: { should_update_memory: memoryChoiceAnswer("update", 1.2) },
       usage: { input_tokens: 1, output_tokens: 0 },
     });
 

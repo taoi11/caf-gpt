@@ -102,6 +102,7 @@ function parseChoiceAnswer(value: unknown): ClefChoiceAnswer | null {
   if (value.type !== "choice") return null;
   if (typeof value.choice !== "string" || value.choice.length === 0) return null;
   if (typeof value.confidence !== "number" || !Number.isFinite(value.confidence)) return null;
+  if (value.confidence < 0 || value.confidence > 1) return null;
   if (!isRecord(value.probabilities)) return null;
   return {
     type: "choice",
