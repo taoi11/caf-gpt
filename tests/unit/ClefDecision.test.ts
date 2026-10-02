@@ -390,6 +390,71 @@ describe("shortlistManifestFiles", () => {
     });
   });
 
+  it("fails when a low-confidence invented choice precedes a valid later pick", async () => {
+    const low = Math.max(0, CLEF_SHORTLIST_CONFIDENCE_THRESHOLD - 0.05);
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("invented", low),
+        pick_2: shortlistChoice("doc_1", 0.9),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "partial invent?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_invalid_choice",
+    });
+  });
+
+  it("fails when high-confidence none is followed by an invented lower rank", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("none", 0.95),
+        pick_2: shortlistChoice("invented", 0.9),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "none then invent?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_invalid_choice",
+    });
+  });
+
+  it("fails when high-confidence none is followed by a conflicting document pick", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: shortlistChoice("none", 0.9),
+        pick_3: shortlistChoice("doc_1", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "none then doc?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_conflicting_choice",
+    });
+  });
+
+  it("fails when high-confidence none is followed by a malformed lower rank", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("none", 0.95),
+        pick_2: { type: "choice", choice: "doc_1" },
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "none then malformed?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_malformed_answer",
+    });
+  });
+
   it("does not treat invented-then-none as intentional empty", async () => {
     const ai = mockAi({
       model: "clef-flash",

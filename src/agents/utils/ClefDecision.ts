@@ -41,7 +41,7 @@ export const CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD = 0.6;
 
 /**
  * Minimum `confidence` (0–1) required to accept a ranked shortlist pick.
- * Below this (or malformed/unknown choice when Clef answered) that pick is skipped.
+ * Below this, allowlisted/none picks are skipped; invented/malformed picks still fail the shortlist.
  */
 export const CLEF_SHORTLIST_CONFIDENCE_THRESHOLD = 0.6;
 
@@ -338,8 +338,9 @@ function buildShortlistQuestions(rows: ManifestRow[], maxPicks: number): Shortli
 /**
  * Ask Clef-flash which allowlisted manifest ids to prefetch for a policy question.
  * Propagates AI.run failures (outages/timeouts).
- * Fail-closed reasons: malformed → clef_malformed_*; only rejected picks → clef_empty_shortlist; confident none → clef_intentional_none.
- * Never invents paths outside the allowlist.
+ * Fail-closed reasons: malformed → clef_malformed_*; invented → clef_invalid_choice; duplicate → clef_duplicate_choice;
+ * conflicting picks after confident none → clef_conflicting_choice; only rejected picks → clef_empty_shortlist; confident none → clef_intentional_none.
+ * Never invents paths outside the allowlist. Validate every ranked answer (including after none / low confidence).
  * @param ai - Injectable Workers AI runner
  * @param question - User research question
  * @param rows - Allowlisted manifest rows (Id/Title/File)
@@ -387,8 +388,12 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
   const selected: string[] = [];
   const seen = new Set<string>();
   let sawValidAnswer = false;
-  let failureReason: "clef_malformed_answer" | "clef_invalid_choice" | "clef_duplicate_choice" | null =
-    null;
+  let failureReason:
+    | "clef_malformed_answer"
+    | "clef_invalid_choice"
+    | "clef_duplicate_choice"
+    | "clef_conflicting_choice"
+    | null = null;
   let stoppedOnHighConfidenceNone = false;
 
   for (const pickKey of pickKeys) {
@@ -403,17 +408,35 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
     }
     sawValidAnswer = true;
 
-    if (answer.confidence < confidenceThreshold) {
-      // Low-confidence none or doc — skip this rank; do not stop the shortlist early.
-      continue;
-    }
+    const isNone = answer.choice === NONE_OPTION;
+    const id = isNone ? undefined : keyToId.get(answer.choice);
 
-    if (answer.choice === NONE_OPTION) {
-      stoppedOnHighConfidenceNone = true;
+    // Allowlist every rank before confidence skips so invented options cannot partially succeed.
+    if (!isNone && id === undefined) {
+      failureReason = "clef_invalid_choice";
       break;
     }
 
-    const id = keyToId.get(answer.choice);
+    // All ranks are answered independently — keep validating after a confident none.
+    if (stoppedOnHighConfidenceNone) {
+      if (!isNone) {
+        failureReason = "clef_conflicting_choice";
+        break;
+      }
+      continue;
+    }
+
+    if (answer.confidence < confidenceThreshold) {
+      // Low-confidence none or allowlisted doc — skip this rank; do not stop early.
+      continue;
+    }
+
+    if (isNone) {
+      stoppedOnHighConfidenceNone = true;
+      continue;
+    }
+
+    // High-confidence allowlisted document (id validated above when !isNone).
     if (id === undefined) {
       failureReason = "clef_invalid_choice";
       break;
