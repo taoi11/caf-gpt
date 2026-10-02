@@ -4,9 +4,9 @@
  * Base class for one-call agents that answer from Clef-shortlisted, prefetched documents
  *
  * Top-level declarations:
- * - ToolReadingAgentConfig: Configuration for shortlist-prefetch agent behavior
+ * - ToolReadingAgentConfig: Configuration for shortlist-prefetch agent behavior (includes tag callback)
  * - ToolReadingAgentDependencies: Injectable BaseAgent + Clef AI dependencies
- * - ToolReadingAgent: Base class that shortlists via Clef-flash, prefetches via DocumentRetriever, then answers once
+ * - ToolReadingAgent: Config-driven agent that shortlists via Clef-flash, prefetches via DocumentRetriever, then answers once
  */
 
 import type { AppConfig } from "../../config";
@@ -36,6 +36,10 @@ export interface ToolReadingAgentConfig {
   documentsVariableName: string;
   /** Maximum documents Clef may shortlist and prefetch */
   maxPrefetchDocuments: number;
+  /** Index filename under the category prefix (default index_v2.md) */
+  indexFile?: string;
+  /** Domain-specific XML tag formatter for a shortlisted id and its document body */
+  formatDocumentTag: (id: string, content: string) => string;
 }
 
 /** Injectable dependencies for ToolReadingAgent, including an optional Clef AI runner. */
@@ -43,8 +47,8 @@ export interface ToolReadingAgentDependencies extends Partial<BaseAgentDependenc
   clefAi?: ClefAiRunner;
 }
 
-// Base class for indexed document agents using Clef shortlist + prefetch + one answer call.
-export abstract class ToolReadingAgent extends BaseAgent {
+// Config-driven indexed document agent using Clef shortlist + prefetch + one answer call.
+export class ToolReadingAgent extends BaseAgent {
   protected agentConfig: ToolReadingAgentConfig;
   private clefAiOverride?: ClefAiRunner;
 
@@ -112,7 +116,7 @@ export abstract class ToolReadingAgent extends BaseAgent {
           continue;
         }
         const doc = await this.docRetriever.getDocument(this.agentConfig.category, filePath);
-        prefetchedParts.push(this.formatDocumentTag(id, doc));
+        prefetchedParts.push(this.agentConfig.formatDocumentTag(id, doc));
         this.logger.info(`${this.agentConfig.policyType} document prefetched`, {
           size: doc.length,
           prefetchedCount: prefetchedParts.length,
@@ -148,11 +152,13 @@ export abstract class ToolReadingAgent extends BaseAgent {
     }
   }
 
-  /** Get the index/table content for document selection. */
-  protected abstract getIndexContent(): Promise<string | null>;
-
-  /** Format loaded document with XML-like tags. */
-  protected abstract formatDocumentTag(file: string, content: string): string;
+  /** Loads the category index/table used for Clef shortlist allowlisting. */
+  protected async getIndexContent(): Promise<string | null> {
+    return this.docRetriever.getDocument(
+      this.agentConfig.category,
+      this.agentConfig.indexFile ?? "index_v2.md"
+    );
+  }
 
   /** Returns the injectable Clef runner, defaulting to Workers AI on env. */
   private getClefAi(): ClefAiRunner {

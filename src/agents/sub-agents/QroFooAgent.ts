@@ -22,19 +22,14 @@ export class QroFooAgent extends ToolReadingAgent {
         promptName: "qro_foo_tool_reader",
         documentsVariableName: "prefetched_documents",
         maxPrefetchDocuments: 3,
+        formatDocumentTag: (id, content) => {
+          const chapterName = id.split("/").pop()?.replace(".md", "") ?? id;
+          // Sanitize chapter name for XML tag: replace non-alphanumeric chars (except hyphens) with underscores
+          const sanitizedName = chapterName.replace(/[^a-zA-Z0-9-]/g, "_");
+          return `<QRO_chapter_${sanitizedName}>\n${content}\n</QRO_chapter_${sanitizedName}>`;
+        },
       },
       dependencies
     );
-  }
-
-  protected async getIndexContent(): Promise<string | null> {
-    return this.docRetriever.getDocument("qro", "index_v2.md");
-  }
-
-  protected formatDocumentTag(file: string, content: string): string {
-    const chapterName = file.split("/").pop()?.replace(".md", "") ?? file;
-    // Sanitize chapter name for XML tag: replace non-alphanumeric chars (except hyphens) with underscores
-    const sanitizedName = chapterName.replace(/[^a-zA-Z0-9-]/g, "_");
-    return `<QRO_chapter_${sanitizedName}>\n${content}\n</QRO_chapter_${sanitizedName}>`;
   }
 }
