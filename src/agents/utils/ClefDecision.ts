@@ -387,11 +387,14 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
   const selected: string[] = [];
   const seen = new Set<string>();
   let sawValidAnswer = false;
+  let sawMalformedRank = false;
+  let sawInvalidChoice = false;
   let stoppedOnHighConfidenceNone = false;
 
   for (const pickKey of pickKeys) {
     const answer = parseChoiceAnswer(answers[pickKey]);
     if (!answer) {
+      sawMalformedRank = true;
       continue;
     }
     sawValidAnswer = true;
@@ -408,7 +411,8 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
 
     const id = keyToId.get(answer.choice);
     if (id === undefined) {
-      // Unknown / invented option key — reject this pick only
+      // Unknown / invented option key — fail the whole shortlist after the loop.
+      sawInvalidChoice = true;
       continue;
     }
     if (seen.has(id)) {
@@ -418,12 +422,16 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
     selected.push(id);
   }
 
-  if (!sawValidAnswer) {
+  if (!sawValidAnswer || sawMalformedRank) {
     return { ids: [], reason: "clef_malformed_answer" };
   }
 
+  if (sawInvalidChoice) {
+    return { ids: [], reason: "clef_invalid_choice" };
+  }
+
   if (selected.length === 0) {
-    // Intentional empty only when Clef confidently chose none (not malformed/low-conf/invented-only).
+    // Intentional empty only when Clef confidently chose none with no invalid ranks.
     if (stoppedOnHighConfidenceNone) {
       return { ids: [], reason: "clef_intentional_none" };
     }

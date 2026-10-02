@@ -33,11 +33,18 @@ function choiceAnswer(choice: string, confidence: number) {
 }
 
 /** Builds a Clef shortlist answers payload mapping pick ranks to doc keys or none. */
-function shortlistResponse(picks: Array<{ choice: string; confidence?: number }>) {
+function shortlistResponse(
+  picks: Array<{ choice: string; confidence?: number }>,
+  totalRanks = 3
+) {
   const answers: { [pickKey: string]: ReturnType<typeof choiceAnswer> } = {};
   picks.forEach((pick, index) => {
     answers[`pick_${index + 1}`] = choiceAnswer(pick.choice, pick.confidence ?? 0.9);
   });
+  // Pad remaining ranks with high-confidence none so incomplete fixtures are not malformed.
+  for (let rank = picks.length + 1; rank <= totalRanks; rank++) {
+    answers[`pick_${rank}`] = choiceAnswer("none", 0.9);
+  }
   return { model: "clef-flash", answers, usage: { input_tokens: 10, output_tokens: 3 } };
 }
 

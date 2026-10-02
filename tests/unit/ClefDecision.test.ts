@@ -374,7 +374,7 @@ describe("shortlistManifestFiles", () => {
     );
   });
 
-  it("rejects invented option keys that are not in the allowlist map", async () => {
+  it("fails the whole shortlist when any option key is not in the allowlist map", async () => {
     const ai = mockAi({
       model: "clef-flash",
       answers: {
@@ -385,8 +385,40 @@ describe("shortlistManifestFiles", () => {
     });
 
     await expect(shortlistManifestFiles(ai, "grievance?", rows)).resolves.toEqual({
-      ids: ["5031-1"],
-      reason: "clef_shortlist",
+      ids: [],
+      reason: "clef_invalid_choice",
+    });
+  });
+
+  it("does not treat invented-then-none as intentional empty", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("invented", 0.99),
+        pick_2: shortlistChoice("none", 0.95),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "noise?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_invalid_choice",
+    });
+  });
+
+  it("fails the whole shortlist when a later ranked answer is malformed", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: { type: "choice", choice: "doc_1" },
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "partial?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_malformed_answer",
     });
   });
 
@@ -430,8 +462,8 @@ describe("shortlistManifestFiles", () => {
       model: "clef-flash",
       answers: {
         pick_1: shortlistChoice("doc_0", low),
-        pick_2: shortlistChoice("invented", 0.99),
-        pick_3: shortlistChoice("doc_1", low),
+        pick_2: shortlistChoice("doc_1", low),
+        pick_3: shortlistChoice("doc_2", low),
       },
     });
 
