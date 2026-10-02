@@ -9,7 +9,10 @@
 
 import type { ParsedEmailData } from "../types";
 
-/** Format quoted content with Outlook-style attribution headers. */
+/**
+ * Format quoted content with Outlook-style attribution headers.
+ * @param originalMessage - Parsed inbound email whose headers/body are quoted
+ */
 export function formatQuotedContent(originalMessage: ParsedEmailData): string {
   // Create Outlook-style header block
   const separator = "________________________________";

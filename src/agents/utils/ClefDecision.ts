@@ -165,6 +165,9 @@ function parseChoiceAnswer(value: unknown): ClefChoiceAnswer | null {
 /**
  * Runs a fail-closed Clef binary choice gate: malformed/unknown/low-confidence → shouldProceed false.
  * Propagates AI.run failures to the caller.
+ * @param ai - Injectable Workers AI runner
+ * @param state - Clef state string (email context, memory, reply text as applicable)
+ * @param options - Question key/criteria, affirmative/negative labels, threshold, and reason strings
  */
 async function runBinaryChoiceGate(
   ai: ClefAiRunner,
@@ -227,7 +230,12 @@ async function runBinaryChoiceGate(
   };
 }
 
-/** Ask Clef-flash whether an inbound email warrants a reply; fail-closed; propagates AI.run failures. */
+/**
+ * Ask Clef-flash whether an inbound email warrants a reply; fail-closed; propagates AI.run failures.
+ * @param ai - Injectable Workers AI runner
+ * @param emailContext - Inbound email context string
+ * @param memory - Optional user memory included in Clef state for contextual short replies
+ */
 export async function decideShouldReply(
   ai: ClefAiRunner,
   emailContext: string,
@@ -254,7 +262,13 @@ export async function decideShouldReply(
   return result;
 }
 
-/** Ask Clef-flash whether a reply exchange warrants MemoryFoo; fail-closed; propagates AI.run failures. */
+/**
+ * Ask Clef-flash whether a reply exchange warrants MemoryFoo; fail-closed; propagates AI.run failures.
+ * @param ai - Injectable Workers AI runner
+ * @param emailContext - Inbound email context string
+ * @param agentReply - Outbound agent reply text that was sent
+ * @param memory - Optional current user memory included in Clef state
+ */
 export async function decideShouldUpdateMemory(
   ai: ClefAiRunner,
   emailContext: string,

@@ -167,20 +167,23 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         { promptName: "memory_foo_edit" }
       );
       const now = Date.now();
-      const versions = this.persistPrunedVersions(now);
 
       if (!result.updated || !result.content) {
+        this.persistPrunedVersions(now);
         this.logger.info("User memory unchanged");
         return;
       }
 
       if (result.content.length > MEMORY_MAX_CONTENT_LENGTH) {
+        this.persistPrunedVersions(now);
         this.logger.warn("Rejected oversize memory update", {
           contentLength: result.content.length,
         });
         return;
       }
 
+      // Success path: prune for nextVersions only — one setState, no intermediate write.
+      const versions = retainMemoryVersions(this.state.versions ?? [], now);
       const previous = this.state.memory;
       const nextVersions =
         previous.trim().length > 0
