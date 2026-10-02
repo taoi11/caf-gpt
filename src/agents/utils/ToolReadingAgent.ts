@@ -91,6 +91,13 @@ export abstract class ToolReadingAgent extends BaseAgent {
         maxPicks,
       });
 
+      // Validation failures (malformed / invalid / duplicate / empty-failed) must not draft.
+      // Only a confident Clef "none" may proceed with zero prefetched documents.
+      if (shortlist.reason !== "clef_shortlist" && shortlist.reason !== "clef_intentional_none") {
+        throw new AgentValidationError(
+          `${this.agentConfig.policyType} Clef shortlist failed: ${shortlist.reason}`
+        );
+      }
       if (shortlist.ids.length === 0 && shortlist.reason !== "clef_intentional_none") {
         throw new AgentValidationError(
           `${this.agentConfig.policyType} Clef shortlist failed: ${shortlist.reason}`

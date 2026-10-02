@@ -406,6 +406,22 @@ describe("shortlistManifestFiles", () => {
     });
   });
 
+  it("fails the whole shortlist when ranked picks repeat the same document", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: shortlistChoice("doc_0", 0.9),
+        pick_3: shortlistChoice("none", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "dup?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_duplicate_choice",
+    });
+  });
+
   it("fails the whole shortlist when a later ranked answer is malformed", async () => {
     const ai = mockAi({
       model: "clef-flash",

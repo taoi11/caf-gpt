@@ -387,15 +387,19 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
   const selected: string[] = [];
   const seen = new Set<string>();
   let sawValidAnswer = false;
-  let sawMalformedRank = false;
-  let sawInvalidChoice = false;
+  let failureReason: "clef_malformed_answer" | "clef_invalid_choice" | "clef_duplicate_choice" | null =
+    null;
   let stoppedOnHighConfidenceNone = false;
 
   for (const pickKey of pickKeys) {
+    if (failureReason !== null) {
+      break;
+    }
+
     const answer = parseChoiceAnswer(answers[pickKey]);
     if (!answer) {
-      sawMalformedRank = true;
-      continue;
+      failureReason = "clef_malformed_answer";
+      break;
     }
     sawValidAnswer = true;
 
@@ -411,27 +415,27 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
 
     const id = keyToId.get(answer.choice);
     if (id === undefined) {
-      // Unknown / invented option key — fail the whole shortlist after the loop.
-      sawInvalidChoice = true;
-      continue;
+      failureReason = "clef_invalid_choice";
+      break;
     }
     if (seen.has(id)) {
-      continue;
+      failureReason = "clef_duplicate_choice";
+      break;
     }
     seen.add(id);
     selected.push(id);
   }
 
-  if (!sawValidAnswer || sawMalformedRank) {
+  if (failureReason !== null) {
+    return { ids: [], reason: failureReason };
+  }
+
+  if (!sawValidAnswer) {
     return { ids: [], reason: "clef_malformed_answer" };
   }
 
-  if (sawInvalidChoice) {
-    return { ids: [], reason: "clef_invalid_choice" };
-  }
-
   if (selected.length === 0) {
-    // Intentional empty only when Clef confidently chose none with no invalid ranks.
+    // Intentional empty only when Clef confidently chose none with no validation failures.
     if (stoppedOnHighConfidenceNone) {
       return { ids: [], reason: "clef_intentional_none" };
     }

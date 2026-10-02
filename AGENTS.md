@@ -50,9 +50,9 @@ Emails are processed through **Cloudflare Email Workers**:
 - `batch_research` accepts leave, DOAD, and QR&O query arrays, then runs the requested sub-agent research calls concurrently.
   - Research sub-agents are `LeaveFooAgent`, `DoadFooAgent`, and `QroFooAgent`.
   - Each domain accepts up to 3 questions per `batch_research` call.
-  - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent` and use one bounded `generateText()` tool loop to select and read indexed documents.
-  - Their `read_file` tool allows at most 5 attempts, 3 successful reads, and 2 correctable bad calls. Successful-read slots are reserved before asynchronous loads so concurrent tool execution cannot exceed the cap.
-  - DOAD and QR&O identifiers come from shared `| Id | Title | File |` manifest tables on R2 (`doad/index_v2.md`, `qro/index_v2.md`), parsed by `parseManifestTable` in `src/agents/utils/ManifestParser.ts`; it rejects absolute paths, dot or empty segments, backslashes, traversal, and non-`.md` files.
+  - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent`: Clef-flash shortlists allowlisted index ids, DocumentRetriever prefetches those docs (max 3), then one `generateText()` answer call uses only the prefetched content (no `read_file` selection loop).
+  - Shortlist validation failures (malformed / invented / duplicate / empty-failed) throw to the error-email boundary; only a confident Clef `none` may answer with zero prefetched docs.
+  - DOAD and QR&O identifiers come from shared `| Id | Title | File |` manifest tables on R2 (`doad/index_v2.md`, `qro/index_v2.md`), parsed by `parseManifestTable` / `parseManifestRows` in `src/agents/utils/ManifestParser.ts`; it rejects absolute paths, dot or empty segments, backslashes, traversal, and non-`.md` files.
 - `generate_feedback_note` delegates to `PaceFooAgent.generateNote(rank, context)`.
   - PaceFooAgent loads competencies from R2 (`paceNote/{rank}.md`) and generates feedback.
   - Rank files: `cpl.md`, `mcpl.md`, `sgt.md`, `wo.md`.
@@ -64,7 +64,7 @@ Emails are processed through **Cloudflare Email Workers**:
 AI SDK tool inputs are validated with Zod schemas:
 
 - Prime Foo defines its tool input schemas inline in `AgentCoordinator`.
-- `ToolReadingAgent` defines the `read_file` input schema inline and validates file values against the domain index allowlist before loading R2.
+- `ToolReadingAgent` shortlists via Clef-flash against the domain index allowlist, then prefetches validated File paths from R2 before the answer call.
 - `MemoryFooAgent` uses `MemoryUpdateToolInputSchema` and `MemoryUnchangedToolInputSchema` from `src/schemas.ts` with a required `generateText()` tool call.
 - AI SDK validates tool inputs before execution; agents additionally validate recognized tool names and domain-specific values.
 
@@ -110,16 +110,17 @@ The codebase uses **Vercel AI SDK** (`ai` + `@ai-sdk/openai`) with the OpenAI Re
 3. Add prompt file: `public/prompts/your_agent.md`
 4. Add model config: add `yourAgent` to `LLMConfig.models` in `src/config.ts`
 
-### Indexed Tool-Reading Agents (One Call)
+### Indexed Shortlist-Prefetch Agents (One Call)
 
-For agents that select and read documents from an index (like `DoadFooAgent` and `QroFooAgent`):
+For agents that answer from indexed documents (like `DoadFooAgent` and `QroFooAgent`):
 
 1. Create an agent class extending `ToolReadingAgent`.
-2. Configure its category, model key, prompt name, index variable, and read limits.
-3. Implement `getIndexContent()`, `getAllowedFiles()`, `getFilePath()`, and `formatDocumentTag()`.
-4. Parse only explicit manifest entries into the allowlist and validate identifiers or safe relative paths before any R2 read.
-5. Add one tool-reader prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md`. The model chooses files, calls the bounded `read_file` tool, and answers in the same `generateText()` run.
-6. Add model config in `src/config.ts`.
+2. Configure its category, model key, prompt name, `documentsVariableName`, and `maxPrefetchDocuments`.
+3. Implement `getIndexContent()` and `formatDocumentTag()`.
+4. Rely on `parseManifestRows` / `parseManifestTable` for the shared `| Id | Title | File |` allowlist; identifiers are validated before any R2 read.
+5. Clef-flash shortlists allowlisted ids (`shortlistManifestFiles`); `DocumentRetriever` prefetches those docs; the specialist answers once from `{prefetched_documents}` with no `read_file` selection loop.
+6. Add one answer prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md` that cites only prefetched documents.
+7. Add model config in `src/config.ts`.
 
 The current policy prompt assets are `doad_foo_tool_reader.md`, `qro_foo_tool_reader.md`, and `leave_foo_research.md`. The DOAD and QR&O indexes live on R2, not in `public/prompts/`. There are no separate DOAD or QR&O selector/answer prompts.
 
