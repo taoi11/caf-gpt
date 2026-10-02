@@ -10,6 +10,7 @@
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
  *
  * Clef-flash no_reply gate runs in getAIResponse (with memory) before recipients/Prime Foo.
+ * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  */
 
 import { Agent } from "agents";
@@ -38,7 +39,7 @@ import {
   retainMemoryVersions,
 } from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
-import { decideShouldReply } from "./utils/ClefDecision";
+import { decideShouldReply, decideShouldUpdateMemory } from "./utils/ClefDecision";
 
 const REFERENCES_MAX_LENGTH = 1000;
 
@@ -141,11 +142,37 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   /** Runs a durable scheduled memory update after a successful email reply. */
   async runMemoryUpdate(task: MemoryUpdateTask): Promise<void> {
     try {
+      // Clef-flash is a System One decision model; cast until wrangler AiModels lists it.
+      const memoryGate = await decideShouldUpdateMemory(
+        {
+          run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
+        },
+        task.emailContext,
+        task.agentReply,
+        this.state.memory
+      );
+      if (!memoryGate.shouldUpdate) {
+        const storedVersions = this.state.versions ?? [];
+        const now = Date.now();
+        const versions = retainMemoryVersions(storedVersions, now);
+        const versionsPruned =
+          versions.length !== storedVersions.length ||
+          versions.some((version, index) => version !== storedVersions[index]);
+        if (versionsPruned) {
+          this.setState({ memory: this.state.memory, versions });
+        }
+        this.logger.info("Clef memory gate skipped MemoryFoo", {
+          reason: memoryGate.reason,
+        });
+        return;
+      }
+
       const memoryAgent = new MemoryFooAgent(this.env, createConfig(this.env));
       const result = await memoryAgent.updateMemory(
         this.state.memory,
         task.emailContext,
-        task.agentReply
+        task.agentReply,
+        { promptName: "memory_foo_edit" }
       );
       const now = Date.now();
       const storedVersions = this.state.versions ?? [];

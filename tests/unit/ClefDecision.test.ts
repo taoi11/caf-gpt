@@ -1,10 +1,11 @@
 /**
  * tests/unit/ClefDecision.test.ts
  *
- * Unit tests for the Clef-flash reply vs no_reply gate helper
+ * Unit tests for Clef-flash reply and memory-update gate helpers
  *
  * Top-level declarations:
  * - choiceAnswer: Builds a Clef choice answer fixture for should_reply
+ * - memoryChoiceAnswer: Builds a Clef choice answer fixture for should_update_memory
  * - mockAi: Returns a ClefAiRunner whose run() resolves to the given result
  */
 
@@ -12,9 +13,11 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   CLEF_FLASH_MODEL,
+  CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD,
   CLEF_REPLY_CONFIDENCE_THRESHOLD,
   type ClefAiRunner,
   decideShouldReply,
+  decideShouldUpdateMemory,
 } from "../../src/agents/utils/ClefDecision";
 
 /** Builds a Clef choice answer fixture for should_reply. */
@@ -26,6 +29,19 @@ function choiceAnswer(choice: string, confidence: number) {
     probabilities: {
       reply: choice === "reply" ? confidence : 1 - confidence,
       no_reply: choice === "no_reply" ? confidence : 1 - confidence,
+    },
+  };
+}
+
+/** Builds a Clef choice answer fixture for should_update_memory. */
+function memoryChoiceAnswer(choice: string, confidence: number) {
+  return {
+    type: "choice",
+    choice,
+    confidence,
+    probabilities: {
+      update: choice === "update" ? confidence : 1 - confidence,
+      no_update: choice === "no_update" ? confidence : 1 - confidence,
     },
   };
 }
@@ -146,10 +162,138 @@ describe("decideShouldReply", () => {
   });
 
   it("fails closed on malformed answers", async () => {
-    const ai = mockAi({ model: "clef-flash", answers: {}, usage: { input_tokens: 1, output_tokens: 0 } });
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {},
+      usage: { input_tokens: 1, output_tokens: 0 },
+    });
 
     await expect(decideShouldReply(ai, "Question")).resolves.toEqual({
       shouldReply: false,
+      reason: "clef_malformed_answer",
+    });
+  });
+});
+
+describe("decideShouldUpdateMemory", () => {
+  it("continues when Clef chooses update above the confidence threshold", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: { should_update_memory: memoryChoiceAnswer("update", 0.92) },
+      usage: { input_tokens: 10, output_tokens: 1 },
+    });
+
+    await expect(
+      decideShouldUpdateMemory(
+        ai,
+        "Subject: Leave\n\nI am a Corporal in engineers.",
+        "Here is leave guidance."
+      )
+    ).resolves.toEqual({
+      shouldUpdate: true,
+      choice: "update",
+      confidence: 0.92,
+      reason: "clef_update",
+    });
+
+    expect(ai.run).toHaveBeenCalledWith(
+      CLEF_FLASH_MODEL,
+      expect.objectContaining({
+        model: "clef-flash",
+        state: expect.stringContaining("<user_email>"),
+        questions: {
+          should_update_memory: expect.objectContaining({ type: "choice" }),
+        },
+      })
+    );
+  });
+
+  it("includes memory, email, and agent reply in Clef state", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: { should_update_memory: memoryChoiceAnswer("update", 0.9) },
+      usage: { input_tokens: 10, output_tokens: 1 },
+    });
+
+    await decideShouldUpdateMemory(
+      ai,
+      "Subject: Pref\n\nPlease keep answers short.",
+      "Understood — I will keep answers concise.",
+      "User asks about leave often."
+    );
+
+    expect(ai.run).toHaveBeenCalledWith(
+      CLEF_FLASH_MODEL,
+      expect.objectContaining({
+        state: expect.stringContaining("<memory>\nUser asks about leave often.\n</memory>"),
+      })
+    );
+    expect(ai.run).toHaveBeenCalledWith(
+      CLEF_FLASH_MODEL,
+      expect.objectContaining({
+        state: expect.stringContaining("Please keep answers short."),
+      })
+    );
+    expect(ai.run).toHaveBeenCalledWith(
+      CLEF_FLASH_MODEL,
+      expect.objectContaining({
+        state: expect.stringContaining("I will keep answers concise."),
+      })
+    );
+  });
+
+  it("skips when Clef chooses no_update", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: { should_update_memory: memoryChoiceAnswer("no_update", 0.87) },
+      usage: { input_tokens: 10, output_tokens: 1 },
+    });
+
+    await expect(decideShouldUpdateMemory(ai, "Thanks", "You're welcome.")).resolves.toEqual({
+      shouldUpdate: false,
+      choice: "no_update",
+      confidence: 0.87,
+      reason: "clef_no_update",
+    });
+  });
+
+  it("fails closed when update confidence is below the threshold", async () => {
+    const low = Math.max(0, CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD - 0.05);
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: { should_update_memory: memoryChoiceAnswer("update", low) },
+      usage: { input_tokens: 10, output_tokens: 1 },
+    });
+
+    await expect(decideShouldUpdateMemory(ai, "Maybe new?", "Reply")).resolves.toEqual({
+      shouldUpdate: false,
+      choice: "update",
+      confidence: low,
+      reason: "clef_low_confidence",
+    });
+  });
+
+  it("propagates AI.run outages instead of silent no_update", async () => {
+    const ai: ClefAiRunner = {
+      run: vi.fn(async () => {
+        throw new Error("workers ai down");
+      }),
+    };
+
+    await expect(decideShouldUpdateMemory(ai, "Question", "Answer")).rejects.toThrow(
+      "workers ai down"
+    );
+  });
+
+  it("fails closed on malformed answers", async () => {
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {},
+      usage: { input_tokens: 1, output_tokens: 0 },
+    });
+
+    await expect(decideShouldUpdateMemory(ai, "Question", "Answer")).resolves.toEqual({
+      shouldUpdate: false,
       reason: "clef_malformed_answer",
     });
   });
