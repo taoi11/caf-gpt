@@ -390,7 +390,7 @@ describe("shortlistManifestFiles", () => {
     });
   });
 
-  it("fails closed to empty when pick confidence is below the threshold", async () => {
+  it("treats high-confidence none as intentional empty after low-confidence docs", async () => {
     const low = Math.max(0, CLEF_SHORTLIST_CONFIDENCE_THRESHOLD - 0.05);
     const ai = mockAi({
       model: "clef-flash",
@@ -402,6 +402,40 @@ describe("shortlistManifestFiles", () => {
     });
 
     await expect(shortlistManifestFiles(ai, "maybe?", rows)).resolves.toEqual({
+      ids: [],
+      reason: "clef_intentional_none",
+    });
+  });
+
+  it("skips low-confidence none and keeps later high-confidence docs", async () => {
+    const low = Math.max(0, CLEF_SHORTLIST_CONFIDENCE_THRESHOLD - 0.05);
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", 0.95),
+        pick_2: shortlistChoice("none", low),
+        pick_3: shortlistChoice("doc_1", 0.9),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "both?", rows)).resolves.toEqual({
+      ids: ["5019-0", "5031-1"],
+      reason: "clef_shortlist",
+    });
+  });
+
+  it("fails closed when every pick is rejected without a confident none", async () => {
+    const low = Math.max(0, CLEF_SHORTLIST_CONFIDENCE_THRESHOLD - 0.05);
+    const ai = mockAi({
+      model: "clef-flash",
+      answers: {
+        pick_1: shortlistChoice("doc_0", low),
+        pick_2: shortlistChoice("invented", 0.99),
+        pick_3: shortlistChoice("doc_1", low),
+      },
+    });
+
+    await expect(shortlistManifestFiles(ai, "none good?", rows)).resolves.toEqual({
       ids: [],
       reason: "clef_empty_shortlist",
     });

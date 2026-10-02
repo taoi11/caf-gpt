@@ -207,6 +207,19 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
     it("should reject invented shortlist ids that are not in the allowlist", async () => {
       clefAi = mockClefAi(shortlistResponse([{ choice: "invented_path" }]));
+      agent = new QroFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
+
+      await expect(agent.research({ question: "Obscure topic" })).rejects.toThrow(
+        "Clef shortlist failed"
+      );
+      expect(mockGenerateText).not.toHaveBeenCalled();
+    });
+
+    it("should allow intentional high-confidence none with an empty prefetch", async () => {
+      clefAi = mockClefAi(shortlistResponse([{ choice: "none" }]));
       mockGenerateText.mockResolvedValue({ text: "No relevant chapter was available." });
       agent = new QroFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
@@ -217,7 +230,6 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
       expect(result).toContain("No relevant chapter");
       // SAFETY: generateText fake is invoked once with the answer options object.
-
       const call = mockGenerateText.mock.calls[0][0] as { system?: string };
       expect(call.system).toContain("No indexed documents were selected");
     });
@@ -239,7 +251,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
-    it("should fail closed to empty prefetch when Clef answers are malformed", async () => {
+    it("should throw when Clef answers are malformed", async () => {
       clefAi = {
         run: vi.fn(async () => ({
           model: "clef-flash",
@@ -247,19 +259,15 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
           usage: { input_tokens: 1, output_tokens: 0 },
         })),
       };
-      mockGenerateText.mockResolvedValue({ text: "Insufficient QR&O context." });
       agent = new QroFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
         clefAi,
       });
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("Insufficient");
-      // SAFETY: generateText fake is invoked once with the answer options object.
-
-      const call = mockGenerateText.mock.calls[0][0] as { system?: string };
-      expect(call.system).toContain("No indexed documents were selected");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "Clef shortlist failed"
+      );
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should reject empty questions before calling Clef or the model", async () => {

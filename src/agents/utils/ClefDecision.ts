@@ -338,7 +338,7 @@ function buildShortlistQuestions(rows: ManifestRow[], maxPicks: number): Shortli
 /**
  * Ask Clef-flash which allowlisted manifest ids to prefetch for a policy question.
  * Propagates AI.run failures (outages/timeouts).
- * Fail-closed to an empty id list for malformed answers, unknown ids, low-confidence picks, or empty manifest.
+ * Fail-closed reasons: malformed → clef_malformed_*; only rejected picks → clef_empty_shortlist; confident none → clef_intentional_none.
  * Never invents paths outside the allowlist.
  * @param ai - Injectable Workers AI runner
  * @param question - User research question
@@ -387,6 +387,7 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
   const selected: string[] = [];
   const seen = new Set<string>();
   let sawValidAnswer = false;
+  let stoppedOnHighConfidenceNone = false;
 
   for (const pickKey of pickKeys) {
     const answer = parseChoiceAnswer(answers[pickKey]);
@@ -395,12 +396,14 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
     }
     sawValidAnswer = true;
 
-    if (answer.choice === NONE_OPTION) {
-      break;
+    if (answer.confidence < confidenceThreshold) {
+      // Low-confidence none or doc — skip this rank; do not stop the shortlist early.
+      continue;
     }
 
-    if (answer.confidence < confidenceThreshold) {
-      continue;
+    if (answer.choice === NONE_OPTION) {
+      stoppedOnHighConfidenceNone = true;
+      break;
     }
 
     const id = keyToId.get(answer.choice);
@@ -420,6 +423,10 @@ ${rows.map((row) => `| ${row.id} | ${row.title} | ${row.file} |`).join("\n")}
   }
 
   if (selected.length === 0) {
+    // Intentional empty only when Clef confidently chose none (not malformed/low-conf/invented-only).
+    if (stoppedOnHighConfidenceNone) {
+      return { ids: [], reason: "clef_intentional_none" };
+    }
     return { ids: [], reason: "clef_empty_shortlist" };
   }
 

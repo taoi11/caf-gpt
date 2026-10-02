@@ -171,7 +171,20 @@ Members are entitled to relocation assistance when posted.`
     });
 
     it("should reject invented shortlist ids that are not in the allowlist", async () => {
-      clefAi = mockClefAi(shortlistResponse([{ choice: "doc_999" }, { choice: "none" }]));
+      clefAi = mockClefAi(shortlistResponse([{ choice: "doc_999" }]));
+      agent = new DoadFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
+
+      await expect(agent.research({ question: "Obscure topic" })).rejects.toThrow(
+        "Clef shortlist failed"
+      );
+      expect(mockGenerateText).not.toHaveBeenCalled();
+    });
+
+    it("should allow intentional high-confidence none with an empty prefetch", async () => {
+      clefAi = mockClefAi(shortlistResponse([{ choice: "none" }]));
       mockGenerateText.mockResolvedValue({ text: "No relevant DOAD was available." });
       agent = new DoadFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
@@ -182,7 +195,6 @@ Members are entitled to relocation assistance when posted.`
 
       expect(result).toContain("No relevant DOAD");
       // SAFETY: generateText fake is invoked once with the answer options object.
-
       const call = mockGenerateText.mock.calls[0][0] as { system?: string };
       expect(call.system).toContain("No indexed documents were selected");
       expect(call.system).not.toContain("<DOAD_");
@@ -205,7 +217,7 @@ Members are entitled to relocation assistance when posted.`
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
-    it("should fail closed to empty prefetch when Clef answers are malformed", async () => {
+    it("should throw when Clef answers are malformed", async () => {
       clefAi = {
         run: vi.fn(async () => ({
           model: "clef-flash",
@@ -213,19 +225,15 @@ Members are entitled to relocation assistance when posted.`
           usage: { input_tokens: 1, output_tokens: 0 },
         })),
       };
-      mockGenerateText.mockResolvedValue({ text: "Insufficient DOAD context." });
       agent = new DoadFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
         clefAi,
       });
 
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toContain("Insufficient");
-      // SAFETY: generateText fake is invoked once with the answer options object.
-
-      const call = mockGenerateText.mock.calls[0][0] as { system?: string };
-      expect(call.system).toContain("No indexed documents were selected");
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
+        "Clef shortlist failed"
+      );
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should reject empty questions before calling Clef or the model", async () => {
