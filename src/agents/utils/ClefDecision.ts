@@ -51,9 +51,10 @@ interface ClefFlashResponse {
 const SHOULD_REPLY_QUESTION = {
   type: "choice" as const,
   instructions:
-    "Should CAF-GPT send a reply to this inbound email? Prefer no_reply for FYI, spam-like noise, thanks-only, or nothing actionable for a CAF policy assistant. Short contextual follow-ups (e.g. \"Yes, please\") warrant reply when <memory> supplies prior context.",
+    "Should CAF-GPT send a reply to this inbound email? Prefer no_reply for FYI, spam-like noise, thanks-only, or nothing actionable. CAF-GPT handles CAF policy questions and CAF PACE/feedback-note requests (including mail to pacenote@caf-gpt.com). Short contextual follow-ups (e.g. \"Yes, please\") warrant reply when <memory> supplies prior context.",
   criteria: {
-    reply: "A substantive reply is warranted",
+    reply:
+      "A substantive reply is warranted — policy/QRO/DOAD/leave help, or a PACE/feedback-note request",
     no_reply: "Silent drop — do not reply",
   },
 };

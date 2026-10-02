@@ -2,6 +2,12 @@
  * tests/workers/ClefNoReplyGate.test.ts
  *
  * Workers tests for the Clef-flash no_reply gate in UserAgent.getAIResponse
+ *
+ * Top-level declarations:
+ * - mockClefChoice: Mocks env.AI.run to return a Clef reply/no_reply choice
+ * - getUserAgentStub: Gets a per-sender UserAgent Durable Object stub
+ * - getEmailBinding: Gets the UserAgent's structured Email Service binding
+ * - createAgentEmail: Builds a mock AgentEmail with configurable RFC and envelope recipients
  */
 
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
@@ -265,6 +271,7 @@ describe("UserAgent Clef no_reply gate", () => {
   });
 });
 
+/** Mocks env.AI.run to return a Clef reply/no_reply choice for the gate. */
 function mockClefChoice(choice: "reply" | "no_reply", confidence: number): void {
   const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
   vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
@@ -289,10 +296,12 @@ function mockClefChoice(choice: "reply" | "no_reply", confidence: number): void 
   });
 }
 
+/** Gets a per-sender UserAgent Durable Object stub. */
 function getUserAgentStub(senderEmail: string) {
   return env.UserAgent.get(env.UserAgent.idFromName(getUserAgentId(senderEmail)));
 }
 
+/** Gets the structured Email Service binding held by a UserAgent instance. */
 function getEmailBinding(instance: UserAgent): Env["EMAIL"] {
   const runtimeAccess = instance as UserAgent & { env: Env };
   return runtimeAccess.env.EMAIL;
@@ -312,6 +321,7 @@ type MockAgentEmail = AgentEmail & {
   reply: ReturnType<typeof vi.fn<AgentEmail["reply"]>>;
 };
 
+/** Builds a mock AgentEmail with configurable RFC and envelope recipients. */
 function createAgentEmail(options: AgentEmailOptions): MockAgentEmail {
   const raw = [
     `From: ${options.from}`,

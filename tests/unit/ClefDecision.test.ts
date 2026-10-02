@@ -2,6 +2,10 @@
  * tests/unit/ClefDecision.test.ts
  *
  * Unit tests for the Clef-flash reply vs no_reply gate helper
+ *
+ * Top-level declarations:
+ * - choiceAnswer: Builds a Clef choice answer fixture for should_reply
+ * - mockAi: Returns a ClefAiRunner whose run() resolves to the given result
  */
 
 import { describe, expect, it, vi } from "vitest";
@@ -13,6 +17,7 @@ import {
   decideShouldReply,
 } from "../../src/agents/utils/ClefDecision";
 
+/** Builds a Clef choice answer fixture for should_reply. */
 function choiceAnswer(choice: string, confidence: number) {
   return {
     type: "choice",
@@ -25,6 +30,7 @@ function choiceAnswer(choice: string, confidence: number) {
   };
 }
 
+/** Returns a ClefAiRunner whose run() resolves to the given result. */
 function mockAi(result: unknown): ClefAiRunner {
   return {
     run: vi.fn(async () => result),
