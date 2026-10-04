@@ -62,6 +62,12 @@ export function createUserAgentResolver(env: Env, config = createConfig(env)): E
       return null;
     }
 
+    logger.info("Email routed", {
+      route: "email",
+      status: "routed",
+      senderDomain: getEmailDomain(senderEmail),
+    });
+
     return {
       agentName: "UserAgent",
       agentId: getUserAgentId(senderEmail),
@@ -112,34 +118,26 @@ async function fetch(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
   const logger = Logger.getInstance();
   const url = new URL(request.url);
-
-  logger.info("Request received", {
-    method: request.method,
-  });
+  let response: Response;
 
   try {
     // Block public access to internal prompts (still available via ASSETS binding internally)
     if (url.pathname.startsWith("/prompts/")) {
-      return new Response("Not Found", { status: 404 });
+      response = new Response("Not Found", { status: 404 });
+    } else if (url.pathname === "/health" && request.method === "GET") {
+      response = new Response("OK", { status: 200 });
+    } else if (url.pathname === "/favicon.ico") {
+      response = new Response(null, { status: 204 });
+    } else {
+      response = await env.ASSETS.fetch(request);
     }
-
-    if (url.pathname === "/health" && request.method === "GET") {
-      return new Response("OK", { status: 200 });
-    }
-
-    // Prevent 404 for favicon requests
-    if (url.pathname === "/favicon.ico") {
-      return new Response(null, { status: 204 });
-    }
-
-    return env.ASSETS.fetch(request);
   } catch (error) {
     logger.error("Request processing failed", {
       processingTime: Date.now() - startTime,
       ...getSafeErrorMetadata(error),
     });
 
-    return new Response(
+    response = new Response(
       JSON.stringify({
         error: "Internal server error",
       }),
@@ -149,6 +147,22 @@ async function fetch(request: Request, env: Env): Promise<Response> {
       }
     );
   }
+
+  logger.info("Request completed", {
+    route: url.pathname,
+    status: response.status,
+    outcome: url.pathname.startsWith("/prompts/")
+      ? "prompts-blocked"
+      : url.pathname === "/health"
+        ? "health"
+        : url.pathname === "/favicon.ico"
+          ? "favicon"
+          : response.status >= 500
+            ? "error"
+            : "asset",
+  });
+
+  return response;
 }
 
 /** Routes inbound email into the per-user UserAgent Durable Object. */
