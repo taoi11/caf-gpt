@@ -132,6 +132,27 @@ If new information worth remembering:
 If nothing new:
 <unchanged>true</unchanged>`
     );
+
+    this.prompts.set(
+      "memory_foo_edit",
+      `# Memory Edit Agent
+
+You are a memory management agent for CAF-GPT. A prior gate already decided this exchange likely warrants a memory update.
+
+## Current Memory
+
+<current_memory>
+{current_memory}
+</current_memory>
+
+## Response Format
+
+If durable information worth remembering:
+<memory>Updated memory content</memory>
+
+If nothing durable remains:
+<unchanged>true</unchanged>`
+    );
   }
 
   async fetch(request: Request | string): Promise<Response> {

@@ -122,51 +122,44 @@ export class AgentCoordinator {
                 { message: "At least one query array must be provided" }
               ),
             execute: async ({ leave_queries, doad_queries, qro_queries }) => {
-              // ⚡ Bolt: Execute cross-domain research concurrently
-              // Instead of awaiting leave, then doad, then qro sequentially,
-              // we process all requested domains in parallel.
-              const [leaveAnswers, doadAnswers, qroAnswers] = await Promise.all([
-                leave_queries && leave_queries.length > 0
-                  ? Promise.all(
-                      leave_queries.map(async (query, index) => {
-                        const answer = await this.leaveFooAgent.research({ question: query });
-                        return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                      })
-                    )
-                  : Promise.resolve(null),
-                doad_queries && doad_queries.length > 0
-                  ? Promise.all(
-                      doad_queries.map(async (query, index) => {
-                        const answer = await this.doadFooAgent.research({ question: query });
-                        return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                      })
-                    )
-                  : Promise.resolve(null),
-                qro_queries && qro_queries.length > 0
-                  ? Promise.all(
-                      qro_queries.map(async (query, index) => {
-                        const answer = await this.qroFooAgent.research({ question: query });
-                        return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
-                      })
-                    )
-                  : Promise.resolve(null),
-              ]);
+              // ⚡ Bolt: Execute cross-domain research concurrently via one shared runner.
+              const domains = [
+                {
+                  queries: leave_queries,
+                  heading: "=== Leave Policy Research ===\n",
+                  research: (question: string) => this.leaveFooAgent.research({ question }),
+                },
+                {
+                  queries: doad_queries,
+                  heading: "=== DOAD Policy Research ===\n",
+                  research: (question: string) => this.doadFooAgent.research({ question }),
+                },
+                {
+                  queries: qro_queries,
+                  heading: "=== QR&O Policy Research ===\n",
+                  research: (question: string) => this.qroFooAgent.research({ question }),
+                },
+              ] as const;
+
+              const domainAnswers = await Promise.all(
+                domains.map(({ queries, research }) =>
+                  queries && queries.length > 0
+                    ? Promise.all(
+                        queries.map(async (query, index) => {
+                          const answer = await research(query);
+                          return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
+                        })
+                      )
+                    : Promise.resolve(null)
+                )
+              );
 
               const results: string[] = [];
-
-              if (leaveAnswers) {
-                results.push("=== Leave Policy Research ===\n");
-                results.push(leaveAnswers.join("\n"));
-              }
-
-              if (doadAnswers) {
-                results.push("=== DOAD Policy Research ===\n");
-                results.push(doadAnswers.join("\n"));
-              }
-
-              if (qroAnswers) {
-                results.push("=== QR&O Policy Research ===\n");
-                results.push(qroAnswers.join("\n"));
+              for (let i = 0; i < domains.length; i++) {
+                const answers = domainAnswers[i];
+                if (!answers) continue;
+                results.push(domains[i].heading);
+                results.push(answers.join("\n"));
               }
 
               return results.length > 0 ? results.join("\n") : "No research queries provided.";

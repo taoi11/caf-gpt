@@ -55,6 +55,8 @@ npm install
 
 The committed `wrangler.jsonc` configures the `AI` Worker binding and routes OpenAI Responses requests through the `caf-gpt` AI Gateway. No Cloudflare REST API token is required.
 
+Workers Logs and Traces are enabled via `observability` in `wrangler.jsonc` (takes effect on the next deploy).
+
 ### 3. Deploy
 
 ```bash

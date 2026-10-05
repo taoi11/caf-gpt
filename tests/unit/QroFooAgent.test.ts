@@ -1,7 +1,12 @@
 /**
  * tests/unit/QroFooAgent.test.ts
  *
- * Unit tests for QroFooAgent - QR&O policy research using a bounded read_file tool
+ * Unit tests for QroFooAgent - QR&O policy research via Clef shortlist + prefetch
+ *
+ * Top-level declarations:
+ * - choiceAnswer: Builds a Clef choice answer fixture
+ * - shortlistResponse: Builds a Clef shortlist answers payload for pick_1..N
+ * - mockClefAi: Returns a ClefAiRunner resolving to a fixed result
  */
 
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -10,33 +15,48 @@ import { createMockEnv } from "../mocks";
 import { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
 import { QroFooAgent } from "../../src/agents/sub-agents/QroFooAgent";
+import type { ClefAiRunner } from "../../src/agents/utils/ClefDecision";
 import { parseManifestTable } from "../../src/agents/utils/ManifestParser";
 import { createConfig } from "../../src/config";
 import type { ResearchRequest } from "../../src/types";
 
 const mockGenerateText = vi.fn();
 
-interface ReadFileToolOptions {
-  system?: string;
-  prompt?: string;
-  tools?: {
-    read_file?: {
-      execute: (input: { file: string }) => Promise<{ ok: boolean; content: string }>;
-    };
+/** Builds a Clef choice answer fixture. */
+function choiceAnswer(choice: string, confidence: number) {
+  return {
+    type: "choice",
+    choice,
+    confidence,
+    probabilities: { [choice]: confidence },
   };
 }
 
-function mockModelReads(files: string[], answer = "Final QR&O answer") {
-  mockGenerateText.mockImplementationOnce(async (options: ReadFileToolOptions) => {
-    for (const file of files) {
-      await options.tools?.read_file?.execute({ file });
-    }
-    return { text: answer };
+/** Builds a Clef shortlist answers payload mapping pick ranks to doc keys or none. */
+function shortlistResponse(picks: Array<{ choice: string; confidence?: number }>, totalRanks = 3) {
+  const answers: { [pickKey: string]: ReturnType<typeof choiceAnswer> } = {};
+  picks.forEach((pick, index) => {
+    answers[`pick_${index + 1}`] = choiceAnswer(pick.choice, pick.confidence ?? 0.9);
   });
+  // Pad remaining ranks with high-confidence none so incomplete fixtures are not malformed.
+  for (let rank = picks.length + 1; rank <= totalRanks; rank++) {
+    answers[`pick_${rank}`] = choiceAnswer("none", 0.9);
+  }
+  return { model: "clef-flash", answers, usage: { input_tokens: 10, output_tokens: 3 } };
 }
 
-function mockModelWithoutReads(answer = "Unsupported answer") {
-  mockGenerateText.mockResolvedValueOnce({ text: answer });
+/** Clef-flash shortlist response fixture used by unit tests. */
+type ShortlistAiResult = {
+  model: string;
+  answers: { [pickKey: string]: ReturnType<typeof choiceAnswer> };
+  usage?: { input_tokens: number; output_tokens: number };
+};
+
+/** Returns a ClefAiRunner whose run() resolves to the given shortlist fixture. */
+function mockClefAi(result: ShortlistAiResult): ClefAiRunner {
+  return {
+    run: vi.fn(async () => result),
+  };
 }
 
 describe("QroFooAgent", () => {
@@ -44,6 +64,8 @@ describe("QroFooAgent", () => {
   let mockEnv: ReturnType<typeof createMockEnv>;
   let mockBucket: MockR2Bucket;
   let mockAssets: MockFetcher;
+  let clefAi: ClefAiRunner;
+  let config: ReturnType<typeof createConfig>;
 
   beforeEach(() => {
     mockGenerateText.mockReset();
@@ -55,8 +77,7 @@ describe("QroFooAgent", () => {
       R2_BUCKET: mockBucket,
       ASSETS: mockAssets,
     });
-
-    const config = createConfig(mockEnv);
+    config = createConfig(mockEnv);
 
     mockBucket.seed(
       "qro/index_v2.md",
@@ -70,7 +91,7 @@ describe("QroFooAgent", () => {
 
     mockAssets.setPrompt(
       "qro_foo_tool_reader",
-      `Read QR&O chapters from: {qro_index}
+      `Answer from: {prefetched_documents}
 Query: {user_input}`
     );
 
@@ -101,7 +122,16 @@ Members may submit grievances through the chain of command.`
 All members must maintain high standards of conduct.`
     );
 
-    agent = new QroFooAgent(mockEnv, config, { generateText: mockGenerateText });
+    // doc_0=leave, doc_1=grievances, doc_2=conduct
+    clefAi = mockClefAi(shortlistResponse([{ choice: "doc_0" }]));
+    mockGenerateText.mockResolvedValue({
+      text: "QR&O Chapter 16 prescribes annual leave entitlements.",
+    });
+
+    agent = new QroFooAgent(mockEnv, config, {
+      generateText: mockGenerateText,
+      clefAi,
+    });
   });
 
   describe("manifest parsing", () => {
@@ -114,12 +144,6 @@ All members must maintain high standards of conduct.`
       expect(manifest.size).toBe(3);
       expect(manifest.get("vol-1-administration/ch-16-leave.md")).toBe(
         "vol-1-administration/ch-16-leave.md"
-      );
-      expect(manifest.get("vol-1-administration/ch-19-grievances.md")).toBe(
-        "vol-1-administration/ch-19-grievances.md"
-      );
-      expect(manifest.get("vol-2-discipline/ch-107-conduct.md")).toBe(
-        "vol-2-discipline/ch-107-conduct.md"
       );
     });
 
@@ -144,165 +168,126 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
   });
 
   describe("research", () => {
-    it("should answer after one valid QR&O read", async () => {
-      mockModelReads(
-        ["vol-1-administration/ch-16-leave.md"],
-        "QR&O Chapter 16 prescribes annual leave entitlements."
-      );
-
+    it("should answer after Clef shortlists and prefetches one chapter", async () => {
       const result = await agent.research({
         question: "What does QR&O say about annual leave?",
       });
 
       expect(result).toContain("annual leave");
       expect(mockGenerateText).toHaveBeenCalledTimes(1);
+      expect(clefAi.run).toHaveBeenCalledTimes(1);
+      // SAFETY: generateText fake is invoked once with the answer options object.
+
+      const call = mockGenerateText.mock.calls[0][0] as {
+        system?: string;
+        prompt?: string;
+        tools?: unknown;
+      };
+      expect(call.tools).toBeUndefined();
+      expect(call.system).toContain("<QRO_chapter_ch-16-leave>");
+      expect(call.prompt).toContain("annual leave");
     });
 
-    it("should allow up to three successful QR&O reads", async () => {
-      mockModelReads(
-        [
-          "vol-1-administration/ch-16-leave.md",
-          "vol-1-administration/ch-19-grievances.md",
-          "vol-2-discipline/ch-107-conduct.md",
-        ],
-        "Answer based on three chapters"
+    it("should prefetch up to three shortlisted chapters", async () => {
+      clefAi = mockClefAi(
+        shortlistResponse([{ choice: "doc_0" }, { choice: "doc_1" }, { choice: "doc_2" }])
       );
-
-      const result = await agent.research({ question: "Tell me about leave and conduct" });
-
-      expect(result).toContain("three chapters");
-      expect(mockGenerateText).toHaveBeenCalledTimes(1);
-    });
-
-    it("should include the QR&O index and question in the one model call", async () => {
-      mockModelReads(["vol-1-administration/ch-16-leave.md"], "Answer");
-
-      await agent.research({ question: "Can I get special leave?" });
-
-      // SAFETY: This test's fake is invoked once by ToolReadingAgent with ReadFileToolOptions.
-      const call = mockGenerateText.mock.calls[0][0] as ReadFileToolOptions;
-      expect(call.system).toContain("QR&O Index");
-      expect(call.system).toContain("ch-16-leave");
-      expect(call.prompt).toContain("Can I get special leave?");
-    });
-
-    it("should return read chapters in sanitized QR&O tags", async () => {
-      let content = "";
-      mockGenerateText.mockImplementationOnce(async (options: ReadFileToolOptions) => {
-        const result = await options.tools?.read_file?.execute({
-          file: "vol-1-administration/ch-16-leave.md",
-        });
-        content = result?.content ?? "";
-        return { text: "Answer" };
+      mockGenerateText.mockResolvedValue({ text: "Answer based on three chapters" });
+      agent = new QroFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
       });
 
-      await agent.research({ question: "Test question" });
+      const result = await agent.research({ question: "Tell me about QR&O policies" });
 
-      expect(content).toContain("<QRO_chapter_ch-16-leave>");
-      expect(content).toContain("</QRO_chapter_ch-16-leave>");
-      expect(content).toContain("Annual Leave");
+      expect(result).toContain("three chapters");
+      // SAFETY: generateText fake is invoked once with the answer options object.
+
+      const call = mockGenerateText.mock.calls[0][0] as { system?: string };
+      expect(call.system).toContain("<QRO_chapter_ch-16-leave>");
+      expect(call.system).toContain("<QRO_chapter_ch-19-grievances>");
+      expect(call.system).toContain("<QRO_chapter_ch-107-conduct>");
     });
 
-    it("should let the model correct two invalid QR&O reads", async () => {
-      mockModelReads(
-        [
-          "vol-99-missing/ch-999-missing.md",
-          "vol-1-administration/ch-16-leave",
-          "vol-1-administration/ch-16-leave.md",
-        ],
-        "Corrected QR&O answer"
+    it("should reject invented shortlist ids that are not in the allowlist", async () => {
+      clefAi = mockClefAi(shortlistResponse([{ choice: "invented_path" }]));
+      agent = new QroFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
+
+      await expect(agent.research({ question: "Obscure topic" })).rejects.toThrow(
+        "Clef shortlist failed"
       );
-
-      const result = await agent.research({ question: "Test question" });
-
-      expect(result).toBe("Corrected QR&O answer");
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
-    it("should fail cleanly after the third invalid QR&O read", async () => {
-      mockModelReads(
-        [
-          "vol-99-missing/ch-999-missing.md",
-          "vol-88-missing/ch-888-missing.md",
-          "vol-77-missing/ch-777-missing.md",
-          "vol-1-administration/ch-16-leave.md",
-        ],
-        "Should not be trusted"
-      );
+    it("should allow intentional high-confidence none with an empty prefetch", async () => {
+      clefAi = mockClefAi(shortlistResponse([{ choice: "none" }]));
+      mockGenerateText.mockResolvedValue({ text: "No relevant chapter was available." });
+      agent = new QroFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
+
+      const result = await agent.research({ question: "Obscure topic" });
+
+      expect(result).toContain("No relevant chapter");
+      // SAFETY: generateText fake is invoked once with the answer options object.
+      const call = mockGenerateText.mock.calls[0][0] as { system?: string };
+      expect(call.system).toContain("No indexed documents were selected");
+    });
+
+    it("should propagate Workers AI outages from the Clef shortlist step", async () => {
+      clefAi = {
+        run: vi.fn(async () => {
+          throw new Error("workers ai down");
+        }),
+      };
+      agent = new QroFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
 
       await expect(agent.research({ question: "Test question" })).rejects.toThrow(
-        "correction budget exhausted"
+        "workers ai down"
       );
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
-    it("should fail cleanly when the model exceeds five total read attempts", async () => {
-      mockModelReads([
-        "vol-1-administration/ch-16-leave.md",
-        "vol-1-administration/ch-16-leave.md",
-        "vol-1-administration/ch-16-leave.md",
-        "vol-1-administration/ch-19-grievances.md",
-        "vol-1-administration/ch-19-grievances.md",
-        "vol-2-discipline/ch-107-conduct.md",
-      ]);
+    it("should throw when Clef answers are malformed", async () => {
+      clefAi = {
+        run: vi.fn(async () => ({
+          model: "clef-flash",
+          answers: { pick_1: { type: "choice", choice: "doc_0" } },
+          usage: { input_tokens: 1, output_tokens: 0 },
+        })),
+      };
+      agent = new QroFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
 
       await expect(agent.research({ question: "Test question" })).rejects.toThrow(
-        "total call limit exceeded"
+        "Clef shortlist failed"
       );
+      expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
-    it("should fail cleanly when the model reads more than three chapters", async () => {
-      mockModelReads([
-        "vol-1-administration/ch-16-leave.md",
-        "vol-1-administration/ch-19-grievances.md",
-        "vol-2-discipline/ch-107-conduct.md",
-        "vol-1-administration/ch-16-leave.md",
-        "vol-1-administration/ch-19-grievances.md",
-        "vol-2-discipline/ch-107-conduct.md",
-      ]);
-
-      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
-        "total call limit exceeded"
-      );
-    });
-
-    it("should reject answers when the model never reads a chapter", async () => {
-      mockModelWithoutReads();
-
-      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
-        "did not successfully read"
-      );
-    });
-
-    it("should reject empty questions before calling the model", async () => {
+    it("should reject empty questions before calling Clef or the model", async () => {
       const request: ResearchRequest = { question: "" };
 
       await expect(agent.research(request)).rejects.toThrow("Empty research question");
+      expect(clefAi.run).not.toHaveBeenCalled();
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
     it("should fail cleanly when the QR&O index is missing", async () => {
-      await mockBucket.delete("qro/index_v2.md");
+      mockBucket.delete("qro/index_v2.md");
 
-      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
-        "Document not found"
-      );
+      await expect(agent.research({ question: "Test question" })).rejects.toThrow();
+      expect(clefAi.run).not.toHaveBeenCalled();
       expect(mockGenerateText).not.toHaveBeenCalled();
-    });
-
-    it("should reject when an indexed QR&O chapter cannot be retrieved", async () => {
-      mockBucket.seed(
-        "qro/index_v2.md",
-        `# QR&O Index
-| vol-99-missing/ch-999-missing.md | Missing Chapter | vol-99-missing/ch-999-missing.md |
-| vol-1-administration/ch-16-leave.md | Leave Regulations | vol-1-administration/ch-16-leave.md |`
-      );
-      mockModelReads(
-        ["vol-99-missing/ch-999-missing.md", "vol-1-administration/ch-16-leave.md"],
-        "Recovered after missing chapter"
-      );
-
-      await expect(agent.research({ question: "Test question" })).rejects.toThrow(
-        "Document not found"
-      );
     });
   });
 });

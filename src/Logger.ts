@@ -3,7 +3,7 @@
  *
  * Singleton logger using native console for Cloudflare Workers
  * Cloudflare Workers automatically captures console logs with timestamps
- * Logs are emitted as single JSON objects for optimal Workers Logs queryability
+ * Logs are emitted as plain objects so Workers Logs can index each field
  *
  * Top-level declarations:
  * - Logger: Singleton logger using native console - Workers handles timestamps and structured logging
@@ -25,7 +25,7 @@ export interface SafeErrorMetadata {
 }
 
 // Simple logger using native console - Workers handles timestamps and structured logging
-// All output is JSON.stringify'd so CF Workers observability can parse and index fields
+// Pass a plain object. Workers indexes its fields; a JSON string is one opaque message.
 export class Logger {
   private static instance: Logger;
 
@@ -41,7 +41,7 @@ export class Logger {
   }
 
   private emit<Data extends object>(method: "log" | "warn" | "error" | "debug", data: Data): void {
-    console[method](JSON.stringify(data));
+    console[method](data);
   }
 
   info<Context extends object>(message: string, context?: Context): void {

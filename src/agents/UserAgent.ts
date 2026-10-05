@@ -7,7 +7,11 @@
  * - UserAgentState: Persistent per-user state stored by the Agents runtime
  * - MemoryUpdateTask: Scheduled memory update payload
  * - UserAgent: Durable Object-backed email agent with AI response and memory scheduling
+ * - persistPrunedVersions: Shared memory-version prune + conditional state write helper
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
+ *
+ * Clef-flash no_reply gate runs in getAIResponse (with memory) before recipients/Prime Foo.
+ * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  */
 
 import { Agent } from "agents";
@@ -15,7 +19,7 @@ import type { AgentEmail } from "agents/email";
 import PostalMime, { type Address } from "postal-mime";
 import type { AppConfig } from "../config";
 import { createConfig } from "../config";
-import { EmailComposer, HtmlEmailComposer } from "../email/components";
+import { formatQuotedContent, HtmlEmailComposer } from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
@@ -36,6 +40,7 @@ import {
   retainMemoryVersions,
 } from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
+import { decideShouldReply, decideShouldUpdateMemory } from "./utils/ClefDecision";
 
 const REFERENCES_MAX_LENGTH = 1000;
 
@@ -71,7 +76,6 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   override observability = undefined;
 
   private readonly logger = Logger.getInstance();
-  private readonly emailComposer = new EmailComposer();
   private readonly htmlEmailComposer = new HtmlEmailComposer();
   private agentCoordinator?: AgentCoordinator;
 
@@ -108,7 +112,6 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       this.validateEmail(parsedEmail);
-      const recipients = resolveReplyRecipients(parsedEmail, config);
       const emailContext = this.buildEmailContext(parsedEmail);
       const response = await this.getAIResponse(emailContext, config);
 
@@ -117,6 +120,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         return;
       }
 
+      const recipients = resolveReplyRecipients(parsedEmail, config);
       await this.sendReply(parsedEmail, response.content, config, recipients, () => {
         sendAttempted = true;
       });
@@ -138,37 +142,48 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   /** Runs a durable scheduled memory update after a successful email reply. */
   async runMemoryUpdate(task: MemoryUpdateTask): Promise<void> {
     try {
+      // Clef-flash is a System One decision model; cast until wrangler AiModels lists it.
+      const memoryGate = await decideShouldUpdateMemory(
+        {
+          run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
+        },
+        task.emailContext,
+        task.agentReply,
+        this.state.memory
+      );
+      if (!memoryGate.shouldUpdate) {
+        this.persistPrunedVersions(Date.now());
+        this.logger.info("Clef memory gate skipped MemoryFoo", {
+          reason: memoryGate.reason,
+        });
+        return;
+      }
+
       const memoryAgent = new MemoryFooAgent(this.env, createConfig(this.env));
       const result = await memoryAgent.updateMemory(
         this.state.memory,
         task.emailContext,
-        task.agentReply
+        task.agentReply,
+        { promptName: "memory_foo_edit" }
       );
       const now = Date.now();
-      const storedVersions = this.state.versions ?? [];
-      const versions = retainMemoryVersions(storedVersions, now);
-      const versionsPruned =
-        versions.length !== storedVersions.length ||
-        versions.some((version, index) => version !== storedVersions[index]);
 
       if (!result.updated || !result.content) {
-        if (versionsPruned) {
-          this.setState({ memory: this.state.memory, versions });
-        }
+        this.persistPrunedVersions(now);
         this.logger.info("User memory unchanged");
         return;
       }
 
       if (result.content.length > MEMORY_MAX_CONTENT_LENGTH) {
-        if (versionsPruned) {
-          this.setState({ memory: this.state.memory, versions });
-        }
+        this.persistPrunedVersions(now);
         this.logger.warn("Rejected oversize memory update", {
           contentLength: result.content.length,
         });
         return;
       }
 
+      // Success path: prune for nextVersions only — one setState, no intermediate write.
+      const versions = retainMemoryVersions(this.state.versions ?? [], now);
       const previous = this.state.memory;
       const nextVersions =
         previous.trim().length > 0
@@ -183,6 +198,22 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       this.logger.error("Memory update failed", getSafeErrorMetadata(error));
       throw new Error("Scheduled memory update failed");
     }
+  }
+
+  /**
+   * Prunes expired memory versions and persists when the list changed.
+   * @returns The pruned versions list for callers that continue updating state
+   */
+  private persistPrunedVersions(now: number): MemoryVersion[] {
+    const storedVersions = this.state.versions ?? [];
+    const versions = retainMemoryVersions(storedVersions, now);
+    if (
+      versions.length !== storedVersions.length ||
+      versions.some((version, index) => version !== storedVersions[index])
+    ) {
+      this.setState({ memory: this.state.memory, versions });
+    }
+    return versions;
   }
 
   /** Parses an AgentEmail into CAF-GPT's internal ParsedEmailData shape. */
@@ -271,6 +302,21 @@ ${parsedEmail.body}`;
     emailContext: string,
     config: AppConfig
   ): Promise<{ shouldRespond: boolean; content?: string }> {
+    // Clef-flash is a System One decision model; cast until wrangler AiModels lists it.
+    const replyGate = await decideShouldReply(
+      {
+        run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
+      },
+      emailContext,
+      this.state.memory
+    );
+    if (!replyGate.shouldReply) {
+      this.logger.info("Clef no_reply gate skipped Prime Foo", {
+        reason: replyGate.reason,
+      });
+      return { shouldRespond: false };
+    }
+
     if (!this.agentCoordinator) {
       this.agentCoordinator = await AgentCoordinator.create(this.env, config);
     }
@@ -285,7 +331,7 @@ ${parsedEmail.body}`;
     recipients: ResolvedReplyRecipients,
     markSendAttempted: () => void
   ): Promise<void> {
-    const quotedContent = this.emailComposer.formatQuotedContent(parsedEmail);
+    const quotedContent = formatQuotedContent(parsedEmail);
     const replyText = htmlToText(content);
     const fullTextContent = (replyText || content.trim()) + quotedContent;
     const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());

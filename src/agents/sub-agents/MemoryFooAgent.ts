@@ -5,6 +5,7 @@
  *
  * Top-level declarations:
  * - MemoryUpdateResult: Result of memory update operation
+ * - MemoryUpdateOptions: Optional prompt selection for gated edit path
  * - MemoryFooAgent: Updates user memory based on email exchanges
  * - updateMemory: Processes email exchange and returns updated memory or unchanged signal
  */
@@ -19,19 +20,31 @@ const UPDATE_MEMORY_TOOL = "update_memory";
 const LEAVE_MEMORY_UNCHANGED_TOOL = "leave_memory_unchanged";
 const MEMORY_UPDATE_MAX_STEPS = 3;
 
-// Result of memory update operation
+/** Result of memory update operation. */
 export interface MemoryUpdateResult {
   updated: boolean;
   content?: string;
 }
 
-// Updates user memory based on email exchanges
+/** Optional prompt selection when a prior gate already decided an update is warranted. */
+export interface MemoryUpdateOptions {
+  promptName?: "memory_foo" | "memory_foo_edit";
+}
+
+/** Updates user memory based on email exchanges. */
 export class MemoryFooAgent extends BaseAgent {
-  // Processes email exchange and returns updated memory or unchanged signal
+  /**
+   * Processes email exchange and returns updated memory or unchanged signal.
+   * @param currentMemory - Existing user memory narrative
+   * @param emailContext - Inbound email context
+   * @param agentReply - Outbound agent reply that was sent
+   * @param options - Optional prompt override (use memory_foo_edit after Clef update gate)
+   */
   async updateMemory(
     currentMemory: string,
     emailContext: string,
-    agentReply: string
+    agentReply: string,
+    options?: MemoryUpdateOptions
   ): Promise<MemoryUpdateResult> {
     const startTime = Date.now();
 
@@ -59,7 +72,8 @@ ${agentReply}
         currentMemory.trim().length > 0 ? currentMemory : "No prior interaction history.";
 
       const modelConfig = this.config.llm.models.memoryFoo;
-      const rendered = await this.promptManager.renderPrompt("memory_foo", {
+      const promptName = options?.promptName ?? "memory_foo";
+      const rendered = await this.promptManager.renderPrompt(promptName, {
         current_memory: memoryContext,
         user_input: emailExchange,
       });
