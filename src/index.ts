@@ -119,17 +119,22 @@ async function fetch(request: Request, env: Env): Promise<Response> {
   const logger = Logger.getInstance();
   const url = new URL(request.url);
   let response: Response;
+  let outcome: "prompts-blocked" | "health" | "favicon" | "error" | "asset";
 
   try {
     // Block public access to internal prompts (still available via ASSETS binding internally)
     if (url.pathname.startsWith("/prompts/")) {
       response = new Response("Not Found", { status: 404 });
+      outcome = "prompts-blocked";
     } else if (url.pathname === "/health" && request.method === "GET") {
       response = new Response("OK", { status: 200 });
+      outcome = "health";
     } else if (url.pathname === "/favicon.ico") {
       response = new Response(null, { status: 204 });
+      outcome = "favicon";
     } else {
       response = await env.ASSETS.fetch(request);
+      outcome = response.status >= 500 ? "error" : "asset";
     }
   } catch (error) {
     logger.error("Request processing failed", {
@@ -146,20 +151,13 @@ async function fetch(request: Request, env: Env): Promise<Response> {
         headers: { "Content-Type": "application/json" },
       }
     );
+    outcome = "error";
   }
 
   logger.info("Request completed", {
     route: url.pathname,
     status: response.status,
-    outcome: url.pathname.startsWith("/prompts/")
-      ? "prompts-blocked"
-      : url.pathname === "/health"
-        ? "health"
-        : url.pathname === "/favicon.ico"
-          ? "favicon"
-          : response.status >= 500
-            ? "error"
-            : "asset",
+    outcome,
   });
 
   return response;
