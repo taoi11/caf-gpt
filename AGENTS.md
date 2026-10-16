@@ -237,3 +237,10 @@ Inline comments are used sparingly within functions. **Only add them when:**
 1. Documenting a specific lesson learned
 2. Explaining a non-obvious solution to a specific problem
 3. Noting a workaround for a known issue
+
+## Cursor Cloud specific instructions
+
+- Oxlint loads `oxlint.config.ts` through Node's TypeScript loader, which requires Node.js `^20.19.0 || >=22.18.0`. The Cloud Agent image can expose Node 22.14 earlier on `PATH` (ahead of `/usr/local/bin`). Use Node 22.23.3 from `/usr/local/bin`; the environment install links that binary ahead of the older one. `node -v` must report `v22.23.3` before `npm run lint`.
+- `npm run dev` follows `wrangler.jsonc`, whose `EMAIL` binding is `remote: true`, so it expects Cloudflare credentials. Local work uses `CI=true npx wrangler dev --local --ip 0.0.0.0 --port 8787`. `--local` simulates `EMAIL`, R2, and the `UserAgent` Durable Object. `CI=true` skips Wrangler's interactive Cloudflare skills prompt. `GET /health` returns `OK`.
+- Inbound email behavior is covered by `npm run test` (the Vitest workers pool against `wrangler.jsonc`). Wrangler 4.97 does not expose `POST /cdn-cgi/local/email`.
+- The `AI` binding is not simulated locally. Policy answers that call the model need a Cloudflare account; format, lint, test, compile, `/health`, and the static site do not.
