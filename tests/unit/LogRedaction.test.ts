@@ -4,34 +4,71 @@
  * Unit tests for privacy-preserving email-path log helpers and safe error metadata
  *
  * Tests:
- * - toSafeLogToken keeps identifier-like tokens and redacts free text
+ * - toLoggableErrorName/toLoggableErrorCode pass allowlisted values and classify everything else
+ * - every AI_* error name in the installed AI SDK builds is allowlisted (drift guard)
  * - getLogSafeDomain returns only the domain portion of an address
- * - createEmailRef is deterministic, short, salted, and never echoes the Message-ID
- * - getSafeErrorMetadata never leaks free-text error names or codes
+ * - createEmailRef is random, 16 hex chars, and unique per call
+ * - getEmailRefFromHeaders reuses a well-formed Worker ref and never falls back to a shared constant
+ * - getSafeErrorMetadata never leaks non-allowlisted error names or codes
  */
 
-import { createHash } from "node:crypto";
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createEmailRef,
-  EMAIL_REF_UNAVAILABLE,
+  EMAIL_REF_HEADER,
+  getEmailRefFromHeaders,
   getLogSafeDomain,
-  toSafeLogToken,
+  OTHER_ERROR_CODE,
+  OTHER_ERROR_NAME,
+  toLoggableErrorCode,
+  toLoggableErrorName,
 } from "../../src/email/utils/LogRedaction";
+import { EmailParsingError } from "../../src/errors";
 import { getSafeErrorMetadata } from "../../src/Logger";
 
-describe("toSafeLogToken", () => {
-  it("keeps short identifier-like tokens", () => {
-    expect(toSafeLogToken("APICallError")).toBe("APICallError");
-    expect(toSafeLogToken("ERR_NETWORK.timeout:1")).toBe("ERR_NETWORK.timeout:1");
+const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
+
+describe("toLoggableErrorName", () => {
+  it("passes allowlisted built-in, app, and AI SDK error names", () => {
+    expect(toLoggableErrorName("TypeError")).toBe("TypeError");
+    expect(toLoggableErrorName("EmailParsingError")).toBe("EmailParsingError");
+    expect(toLoggableErrorName("AI_APICallError")).toBe("AI_APICallError");
   });
 
-  it("redacts free text, addresses, and oversize values", () => {
-    expect(toSafeLogToken("Failed for user@forces.gc.ca")).toBe("redacted");
-    expect(toSafeLogToken("user@forces.gc.ca")).toBe("redacted");
-    expect(toSafeLogToken("x".repeat(65))).toBe("redacted");
-    expect(toSafeLogToken("")).toBe("redacted");
-    expect(toSafeLogToken(undefined, "none")).toBe("none");
+  it("classifies identifier-shaped and free-text unknown names as OtherError", () => {
+    expect(toLoggableErrorName("ProjectFalcon")).toBe(OTHER_ERROR_NAME);
+    expect(toLoggableErrorName("Delivery to user@forces.gc.ca failed")).toBe(OTHER_ERROR_NAME);
+    expect(toLoggableErrorName("")).toBe(OTHER_ERROR_NAME);
+    expect(toLoggableErrorName(undefined)).toBe(OTHER_ERROR_NAME);
+  });
+});
+
+describe("AI SDK error name allowlist", () => {
+  it("covers every AI_* error name in the installed ai and @ai-sdk/provider builds", () => {
+    const require = createRequire(import.meta.url);
+    const sdkNames = new Set<string>();
+    for (const pkg of ["ai", "@ai-sdk/provider"]) {
+      const packageDir = dirname(require.resolve(`${pkg}/package.json`));
+      const source = readFileSync(join(packageDir, "dist", "index.mjs"), "utf8");
+      for (const match of source.matchAll(/"(AI_[A-Za-z]+Error)"/g)) {
+        sdkNames.add(match[1]);
+      }
+    }
+
+    expect(sdkNames.size).toBeGreaterThan(0);
+    const missing = [...sdkNames].filter((name) => toLoggableErrorName(name) !== name);
+    expect(missing).toEqual([]);
+  });
+});
+
+describe("toLoggableErrorCode", () => {
+  it("passes allowlisted app codes and classifies the rest as other", () => {
+    expect(toLoggableErrorCode("EMAIL_PARSING_ERROR")).toBe("EMAIL_PARSING_ERROR");
+    expect(toLoggableErrorCode("ProjectFalcon")).toBe(OTHER_ERROR_CODE);
+    expect(toLoggableErrorCode("rejected user@forces.gc.ca")).toBe(OTHER_ERROR_CODE);
   });
 });
 
@@ -50,43 +87,58 @@ describe("getLogSafeDomain", () => {
 });
 
 describe("createEmailRef", () => {
-  it("is deterministic, 16 hex chars, and does not contain the Message-ID", async () => {
-    const messageId = "<abc.123@forces.gc.ca>";
-    const first = await createEmailRef(messageId);
-    const second = await createEmailRef(` ${messageId} `);
+  it("returns 16 hex characters that differ on every call", () => {
+    const refs = new Set(Array.from({ length: 50 }, () => createEmailRef()));
+    expect(refs.size).toBe(50);
+    for (const ref of refs) {
+      expect(ref).toMatch(EMAIL_REF_PATTERN);
+    }
+  });
+});
 
-    expect(first).toMatch(/^[0-9a-f]{16}$/);
-    expect(second).toBe(first);
-    expect(first).not.toContain("forces");
+describe("getEmailRefFromHeaders", () => {
+  it("reuses the Worker-assigned ref", () => {
+    const ref = createEmailRef();
+    expect(getEmailRefFromHeaders(new Headers({ [EMAIL_REF_HEADER]: ref }))).toBe(ref);
   });
 
-  it("is salted rather than a plain SHA-256 prefix of the Message-ID", async () => {
-    const messageId = "<abc.123@forces.gc.ca>";
-    const plain = createHash("sha256").update(messageId).digest("hex").slice(0, 16);
-    await expect(createEmailRef(messageId)).resolves.not.toBe(plain);
-  });
+  it("generates distinct fresh refs when the header is missing or malformed", () => {
+    const missingA = getEmailRefFromHeaders(new Headers());
+    const missingB = getEmailRefFromHeaders(new Headers());
+    const malformed = getEmailRefFromHeaders(
+      new Headers({ [EMAIL_REF_HEADER]: "user@forces.gc.ca" })
+    );
 
-  it("differs per Message-ID and reports a marker when missing", async () => {
-    await expect(createEmailRef("<a@x>")).resolves.not.toBe(await createEmailRef("<b@x>"));
-    await expect(createEmailRef(undefined)).resolves.toBe(EMAIL_REF_UNAVAILABLE);
-    await expect(createEmailRef(null)).resolves.toBe(EMAIL_REF_UNAVAILABLE);
-    await expect(createEmailRef("   ")).resolves.toBe(EMAIL_REF_UNAVAILABLE);
+    expect(missingA).toMatch(EMAIL_REF_PATTERN);
+    expect(missingB).toMatch(EMAIL_REF_PATTERN);
+    expect(missingA).not.toBe(missingB);
+    expect(malformed).toMatch(EMAIL_REF_PATTERN);
+    expect([missingA, missingB, malformed]).not.toContain("none");
   });
 });
 
 describe("getSafeErrorMetadata", () => {
-  it("keeps safe names and codes", () => {
-    const error = Object.assign(new TypeError("secret body text"), { code: "E_TIMEOUT" });
-    expect(getSafeErrorMetadata(error)).toEqual({ errorName: "TypeError", errorCode: "E_TIMEOUT" });
+  it("keeps allowlisted names and codes", () => {
+    expect(getSafeErrorMetadata(new EmailParsingError("secret body text"))).toMatchObject({
+      errorName: "EmailParsingError",
+      errorCode: "EMAIL_PARSING_ERROR",
+    });
   });
 
-  it("redacts free-text names and codes that could carry content or addresses", () => {
-    const error = new Error("message text");
-    error.name = "Delivery to user@forces.gc.ca failed";
-    Object.assign(error, { code: "rejected recipient user@forces.gc.ca" });
+  it("classifies unknown identifier-shaped and free-text names and codes", () => {
+    const tokenError = new Error("message text");
+    tokenError.name = "ProjectFalcon";
+    Object.assign(tokenError, { code: "ProjectFalcon" });
+    expect(getSafeErrorMetadata(tokenError)).toEqual({
+      errorName: OTHER_ERROR_NAME,
+      errorCode: OTHER_ERROR_CODE,
+    });
 
-    const metadata = getSafeErrorMetadata(error);
-    expect(metadata).toEqual({ errorName: "Error", errorCode: "redacted" });
+    const textError = new Error("message text");
+    textError.name = "Delivery to user@forces.gc.ca failed";
+    Object.assign(textError, { code: "rejected recipient user@forces.gc.ca" });
+    const metadata = getSafeErrorMetadata(textError);
+    expect(metadata).toEqual({ errorName: OTHER_ERROR_NAME, errorCode: OTHER_ERROR_CODE });
     expect(JSON.stringify(metadata)).not.toContain("@");
   });
 

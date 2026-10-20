@@ -14,7 +14,7 @@ src/
 │   ├── utils/                   # Email utilities
 │   │   ├── EmailValidator.ts    # Email validation
 │   │   ├── EmailNormalizer.ts   # Email address normalization
-│   │   ├── LogRedaction.ts      # Privacy-safe log tokens, domains, and emailRef hashes
+│   │   ├── LogRedaction.ts      # Error-name/code allowlists, log-safe domains, and emailRef ids
 │   │   └── ReplyRecipients.ts   # Outlook-style primary and reply-all recipient policy
 │   └── types.ts                 # Email type definitions
 ├── agents/
@@ -64,7 +64,7 @@ Authorized inbound messages route directly to the `UserAgent` keyed by the norma
 
 ### Email-path logging
 
-Every inbound email is correlated by `emailRef`, a salted SHA-256 prefix of the Message-ID computed identically in the Worker and in `UserAgent`. Logs identify senders and recipients by domain only and never include addresses, subjects, bodies, attachment names, Message-IDs, prompts, model output, or raw error messages (errors log only a sanitized `errorName`/`errorCode`).
+Every inbound email is correlated by `emailRef`, a random 16-hex id the Worker generates per message and passes to `UserAgent` in the internal `x-caf-gpt-email-ref` header (overwriting any sender-supplied value), so both sides log the same value even when Message-ID is missing. Logs identify senders and recipients by domain only and never include addresses, subjects, bodies, attachment names, Message-IDs, prompts, model output, or raw error messages (errors log only an allowlisted `errorName`/`errorCode`; anything else is logged as `OtherError`/`other`).
 
 - Worker: `Email routed` / `Email ignored - ...` (resolver), `Email handed off to UserAgent` (with `durationMs`), `Email rejected - no UserAgent route`, `Top-level email routing failed`.
 - UserAgent: `Inbound email received by UserAgent`, one line per skip path (`Inbound email skipped by self-loop guard`, `Ignoring auto-reply or bounce email` with header categories, `Email content validation failed`, `Clef no_reply gate skipped Prime Foo` / `Clef reply gate allowed Prime Foo` with `choice`, `confidence`, `reason`), then exactly one terminal `Inbound email outcome` line with `outcome` (`replied` / `skipped` / `error`), `reason`, `durationMs`, and `errorReply` status when relevant.

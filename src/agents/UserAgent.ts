@@ -14,9 +14,10 @@
  * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  *
  * Inbound logging contract: every onEmail invocation logs one receipt line, one line per skip path,
- * and exactly one terminal "Inbound email outcome" line, all tagged with the content-free emailRef
- * that also appears on the Worker boundary "Email routed" line. Logs never carry addresses
- * (domains only), subjects, bodies, prompts, or model output.
+ * and exactly one terminal "Inbound email outcome" line, all tagged with the random per-message
+ * emailRef the Worker assigns and passes in the internal x-caf-gpt-email-ref header, so it matches
+ * the Worker boundary "Email routed" line. Logs never carry addresses (domains only), subjects,
+ * bodies, prompts, or model output.
  */
 
 import { Agent } from "agents";
@@ -27,7 +28,7 @@ import { createConfig } from "../config";
 import { formatQuotedContent, HtmlEmailComposer } from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
-import { createEmailRef, getLogSafeDomain } from "../email/utils/LogRedaction";
+import { getEmailRefFromHeaders, getLogSafeDomain } from "../email/utils/LogRedaction";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
 import { isValidMessageId, validateEmailContent } from "../email/utils/EmailValidator";
 import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates";
@@ -116,7 +117,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   async onEmail(email: AgentEmail): Promise<void> {
     const startTime = Date.now();
     const logContext: InboundLogContext = {
-      emailRef: await createEmailRef(email.headers.get("message-id")),
+      emailRef: getEmailRefFromHeaders(email.headers),
       senderDomain: getLogSafeDomain(email.from),
     };
     this.logger.info("Inbound email received by UserAgent", {

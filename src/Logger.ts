@@ -12,7 +12,7 @@
  */
 
 import { z } from "zod";
-import { toSafeLogToken } from "./email/utils/LogRedaction";
+import { toLoggableErrorCode, toLoggableErrorName } from "./email/utils/LogRedaction";
 
 const ErrorMetadataDetailsSchema = z.object({
   code: z.string().optional().catch(undefined),
@@ -79,8 +79,8 @@ export class Logger {
 
 /**
  * Extracts safe error class/code metadata without exception text or stack content.
- * Name and code are restricted to short identifier tokens because third-party errors may set
- * either field to free text that embeds addresses or message content.
+ * Name and code are logged only when allowlisted; anything else becomes a fixed classification
+ * because third-party errors may place addresses or message content in either field.
  */
 export function getSafeErrorMetadata<ErrorValue>(error: ErrorValue): SafeErrorMetadata {
   if (!(error instanceof Error)) {
@@ -88,9 +88,9 @@ export function getSafeErrorMetadata<ErrorValue>(error: ErrorValue): SafeErrorMe
   }
 
   const details = ErrorMetadataDetailsSchema.parse(error);
-  const metadata: SafeErrorMetadata = { errorName: toSafeLogToken(error.name, "Error") };
+  const metadata: SafeErrorMetadata = { errorName: toLoggableErrorName(error.name) };
   if (details.code !== undefined) {
-    metadata.errorCode = toSafeLogToken(details.code);
+    metadata.errorCode = toLoggableErrorCode(details.code);
   }
   if (details.recoverable !== undefined) {
     metadata.recoverable = details.recoverable;

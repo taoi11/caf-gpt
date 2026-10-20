@@ -11,6 +11,7 @@
  * - isAuthorizedSender: Checks configured sender allow list
  * - isMonitoredRecipient: Checks monitored recipient addresses
  * - rejectEmailSafely: Attempts an SMTP rejection without allowing it to escape
+ * - withEmailRefHeader: Wraps the inbound message so the UserAgent receives the emailRef header
  * - fetch: HTTP handler for health checks and static assets
  * - email: Email Worker handler for inbound email processing
  * - default: Default export for Cloudflare Worker
@@ -21,7 +22,12 @@ import type { EmailResolver } from "agents/email";
 import { getUserAgentId, UserAgent } from "./agents/UserAgent";
 import { createConfig } from "./config";
 import { normalizeEmailAddress } from "./email/utils/EmailNormalizer";
-import { createEmailRef, getLogSafeDomain } from "./email/utils/LogRedaction";
+import {
+  createEmailRef,
+  EMAIL_REF_HEADER,
+  getEmailRefFromHeaders,
+  getLogSafeDomain,
+} from "./email/utils/LogRedaction";
 import { isAuthorizedEmailAddress } from "./email/utils/ReplyRecipients";
 import { getSafeErrorMetadata, Logger } from "./Logger";
 
@@ -49,7 +55,7 @@ export function createUserAgentResolver(env: Env, config = createConfig(env)): E
     const senderEmail = normalizeEmailAddress(emailMessage.from);
     const recipientEmail = normalizeEmailAddress(emailMessage.to);
     const metadata: EmailBoundaryMetadata = {
-      emailRef: await createEmailRef(emailMessage.headers.get("message-id")),
+      emailRef: getEmailRefFromHeaders(emailMessage.headers),
       senderDomain: getLogSafeDomain(senderEmail),
       receivingDomain: getLogSafeDomain(recipientEmail),
     };
@@ -104,7 +110,7 @@ function rejectEmailSafely(
   } catch (error) {
     logger.error("Email rejection failed", {
       ...context,
-      errorName: error instanceof Error ? error.name : "UnknownError",
+      errorName: getSafeErrorMetadata(error).errorName,
     });
   }
 }
@@ -159,6 +165,32 @@ async function fetch(request: Request, env: Env): Promise<Response> {
   return response;
 }
 
+/**
+ * Wraps the inbound message so its headers carry the Worker-assigned emailRef to the UserAgent.
+ * The value always overwrites any sender-supplied header of the same name.
+ * @param message - Inbound platform email message
+ * @param emailRef - Random per-message correlation id
+ */
+function withEmailRefHeader(
+  message: ForwardableEmailMessage,
+  emailRef: string
+): ForwardableEmailMessage {
+  const headers = new Headers(message.headers);
+  headers.set(EMAIL_REF_HEADER, emailRef);
+  return {
+    from: message.from,
+    to: message.to,
+    headers,
+    get raw() {
+      return message.raw;
+    },
+    rawSize: message.rawSize,
+    setReject: (reason) => message.setReject(reason),
+    forward: (rcptTo, extraHeaders) => message.forward(rcptTo, extraHeaders),
+    reply: (reply) => message.reply(reply),
+  };
+}
+
 /** Routes inbound email into the per-user UserAgent Durable Object. */
 async function email(
   message: ForwardableEmailMessage,
@@ -167,8 +199,9 @@ async function email(
 ): Promise<void> {
   const startTime = Date.now();
   const logger = Logger.getInstance();
+  const emailRef = createEmailRef();
   const metadata = {
-    emailRef: await createEmailRef(message.headers.get("message-id")),
+    emailRef,
     senderDomain: getLogSafeDomain(message.from),
     receivingDomain: getLogSafeDomain(message.to),
   } satisfies EmailBoundaryMetadata;
@@ -197,7 +230,7 @@ async function email(
   const resolver = createUserAgentResolver(env, config);
   let routedToAgent = false;
   try {
-    await routeAgentEmail(message, env, {
+    await routeAgentEmail(withEmailRefHeader(message, emailRef), env, {
       resolver: async (emailMessage, resolverEnv) => {
         const route = await resolver(emailMessage, resolverEnv);
         routedToAgent = route !== null;
