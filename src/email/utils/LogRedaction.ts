@@ -4,40 +4,114 @@
  * Privacy-preserving helpers for email-path log fields (no addresses, subjects, or bodies)
  *
  * Top-level declarations:
- * - EMAIL_REF_UNAVAILABLE: emailRef value used when the inbound message has no Message-ID
- * - EMAIL_REF_HASH_FAILED: emailRef value used when hashing is unavailable
- * - EMAIL_REF_HASH_PREFIX: Fixed domain-separation salt mixed into emailRef hashes
- * - toSafeLogToken: Restricts a free-form value to a short identifier-like token
+ * - EMAIL_REF_HEADER: Internal header the Worker sets so UserAgent logs reuse the same emailRef
+ * - OTHER_ERROR_NAME / OTHER_ERROR_CODE: Fixed classifications for error names/codes not allowlisted
+ * - toLoggableErrorName: Maps an error name to an allowlisted value or OTHER_ERROR_NAME
+ * - toLoggableErrorCode: Maps an error code to an allowlisted value or OTHER_ERROR_CODE
  * - getLogSafeDomain: Extracts a log-safe domain from an email address
- * - createEmailRef: Builds a short non-reversible correlation id from the Message-ID header
+ * - createEmailRef: Generates a random per-message correlation id
+ * - getEmailRefFromHeaders: Reads the Worker-assigned emailRef, or generates a fresh one
  */
 
 import { normalizeEmailAddress } from "./EmailNormalizer";
 
-/** emailRef value used when the inbound message has no usable Message-ID. */
-export const EMAIL_REF_UNAVAILABLE = "none";
+/** Internal header the Worker sets before routing; the UserAgent logs reuse its value. */
+export const EMAIL_REF_HEADER = "x-caf-gpt-email-ref";
 
-/** emailRef value used when hashing fails, so logging never breaks the inbound boundary. */
-export const EMAIL_REF_HASH_FAILED = "unavailable";
+/** Logged in place of any error name that is not on the allowlist. */
+export const OTHER_ERROR_NAME = "OtherError";
 
-/** Fixed domain-separation salt so emailRef hashes are not plain Message-ID digests. */
-export const EMAIL_REF_HASH_PREFIX = "caf-gpt:email-ref:v1:";
+/** Logged in place of any error code that is not on the allowlist. */
+export const OTHER_ERROR_CODE = "other";
 
-const SAFE_TOKEN_PATTERN = /^[A-Za-z0-9_.:-]{1,64}$/;
 const SAFE_DOMAIN_PATTERN = /^[a-z0-9.-]{1,253}$/;
+const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
 const EMAIL_REF_HEX_LENGTH = 16;
 
+/** Error names known to be fixed class names (JS built-ins, platform, app, and AI SDK errors). */
+const LOGGABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
+  // JavaScript and Web Platform
+  "Error",
+  "AggregateError",
+  "EvalError",
+  "RangeError",
+  "ReferenceError",
+  "SyntaxError",
+  "TypeError",
+  "URIError",
+  "AbortError",
+  "TimeoutError",
+  "NetworkError",
+  "DataError",
+  "OperationError",
+  "NotSupportedError",
+  "InvalidStateError",
+  "DOMException",
+  "ZodError",
+  "UnknownError",
+  // App errors (src/errors.ts)
+  "EmailCompositionError",
+  "EmailParsingError",
+  "EmailThreadingError",
+  "EmailValidationError",
+  "AgentTimeoutError",
+  "AgentAPIError",
+  "AgentValidationError",
+  "StorageNotFoundError",
+  "StorageConnectionError",
+  "StorageValidationError",
+  // Vercel AI SDK
+  "AI_APICallError",
+  "AI_DownloadError",
+  "AI_EmptyResponseBodyError",
+  "AI_InvalidArgumentError",
+  "AI_InvalidDataContentError",
+  "AI_InvalidPromptError",
+  "AI_InvalidResponseDataError",
+  "AI_InvalidToolInputError",
+  "AI_JSONParseError",
+  "AI_LoadAPIKeyError",
+  "AI_MessageConversionError",
+  "AI_NoContentGeneratedError",
+  "AI_NoObjectGeneratedError",
+  "AI_NoOutputGeneratedError",
+  "AI_NoSuchToolError",
+  "AI_RetryError",
+  "AI_ToolCallRepairError",
+  "AI_ToolExecutionError",
+  "AI_TypeValidationError",
+  "AI_UnsupportedFunctionalityError",
+]);
+
+/** Error codes known to be fixed values (app error codes from src/errors.ts). */
+const LOGGABLE_ERROR_CODES: ReadonlySet<string> = new Set([
+  "EMAIL_COMPOSITION_ERROR",
+  "EMAIL_PARSING_ERROR",
+  "EMAIL_THREADING_ERROR",
+  "EMAIL_VALIDATION_ERROR",
+  "AGENT_TIMEOUT_ERROR",
+  "AGENT_API_ERROR",
+  "AGENT_VALIDATION_ERROR",
+  "STORAGE_NOT_FOUND",
+  "STORAGE_CONNECTION_ERROR",
+  "STORAGE_VALIDATION_ERROR",
+]);
+
 /**
- * Returns value when it is a short identifier-like token, otherwise fallback.
- * Rejects whitespace, `@`, and anything long enough to carry message content.
- * @param value - Candidate log value (error name, error code, enum-like reason)
- * @param fallback - Replacement for unsafe or missing values
+ * Returns the error name when it is allowlisted, otherwise OTHER_ERROR_NAME.
+ * Unknown names are never logged raw, since a dependency could place user content in them.
+ * @param name - Error.name value
  */
-export function toSafeLogToken(value: string | undefined, fallback = "redacted"): string {
-  if (value === undefined || !SAFE_TOKEN_PATTERN.test(value)) {
-    return fallback;
-  }
-  return value;
+export function toLoggableErrorName(name: string | undefined): string {
+  return name !== undefined && LOGGABLE_ERROR_NAMES.has(name) ? name : OTHER_ERROR_NAME;
+}
+
+/**
+ * Returns the error code when it is allowlisted, otherwise OTHER_ERROR_CODE.
+ * @param code - Error code value
+ */
+export function toLoggableErrorCode(code: string): string {
+  return LOGGABLE_ERROR_CODES.has(code) ? code : OTHER_ERROR_CODE;
 }
 
 /**
@@ -55,25 +129,19 @@ export function getLogSafeDomain(address?: string | null): string {
 }
 
 /**
- * Builds a short SHA-256-derived correlation id from the Message-ID so the Worker boundary log and
- * the UserAgent Durable Object logs for one email can be joined without logging the header itself.
- * Never throws.
- * @param messageId - Raw Message-ID header value
+ * Generates a random 16-hex-character correlation id for one inbound message.
+ * Derived from no message content, so it is unique even when Message-ID is missing.
  */
-export async function createEmailRef(messageId?: string | null): Promise<string> {
-  const normalized = messageId?.trim() ?? "";
-  if (normalized.length === 0) {
-    return EMAIL_REF_UNAVAILABLE;
-  }
-  try {
-    const bytes = new TextEncoder().encode(`${EMAIL_REF_HASH_PREFIX}${normalized}`);
-    const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
-    let hex = "";
-    for (const byte of digest) {
-      hex += byte.toString(16).padStart(2, "0");
-    }
-    return hex.slice(0, EMAIL_REF_HEX_LENGTH);
-  } catch {
-    return EMAIL_REF_HASH_FAILED;
-  }
+export function createEmailRef(): string {
+  return crypto.randomUUID().replaceAll("-", "").slice(0, EMAIL_REF_HEX_LENGTH);
+}
+
+/**
+ * Returns the Worker-assigned emailRef from the internal header when well-formed,
+ * otherwise a freshly generated one (never a shared constant).
+ * @param headers - Inbound message headers as routed by the Worker
+ */
+export function getEmailRefFromHeaders(headers: Headers): string {
+  const value = headers.get(EMAIL_REF_HEADER)?.trim().toLowerCase() ?? "";
+  return EMAIL_REF_PATTERN.test(value) ? value : createEmailRef();
 }

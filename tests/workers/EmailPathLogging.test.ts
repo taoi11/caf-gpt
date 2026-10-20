@@ -18,7 +18,7 @@
 
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { reset, runInDurableObject } from "cloudflare:test";
+import { createExecutionContext, reset, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
 import type { AgentEmail } from "agents/email";
 import { afterEach, describe, expect, it, vi } from "vitest";
@@ -26,13 +26,15 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
 import { CLEF_FLASH_MODEL } from "../../src/agents/utils/ClefDecision";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
-import { createEmailRef } from "../../src/email/utils/LogRedaction";
-import { createUserAgentResolver } from "../../src/index";
+import { EMAIL_REF_HEADER } from "../../src/email/utils/LogRedaction";
+import worker, { createUserAgentResolver } from "../../src/index";
 
 const SENDER = "Luffy.Dhaliwal@forces.gc.ca";
 const SUBJECT = "Secret subject line";
 const BODY = "Private body text about my leave";
 const MESSAGE_ID = "<private-message-id@forces.gc.ca>";
+const WORKER_EMAIL_REF = "0123456789abcdef";
+const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -53,7 +55,7 @@ describe("inbound email logging contract", () => {
       return logs;
     });
 
-    const emailRef = await createEmailRef(MESSAGE_ID);
+    const emailRef = WORKER_EMAIL_REF;
     expect(lines.map((line) => line.message)).toEqual([
       "Inbound email received by UserAgent",
       "Clef no_reply gate skipped Prime Foo",
@@ -182,7 +184,11 @@ describe("inbound email logging contract", () => {
       {
         from: SENDER,
         to: "agent@caf-gpt.com",
-        headers: new Headers({ "message-id": MESSAGE_ID, subject: SUBJECT }),
+        headers: new Headers({
+          "message-id": MESSAGE_ID,
+          subject: SUBJECT,
+          [EMAIL_REF_HEADER]: WORKER_EMAIL_REF,
+        }),
         raw: new ReadableStream<Uint8Array>(),
         rawSize: 0,
         setReject: vi.fn(),
@@ -194,11 +200,61 @@ describe("inbound email logging contract", () => {
 
     const routed = logs.find((line) => line.message === "Email routed");
     expect(routed).toMatchObject({
-      emailRef: await createEmailRef(MESSAGE_ID),
+      emailRef: WORKER_EMAIL_REF,
       senderDomain: "forces.gc.ca",
       receivingDomain: "caf-gpt.com",
     });
     expectNoSensitiveContent(logs);
+  });
+
+  it("gives emails without a Message-ID or Worker ref distinct emailRefs, never none", async () => {
+    const stub = getUserAgentStub(SENDER);
+    const refs = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const logs = captureLogs();
+      const options = {
+        headers: { "Auto-Submitted": "auto-replied" },
+        omitMessageId: true,
+        omitEmailRef: true,
+      };
+      await instance.onEmail(createAgentEmail(options));
+      await instance.onEmail(createAgentEmail(options));
+      return logs
+        .filter((line) => line.message === "Inbound email outcome")
+        .map((line) => line.emailRef);
+    });
+
+    expect(refs).toHaveLength(2);
+    expect(refs[0]).toMatch(EMAIL_REF_PATTERN);
+    expect(refs[1]).toMatch(EMAIL_REF_PATTERN);
+    expect(refs[0]).not.toBe(refs[1]);
+  });
+
+  it("assigns one Worker emailRef per message and overwrites a sender-supplied ref header", async () => {
+    const logs = captureLogs();
+    const spoofedRef = "ffffffffffffffff";
+    const setReject = vi.fn();
+    await worker.email(
+      {
+        from: "outsider.person@example.com",
+        to: "agent@caf-gpt.com",
+        headers: new Headers({ "message-id": MESSAGE_ID, [EMAIL_REF_HEADER]: spoofedRef }),
+        raw: new ReadableStream<Uint8Array>(),
+        rawSize: 0,
+        setReject,
+        forward: vi.fn(),
+        reply: vi.fn(),
+      },
+      env,
+      createExecutionContext()
+    );
+
+    const ignored = logs.find((line) => line.message === "Email ignored - sender not authorized");
+    const rejected = logs.find((line) => line.message === "Email rejected - no UserAgent route");
+    expect(ignored?.emailRef).toMatch(EMAIL_REF_PATTERN);
+    expect(ignored?.emailRef).not.toBe(spoofedRef);
+    expect(rejected?.emailRef).toBe(ignored?.emailRef);
+    expect(setReject).toHaveBeenCalledOnce();
+    expect(JSON.stringify(logs)).not.toContain("outsider.person");
   });
 
   it("logs unauthorized senders by domain only", async () => {
@@ -306,11 +362,13 @@ function getEmailBinding(instance: UserAgent): Env["EMAIL"] {
   return runtimeAccess.env.EMAIL;
 }
 
-/** Builds a mock AgentEmail; defaults to an authorized forces.gc.ca sender writing to agent@. */
+/** Builds a mock AgentEmail as routed by the Worker (with its emailRef header) from an authorized sender. */
 function createAgentEmail(options: {
   envelopeFrom?: string;
   from?: string;
   headers?: Record<string, string>;
+  omitMessageId?: boolean;
+  omitEmailRef?: boolean;
 }): AgentEmail {
   const from = options.from ?? SENDER;
   const extraHeaders = Object.entries(options.headers ?? {}).map(([k, v]) => `${k}: ${v}`);
@@ -318,23 +376,28 @@ function createAgentEmail(options: {
     `From: ${from}`,
     "To: agent@caf-gpt.com",
     `Subject: ${SUBJECT}`,
-    `Message-ID: ${MESSAGE_ID}`,
+    ...(options.omitMessageId ? [] : [`Message-ID: ${MESSAGE_ID}`]),
     ...extraHeaders,
     "Content-Type: text/plain; charset=utf-8",
     "",
     BODY,
   ].join("\r\n");
 
+  const headers = new Headers({ from, to: "agent@caf-gpt.com", subject: SUBJECT });
+  if (!options.omitMessageId) {
+    headers.set("message-id", MESSAGE_ID);
+  }
+  if (!options.omitEmailRef) {
+    headers.set(EMAIL_REF_HEADER, WORKER_EMAIL_REF);
+  }
+  for (const [name, value] of Object.entries(options.headers ?? {})) {
+    headers.set(name, value);
+  }
+
   return {
     from: options.envelopeFrom ?? SENDER,
     to: "agent@caf-gpt.com",
-    headers: new Headers({
-      from,
-      to: "agent@caf-gpt.com",
-      subject: SUBJECT,
-      "message-id": MESSAGE_ID,
-      ...options.headers,
-    }),
+    headers,
     rawSize: raw.length,
     getRaw: vi.fn(async () => new TextEncoder().encode(raw)),
     setReject: vi.fn(),
