@@ -5,12 +5,16 @@
  *
  * Tests:
  * - toLoggableErrorName/toLoggableErrorCode pass allowlisted values and classify everything else
+ * - every AI_* error name in the installed AI SDK builds is allowlisted (drift guard)
  * - getLogSafeDomain returns only the domain portion of an address
  * - createEmailRef is random, 16 hex chars, and unique per call
  * - getEmailRefFromHeaders reuses a well-formed Worker ref and never falls back to a shared constant
  * - getSafeErrorMetadata never leaks non-allowlisted error names or codes
  */
 
+import { readFileSync } from "node:fs";
+import { createRequire } from "node:module";
+import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createEmailRef,
@@ -39,6 +43,24 @@ describe("toLoggableErrorName", () => {
     expect(toLoggableErrorName("Delivery to user@forces.gc.ca failed")).toBe(OTHER_ERROR_NAME);
     expect(toLoggableErrorName("")).toBe(OTHER_ERROR_NAME);
     expect(toLoggableErrorName(undefined)).toBe(OTHER_ERROR_NAME);
+  });
+});
+
+describe("AI SDK error name allowlist", () => {
+  it("covers every AI_* error name in the installed ai and @ai-sdk/provider builds", () => {
+    const require = createRequire(import.meta.url);
+    const sdkNames = new Set<string>();
+    for (const pkg of ["ai", "@ai-sdk/provider"]) {
+      const packageDir = dirname(require.resolve(`${pkg}/package.json`));
+      const source = readFileSync(join(packageDir, "dist", "index.mjs"), "utf8");
+      for (const match of source.matchAll(/"(AI_[A-Za-z]+Error)"/g)) {
+        sdkNames.add(match[1]);
+      }
+    }
+
+    expect(sdkNames.size).toBeGreaterThan(0);
+    const missing = [...sdkNames].filter((name) => toLoggableErrorName(name) !== name);
+    expect(missing).toEqual([]);
   });
 });
 
