@@ -26,12 +26,15 @@
   "ai": {
     "binding": "AI"
   },
-  // Workers Logs were already on; enable top-level observability + Traces
+  // Workers Logs were already on; enable top-level observability + Traces.
+  // Invocation logs are off: the platform email invocation record indexes the full envelope
+  // sender/recipient ($workers.event.mailFrom / rcptTo). App logs carry domains + emailRef instead,
+  // and Traces still record per-invocation outcome and timing.
   "observability": {
     "enabled": true,
     "logs": {
       "enabled": true,
-      "invocation_logs": true,
+      "invocation_logs": false,
       "head_sampling_rate": 1
     },
     "traces": {
