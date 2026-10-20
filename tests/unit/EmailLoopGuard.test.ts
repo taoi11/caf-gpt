@@ -9,6 +9,7 @@
  * - Detect delivery status content types
  * - Detect auto-reply headers
  * - Avoid false positives on subject-only signals
+ * - Expose only log-safe categories and allowlisted header names
  */
 
 import { describe, expect, it } from "vitest";
@@ -75,5 +76,35 @@ describe("EmailLoopGuard", () => {
     const result = detectAutoReply(email);
     expect(result.ignore).toBe(true);
     expect(result.reasons.join(" ")).toMatch(/Subject/i);
+  });
+
+  it("exposes log-safe categories and allowlisted header names", () => {
+    const email = createMockParsedEmail({
+      subject: "Automatic reply: secret subject",
+      from: "noreply@forces.gc.ca",
+      headers: {
+        "Auto-Submitted": "auto-replied (secret)",
+        "X-Auto-Response-Suppress": "All",
+        Precedence: "bulk",
+      },
+    });
+
+    const result = detectAutoReply(email);
+    expect(result.ignore).toBe(true);
+    expect(result.categories).toEqual([
+      "auto_submitted",
+      "precedence",
+      "auto_reply_header",
+      "subject_pattern",
+      "sender_pattern",
+    ]);
+    expect(result.matchedHeaders).toEqual(["auto-submitted", "x-auto-response-suppress"]);
+    const logSafe = JSON.stringify({ c: result.categories, h: result.matchedHeaders });
+    expect(logSafe).not.toMatch(/secret|noreply@|forces\.gc\.ca/);
+  });
+
+  it("returns empty categories when not ignored", () => {
+    const result = detectAutoReply(createMockParsedEmail({ headers: {} }));
+    expect(result).toEqual({ ignore: false, reasons: [], categories: [], matchedHeaders: [] });
   });
 });

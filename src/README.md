@@ -14,6 +14,7 @@ src/
 │   ├── utils/                   # Email utilities
 │   │   ├── EmailValidator.ts    # Email validation
 │   │   ├── EmailNormalizer.ts   # Email address normalization
+│   │   ├── LogRedaction.ts      # Error-name/code allowlists, log-safe domains, and emailRef ids
 │   │   └── ReplyRecipients.ts   # Outlook-style primary and reply-all recipient policy
 │   └── types.ts                 # Email type definitions
 ├── agents/
@@ -59,7 +60,16 @@ Inbound sender authorization is a code-reviewed policy in `src/config.ts`: `forc
 
 ## Email Delivery Contract
 
-Authorized inbound messages route directly to the `UserAgent` keyed by the normalized SMTP envelope sender; agent-routing headers are ignored. Successful responses use the official `Agent.sendEmail()` helper with the inbound monitored alias as `from`/`replyTo`, validated threading and subject headers, and a maximum of 50 combined recipients. The Agents SDK email observability hook is disabled while application logging remains basic.
+Authorized inbound messages route directly to the `UserAgent` keyed by the normalized SMTP envelope sender; agent-routing headers are ignored. Successful responses use the official `Agent.sendEmail()` helper with the inbound monitored alias as `from`/`replyTo`, validated threading and subject headers, and a maximum of 50 combined recipients. The Agents SDK email observability hook stays disabled because it would emit sender, recipient, and subject.
+
+### Email-path logging
+
+Every inbound email is correlated by `emailRef`, a random 16-hex id the Worker generates per message and passes to `UserAgent` in the internal `x-caf-gpt-email-ref` header (overwriting any sender-supplied value), so both sides log the same value even when Message-ID is missing. Logs identify senders and recipients by domain only and never include addresses, subjects, bodies, attachment names, Message-IDs, prompts, model output, or raw error messages (errors log only an allowlisted `errorName`/`errorCode`; anything else is logged as `OtherError`/`other`).
+
+- Worker: `Email routed` / `Email ignored - ...` (resolver), `Email handed off to UserAgent` (with `durationMs`), `Email rejected - no UserAgent route`, `Top-level email routing failed`.
+- UserAgent: `Inbound email received by UserAgent`, one line per skip path (`Inbound email skipped by self-loop guard`, `Ignoring auto-reply or bounce email` with header categories, `Email content validation failed`, `Clef no_reply gate skipped Prime Foo` / `Clef reply gate allowed Prime Foo` with `choice`, `confidence`, `reason`), then exactly one terminal `Inbound email outcome` line with `outcome` (`replied` / `skipped` / `error`), `reason`, `durationMs`, and `errorReply` status when relevant.
+
+Platform `invocation_logs` are disabled in `wrangler.jsonc` because the email invocation record indexes the full envelope `mailFrom`/`rcptTo`; Traces still record invocation outcome and timing.
 
 Reply-all mirrors a normal email client: every valid, unique `Reply-To` mailbox is a primary `To` recipient, with RFC `From` used when no valid `Reply-To` mailbox remains. Original `To` then `Cc` addresses are retained in order as CC recipients after excluding `Bcc`, malformed or duplicate addresses, primary and sender identities, and CAF-GPT/self addresses. Valid external recipients are allowed.
 

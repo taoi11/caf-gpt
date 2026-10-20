@@ -4,15 +4,32 @@
  * Auto-reply detection utilities for inbound email loop prevention
  *
  * Top-level declarations:
+ * - AutoReplyCategory: Content-free category label for a matched auto-reply signal
  * - AutoReplyDetection: Detection result for auto-reply signals
  * - detectAutoReply: Detects common auto-reply and bounce indicators
  */
 
 import type { ParsedEmailData } from "../types";
 
+/** Content-free category label for a matched auto-reply signal (safe to log). */
+export type AutoReplyCategory =
+  | "auto_submitted"
+  | "precedence"
+  | "delivery_report"
+  | "auto_reply_header"
+  | "subject_pattern"
+  | "sender_pattern";
+
+/**
+ * Detection result for auto-reply signals.
+ * `reasons` may quote header values, the subject, or the sender and must never be logged;
+ * `categories` and `matchedHeaders` (names from a fixed allowlist) are log-safe.
+ */
 export interface AutoReplyDetection {
   ignore: boolean;
   reasons: string[];
+  categories: AutoReplyCategory[];
+  matchedHeaders: string[];
 }
 
 const AUTO_REPLY_HEADERS = [
@@ -52,11 +69,15 @@ export function detectAutoReply(parsedEmail: ParsedEmailData): AutoReplyDetectio
   const headers = normalizeHeaders(parsedEmail.headers);
   const reasons: string[] = [];
   const lowConfidenceReasons: string[] = [];
+  const categories: AutoReplyCategory[] = [];
+  const lowConfidenceCategories: AutoReplyCategory[] = [];
+  let matchedHeaders: string[] = [];
 
   const autoSubmitted = getHeaderValue(headers, "auto-submitted");
   const autoSubmittedToken = autoSubmitted?.split(";")[0]?.trim().toLowerCase();
   if (autoSubmittedToken && autoSubmittedToken !== "no") {
     reasons.push(`Auto-Submitted: ${autoSubmitted}`);
+    categories.push("auto_submitted");
   }
 
   const precedence = getHeaderValue(headers, "precedence");
@@ -66,33 +87,43 @@ export function detectAutoReply(parsedEmail: ParsedEmailData): AutoReplyDetectio
     .toLowerCase();
   if (precedenceToken && ["bulk", "junk", "list"].includes(precedenceToken)) {
     reasons.push(`Precedence: ${precedence}`);
+    categories.push("precedence");
   }
 
   const contentType = getHeaderValue(headers, "content-type")?.toLowerCase() ?? "";
   if (contentType.includes("multipart/report") || contentType.includes("message/delivery-status")) {
     reasons.push(`Content-Type: ${contentType}`);
+    categories.push("delivery_report");
   }
 
   if (hasAnyHeader(headers, AUTO_REPLY_HEADERS)) {
-    const matched = AUTO_REPLY_HEADERS.filter((header) => header in headers).join(", ");
-    reasons.push(`Auto-reply headers: ${matched}`);
+    matchedHeaders = AUTO_REPLY_HEADERS.filter((header) => header in headers);
+    reasons.push(`Auto-reply headers: ${matchedHeaders.join(", ")}`);
+    categories.push("auto_reply_header");
   }
 
   const subject = parsedEmail.subject ?? "";
   if (AUTO_REPLY_SUBJECT_PATTERNS.some((pattern) => pattern.test(subject))) {
     lowConfidenceReasons.push(`Subject: ${subject}`);
+    lowConfidenceCategories.push("subject_pattern");
   }
 
   const senderLocalPart = parsedEmail.from?.split("@")[0] ?? "";
   if (AUTO_REPLY_SENDER_PATTERNS.some((pattern) => pattern.test(senderLocalPart))) {
     lowConfidenceReasons.push(`Sender: ${parsedEmail.from}`);
+    lowConfidenceCategories.push("sender_pattern");
   }
 
   if (reasons.length === 0) {
-    return { ignore: false, reasons: [] };
+    return { ignore: false, reasons: [], categories: [], matchedHeaders: [] };
   }
 
-  return { ignore: true, reasons: [...reasons, ...lowConfidenceReasons] };
+  return {
+    ignore: true,
+    reasons: [...reasons, ...lowConfidenceReasons],
+    categories: [...categories, ...lowConfidenceCategories],
+    matchedHeaders,
+  };
 }
 
 // Read header value from normalized header map

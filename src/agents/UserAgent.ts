@@ -12,6 +12,12 @@
  *
  * Clef-flash no_reply gate runs in getAIResponse (with memory) before recipients/Prime Foo.
  * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
+ *
+ * Inbound logging contract: every onEmail invocation logs one receipt line, one line per skip path,
+ * and exactly one terminal "Inbound email outcome" line, all tagged with the random per-message
+ * emailRef the Worker assigns and passes in the internal x-caf-gpt-email-ref header, so it matches
+ * the Worker boundary "Email routed" line. Logs never carry addresses (domains only), subjects,
+ * bodies, prompts, or model output.
  */
 
 import { Agent } from "agents";
@@ -22,6 +28,7 @@ import { createConfig } from "../config";
 import { formatQuotedContent, HtmlEmailComposer } from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
+import { getEmailRefFromHeaders, getLogSafeDomain } from "../email/utils/LogRedaction";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
 import { isValidMessageId, validateEmailContent } from "../email/utils/EmailValidator";
 import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates";
@@ -56,6 +63,25 @@ interface MemoryUpdateTask {
 
 type ProcessingError = Error | string;
 
+/** Terminal outcome of one inbound email invocation. */
+type InboundOutcome = "replied" | "skipped" | "error";
+
+/** Result of the sender-only error reply attempt on the error path. */
+type ErrorReplyStatus = "sent" | "failed" | "skipped_unauthorized" | "not_attempted";
+
+/** Content-free fields attached to every inbound email log line. */
+interface InboundLogContext {
+  emailRef: string;
+  senderDomain: string;
+}
+
+/** Prime Foo response plus a content-free skip reason when no reply will be sent. */
+interface AIResponseResult {
+  shouldRespond: boolean;
+  content?: string;
+  skipReason?: string;
+}
+
 interface ReplyThreadingOptions {
   inReplyTo?: string;
   headers?: Record<string, string>;
@@ -89,9 +115,23 @@ export class UserAgent extends Agent<Env, UserAgentState> {
 
   /** Handles inbound email routed by the Agents SDK. */
   async onEmail(email: AgentEmail): Promise<void> {
+    const startTime = Date.now();
+    const logContext: InboundLogContext = {
+      emailRef: getEmailRefFromHeaders(email.headers),
+      senderDomain: getLogSafeDomain(email.from),
+    };
+    this.logger.info("Inbound email received by UserAgent", {
+      ...logContext,
+      receivingDomain: getLogSafeDomain(email.to),
+      rawSize: email.rawSize,
+    });
+
     let config: AppConfig | undefined;
     let parsedEmail = this.buildEnvelopeEmailData(email);
     let sendAttempted = false;
+    let outcome: InboundOutcome = "error";
+    let outcomeReason = "unhandled";
+    let errorReply: ErrorReplyStatus | undefined;
 
     try {
       config = createConfig(this.env);
@@ -99,24 +139,42 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       const rawEmail = await email.getRaw();
       parsedEmail = await this.parseEmail(email, rawEmail);
 
-      if (this.guardAgainstSelfLoop(parsedEmail, config)) {
+      const selfLoopReason = this.getSelfLoopSkipReason(parsedEmail, config);
+      if (selfLoopReason) {
+        this.logger.info("Inbound email skipped by self-loop guard", {
+          ...logContext,
+          skipReason: selfLoopReason,
+        });
+        outcome = "skipped";
+        outcomeReason = selfLoopReason;
         return;
       }
 
       const autoReplyDetection = detectAutoReply(parsedEmail);
       if (autoReplyDetection.ignore) {
+        // Only fixed category labels and allowlisted header names; `reasons` quotes header values.
         this.logger.info("Ignoring auto-reply or bounce email", {
+          ...logContext,
           reasonCount: autoReplyDetection.reasons.length,
+          categories: autoReplyDetection.categories,
+          matchedHeaders: autoReplyDetection.matchedHeaders,
         });
+        outcome = "skipped";
+        outcomeReason = "auto_reply";
         return;
       }
 
-      this.validateEmail(parsedEmail);
+      this.validateEmail(parsedEmail, logContext);
       const emailContext = this.buildEmailContext(parsedEmail);
-      const response = await this.getAIResponse(emailContext, config);
+      const response = await this.getAIResponse(emailContext, config, logContext);
 
       if (!response.shouldRespond || !response.content?.trim()) {
-        this.logger.info("Inbound email completed without a reply");
+        this.logger.info("Inbound email completed without a reply", {
+          ...logContext,
+          skipReason: response.skipReason ?? "prime_foo_no_response",
+        });
+        outcome = "skipped";
+        outcomeReason = response.skipReason ?? "prime_foo_no_response";
         return;
       }
 
@@ -126,17 +184,59 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       });
       await this.scheduleMemoryUpdate(emailContext, response.content);
       this.logger.info("Inbound email reply accepted", {
+        ...logContext,
         toCount: recipients.to.length,
         ccCount: recipients.cc.length,
       });
+      outcome = "replied";
+      outcomeReason = "reply_sent";
     } catch (error) {
-      this.logger.error("Email processing failed", getSafeErrorMetadata(error));
+      this.logger.error("Email processing failed", {
+        ...logContext,
+        ...getSafeErrorMetadata(error),
+        sendAttempted,
+      });
+      outcome = "error";
+      outcomeReason = this.classifyProcessingFailure(error, sendAttempted, config);
       if (sendAttempted || !config) {
+        errorReply = "not_attempted";
         return;
       }
 
-      await this.handleProcessingError(this.parseProcessingError(error), parsedEmail, config);
+      errorReply = await this.handleProcessingError(
+        this.parseProcessingError(error),
+        parsedEmail,
+        config,
+        logContext
+      );
+    } finally {
+      const outcomeFields = {
+        ...logContext,
+        outcome,
+        reason: outcomeReason,
+        durationMs: Date.now() - startTime,
+      };
+      if (errorReply !== undefined) {
+        Object.assign(outcomeFields, { errorReply });
+      }
+      if (outcome === "error") {
+        this.logger.error("Inbound email outcome", outcomeFields);
+      } else {
+        this.logger.info("Inbound email outcome", outcomeFields);
+      }
     }
+  }
+
+  /** Maps a caught inbound failure to a content-free terminal outcome reason. */
+  private classifyProcessingFailure<ErrorValue>(
+    error: ErrorValue,
+    sendAttempted: boolean,
+    config: AppConfig | undefined
+  ): string {
+    if (!config) return "config_unavailable";
+    if (sendAttempted) return "reply_send_failed";
+    if (error instanceof EmailValidationError) return "content_validation_failed";
+    return "processing_failed";
   }
 
   /** Runs a durable scheduled memory update after a successful email reply. */
@@ -246,11 +346,13 @@ export class UserAgent extends Agent<Env, UserAgentState> {
     };
   }
 
-  /** Checks if email is from CAF-GPT itself to prevent loops. */
-  private guardAgainstSelfLoop(parsedEmail: ParsedEmailData, config: AppConfig): boolean {
+  /** Returns a skip reason when the email is from CAF-GPT itself (or has no sender) to prevent loops. */
+  private getSelfLoopSkipReason(
+    parsedEmail: ParsedEmailData,
+    config: AppConfig
+  ): "missing_sender" | "self_sender" | undefined {
     if (!parsedEmail.envelopeFrom) {
-      this.logger.warn("Email sender is missing, ignoring email");
-      return true;
+      return "missing_sender";
     }
 
     const normalizedFrom = normalizeEmailAddress(parsedEmail.envelopeFrom);
@@ -260,18 +362,15 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       )
     );
 
-    if (selfAddresses.has(normalizedFrom)) {
-      this.logger.info("Ignoring email from self");
-      return true;
-    }
-    return false;
+    return selfAddresses.has(normalizedFrom) ? "self_sender" : undefined;
   }
 
   /** Validates inbound content before recipient policy handles reply-all candidates. */
-  private validateEmail(parsedEmail: ParsedEmailData): void {
+  private validateEmail(parsedEmail: ParsedEmailData, logContext: InboundLogContext): void {
     const contentValidation = validateEmailContent(parsedEmail);
     if (!contentValidation.isValid) {
       this.logger.error("Email content validation failed", {
+        ...logContext,
         errorCount: contentValidation.errors.length,
       });
       throw new EmailValidationError("Inbound email content failed validation");
@@ -279,6 +378,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
 
     if (contentValidation.warnings.length > 0) {
       this.logger.warn("Email content warnings", {
+        ...logContext,
         warningCount: contentValidation.warnings.length,
       });
     }
@@ -300,8 +400,9 @@ ${parsedEmail.body}`;
   /** Gets the Prime Foo response using the current Agent state memory. */
   private async getAIResponse(
     emailContext: string,
-    config: AppConfig
-  ): Promise<{ shouldRespond: boolean; content?: string }> {
+    config: AppConfig,
+    logContext: InboundLogContext
+  ): Promise<AIResponseResult> {
     // Clef-flash is a System One decision model; cast until wrangler AiModels lists it.
     const replyGate = await decideShouldReply(
       {
@@ -310,12 +411,17 @@ ${parsedEmail.body}`;
       emailContext,
       this.state.memory
     );
+    const gateFields = {
+      ...logContext,
+      reason: replyGate.reason,
+      choice: replyGate.choice ?? "none",
+      confidence: replyGate.confidence ?? null,
+    };
     if (!replyGate.shouldReply) {
-      this.logger.info("Clef no_reply gate skipped Prime Foo", {
-        reason: replyGate.reason,
-      });
-      return { shouldRespond: false };
+      this.logger.info("Clef no_reply gate skipped Prime Foo", gateFields);
+      return { shouldRespond: false, skipReason: replyGate.reason };
     }
+    this.logger.info("Clef reply gate allowed Prime Foo", gateFields);
 
     if (!this.agentCoordinator) {
       this.agentCoordinator = await AgentCoordinator.create(this.env, config);
@@ -373,16 +479,20 @@ ${parsedEmail.body}`;
     }
   }
 
-  /** Attempts one sender-only structured error reply and swallows every reply failure. */
+  /** Attempts one sender-only structured error reply, swallows every reply failure, and reports the result. */
   private async handleProcessingError(
     error: ProcessingError,
     parsedEmail: ParsedEmailData,
-    config: AppConfig
-  ): Promise<void> {
+    config: AppConfig,
+    logContext: InboundLogContext
+  ): Promise<ErrorReplyStatus> {
     const envelopeSender = normalizeEmailAddress(parsedEmail.envelopeFrom);
     if (!isAuthorizedEmailAddress(envelopeSender, config.authorization)) {
-      this.logger.warn("Skipping error reply to unauthorized or malformed envelope sender");
-      return;
+      this.logger.warn(
+        "Skipping error reply to unauthorized or malformed envelope sender",
+        logContext
+      );
+      return "skipped_unauthorized";
     }
 
     try {
@@ -398,9 +508,14 @@ ${parsedEmail.body}`;
         inReplyTo: threadingOptions.inReplyTo,
         headers: threadingOptions.headers,
       });
-      this.logger.info("Sender-only error reply sent");
+      this.logger.info("Sender-only error reply sent", logContext);
+      return "sent";
     } catch (replyError) {
-      this.logger.error("Failed to send error reply", getSafeErrorMetadata(replyError));
+      this.logger.error("Failed to send error reply", {
+        ...logContext,
+        ...getSafeErrorMetadata(replyError),
+      });
+      return "failed";
     }
   }
 
