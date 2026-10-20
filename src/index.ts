@@ -5,12 +5,11 @@
  *
  * Top-level functions:
  * - UserAgent: Durable Object-backed per-user email agent
- * - EmailBoundaryMetadata: Safe sender and recipient domain metadata for boundary logs
+ * - EmailBoundaryMetadata: Safe sender/recipient domain and emailRef metadata for boundary logs
  * - EmailRoutingFailureMetadata: Parsed error metadata for top-level routing failures
  * - createUserAgentResolver: Creates the sender-keyed Agents SDK email resolver
  * - isAuthorizedSender: Checks configured sender allow list
  * - isMonitoredRecipient: Checks monitored recipient addresses
- * - getEmailDomain: Extracts safe normalized sender-domain metadata
  * - rejectEmailSafely: Attempts an SMTP rejection without allowing it to escape
  * - fetch: HTTP handler for health checks and static assets
  * - email: Email Worker handler for inbound email processing
@@ -22,13 +21,15 @@ import type { EmailResolver } from "agents/email";
 import { getUserAgentId, UserAgent } from "./agents/UserAgent";
 import { createConfig } from "./config";
 import { normalizeEmailAddress } from "./email/utils/EmailNormalizer";
+import { createEmailRef, getLogSafeDomain } from "./email/utils/LogRedaction";
 import { isAuthorizedEmailAddress } from "./email/utils/ReplyRecipients";
 import { getSafeErrorMetadata, Logger } from "./Logger";
 
 export { UserAgent };
 
-/** Safe sender and recipient domain metadata for inbound email boundary logs. */
+/** Safe sender/recipient domains plus the content-free emailRef for inbound boundary logs. */
 interface EmailBoundaryMetadata {
+  emailRef: string;
   senderDomain: string;
   receivingDomain: string;
 }
@@ -37,6 +38,7 @@ interface EmailBoundaryMetadata {
 interface EmailRoutingFailureMetadata extends EmailBoundaryMetadata {
   errorName: string;
   errorCode?: string;
+  routedToAgent: boolean;
 }
 
 /** Creates the Agents SDK email resolver for authorized sender-keyed routing. */
@@ -45,27 +47,27 @@ export function createUserAgentResolver(env: Env, config = createConfig(env)): E
 
   return async (emailMessage) => {
     const senderEmail = normalizeEmailAddress(emailMessage.from);
+    const recipientEmail = normalizeEmailAddress(emailMessage.to);
+    const metadata: EmailBoundaryMetadata = {
+      emailRef: await createEmailRef(emailMessage.headers.get("message-id")),
+      senderDomain: getLogSafeDomain(senderEmail),
+      receivingDomain: getLogSafeDomain(recipientEmail),
+    };
+
     if (!isAuthorizedSender(senderEmail, config)) {
-      logger.info("Email ignored - sender not authorized", {
-        senderDomain: getEmailDomain(senderEmail),
-        receivingDomain: getEmailDomain(emailMessage.to),
-      });
+      logger.info("Email ignored - sender not authorized", metadata);
       return null;
     }
 
-    const recipientEmail = normalizeEmailAddress(emailMessage.to);
     if (!isMonitoredRecipient(recipientEmail, config)) {
-      logger.info("Email ignored - recipient not monitored", {
-        senderDomain: getEmailDomain(senderEmail),
-        receivingDomain: getEmailDomain(recipientEmail),
-      });
+      logger.info("Email ignored - recipient not monitored", metadata);
       return null;
     }
 
     logger.info("Email routed", {
+      ...metadata,
       route: "email",
       status: "routed",
-      senderDomain: getEmailDomain(senderEmail),
     });
 
     return {
@@ -88,12 +90,6 @@ function isMonitoredRecipient(
   return config.email.monitoredAddresses.some(
     (address) => recipientEmail === normalizeEmailAddress(address)
   );
-}
-
-/** Extracts safe normalized domain metadata from an email address. */
-function getEmailDomain(address: string): string {
-  const normalized = normalizeEmailAddress(address);
-  return normalized.includes("@") ? normalized.slice(normalized.lastIndexOf("@") + 1) : "";
 }
 
 /** Attempts an SMTP rejection without allowing platform errors to escape. */
@@ -169,10 +165,12 @@ async function email(
   env: Env,
   _ctx: ExecutionContext
 ): Promise<void> {
+  const startTime = Date.now();
   const logger = Logger.getInstance();
   const metadata = {
-    senderDomain: getEmailDomain(message.from),
-    receivingDomain: getEmailDomain(message.to),
+    emailRef: await createEmailRef(message.headers.get("message-id")),
+    senderDomain: getLogSafeDomain(message.from),
+    receivingDomain: getLogSafeDomain(message.to),
   } satisfies EmailBoundaryMetadata;
 
   if (!env.EMAIL) {
@@ -196,9 +194,15 @@ async function email(
     return;
   }
 
+  const resolver = createUserAgentResolver(env, config);
+  let routedToAgent = false;
   try {
     await routeAgentEmail(message, env, {
-      resolver: createUserAgentResolver(env, config),
+      resolver: async (emailMessage, resolverEnv) => {
+        const route = await resolver(emailMessage, resolverEnv);
+        routedToAgent = route !== null;
+        return route;
+      },
       onNoRoute: (emailMessage) => {
         logger.warn("Email rejected - no UserAgent route", {
           ...metadata,
@@ -211,11 +215,19 @@ async function email(
         );
       },
     });
+    if (routedToAgent) {
+      // Worker-side proof the UserAgent call returned; the DO's own outcome line carries the reason.
+      logger.info("Email handed off to UserAgent", {
+        ...metadata,
+        durationMs: Date.now() - startTime,
+      });
+    }
   } catch (error) {
     const { errorName, errorCode } = getSafeErrorMetadata(error);
     const failureMetadata: EmailRoutingFailureMetadata = {
       ...metadata,
       errorName,
+      routedToAgent,
     };
     if (errorCode !== undefined) {
       failureMetadata.errorCode = errorCode;
