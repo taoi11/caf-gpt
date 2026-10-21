@@ -588,6 +588,32 @@ describe("UserAgent email processing", () => {
     });
     expect(inReplyToOnly).toContain("OWNER-SECRET");
 
+    // A very long answer cannot push the inbound email out of the stored turn.
+    const longSender = "thread-long@forces.gc.ca";
+    await runInDurableObject(getUserAgentStub(longSender), async (instance: UserAgent) => {
+      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({ messageId: "out" });
+      mockSuccessfulSchedule(instance, "schedule-1");
+      mockPrimeFoo(
+        vi.fn(async () => ({ shouldRespond: true, content: `<p>${"x".repeat(30_000)}</p>` }))
+      );
+      await instance.onEmail(
+        createAgentEmail({
+          envelopeFrom: longSender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: longSender,
+          to: ["agent@caf-gpt.com"],
+          subject: "Thread",
+          body: "LONG-INBOUND-DETAIL",
+          messageId: "<long1@forces.gc.ca>",
+        })
+      );
+    });
+    const longFollowUp = await runTurn(longSender, {
+      messageId: "<long2@forces.gc.ca>",
+      headers: { references: "<long1@forces.gc.ca>" },
+    });
+    expect(longFollowUp).toContain("LONG-INBOUND-DETAIL");
+
     // A first email with no usable ids is seeded from our outbound Message-ID.
     const noIdSender = "thread-noid@forces.gc.ca";
     await runTurn(noIdSender, { body: "NOID-FIRST", messageId: undefined });

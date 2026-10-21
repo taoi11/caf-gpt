@@ -61,6 +61,7 @@ import {
   loadThreadHistory,
   pruneThreadHistory,
   recordThreadTurn,
+  THREAD_HISTORY_MAX_CHARS,
   THREAD_HISTORY_PRUNE_INTERVAL_SECONDS,
   type ThreadLookup,
 } from "./utils/ThreadHistory";
@@ -519,7 +520,9 @@ ${parsedEmail.body}`;
       recordThreadTurn(
         this.sql.bind(this),
         parsedEmail,
-        replyBlock + formatQuotedContent(parsedEmail),
+        // Each side gets half the block cap so a long answer cannot push out the inbound email.
+        replyBlock.slice(0, THREAD_HISTORY_MAX_CHARS / 2) +
+          formatQuotedContent(parsedEmail).slice(0, THREAD_HISTORY_MAX_CHARS / 2),
         thread.threadId,
         outboundMessageId,
         Date.now()
