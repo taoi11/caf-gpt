@@ -1,13 +1,13 @@
 /**
  * tests/workers/setup.ts
  *
- * Workers-pool setup: default Clef-flash gates to allow so existing suites still hit Prime Foo / MemoryFoo
+ * Workers-pool setup: default Clef / Clef-flash gates to allow so existing suites still hit Prime Foo / MemoryFoo
  */
 
 import { env } from "cloudflare:workers";
 import { beforeEach, vi } from "vitest";
 
-import { CLEF_FLASH_MODEL } from "../../src/agents/utils/ClefDecision";
+import { CLEF_FLASH_MODEL, CLEF_MODEL } from "../../src/agents/utils/ClefDecision";
 
 beforeEach(() => {
   if (!env.AI || typeof env.AI.run !== "function") {
@@ -16,7 +16,7 @@ beforeEach(() => {
 
   const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
   vi.spyOn(ai, "run").mockImplementation(async (model: unknown, inputs?: unknown) => {
-    if (model === CLEF_FLASH_MODEL) {
+    if (model === CLEF_FLASH_MODEL || model === CLEF_MODEL) {
       const questions =
         typeof inputs === "object" &&
         inputs !== null &&

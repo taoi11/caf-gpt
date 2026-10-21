@@ -1,7 +1,7 @@
 /**
  * tests/workers/ClefNoReplyGate.test.ts
  *
- * Workers tests for the Clef-flash no_reply gate in UserAgent.getAIResponse
+ * Workers tests for the Clef (27B) prompt-injection/abuse screen in UserAgent.getAIResponse
  *
  * Top-level declarations:
  * - mockClefChoice: Mocks env.AI.run to return a Clef reply/no_reply choice
@@ -18,7 +18,7 @@ import type { AgentEmail } from "agents/email";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
-import { CLEF_FLASH_MODEL } from "../../src/agents/utils/ClefDecision";
+import { CLEF_MODEL } from "../../src/agents/utils/ClefDecision";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
 
 afterEach(async () => {
@@ -26,7 +26,7 @@ afterEach(async () => {
   await reset();
 });
 
-describe("UserAgent Clef no_reply gate", () => {
+describe("UserAgent Clef injection screen", () => {
   it("skips Prime Foo and does not send when Clef chooses no_reply", async () => {
     const stub = getUserAgentStub("clef-no-reply@forces.gc.ca");
 
@@ -77,7 +77,7 @@ describe("UserAgent Clef no_reply gate", () => {
 
       const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
       vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
-        if (model === CLEF_FLASH_MODEL) {
+        if (model === CLEF_MODEL) {
           throw new Error("workers ai down");
         }
         throw new Error(`Unexpected AI.run model: ${String(model)}`);
@@ -166,9 +166,9 @@ describe("UserAgent Clef no_reply gate", () => {
 
       const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
       const runSpy = vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
-        if (model === CLEF_FLASH_MODEL) {
+        if (model === CLEF_MODEL) {
           return {
-            model: "clef-flash",
+            model: "clef",
             answers: {
               should_reply: {
                 type: "choice",
@@ -206,7 +206,7 @@ describe("UserAgent Clef no_reply gate", () => {
       });
 
       await instance.onEmail(email);
-      const clefCall = runSpy.mock.calls.find((call) => call[0] === CLEF_FLASH_MODEL);
+      const clefCall = runSpy.mock.calls.find((call) => call[0] === CLEF_MODEL);
       const inputs = clefCall?.[1] as { state?: string } | undefined;
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
@@ -275,9 +275,9 @@ describe("UserAgent Clef no_reply gate", () => {
 function mockClefChoice(choice: "reply" | "no_reply", confidence: number): void {
   const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
   vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
-    if (model === CLEF_FLASH_MODEL) {
+    if (model === CLEF_MODEL) {
       return {
-        model: "clef-flash",
+        model: "clef",
         answers: {
           should_reply: {
             type: "choice",

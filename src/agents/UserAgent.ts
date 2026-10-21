@@ -10,7 +10,7 @@
  * - persistPrunedVersions: Shared memory-version prune + conditional state write helper
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
  *
- * Clef-flash no_reply gate runs in getAIResponse (with memory) before recipients/Prime Foo.
+ * Clef (27B) prompt-injection/abuse screen runs in getAIResponse (with memory) before Prime Foo.
  * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  *
  * Inbound logging contract: every onEmail invocation logs one receipt line, one line per skip path,
@@ -242,7 +242,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   /** Runs a durable scheduled memory update after a successful email reply. */
   async runMemoryUpdate(task: MemoryUpdateTask): Promise<void> {
     try {
-      // Clef-flash is a System One decision model; cast until wrangler AiModels lists it.
+      // Clef is a System One decision model; cast until wrangler AiModels lists it.
       const memoryGate = await decideShouldUpdateMemory(
         {
           run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
@@ -403,7 +403,7 @@ ${parsedEmail.body}`;
     config: AppConfig,
     logContext: InboundLogContext
   ): Promise<AIResponseResult> {
-    // Clef-flash is a System One decision model; cast until wrangler AiModels lists it.
+    // Clef is a System One decision model; cast until wrangler AiModels lists it.
     const replyGate = await decideShouldReply(
       {
         run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
@@ -418,10 +418,10 @@ ${parsedEmail.body}`;
       confidence: replyGate.confidence ?? null,
     };
     if (!replyGate.shouldReply) {
-      this.logger.info("Clef no_reply gate skipped Prime Foo", gateFields);
+      this.logger.info("Clef injection screen blocked Prime Foo", gateFields);
       return { shouldRespond: false, skipReason: replyGate.reason };
     }
-    this.logger.info("Clef reply gate allowed Prime Foo", gateFields);
+    this.logger.info("Clef injection screen allowed Prime Foo", gateFields);
 
     if (!this.agentCoordinator) {
       this.agentCoordinator = await AgentCoordinator.create(this.env, config);

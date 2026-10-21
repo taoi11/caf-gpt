@@ -24,7 +24,7 @@ import type { AgentEmail } from "agents/email";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
-import { CLEF_FLASH_MODEL } from "../../src/agents/utils/ClefDecision";
+import { CLEF_MODEL } from "../../src/agents/utils/ClefDecision";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
 import { EMAIL_REF_HEADER } from "../../src/email/utils/LogRedaction";
 import worker, { createUserAgentResolver } from "../../src/index";
@@ -58,7 +58,7 @@ describe("inbound email logging contract", () => {
     const emailRef = WORKER_EMAIL_REF;
     expect(lines.map((line) => line.message)).toEqual([
       "Inbound email received by UserAgent",
-      "Clef no_reply gate skipped Prime Foo",
+      "Clef injection screen blocked Prime Foo",
       "Inbound email completed without a reply",
       "Inbound email outcome",
     ]);
@@ -70,12 +70,12 @@ describe("inbound email logging contract", () => {
     expect(lines[1]).toMatchObject({
       choice: "no_reply",
       confidence: 0.93,
-      reason: "clef_no_reply",
+      reason: "clef_suspected_injection",
     });
     expect(lines[3]).toMatchObject({
       level: "info",
       outcome: "skipped",
-      reason: "clef_no_reply",
+      reason: "clef_suspected_injection",
     });
     expect(lines[3].durationMs).toEqual(expect.any(Number));
     expectNoSensitiveContent(lines);
@@ -141,7 +141,7 @@ describe("inbound email logging contract", () => {
     });
 
     expect(
-      lines.find((line) => line.message === "Clef reply gate allowed Prime Foo")
+      lines.find((line) => line.message === "Clef injection screen allowed Prime Foo")
     ).toMatchObject({ choice: "reply", confidence: 0.91, reason: "clef_reply" });
     expect(lines.at(-1)).toMatchObject({ outcome: "replied", reason: "reply_sent" });
     expect(JSON.stringify(lines)).not.toContain("Model output");
@@ -333,9 +333,9 @@ function expectNoSensitiveContent(lines: LoggedLine[]): void {
 /** Mocks env.AI.run to return a Clef reply/no_reply choice for the gate. */
 function mockClefChoice(choice: "reply" | "no_reply", confidence: number): void {
   vi.spyOn(getAiRunStub(), "run").mockImplementation(async (model: string) => {
-    if (model === CLEF_FLASH_MODEL) {
+    if (model === CLEF_MODEL) {
       return {
-        model: "clef-flash",
+        model: "clef",
         answers: {
           should_reply: {
             type: "choice",
