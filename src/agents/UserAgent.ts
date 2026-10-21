@@ -14,7 +14,7 @@
  * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  *
  * Replies carry only the agent answer and signature (no quoted history) and thread via
- * In-Reply-To/References. Prior turns the old quoted block carried are kept in DO SQLite
+ * In-Reply-To/References. Prior turns (inbound email plus our reply) are kept in DO SQLite
  * (utils/ThreadHistory) and appended to the model context of the user's next reply.
  *
  * Inbound logging contract: every onEmail invocation logs one receipt line, one line per skip path,
@@ -61,6 +61,7 @@ import {
   loadThreadHistory,
   pruneThreadHistory,
   recordThreadTurn,
+  THREAD_HISTORY_MAX_CHARS,
   THREAD_HISTORY_PRUNE_INTERVAL_SECONDS,
   type ThreadLookup,
 } from "./utils/ThreadHistory";
@@ -205,7 +206,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
           sendAttempted = true;
         }
       );
-      await this.recordThread(parsedEmail, thread, outboundMessageId, logContext);
+      await this.recordThread(parsedEmail, response.content, thread, outboundMessageId, logContext);
       await this.scheduleMemoryUpdate(emailContext, response.content);
       this.logger.info("Inbound email reply accepted", {
         ...logContext,
@@ -502,26 +503,30 @@ ${parsedEmail.body}`;
   }
 
   /**
-   * Stores the answered inbound email as the thread's newest turn and keeps a daily prune
-   * schedule (idempotent) so retention holds even if the user never writes again.
-   * Never fails the reply.
+   * Stores the answered inbound email and our reply as the thread's newest turn. The daily prune
+   * schedule (idempotent) is ensured first, so nothing is stored without one and retention holds
+   * even if the user never writes again. Never fails the reply.
    */
   private async recordThread(
     parsedEmail: ParsedEmailData,
+    replyContent: string,
     thread: ThreadLookup,
     outboundMessageId: string | undefined,
     logContext: InboundLogContext
   ): Promise<void> {
     try {
+      await this.scheduleEvery(THREAD_HISTORY_PRUNE_INTERVAL_SECONDS, "runThreadHistoryPrune");
+      const replyBlock = `\n\n________________________________\nFrom: CAF-GPT\n\n${htmlToText(replyContent) || replyContent.trim()}`;
       recordThreadTurn(
         this.sql.bind(this),
         parsedEmail,
-        formatQuotedContent(parsedEmail),
+        // Each side gets half the block cap so a long answer cannot push out the inbound email.
+        replyBlock.slice(0, THREAD_HISTORY_MAX_CHARS / 2) +
+          formatQuotedContent(parsedEmail).slice(0, THREAD_HISTORY_MAX_CHARS / 2),
         thread.threadId,
         outboundMessageId,
         Date.now()
       );
-      await this.scheduleEvery(THREAD_HISTORY_PRUNE_INTERVAL_SECONDS, "runThreadHistoryPrune");
     } catch (error) {
       this.logger.warn("Thread history save failed", {
         ...logContext,
