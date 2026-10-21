@@ -19,11 +19,15 @@ const FILETIME_UNIX_EPOCH_OFFSET = 116444736000000000n;
 const PARENT_MS = Date.UTC(2026, 9, 21, 21, 0, 0);
 const GUID = Array.from({ length: 16 }, (_, index) => index + 1);
 
-/** Builds a 22-byte conversation index header (0x01, 5-byte FILETIME, GUID) as base64. */
-function buildParentIndex(ms: number, extraBytes: number[] = []): string {
+/**
+ * Builds a 22-byte conversation index header (0x01, 5-byte FILETIME, GUID) as base64. The
+ * current layout stores FILETIME bits 24-63; the legacy Outlook 2007-2019 layout bits 16-55.
+ */
+function buildParentIndex(ms: number, extraBytes: number[] = [], legacy = false): string {
   const filetime = BigInt(ms) * 10000n + FILETIME_UNIX_EPOCH_OFFSET;
+  const lowShift = legacy ? 16 : 24;
   const time = Array.from({ length: 5 }, (_, index) =>
-    Number((filetime >> BigInt(56 - index * 8)) & 0xffn)
+    Number((filetime >> BigInt(lowShift + 32 - index * 8)) & 0xffn)
   );
   return btoa(String.fromCharCode(0x01, ...time, ...GUID, ...extraBytes));
 }
@@ -78,6 +82,28 @@ describe("buildChildThreadIndex", () => {
     expect(bytes).toHaveLength(32);
     expect(bytes.slice(0, 27)).toEqual(decode(parent));
     expect(bytes.slice(27)).toEqual([0, 0, 0, 0, 7]);
+  });
+
+  it("reconstructs the legacy Outlook 2007-2019 header time instead of clamping to zero", () => {
+    const parent = buildParentIndex(PARENT_MS, [], true);
+    const nowMs = PARENT_MS + 60 * 60 * 1000;
+    const bytes = decode(buildChildThreadIndex(parent, nowMs, 0));
+    const level = ((bytes[22] << 24) | (bytes[23] << 16) | (bytes[24] << 8) | bytes[25]) >>> 0;
+    const filetime = BigInt(PARENT_MS) * 10000n + FILETIME_UNIX_EPOCH_OFFSET;
+    const legacyHeaderTime = (filetime >> 16n) << 16n;
+    const now = BigInt(nowMs) * 10000n + FILETIME_UNIX_EPOCH_OFFSET;
+
+    expect(level >>> 31).toBe(0);
+    expect(level).toBe(Number(((now - legacyHeaderTime) >> 18n) & 0x7fffffffn));
+  });
+
+  it("ignores whitespace left by header folding", () => {
+    const parent = buildParentIndex(PARENT_MS, [1, 2, 3, 4, 5]);
+    const folded = `${parent.slice(0, 20)}\r\n ${parent.slice(20)}`;
+    const bytes = decode(buildChildThreadIndex(folded, PARENT_MS, 9));
+
+    expect(bytes.slice(0, 27)).toEqual(decode(parent));
+    expect(bytes).toHaveLength(32);
   });
 
   it.each([
