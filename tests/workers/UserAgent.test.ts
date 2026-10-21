@@ -527,6 +527,8 @@ describe("UserAgent email processing", () => {
     expect(contexts[0]).not.toContain("________________________________");
     expect(contexts[1]).toContain("Sgt TURN-TWO-ANSWER");
     expect(contexts[1]).toContain("TURN-ONE-NARRATIVE");
+    // Our previous reply is kept too, so a bare answer to our question still makes sense.
+    expect(contexts[1]).toContain("What is the member's rank?");
     // Newest prior turn first, matching the nested order quoted history used.
     expect(contexts[2].indexOf("TURN-TWO-ANSWER")).toBeGreaterThan(-1);
     expect(contexts[2].indexOf("TURN-TWO-ANSWER")).toBeLessThan(
@@ -585,6 +587,41 @@ describe("UserAgent email processing", () => {
       headers: { "in-reply-to": `<out-${owner}>` },
     });
     expect(inReplyToOnly).toContain("OWNER-SECRET");
+
+    // A first email with no usable ids is seeded from our outbound Message-ID.
+    const noIdSender = "thread-noid@forces.gc.ca";
+    await runTurn(noIdSender, { body: "NOID-FIRST", messageId: undefined });
+    const noIdFollowUp = await runTurn(noIdSender, {
+      messageId: "<noid2@forces.gc.ca>",
+      headers: { "in-reply-to": `<out-${noIdSender}>` },
+    });
+    expect(noIdFollowUp).toContain("NOID-FIRST");
+
+    // Nothing is stored when the prune schedule cannot be ensured.
+    const unscheduled = await runInDurableObject(
+      getUserAgentStub("thread-unscheduled@forces.gc.ca"),
+      async (instance: UserAgent) => {
+        vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({ messageId: "out" });
+        mockSuccessfulSchedule(instance, "schedule-1");
+        vi.spyOn(instance, "scheduleEvery").mockRejectedValue(new Error("schedule unavailable"));
+        mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "<p>Ok</p>" })));
+        await instance.onEmail(
+          createAgentEmail({
+            envelopeFrom: "thread-unscheduled@forces.gc.ca",
+            envelopeTo: "agent@caf-gpt.com",
+            from: "thread-unscheduled@forces.gc.ca",
+            to: ["agent@caf-gpt.com"],
+            subject: "Thread",
+            body: "Body",
+            messageId: "<unscheduled@forces.gc.ca>",
+          })
+        );
+        return instance.sql<{
+          count: number;
+        }>`SELECT COUNT(*) AS count FROM cafgpt_thread_turns`[0].count;
+      }
+    );
+    expect(unscheduled).toBe(0);
 
     const expired = await runInDurableObject(
       getUserAgentStub(owner),

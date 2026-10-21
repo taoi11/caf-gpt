@@ -127,13 +127,13 @@ export function loadThreadHistory(
 }
 
 /**
- * Stores the replied-to inbound email's history block as the newest turn of its thread and maps
+ * Stores the answered turn's history block (our reply, then the inbound email) as the newest turn of its thread and maps
  * its Message-ID (and the ids it referenced) to the thread so the user's next reply finds it.
  * Each block is capped at THREAD_HISTORY_MAX_CHARS and each thread at THREAD_HISTORY_MAX_TURNS;
  * turns and mappings older than THREAD_HISTORY_RETENTION_MS are pruned.
  * @param sql - Agent SQL surface
  * @param parsedEmail - Parsed inbound email that was answered
- * @param block - Plain-text history block for this inbound email
+ * @param block - Plain-text history block for this turn (our reply, then the inbound email)
  * @param existingThreadId - Thread id returned by loadThreadHistory, when one matched
  * @param outboundMessageId - Message-ID Email Service assigned our reply, so a reply that carries
  *   only In-Reply-To (no References) still matches
@@ -153,12 +153,12 @@ export function recordThreadTurn(
       ? parsedEmail.messageId
       : undefined;
   const linkedIds = getThreadMessageIds(parsedEmail);
-  const threadId = existingThreadId ?? ownId ?? linkedIds[0];
+  const replyId = toMessageId(outboundMessageId);
+  const threadId = existingThreadId ?? ownId ?? linkedIds[0] ?? replyId;
   if (!threadId) return;
 
   const storedBlock = block.slice(0, THREAD_HISTORY_MAX_CHARS);
   void sql`INSERT INTO cafgpt_thread_turns (thread_id, created_at, block) VALUES (${threadId}, ${now}, ${storedBlock})`;
-  const replyId = toMessageId(outboundMessageId);
   const mappedIds = [...(ownId ? [ownId] : []), ...(replyId ? [replyId] : []), ...linkedIds];
   for (const messageId of mappedIds) {
     void sql`INSERT OR REPLACE INTO cafgpt_thread_messages (message_id, thread_id, created_at)
