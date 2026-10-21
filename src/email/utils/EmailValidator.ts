@@ -8,6 +8,7 @@
  * - isValidEmailAddress: Validate email address format using Zod
  * - hasControlCharacters: Detects unsafe header control characters
  * - isValidMessageId: Validates a strict practical Message-ID subset
+ * - parseMessageIdList: Extracts valid Message-IDs from a References/In-Reply-To header value
  */
 
 import { z } from "zod";
@@ -155,6 +156,19 @@ export function isValidMessageId(messageId: string): boolean {
     return false;
   }
   return MESSAGE_ID_REGEX.test(messageIdValue);
+}
+
+/**
+ * Extracts the valid Message-IDs from a References/In-Reply-To value, in order. Ids may be
+ * separated by any whitespace or none (RFC 5322 makes the separator optional); a token that is
+ * not wholly a valid Message-ID is dropped, never mined for an embedded one.
+ * @param value - Raw header value
+ */
+export function parseMessageIdList(value: string | undefined): string[] {
+  return (value ?? "")
+    .replace(/>\s*</g, "> <")
+    .split(/\s+/)
+    .filter((messageId) => isValidMessageId(messageId));
 }
 
 // Pre-compile regular expressions and use a Set for O(1) lookup

@@ -1,94 +1,49 @@
+/**
+ * tests/unit/HtmlEmailComposer.test.ts
+ *
+ * Unit tests for the HTML reply body composer (agent answer only, no quoted history)
+ *
+ * Top-level declarations:
+ * - HtmlEmailComposer suite: Verifies Outlook-style wrapper and absence of quoted history
+ */
+
 import { describe, expect, it } from "vitest";
 import { HtmlEmailComposer } from "../../src/email/components/HtmlEmailComposer";
-import { createMockParsedEmail } from "../mocks/email";
 
 describe("HtmlEmailComposer", () => {
   const composer = new HtmlEmailComposer();
 
   describe("composeHtmlReply", () => {
-    it("should generate valid HTML structure", () => {
-      const originalEmail = createMockParsedEmail({
-        from: "sender@example.com",
-        to: ["recipient@example.com"],
-        subject: "Test Subject",
-        body: "Original plain text body",
-        html: "<p>Original HTML body</p>",
-        date: new Date("2024-01-01T12:00:00Z"),
-      });
-
+    it("wraps the reply content in the Outlook-style document", () => {
       const replyContent = "<div class=MsoNormal><p>This is the reply content.</p></div>";
-      const html = composer.composeHtmlReply(originalEmail, replyContent);
+      const html = composer.composeHtmlReply(replyContent);
 
-      // Check for key HTML elements
       expect(html).toContain("<html");
       expect(html).toContain("xmlns:o=");
-      expect(html).toContain("class=MsoNormal");
-
-      // Check for reply content
-      expect(html).toContain(replyContent);
-
-      // Check for Reply Header components
-      // Note: Labels and values are separated by tags/spaces, so check separately
-      expect(html).toContain("From:</span></b>");
-      expect(html).toContain("sender@example.com");
-
-      expect(html).toContain("To:</b>");
-      expect(html).toContain("recipient@example.com");
-
-      expect(html).toContain("Subject:</b>");
-      expect(html).toContain("Test Subject");
-
-      // Check for original body
-      expect(html).toContain("<p>Original HTML body</p>");
-    });
-
-    it("should pass through HTML content directly", () => {
-      const originalEmail = createMockParsedEmail({
-        from: "sender@example.com",
-      });
-
-      const replyContent = "<div class=MsoNormal><p>Line 1.</p><p>Line 2.</p></div>";
-      const html = composer.composeHtmlReply(originalEmail, replyContent);
-
+      expect(html).toContain("<div class=WordSection1>");
       expect(html).toContain(replyContent);
     });
 
-    it("should fallback to wrapping plain text if original HTML is missing", () => {
-      const originalEmail = createMockParsedEmail({
-        body: "Plain text line 1\nPlain text line 2",
-        html: undefined, // Simulating no HTML
-      });
+    it("keeps the signature footer that arrives inside the reply content", () => {
+      const replyContent =
+        '<p>Answer</p>\n<div class="MsoNormal">\n<br><br>\nCAF-GPT<br>\nSource Code:<br>\n<pre><code>https://github.com/taoi11/caf-gpt</code></pre>\nHow to use CAF-GPT:<br>\n<pre><code>https://caf-gpt.com</code></pre>\n</div>';
+      const html = composer.composeHtmlReply(replyContent);
 
-      const html = composer.composeHtmlReply(originalEmail, "Reply");
-
-      expect(html).toContain("<p class=MsoNormal>Plain text line 1</p>");
-      expect(html).toContain("<p class=MsoNormal>Plain text line 2</p>");
+      expect(html).toContain("Source Code:");
+      expect(html).toContain("https://github.com/taoi11/caf-gpt");
+      expect(html).toContain("How to use CAF-GPT:");
     });
 
-    it("should include CC in headers if present", () => {
-      const originalEmail = createMockParsedEmail({
-        cc: ["cc1@example.com", "cc2@example.com"],
-      });
+    it("never writes a quoted-history header block into the body", () => {
+      const html = composer.composeHtmlReply("<p>Reply</p>");
 
-      const html = composer.composeHtmlReply(originalEmail, "Reply");
-      expect(html).toContain("Cc:</b> cc1@example.com; cc2@example.com");
-    });
-
-    it("should escape header fields and plain text fallback content", () => {
-      const originalEmail = createMockParsedEmail({
-        from: 'Bad Sender <script>alert("x")</script>',
-        to: ["to@example.com"],
-        subject: 'Subject & "test"',
-        body: "Line <b>bold</b> & more",
-        html: undefined,
-      });
-
-      const html = composer.composeHtmlReply(originalEmail, "Reply");
-
-      expect(html).toContain("Bad Sender &lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;");
-      expect(html).toContain("Subject &amp; &quot;test&quot;");
-      expect(html).toContain("<p class=MsoNormal>Line &lt;b&gt;bold&lt;/b&gt; &amp; more</p>");
-      expect(html).not.toContain("<script>");
+      expect(html).not.toMatch(/<b>\s*(?:<span[^>]*>)?From:/);
+      expect(html).not.toContain("<b>Sent:</b>");
+      expect(html).not.toContain("<b>To:</b>");
+      expect(html).not.toContain("<b>Subject:</b>");
+      expect(html).not.toContain("border-top:solid #E1E1E1");
+      // Only the reply content sits between the WordSection1 wrapper tags.
+      expect(html).toMatch(/<div class=WordSection1>\n<p>Reply<\/p>\n<\/div>/);
     });
   });
 });
