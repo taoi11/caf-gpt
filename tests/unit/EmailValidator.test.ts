@@ -13,6 +13,7 @@ import type { ParsedEmailData } from "../../src/email/types";
 import {
   isValidEmailAddress,
   isValidMessageId,
+  parseMessageIdList,
   validateEmailContent,
 } from "../../src/email/utils/EmailValidator";
 
@@ -208,6 +209,23 @@ describe("EmailValidator", () => {
       "<id@forces.gc.ca>\r\nBcc: leak@forces.gc.ca",
     ])("rejects malformed Message-ID %s", (value) => {
       expect(isValidMessageId(value)).toBe(false);
+    });
+  });
+
+  describe("parseMessageIdList", () => {
+    it("extracts ids separated by any whitespace or none, in order", () => {
+      expect(parseMessageIdList(" <a@x.ca>\r\n\t<b@x.ca><c@x.ca> ")).toEqual([
+        "<a@x.ca>",
+        "<b@x.ca>",
+        "<c@x.ca>",
+      ]);
+    });
+
+    it("drops malformed tokens and handles missing values", () => {
+      expect(parseMessageIdList("bare@x.ca <bad space@x.ca> <ok@x.ca>")).toEqual(["<ok@x.ca>"]);
+      expect(parseMessageIdList("=?utf-8?Q?<forged@x.ca>=00?=")).toEqual([]);
+      expect(parseMessageIdList(undefined)).toEqual([]);
+      expect(parseMessageIdList("")).toEqual([]);
     });
   });
 });

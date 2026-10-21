@@ -13,6 +13,10 @@
  * Clef (27B) prompt-injection/abuse screen runs in getAIResponse (with memory) before Prime Foo.
  * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  *
+ * Replies carry only the agent answer and signature (no quoted history) and thread via
+ * In-Reply-To/References. Prior turns (inbound email plus our reply) are kept in DO SQLite
+ * (utils/ThreadHistory) and appended to the model context of the user's next reply.
+ *
  * Inbound logging contract: every onEmail invocation logs one receipt line, one line per skip path,
  * and exactly one terminal "Inbound email outcome" line, all tagged with the random per-message
  * emailRef the Worker assigns and passes in the internal x-caf-gpt-email-ref header, so it matches
@@ -30,9 +34,14 @@ import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
 import { getEmailRefFromHeaders, getLogSafeDomain } from "../email/utils/LogRedaction";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
-import { isValidMessageId, validateEmailContent } from "../email/utils/EmailValidator";
+import {
+  isValidMessageId,
+  parseMessageIdList,
+  validateEmailContent,
+} from "../email/utils/EmailValidator";
 import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates";
 import { htmlToText } from "../email/utils/HtmlToText";
+import { normalizeReplySubject } from "../email/utils/ReplySubject";
 import {
   isAuthorizedEmailAddress,
   type ResolvedReplyRecipients,
@@ -48,6 +57,14 @@ import {
 } from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
 import { decideShouldReply, decideShouldUpdateMemory } from "./utils/ClefDecision";
+import {
+  loadThreadHistory,
+  pruneThreadHistory,
+  recordThreadTurn,
+  THREAD_HISTORY_MAX_CHARS,
+  THREAD_HISTORY_PRUNE_INTERVAL_SECONDS,
+  type ThreadLookup,
+} from "./utils/ThreadHistory";
 
 const REFERENCES_MAX_LENGTH = 1000;
 
@@ -165,7 +182,8 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       this.validateEmail(parsedEmail, logContext);
-      const emailContext = this.buildEmailContext(parsedEmail);
+      const thread = this.loadThread(parsedEmail, logContext);
+      const emailContext = this.buildEmailContext(parsedEmail) + thread.history;
       const response = await this.getAIResponse(emailContext, config, logContext);
 
       if (!response.shouldRespond || !response.content?.trim()) {
@@ -179,9 +197,16 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       const recipients = resolveReplyRecipients(parsedEmail, config);
-      await this.sendReply(parsedEmail, response.content, config, recipients, () => {
-        sendAttempted = true;
-      });
+      const outboundMessageId = await this.sendReply(
+        parsedEmail,
+        response.content,
+        config,
+        recipients,
+        () => {
+          sendAttempted = true;
+        }
+      );
+      await this.recordThread(parsedEmail, response.content, thread, outboundMessageId, logContext);
       await this.scheduleMemoryUpdate(emailContext, response.content);
       this.logger.info("Inbound email reply accepted", {
         ...logContext,
@@ -436,14 +461,12 @@ ${parsedEmail.body}`;
     config: AppConfig,
     recipients: ResolvedReplyRecipients,
     markSendAttempted: () => void
-  ): Promise<void> {
-    const quotedContent = formatQuotedContent(parsedEmail);
+  ): Promise<string | undefined> {
+    // Answer + signature only; the client renders the thread from In-Reply-To/References.
     const replyText = htmlToText(content);
-    const fullTextContent = (replyText || content.trim()) + quotedContent;
-    const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());
-    const subject = /^re:/i.test(parsedEmail.subject)
-      ? parsedEmail.subject
-      : `Re: ${parsedEmail.subject}`;
+    const fullTextContent = replyText || content.trim();
+    const htmlContent = this.htmlEmailComposer.composeHtmlReply(content.trim());
+    const subject = normalizeReplySubject(parsedEmail.subject);
     const threadingOptions = this.buildThreadingOptions(parsedEmail);
     const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
@@ -462,7 +485,62 @@ ${parsedEmail.body}`;
     if (recipients.cc.length > 0) {
       Object.assign(emailOptions, { cc: recipients.cc });
     }
-    await this.sendEmail(emailOptions);
+    const result = await this.sendEmail(emailOptions);
+    return result?.messageId;
+  }
+
+  /** Loads stored prior turns for the thread this email continues; storage failure yields none. */
+  private loadThread(parsedEmail: ParsedEmailData, logContext: InboundLogContext): ThreadLookup {
+    try {
+      return loadThreadHistory(this.sql.bind(this), parsedEmail, Date.now());
+    } catch (error) {
+      this.logger.warn("Thread history load failed", {
+        ...logContext,
+        ...getSafeErrorMetadata(error),
+      });
+      return { history: "" };
+    }
+  }
+
+  /**
+   * Stores the answered inbound email and our reply as the thread's newest turn. The daily prune
+   * schedule (idempotent) is ensured first, so nothing is stored without one and retention holds
+   * even if the user never writes again. Never fails the reply.
+   */
+  private async recordThread(
+    parsedEmail: ParsedEmailData,
+    replyContent: string,
+    thread: ThreadLookup,
+    outboundMessageId: string | undefined,
+    logContext: InboundLogContext
+  ): Promise<void> {
+    try {
+      await this.scheduleEvery(THREAD_HISTORY_PRUNE_INTERVAL_SECONDS, "runThreadHistoryPrune");
+      const replyBlock = `\n\n________________________________\nFrom: CAF-GPT\n\n${htmlToText(replyContent) || replyContent.trim()}`;
+      recordThreadTurn(
+        this.sql.bind(this),
+        parsedEmail,
+        // Each side gets half the block cap so a long answer cannot push out the inbound email.
+        replyBlock.slice(0, THREAD_HISTORY_MAX_CHARS / 2) +
+          formatQuotedContent(parsedEmail).slice(0, THREAD_HISTORY_MAX_CHARS / 2),
+        thread.threadId,
+        outboundMessageId,
+        Date.now()
+      );
+    } catch (error) {
+      this.logger.warn("Thread history save failed", {
+        ...logContext,
+        ...getSafeErrorMetadata(error),
+      });
+    }
+  }
+
+  /** Scheduled: prunes expired thread history; cancels itself once no turns remain. */
+  async runThreadHistoryPrune(_payload: unknown, schedule?: { id: string }): Promise<void> {
+    const remaining = pruneThreadHistory(this.sql.bind(this), Date.now());
+    if (remaining === 0 && schedule) {
+      await this.cancelSchedule(schedule.id);
+    }
   }
 
   /** Schedules a durable memory update after the user-visible reply succeeds. */
@@ -567,12 +645,9 @@ ${parsedEmail.body}`;
       return "";
     }
 
-    const inboundReferences = (parsedEmail.references ?? "").trim();
-    const priorMessageIds = inboundReferences
-      ? inboundReferences.split(/\s+/).filter((reference) => isValidMessageId(reference))
-      : parsedEmail.inReplyTo && isValidMessageId(parsedEmail.inReplyTo)
-        ? [parsedEmail.inReplyTo]
-        : [];
+    const inboundReferences = parseMessageIdList(parsedEmail.references);
+    const priorMessageIds =
+      inboundReferences.length > 0 ? inboundReferences : parseMessageIdList(parsedEmail.inReplyTo);
     const chain = [
       ...new Set(priorMessageIds.filter((priorMessageId) => priorMessageId !== messageId)),
       messageId,
