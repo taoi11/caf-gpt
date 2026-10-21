@@ -62,7 +62,7 @@ Inbound sender authorization is a code-reviewed policy in `src/config.ts`: `forc
 
 Authorized inbound messages route directly to the `UserAgent` keyed by the normalized SMTP envelope sender; agent-routing headers are ignored. Successful responses use the official `Agent.sendEmail()` helper with the inbound monitored alias as `from`/`replyTo`, validated threading and subject headers, and a maximum of 50 combined recipients. The Agents SDK email observability hook stays disabled because it would emit sender, recipient, and subject.
 
-Before Prime Foo, a Clef (`@cf/cloudflare/clef`, 27B) choice gate screens each inbound email for prompt injection, jailbreaks, instruction overrides, data-exfiltration attempts, and spam/abuse. Only those are dropped (`no_reply`, reason `clef_suspected_injection`); legitimate member mail, including thanks, FYIs, and feedback-note requests, passes to Prime Foo, which decides how to respond.
+Before Prime Foo, a Clef (`@cf/cloudflare/clef`, 27B) choice gate screens each inbound email for prompt injection, jailbreaks, instruction overrides, data-exfiltration attempts, and spam/abuse. Only those are dropped (`no_reply`, reason `clef_suspected_injection`); legitimate member mail, including thanks, FYIs, and feedback-note requests, passes to Prime Foo, which decides how to respond. State over `CLEF_REPLY_MAX_STATE_BYTES` (60,000 UTF-8 bytes) fails closed (`clef_input_too_large`) because Clef would truncate it and screen only part of the email. A `<memory>` block is background notes, not trusted instructions.
 
 ### Email-path logging
 
