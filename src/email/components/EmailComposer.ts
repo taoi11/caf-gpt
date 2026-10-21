@@ -1,16 +1,18 @@
 /**
  * src/email/components/EmailComposer.ts
  *
- * Email composition utilities for formatting quoted content
+ * Formats an inbound email as a plain-text thread-history block for model context. The block
+ * is stored per thread (agents/utils/ThreadHistory) and is never written into reply bodies.
  *
  * Top-level declarations:
- * - formatQuotedContent: Format quoted content with Outlook-style attribution headers
+ * - formatQuotedContent: Format an inbound email as an attributed history block
  */
 
 import type { ParsedEmailData } from "../types";
 
 /**
- * Format quoted content with Outlook-style attribution headers.
+ * Format an inbound email as an attributed history block (same layout the reply body used to
+ * quote, so the model sees the same prior-turn text it did before).
  * @param originalMessage - Parsed inbound email whose headers/body are quoted
  */
 export function formatQuotedContent(originalMessage: ParsedEmailData): string {

@@ -13,6 +13,10 @@
  * Clef (27B) prompt-injection/abuse screen runs in getAIResponse (with memory) before Prime Foo.
  * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  *
+ * Replies carry only the agent answer and signature (no quoted history) and thread via
+ * In-Reply-To/References. Prior turns the old quoted block carried are kept in DO SQLite
+ * (utils/ThreadHistory) and appended to the model context of the user's next reply.
+ *
  * Inbound logging contract: every onEmail invocation logs one receipt line, one line per skip path,
  * and exactly one terminal "Inbound email outcome" line, all tagged with the random per-message
  * emailRef the Worker assigns and passes in the internal x-caf-gpt-email-ref header, so it matches
@@ -33,6 +37,7 @@ import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
 import { isValidMessageId, validateEmailContent } from "../email/utils/EmailValidator";
 import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates";
 import { htmlToText } from "../email/utils/HtmlToText";
+import { normalizeReplySubject } from "../email/utils/ReplySubject";
 import {
   isAuthorizedEmailAddress,
   type ResolvedReplyRecipients,
@@ -48,6 +53,7 @@ import {
 } from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
 import { decideShouldReply, decideShouldUpdateMemory } from "./utils/ClefDecision";
+import { loadThreadHistory, recordThreadTurn, type ThreadLookup } from "./utils/ThreadHistory";
 
 const REFERENCES_MAX_LENGTH = 1000;
 
@@ -165,7 +171,8 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       this.validateEmail(parsedEmail, logContext);
-      const emailContext = this.buildEmailContext(parsedEmail);
+      const thread = this.loadThread(parsedEmail, logContext);
+      const emailContext = this.buildEmailContext(parsedEmail) + thread.history;
       const response = await this.getAIResponse(emailContext, config, logContext);
 
       if (!response.shouldRespond || !response.content?.trim()) {
@@ -182,6 +189,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       await this.sendReply(parsedEmail, response.content, config, recipients, () => {
         sendAttempted = true;
       });
+      this.recordThread(parsedEmail, thread, logContext);
       await this.scheduleMemoryUpdate(emailContext, response.content);
       this.logger.info("Inbound email reply accepted", {
         ...logContext,
@@ -437,13 +445,11 @@ ${parsedEmail.body}`;
     recipients: ResolvedReplyRecipients,
     markSendAttempted: () => void
   ): Promise<void> {
-    const quotedContent = formatQuotedContent(parsedEmail);
+    // Answer + signature only; the client renders the thread from In-Reply-To/References.
     const replyText = htmlToText(content);
-    const fullTextContent = (replyText || content.trim()) + quotedContent;
-    const htmlContent = this.htmlEmailComposer.composeHtmlReply(parsedEmail, content.trim());
-    const subject = /^re:/i.test(parsedEmail.subject)
-      ? parsedEmail.subject
-      : `Re: ${parsedEmail.subject}`;
+    const fullTextContent = replyText || content.trim();
+    const htmlContent = this.htmlEmailComposer.composeHtmlReply(content.trim());
+    const subject = normalizeReplySubject(parsedEmail.subject);
     const threadingOptions = this.buildThreadingOptions(parsedEmail);
     const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
@@ -463,6 +469,41 @@ ${parsedEmail.body}`;
       Object.assign(emailOptions, { cc: recipients.cc });
     }
     await this.sendEmail(emailOptions);
+  }
+
+  /** Loads stored prior turns for the thread this email continues; storage failure yields none. */
+  private loadThread(parsedEmail: ParsedEmailData, logContext: InboundLogContext): ThreadLookup {
+    try {
+      return loadThreadHistory(this.sql.bind(this), parsedEmail);
+    } catch (error) {
+      this.logger.warn("Thread history load failed", {
+        ...logContext,
+        ...getSafeErrorMetadata(error),
+      });
+      return { history: "" };
+    }
+  }
+
+  /** Stores the answered inbound email as the thread's newest turn; never fails the reply. */
+  private recordThread(
+    parsedEmail: ParsedEmailData,
+    thread: ThreadLookup,
+    logContext: InboundLogContext
+  ): void {
+    try {
+      recordThreadTurn(
+        this.sql.bind(this),
+        parsedEmail,
+        formatQuotedContent(parsedEmail),
+        thread.threadId,
+        Date.now()
+      );
+    } catch (error) {
+      this.logger.warn("Thread history save failed", {
+        ...logContext,
+        ...getSafeErrorMetadata(error),
+      });
+    }
   }
 
   /** Schedules a durable memory update after the user-visible reply succeeds. */

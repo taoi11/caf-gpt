@@ -4,26 +4,22 @@
  * HTML email composition utility using Outlook-style templates
  *
  * Top-level declarations:
- * - HtmlEmailComposer: Composes HTML reply emails with reply headers and quoted content
+ * - HtmlEmailComposer: Composes the HTML reply body (agent answer only; no quoted history)
  */
 
-import type { ParsedEmailData } from "../types";
-
 /**
- * Composes HTML reply emails with Outlook-style formatting.
+ * Composes HTML reply emails with Outlook-style formatting. Quoted thread history is never
+ * written into the body: replies thread via In-Reply-To/References so the client shows the
+ * conversation itself.
  */
 export class HtmlEmailComposer {
   /**
    * Composes a full HTML reply email.
    *
-   * @param originalEmail The original email being replied to.
-   * @param newContent The HTML content of the reply (from LLM).
+   * @param newContent The HTML content of the reply (from LLM, including the signature).
    * @returns The complete HTML string for the email body.
    */
-  composeHtmlReply(originalEmail: ParsedEmailData, newContent: string): string {
-    const replyHeader = this.getReplyHeader(originalEmail);
-    const originalBody = originalEmail.html || this.wrapPlainTextAsHtml(originalEmail.body);
-
+  composeHtmlReply(newContent: string): string {
     return `
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns:m="http://schemas.microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
@@ -70,57 +66,8 @@ div.WordSection1
 <body lang=EN-CA link="#467886" vlink="#96607D" style='word-wrap:break-word'>
 <div class=WordSection1>
 ${newContent}
-<p class=MsoNormal><span style='font-size:12.0pt'><o:p>&nbsp;</o:p></span></p>
-<div>
-<div style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>
-${replyHeader}
-</div>
-</div>
-<p class=MsoNormal><o:p>&nbsp;</o:p></p>
-${originalBody}
 </div>
 </body>
 </html>`;
-  }
-
-  private getReplyHeader(originalEmail: ParsedEmailData): string {
-    const from = this.escapeHtml(originalEmail.from);
-    const sent = this.escapeHtml(
-      originalEmail.date
-        ? originalEmail.date.toLocaleString("en-US", {
-            year: "numeric",
-            month: "long",
-            day: "numeric",
-            hour: "numeric",
-            minute: "numeric",
-            hour12: true,
-          })
-        : "Unknown Date"
-    );
-    const to = originalEmail.to.map((value) => this.escapeHtml(value)).join("; ");
-    const subject = this.escapeHtml(originalEmail.subject);
-    const cc =
-      originalEmail.cc && originalEmail.cc.length > 0
-        ? `<br><b>Cc:</b> ${originalEmail.cc.map((value) => this.escapeHtml(value)).join("; ")}`
-        : "";
-
-    return `<p class=MsoNormal><b><span lang=EN-US style='font-family:"Calibri",sans-serif;mso-ligatures:none;mso-fareast-language:EN-CA'>From:</span></b><span lang=EN-US style='font-family:"Calibri",sans-serif;mso-ligatures:none;mso-fareast-language:EN-CA'> ${from} <br><b>Sent:</b> ${sent}<br><b>To:</b> ${to}${cc}<br><b>Subject:</b> ${subject}<o:p></o:p></span></p>`;
-  }
-
-  private wrapPlainTextAsHtml(text: string): string {
-    // Basic fallback if original email had no HTML
-    return text
-      .split("\n")
-      .map((line) => `<p class=MsoNormal>${this.escapeHtml(line)}</p>`)
-      .join("");
-  }
-
-  private escapeHtml(text: string): string {
-    return text
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#39;");
   }
 }
