@@ -34,7 +34,11 @@ import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
 import { getEmailRefFromHeaders, getLogSafeDomain } from "../email/utils/LogRedaction";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
-import { isValidMessageId, validateEmailContent } from "../email/utils/EmailValidator";
+import {
+  isValidMessageId,
+  parseMessageIdList,
+  validateEmailContent,
+} from "../email/utils/EmailValidator";
 import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates";
 import { htmlToText } from "../email/utils/HtmlToText";
 import { normalizeReplySubject } from "../email/utils/ReplySubject";
@@ -53,7 +57,13 @@ import {
 } from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
 import { decideShouldReply, decideShouldUpdateMemory } from "./utils/ClefDecision";
-import { loadThreadHistory, recordThreadTurn, type ThreadLookup } from "./utils/ThreadHistory";
+import {
+  loadThreadHistory,
+  pruneThreadHistory,
+  recordThreadTurn,
+  THREAD_HISTORY_PRUNE_INTERVAL_SECONDS,
+  type ThreadLookup,
+} from "./utils/ThreadHistory";
 
 const REFERENCES_MAX_LENGTH = 1000;
 
@@ -186,10 +196,16 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       const recipients = resolveReplyRecipients(parsedEmail, config);
-      await this.sendReply(parsedEmail, response.content, config, recipients, () => {
-        sendAttempted = true;
-      });
-      this.recordThread(parsedEmail, thread, logContext);
+      const outboundMessageId = await this.sendReply(
+        parsedEmail,
+        response.content,
+        config,
+        recipients,
+        () => {
+          sendAttempted = true;
+        }
+      );
+      await this.recordThread(parsedEmail, thread, outboundMessageId, logContext);
       await this.scheduleMemoryUpdate(emailContext, response.content);
       this.logger.info("Inbound email reply accepted", {
         ...logContext,
@@ -444,7 +460,7 @@ ${parsedEmail.body}`;
     config: AppConfig,
     recipients: ResolvedReplyRecipients,
     markSendAttempted: () => void
-  ): Promise<void> {
+  ): Promise<string | undefined> {
     // Answer + signature only; the client renders the thread from In-Reply-To/References.
     const replyText = htmlToText(content);
     const fullTextContent = replyText || content.trim();
@@ -468,13 +484,14 @@ ${parsedEmail.body}`;
     if (recipients.cc.length > 0) {
       Object.assign(emailOptions, { cc: recipients.cc });
     }
-    await this.sendEmail(emailOptions);
+    const result = await this.sendEmail(emailOptions);
+    return result?.messageId;
   }
 
   /** Loads stored prior turns for the thread this email continues; storage failure yields none. */
   private loadThread(parsedEmail: ParsedEmailData, logContext: InboundLogContext): ThreadLookup {
     try {
-      return loadThreadHistory(this.sql.bind(this), parsedEmail);
+      return loadThreadHistory(this.sql.bind(this), parsedEmail, Date.now());
     } catch (error) {
       this.logger.warn("Thread history load failed", {
         ...logContext,
@@ -484,25 +501,40 @@ ${parsedEmail.body}`;
     }
   }
 
-  /** Stores the answered inbound email as the thread's newest turn; never fails the reply. */
-  private recordThread(
+  /**
+   * Stores the answered inbound email as the thread's newest turn and keeps a daily prune
+   * schedule (idempotent) so retention holds even if the user never writes again.
+   * Never fails the reply.
+   */
+  private async recordThread(
     parsedEmail: ParsedEmailData,
     thread: ThreadLookup,
+    outboundMessageId: string | undefined,
     logContext: InboundLogContext
-  ): void {
+  ): Promise<void> {
     try {
       recordThreadTurn(
         this.sql.bind(this),
         parsedEmail,
         formatQuotedContent(parsedEmail),
         thread.threadId,
+        outboundMessageId,
         Date.now()
       );
+      await this.scheduleEvery(THREAD_HISTORY_PRUNE_INTERVAL_SECONDS, "runThreadHistoryPrune");
     } catch (error) {
       this.logger.warn("Thread history save failed", {
         ...logContext,
         ...getSafeErrorMetadata(error),
       });
+    }
+  }
+
+  /** Scheduled: prunes expired thread history; cancels itself once no turns remain. */
+  async runThreadHistoryPrune(_payload: unknown, schedule?: { id: string }): Promise<void> {
+    const remaining = pruneThreadHistory(this.sql.bind(this), Date.now());
+    if (remaining === 0 && schedule) {
+      await this.cancelSchedule(schedule.id);
     }
   }
 
@@ -608,12 +640,9 @@ ${parsedEmail.body}`;
       return "";
     }
 
-    const inboundReferences = (parsedEmail.references ?? "").trim();
-    const priorMessageIds = inboundReferences
-      ? inboundReferences.split(/\s+/).filter((reference) => isValidMessageId(reference))
-      : parsedEmail.inReplyTo && isValidMessageId(parsedEmail.inReplyTo)
-        ? [parsedEmail.inReplyTo]
-        : [];
+    const inboundReferences = parseMessageIdList(parsedEmail.references);
+    const priorMessageIds =
+      inboundReferences.length > 0 ? inboundReferences : parseMessageIdList(parsedEmail.inReplyTo);
     const chain = [
       ...new Set(priorMessageIds.filter((priorMessageId) => priorMessageId !== messageId)),
       messageId,

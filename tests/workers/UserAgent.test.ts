@@ -536,6 +536,68 @@ describe("UserAgent email processing", () => {
     expect(contexts[3]).not.toContain("TURN-TWO-ANSWER");
   });
 
+  it("never matches another sender's thread, matches our outbound id, and drops expired turns", async () => {
+    const owner = "thread-owner@forces.gc.ca";
+    const other = "thread-other@forces.gc.ca";
+    const runTurn = (sender: string, fields: Partial<Parameters<typeof createAgentEmail>[0]>) =>
+      runInDurableObject(getUserAgentStub(sender), async (instance: UserAgent) => {
+        vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
+          messageId: `out-${sender}`,
+        });
+        mockSuccessfulSchedule(instance, "schedule-1");
+        const primeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
+          shouldRespond: true,
+          content: "<p>Ok</p>",
+        }));
+        mockPrimeFoo(primeFoo);
+        await instance.onEmail(
+          createAgentEmail({
+            envelopeFrom: sender,
+            envelopeTo: "agent@caf-gpt.com",
+            from: sender,
+            to: ["agent@caf-gpt.com"],
+            subject: "Thread",
+            body: "Body",
+            ...fields,
+          })
+        );
+        return primeFoo.mock.calls[0][0];
+      });
+
+    await runTurn(owner, { body: "OWNER-SECRET", messageId: "<owner1@forces.gc.ca>" });
+    // Forged References from another sender land in that sender's own DO: no match.
+    const otherContext = await runTurn(other, {
+      messageId: "<other1@forces.gc.ca>",
+      headers: { references: "<owner1@forces.gc.ca>" },
+    });
+    expect(otherContext).not.toContain("OWNER-SECRET");
+
+    // Ids with no separator still match the stored thread.
+    const ownerContext = await runTurn(owner, {
+      messageId: "<owner2@forces.gc.ca>",
+      headers: { references: "<owner1@forces.gc.ca><agent-reply@caf-gpt.com>" },
+    });
+    expect(ownerContext).toContain("OWNER-SECRET");
+
+    // A reply carrying only In-Reply-To = our outbound Message-ID still matches.
+    const inReplyToOnly = await runTurn(owner, {
+      messageId: "<owner3@forces.gc.ca>",
+      headers: { "in-reply-to": `<out-${owner}>` },
+    });
+    expect(inReplyToOnly).toContain("OWNER-SECRET");
+
+    const expired = await runInDurableObject(
+      getUserAgentStub(owner),
+      async (instance: UserAgent) => {
+        vi.spyOn(Date, "now").mockReturnValue(Date.now() + 31 * 24 * 60 * 60 * 1000);
+        await instance.runThreadHistoryPrune(undefined, { id: "missing" });
+        return instance.sql<{ count: number }>`SELECT COUNT(*) AS count FROM cafgpt_thread_turns`[0]
+          .count;
+      }
+    );
+    expect(expired).toBe(0);
+  });
+
   it("treats blank real-coordinator output as an intentional no-response decision", async () => {
     const stub = getUserAgentStub("blank-output@forces.gc.ca");
 
