@@ -166,7 +166,7 @@ export class ToolReadingAgent extends BaseAgent {
       return this.clefAiOverride;
     }
     return {
-      // SAFETY: Workers AI.run model/inputs are wider than ClefAiRunner; ClefDecision only sends clef-flash payloads.
+      // SAFETY: Workers AI.run model/inputs are wider than ClefAiRunner; ClefDecision only sends Clef System One payloads.
       run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
     };
   }

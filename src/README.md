@@ -62,12 +62,14 @@ Inbound sender authorization is a code-reviewed policy in `src/config.ts`: `forc
 
 Authorized inbound messages route directly to the `UserAgent` keyed by the normalized SMTP envelope sender; agent-routing headers are ignored. Successful responses use the official `Agent.sendEmail()` helper with the inbound monitored alias as `from`/`replyTo`, validated threading and subject headers, and a maximum of 50 combined recipients. The Agents SDK email observability hook stays disabled because it would emit sender, recipient, and subject.
 
+Before Prime Foo, a Clef (`@cf/cloudflare/clef`, 27B) choice gate screens each inbound email for prompt injection, jailbreaks, instruction overrides, data-exfiltration attempts, and spam/abuse. Only those are dropped (`no_reply`, reason `clef_suspected_injection`); legitimate member mail, including thanks, FYIs, and feedback-note requests, passes to Prime Foo, which decides how to respond.
+
 ### Email-path logging
 
 Every inbound email is correlated by `emailRef`, a random 16-hex id the Worker generates per message and passes to `UserAgent` in the internal `x-caf-gpt-email-ref` header (overwriting any sender-supplied value), so both sides log the same value even when Message-ID is missing. Logs identify senders and recipients by domain only and never include addresses, subjects, bodies, attachment names, Message-IDs, prompts, model output, or raw error messages (errors log only an allowlisted `errorName`/`errorCode`; anything else is logged as `OtherError`/`other`).
 
 - Worker: `Email routed` / `Email ignored - ...` (resolver), `Email handed off to UserAgent` (with `durationMs`), `Email rejected - no UserAgent route`, `Top-level email routing failed`.
-- UserAgent: `Inbound email received by UserAgent`, one line per skip path (`Inbound email skipped by self-loop guard`, `Ignoring auto-reply or bounce email` with header categories, `Email content validation failed`, `Clef no_reply gate skipped Prime Foo` / `Clef reply gate allowed Prime Foo` with `choice`, `confidence`, `reason`), then exactly one terminal `Inbound email outcome` line with `outcome` (`replied` / `skipped` / `error`), `reason`, `durationMs`, and `errorReply` status when relevant.
+- UserAgent: `Inbound email received by UserAgent`, one line per skip path (`Inbound email skipped by self-loop guard`, `Ignoring auto-reply or bounce email` with header categories, `Email content validation failed`, `Clef injection screen blocked Prime Foo` / `Clef injection screen allowed Prime Foo` with `choice`, `confidence`, `reason`), then exactly one terminal `Inbound email outcome` line with `outcome` (`replied` / `skipped` / `error`), `reason`, `durationMs`, and `errorReply` status when relevant.
 
 Platform `invocation_logs` are disabled in `wrangler.jsonc` because the email invocation record indexes the full envelope `mailFrom`/`rcptTo`; Traces still record invocation outcome and timing.
 
