@@ -22,7 +22,10 @@ import { stripReplyPrefixes } from "./ReplySubject";
 export interface ThreadTopicDiagnostics {
   /** The inbound email had a non-blank Thread-Topic header. */
   threadTopicPresent: boolean;
-  /** Subject-derived topic equals the inbound Thread-Topic after normalization; false without one. */
+  /**
+   * The subject still carries the inbound Thread-Topic as Exchange's MIME reader checks it: equal
+   * after reply-prefix stripping, or the subject ends with it. False without an inbound topic.
+   */
   threadTopicMatches: boolean;
   /** The inbound subject has a bracketed or CAUTION:/EXTERNAL:-style tag before or after Re:/FW:. */
   subjectHasTag: boolean;
@@ -30,9 +33,9 @@ export interface ThreadTopicDiagnostics {
 
 /** One leading reply or forward prefix: "Re:", "RE[2]:", "FW:", "Fwd:", "AW:", "WG:", "TR:", ... */
 const REPLY_OR_FORWARD_PREFIX = /^\s*(?:re|aw|sv|antw|fw|fwd|wg|tr|rv|vs)\s*(?:\[\d+\])?\s*:\s*/i;
-/** A short bracketed token, e.g. "[EXTERNAL]"; a tag needs a letter, so "[2]" is not one. */
+/** A short bracketed token, e.g. "[EXTERNAL]", "[外部]"; a tag needs a letter, so "[2]" is not one. */
 const BRACKETED_TOKEN = /^\s*\[([^\]\r\n]{1,64})\]/;
-const LETTER = /[A-Za-z]/;
+const LETTER = /\p{L}/u;
 /** A warning-word prefix such as "CAUTION:", "EXTERNAL -", "*EXTERNAL*". */
 const WARNING_PREFIX =
   /^\s*\*?\s*(?:caution|external|ext|warning|suspicious|suspect|spam|phish(?:ing)?)(?:\s*:|\s*\*|\s+-\s)/i;
@@ -66,6 +69,7 @@ export function hasSubjectTag(subject: string): boolean {
 /**
  * Decodes RFC 2047 encoded words so a raw Thread-Topic compares with the parser-decoded subject.
  * A malformed encoded word leaves the raw value, which then simply fails to match.
+ * @param value - Raw Thread-Topic header value
  */
 function decodeTopicHeader(value: string): string {
   try {
@@ -75,14 +79,19 @@ function decodeTopicHeader(value: string): string {
   }
 }
 
-/** Topic comparison form: trimmed, whitespace collapsed, uppercased as Exchange hashes topics. */
+/**
+ * Topic comparison form: trimmed, whitespace collapsed, uppercased as Exchange hashes topics.
+ * @param topic - Decoded topic or subject
+ */
 function normalizeTopic(topic: string): string {
   return topic.replace(/\s+/g, " ").trim().toUpperCase();
 }
 
 /**
- * Builds boolean-only topic diagnostics. The derived topic is the subject without reply
- * prefixes (the Thread-Topic fallback in OutlookThreading), compared to the inbound Thread-Topic.
+ * Builds boolean-only topic diagnostics. The topic matches when the subject without reply
+ * prefixes (the Thread-Topic fallback in OutlookThreading) equals the inbound Thread-Topic, or
+ * when the subject ends with it: Exchange's MIME reader then keeps the Thread-Topic as the
+ * conversation topic (MS-OXCMAIL 2.2.3.2.6.3), so a prepended gateway tag alone does not change it.
  * @param headers - Inbound header map with lowercase names
  * @param subject - Inbound subject as parsed
  */
@@ -98,7 +107,8 @@ export function describeThreadTopic(
     threadTopicMatches:
       threadTopicPresent &&
       inboundTopic.length > 0 &&
-      normalizeTopic(stripReplyPrefixes(subject)) === inboundTopic,
+      (normalizeTopic(stripReplyPrefixes(subject)) === inboundTopic ||
+        normalizeTopic(subject).endsWith(inboundTopic)),
     subjectHasTag: hasSubjectTag(subject),
   };
 }

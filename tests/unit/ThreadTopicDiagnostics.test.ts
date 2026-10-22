@@ -24,6 +24,8 @@ describe("hasSubjectTag", () => {
     "*EXTERNAL* Leave request",
     "EXTERNAL - Leave request",
     "  [EXTERNAL]Leave request",
+    "[外部] Leave request",
+    "Re: [ВНЕШНИЙ] Leave request",
   ])("detects a tag in %j", (subject) => {
     expect(hasSubjectTag(subject)).toBe(true);
   });
@@ -78,21 +80,29 @@ describe("describeThreadTopic", () => {
     ).toStrictEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: false });
   });
 
-  it("reports a mismatch when a gateway tag changed the subject", () => {
+  it("matches when a prepended gateway tag leaves the topic as the subject's tail", () => {
     expect(
       describeThreadTopic({ "thread-topic": "Leave request" }, "[EXTERNAL] Re: Leave request")
-    ).toEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: true });
+    ).toEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: true });
+    expect(
+      describeThreadTopic({ "thread-topic": "Leave request" }, "FW: Leave request")
+        .threadTopicMatches
+    ).toBe(true);
   });
 
-  it("reports a mismatch when a forward marker stays in the derived topic", () => {
-    const result = describeThreadTopic({ "thread-topic": "Leave request" }, "FW: Leave request");
-    expect(result.threadTopicMatches).toBe(false);
-    expect(result.subjectHasTag).toBe(false);
+  it("reports a mismatch when the subject no longer carries the topic", () => {
+    expect(
+      describeThreadTopic({ "thread-topic": "Leave request" }, "Re: Leave request [EXTERNAL]")
+    ).toEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: false });
+    expect(
+      describeThreadTopic({ "thread-topic": "Leave request" }, "Re: Course nomination")
+        .threadTopicMatches
+    ).toBe(false);
   });
 
   it("returns exactly the three boolean fields", () => {
     expect(
       describeThreadTopic({ "thread-topic": "Leave request" }, "Re: [EXTERNAL] Leave request")
-    ).toStrictEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: true });
+    ).toStrictEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: true });
   });
 });
