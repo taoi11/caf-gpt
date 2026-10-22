@@ -64,6 +64,20 @@ describe("describeThreadTopic", () => {
     ).toEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: false });
   });
 
+  it.each([
+    ["=?UTF-8?Q?Cong=C3=A9_annuel?=", "Re: Congé annuel"],
+    ["=?utf-8?B?Q29uZ8OpIGFubnVlbA==?=", "RE: Congé annuel"],
+    ["=?UTF-8?Q?Cong=C3=A9?= annuel", "Congé annuel"],
+  ])("decodes an RFC 2047 Thread-Topic %j before comparing", (topic, subject) => {
+    expect(describeThreadTopic({ "thread-topic": topic }, subject).threadTopicMatches).toBe(true);
+  });
+
+  it("treats a malformed encoded word as a raw, non-matching topic", () => {
+    expect(
+      describeThreadTopic({ "thread-topic": "=?UTF-8?B?***?=" }, "Re: Leave request")
+    ).toStrictEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: false });
+  });
+
   it("reports a mismatch when a gateway tag changed the subject", () => {
     expect(
       describeThreadTopic({ "thread-topic": "Leave request" }, "[EXTERNAL] Re: Leave request")
