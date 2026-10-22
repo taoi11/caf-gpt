@@ -3,13 +3,17 @@
  *
  * Content-free conversation-topic diagnostics for the reply-accepted log
  *
- * Exchange falls back to the conversation topic when it does not use the Thread-Index GUID, so a
- * subject that differs from the sender's Thread-Topic (e.g. a gateway "[EXTERNAL]" tag) starts a
- * new conversation. These booleans show whether that happens without logging any value.
+ * Exchange falls back to the conversation topic when it does not use the Thread-Index GUID, and its
+ * MIME reader derives that topic from Subject and Thread-Topic (MS-OXCMAIL 2.2.3.2.6.3). A tag
+ * prepended to an unprefixed subject (e.g. "[EXTERNAL] Re: ...") keeps the Thread-Topic, because
+ * the subject then ends with it; a subject whose prefix-stripped text differs from the topic may
+ * not. threadTopicMatches is true only when every MIME header order keeps the topic, and
+ * subjectHasTag records a tag either way. Neither logs a value.
  *
  * Top-level declarations:
  * - ThreadTopicDiagnostics: Boolean-only topic diagnostics
  * - hasSubjectTag: Whether a subject carries a gateway-style tag in its leading prefixes
+ * - stripReplyAndForwardPrefixes: Removes a leading chain of reply and forward prefixes
  * - decodeTopicHeader: Decodes RFC 2047 encoded words in a raw Thread-Topic header value
  * - normalizeTopic: Comparison form of a topic (whitespace collapsed, uppercased)
  * - describeThreadTopic: Builds the diagnostics from inbound headers and subject
@@ -23,8 +27,9 @@ export interface ThreadTopicDiagnostics {
   /** The inbound email had a non-blank Thread-Topic header. */
   threadTopicPresent: boolean;
   /**
-   * The subject still carries the inbound Thread-Topic as Exchange's MIME reader checks it: equal
-   * after reply-prefix stripping, or the subject ends with it. False without an inbound topic.
+   * Exchange keeps the inbound Thread-Topic as the conversation topic whatever the MIME header
+   * order: the prefix-stripped subject equals it, or an unprefixed subject ends with it. False
+   * without an inbound topic, and false when the outcome would depend on header order.
    */
   threadTopicMatches: boolean;
   /** The inbound subject has a bracketed or CAUTION:/EXTERNAL:-style tag before or after Re:/FW:. */
@@ -67,6 +72,22 @@ export function hasSubjectTag(subject: string): boolean {
 }
 
 /**
+ * Removes a leading chain of reply and forward prefixes ("Re: FW: "), bounded like hasSubjectTag.
+ * @param subject - Inbound subject as parsed
+ */
+function stripReplyAndForwardPrefixes(subject: string): string {
+  let rest = subject;
+  for (let step = 0; step < MAX_PREFIX_TOKENS; step++) {
+    const prefix = REPLY_OR_FORWARD_PREFIX.exec(rest);
+    if (!prefix) {
+      break;
+    }
+    rest = rest.slice(prefix[0].length);
+  }
+  return rest;
+}
+
+/**
  * Decodes RFC 2047 encoded words so a raw Thread-Topic compares with the parser-decoded subject.
  * A malformed encoded word leaves the raw value, which then simply fails to match.
  * @param value - Raw Thread-Topic header value
@@ -88,10 +109,11 @@ function normalizeTopic(topic: string): string {
 }
 
 /**
- * Builds boolean-only topic diagnostics. The topic matches when the subject without reply
- * prefixes (the Thread-Topic fallback in OutlookThreading) equals the inbound Thread-Topic, or
- * when the subject ends with it: Exchange's MIME reader then keeps the Thread-Topic as the
- * conversation topic (MS-OXCMAIL 2.2.3.2.6.3), so a prepended gateway tag alone does not change it.
+ * Builds boolean-only topic diagnostics. The header map does not keep MIME header order, so the
+ * match is conservative. When the subject starts with a reply/forward prefix, Exchange normalizes
+ * it if Subject comes first, so only an equal prefix-stripped subject counts. Without such a
+ * prefix, normalization fails in either order and Exchange keeps the Thread-Topic when the subject
+ * ends with it (MS-OXCMAIL 2.2.3.2.6.3).
  * @param headers - Inbound header map with lowercase names
  * @param subject - Inbound subject as parsed
  */
@@ -108,7 +130,8 @@ export function describeThreadTopic(
       threadTopicPresent &&
       inboundTopic.length > 0 &&
       (normalizeTopic(stripReplyPrefixes(subject)) === inboundTopic ||
-        normalizeTopic(subject).endsWith(inboundTopic)),
+        normalizeTopic(stripReplyAndForwardPrefixes(subject)) === inboundTopic ||
+        (!REPLY_OR_FORWARD_PREFIX.test(subject) && normalizeTopic(subject).endsWith(inboundTopic))),
     subjectHasTag: hasSubjectTag(subject),
   };
 }

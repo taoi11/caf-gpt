@@ -84,10 +84,25 @@ describe("describeThreadTopic", () => {
     expect(
       describeThreadTopic({ "thread-topic": "Leave request" }, "[EXTERNAL] Re: Leave request")
     ).toEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: true });
+  });
+
+  it("matches a forwarded or stacked reply-forward subject by its stripped text", () => {
+    for (const subject of [
+      "FW: Leave request",
+      "Re: FW: Leave request",
+      "RE: Fwd: Re: leave request",
+    ]) {
+      expect(
+        describeThreadTopic({ "thread-topic": "Leave request" }, subject).threadTopicMatches
+      ).toBe(true);
+    }
+  });
+
+  it("does not use the suffix check when Exchange could normalize a prefixed subject", () => {
     expect(
-      describeThreadTopic({ "thread-topic": "Leave request" }, "FW: Leave request")
+      describeThreadTopic({ "thread-topic": "Leave request" }, "Re: Updated Leave request")
         .threadTopicMatches
-    ).toBe(true);
+    ).toBe(false);
   });
 
   it("reports a mismatch when the subject no longer carries the topic", () => {
@@ -103,6 +118,6 @@ describe("describeThreadTopic", () => {
   it("returns exactly the three boolean fields", () => {
     expect(
       describeThreadTopic({ "thread-topic": "Leave request" }, "Re: [EXTERNAL] Leave request")
-    ).toStrictEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: true });
+    ).toStrictEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: true });
   });
 });
