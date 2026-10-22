@@ -24,6 +24,8 @@ describe("hasSubjectTag", () => {
     "*EXTERNAL* Leave request",
     "EXTERNAL - Leave request",
     "  [EXTERNAL]Leave request",
+    "[外部] Leave request",
+    "Re: [ВНЕШНИЙ] Leave request",
   ])("detects a tag in %j", (subject) => {
     expect(hasSubjectTag(subject)).toBe(true);
   });
@@ -58,10 +60,13 @@ describe("describeThreadTopic", () => {
     expect(describeThreadTopic({ "thread-topic": "   " }, "").threadTopicPresent).toBe(false);
   });
 
-  it("matches the subject without reply prefixes, ignoring case and whitespace", () => {
+  it("matches the normalized subject, ignoring case and whitespace", () => {
     expect(
-      describeThreadTopic({ "thread-topic": " leave  REQUEST " }, "RE: Re[2]: Leave request")
+      describeThreadTopic({ "thread-topic": " leave  REQUEST " }, "RE:  Leave request")
     ).toEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: false });
+    expect(
+      describeThreadTopic({ "thread-topic": "Leave request" }, "Leave request").threadTopicMatches
+    ).toBe(true);
   });
 
   it.each([
@@ -78,16 +83,42 @@ describe("describeThreadTopic", () => {
     ).toStrictEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: false });
   });
 
-  it("reports a mismatch when a gateway tag changed the subject", () => {
+  it("matches when a prepended gateway tag leaves the topic as the subject's tail", () => {
     expect(
       describeThreadTopic({ "thread-topic": "Leave request" }, "[EXTERNAL] Re: Leave request")
-    ).toEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: true });
+    ).toEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: true });
   });
 
-  it("reports a mismatch when a forward marker stays in the derived topic", () => {
-    const result = describeThreadTopic({ "thread-topic": "Leave request" }, "FW: Leave request");
-    expect(result.threadTopicMatches).toBe(false);
-    expect(result.subjectHasTag).toBe(false);
+  it("normalizes exactly one Exchange prefix, so stacked prefixes do not match", () => {
+    const topic = { "thread-topic": "Leave request" };
+    expect(describeThreadTopic(topic, "FW: Leave request").threadTopicMatches).toBe(true);
+    expect(describeThreadTopic(topic, "Fwd: Leave request").threadTopicMatches).toBe(true);
+    expect(describeThreadTopic(topic, "Re: FW: Leave request").threadTopicMatches).toBe(false);
+    expect(describeThreadTopic(topic, "RE: Re[2]: Leave request").threadTopicMatches).toBe(false);
+  });
+
+  it("uses the suffix check when Exchange cannot normalize the subject", () => {
+    const topic = { "thread-topic": "Leave request" };
+    expect(describeThreadTopic(topic, "Re[2]: Leave request").threadTopicMatches).toBe(true);
+    expect(describeThreadTopic(topic, "Antw: Leave request").threadTopicMatches).toBe(true);
+    expect(describeThreadTopic(topic, "Updated Leave request").threadTopicMatches).toBe(true);
+  });
+
+  it("does not use the suffix check when Exchange could normalize a prefixed subject", () => {
+    expect(
+      describeThreadTopic({ "thread-topic": "Leave request" }, "Re: Updated Leave request")
+        .threadTopicMatches
+    ).toBe(false);
+  });
+
+  it("reports a mismatch when the subject no longer carries the topic", () => {
+    expect(
+      describeThreadTopic({ "thread-topic": "Leave request" }, "Re: Leave request [EXTERNAL]")
+    ).toEqual({ threadTopicPresent: true, threadTopicMatches: false, subjectHasTag: false });
+    expect(
+      describeThreadTopic({ "thread-topic": "Leave request" }, "Re: Course nomination")
+        .threadTopicMatches
+    ).toBe(false);
   });
 
   it("returns exactly the three boolean fields", () => {

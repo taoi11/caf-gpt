@@ -228,7 +228,6 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         toCount: recipients.to.length,
         ccCount: recipients.cc.length,
         outlookThreaded: sentReply.outlookThreaded,
-        // Booleans only; topic and subject values are never logged.
         ...describeThreadTopic(parsedEmail.headers, parsedEmail.subject),
       });
       outcome = "replied";
