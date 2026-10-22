@@ -10,9 +10,12 @@
  * Top-level declarations:
  * - ThreadTopicDiagnostics: Boolean-only topic diagnostics
  * - hasSubjectTag: Whether a subject carries a gateway-style tag in its leading prefixes
+ * - decodeTopicHeader: Decodes RFC 2047 encoded words in a raw Thread-Topic header value
+ * - normalizeTopic: Comparison form of a topic (whitespace collapsed, uppercased)
  * - describeThreadTopic: Builds the diagnostics from inbound headers and subject
  */
 
+import { decodeWords } from "postal-mime";
 import { stripReplyPrefixes } from "./ReplySubject";
 
 /** Boolean-only topic diagnostics; never carries header or subject values. */
@@ -60,6 +63,18 @@ export function hasSubjectTag(subject: string): boolean {
   return false;
 }
 
+/**
+ * Decodes RFC 2047 encoded words so a raw Thread-Topic compares with the parser-decoded subject.
+ * A malformed encoded word leaves the raw value, which then simply fails to match.
+ */
+function decodeTopicHeader(value: string): string {
+  try {
+    return decodeWords(value);
+  } catch {
+    return value;
+  }
+}
+
 /** Topic comparison form: trimmed, whitespace collapsed, uppercased as Exchange hashes topics. */
 function normalizeTopic(topic: string): string {
   return topic.replace(/\s+/g, " ").trim().toUpperCase();
@@ -75,12 +90,15 @@ export function describeThreadTopic(
   headers: Record<string, string> | undefined,
   subject: string
 ): ThreadTopicDiagnostics {
-  const inboundTopic = normalizeTopic(headers?.["thread-topic"] ?? "");
-  const threadTopicPresent = inboundTopic.length > 0;
+  const rawTopic = headers?.["thread-topic"] ?? "";
+  const threadTopicPresent = rawTopic.trim().length > 0;
+  const inboundTopic = normalizeTopic(decodeTopicHeader(rawTopic));
   return {
     threadTopicPresent,
     threadTopicMatches:
-      threadTopicPresent && normalizeTopic(stripReplyPrefixes(subject)) === inboundTopic,
+      threadTopicPresent &&
+      inboundTopic.length > 0 &&
+      normalizeTopic(stripReplyPrefixes(subject)) === inboundTopic,
     subjectHasTag: hasSubjectTag(subject),
   };
 }
