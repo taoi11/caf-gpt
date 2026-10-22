@@ -44,6 +44,7 @@ import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates"
 import { htmlToText } from "../email/utils/HtmlToText";
 import { buildOutlookThreadHeaders } from "../email/utils/OutlookThreading";
 import { normalizeReplySubject } from "../email/utils/ReplySubject";
+import { describeThreadTopic } from "../email/utils/ThreadTopicDiagnostics";
 import {
   isAuthorizedEmailAddress,
   type ResolvedReplyRecipients,
@@ -227,6 +228,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         toCount: recipients.to.length,
         ccCount: recipients.cc.length,
         outlookThreaded: sentReply.outlookThreaded,
+        ...describeThreadTopic(parsedEmail.headers, parsedEmail.subject),
       });
       outcome = "replied";
       outcomeReason = "reply_sent";
