@@ -17,7 +17,8 @@ src/
 │   │   ├── LogRedaction.ts      # Error-name/code allowlists, log-safe domains, and emailRef ids
 │   │   ├── OutlookThreading.ts  # Child Thread-Index / Thread-Topic so Exchange groups replies
 │   │   ├── ReplyRecipients.ts   # Outlook-style primary and reply-all recipient policy
-│   │   └── ReplySubject.ts      # Single "Re: " reply subject normalization
+│   │   ├── ReplySubject.ts      # Single "Re: " reply subject normalization
+│   │   └── ThreadTopicDiagnostics.ts # Boolean-only Thread-Topic/subject-tag log diagnostics
 │   └── types.ts                 # Email type definitions
 ├── agents/
 │   ├── UserAgent.ts             # Durable Object-backed per-user email agent
