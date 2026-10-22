@@ -148,6 +148,41 @@ describe("inbound email logging contract", () => {
     expectNoSensitiveContent(lines);
   });
 
+  it("logs topic diagnostics on the reply-accepted line as booleans only", async () => {
+    const stub = getUserAgentStub(SENDER);
+    const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const logs = captureLogs();
+      vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockResolvedValue({
+        shouldRespond: true,
+        content: "<p>Reply</p>",
+      });
+      mockClefChoice("reply", 0.91);
+      // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
+      vi.spyOn(instance, "schedule").mockResolvedValue({
+        id: "schedule-1",
+        callback: "runMemoryUpdate",
+        payload: "",
+        type: "delayed",
+        time: 1,
+        delayInSeconds: 1,
+      } as never);
+      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
+        messageId: "structured-reply",
+      });
+      await instance.onEmail(createAgentEmail({ headers: { "Thread-Topic": SUBJECT } }));
+      return logs;
+    });
+
+    const accepted = lines.find((line) => line.message === "Inbound email reply accepted");
+    expect(accepted).toMatchObject({
+      outlookThreaded: false,
+      threadTopicPresent: true,
+      threadTopicMatches: true,
+      subjectHasTag: false,
+    });
+    expectNoSensitiveContent(lines);
+  });
+
   it("logs an error outcome with the error-reply status and no exception text", async () => {
     const stub = getUserAgentStub(SENDER);
     const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
