@@ -5,22 +5,23 @@
  *
  * Exchange falls back to the conversation topic when it does not use the Thread-Index GUID, and its
  * MIME reader derives that topic from Subject and Thread-Topic (MS-OXCMAIL 2.2.3.2.6.3). A tag
- * prepended to an unprefixed subject (e.g. "[EXTERNAL] Re: ...") keeps the Thread-Topic, because
- * the subject then ends with it; a subject whose prefix-stripped text differs from the topic may
- * not. threadTopicMatches is true only when every MIME header order keeps the topic, and
+ * prepended to the subject (e.g. "[EXTERNAL] Re: ...") defeats subject normalization, so Exchange
+ * keeps the Thread-Topic when the subject ends with it. A normalizable subject ("Re: ...") whose
+ * remainder differs from the topic may not keep it, depending on header order.
+ * threadTopicMatches is true only when every header order keeps the Thread-Topic, and
  * subjectHasTag records a tag either way. Neither logs a value.
  *
  * Top-level declarations:
  * - ThreadTopicDiagnostics: Boolean-only topic diagnostics
  * - hasSubjectTag: Whether a subject carries a gateway-style tag in its leading prefixes
- * - stripReplyAndForwardPrefixes: Removes a leading chain of reply and forward prefixes
+ * - normalizeExchangeSubject: Exchange's one-prefix subject normalization, or undefined
  * - decodeTopicHeader: Decodes RFC 2047 encoded words in a raw Thread-Topic header value
  * - normalizeTopic: Comparison form of a topic (whitespace collapsed, uppercased)
+ * - keepsThreadTopic: Whether Exchange keeps the Thread-Topic for a subject in every header order
  * - describeThreadTopic: Builds the diagnostics from inbound headers and subject
  */
 
 import { decodeWords } from "postal-mime";
-import { stripReplyPrefixes } from "./ReplySubject";
 
 /** Boolean-only topic diagnostics; never carries header or subject values. */
 export interface ThreadTopicDiagnostics {
@@ -28,8 +29,8 @@ export interface ThreadTopicDiagnostics {
   threadTopicPresent: boolean;
   /**
    * Exchange keeps the inbound Thread-Topic as the conversation topic whatever the MIME header
-   * order: the prefix-stripped subject equals it, or an unprefixed subject ends with it. False
-   * without an inbound topic, and false when the outcome would depend on header order.
+   * order: the normalized subject equals it, or a subject Exchange cannot normalize ends with it.
+   * False without an inbound topic, and false when the outcome would depend on header order.
    */
   threadTopicMatches: boolean;
   /** The inbound subject has a bracketed or CAUTION:/EXTERNAL:-style tag before or after Re:/FW:. */
@@ -71,20 +72,17 @@ export function hasSubjectTag(subject: string): boolean {
   return false;
 }
 
+/** Exchange subject prefix: 1-3 characters other than colon, blank or digit, a colon, blanks. */
+const EXCHANGE_SUBJECT_PREFIX = /^[^:\s0-9]{1,3}: */;
+
 /**
- * Removes a leading chain of reply and forward prefixes ("Re: FW: "), bounded like hasSubjectTag.
+ * Exchange's subject normalization (MS-OXCMAIL 2.2.3.2.6.1): strips exactly one short prefix
+ * such as "RE: " or "FW: ". Returns undefined when the subject has no such prefix.
  * @param subject - Inbound subject as parsed
  */
-function stripReplyAndForwardPrefixes(subject: string): string {
-  let rest = subject;
-  for (let step = 0; step < MAX_PREFIX_TOKENS; step++) {
-    const prefix = REPLY_OR_FORWARD_PREFIX.exec(rest);
-    if (!prefix) {
-      break;
-    }
-    rest = rest.slice(prefix[0].length);
-  }
-  return rest;
+function normalizeExchangeSubject(subject: string): string | undefined {
+  const prefix = EXCHANGE_SUBJECT_PREFIX.exec(subject);
+  return prefix ? subject.slice(prefix[0].length) : undefined;
 }
 
 /**
@@ -109,11 +107,22 @@ function normalizeTopic(topic: string): string {
 }
 
 /**
+ * Whether Exchange keeps the topic for this subject in every MIME header order.
+ * @param subject - Inbound subject as parsed
+ * @param normalizedTopic - Decoded inbound Thread-Topic in comparison form
+ */
+function keepsThreadTopic(subject: string, normalizedTopic: string): boolean {
+  const normalizedSubject = normalizeExchangeSubject(subject);
+  return normalizedSubject === undefined
+    ? normalizeTopic(subject).endsWith(normalizedTopic)
+    : normalizeTopic(normalizedSubject) === normalizedTopic;
+}
+
+/**
  * Builds boolean-only topic diagnostics. The header map does not keep MIME header order, so the
- * match is conservative. When the subject starts with a reply/forward prefix, Exchange normalizes
- * it if Subject comes first, so only an equal prefix-stripped subject counts. Without such a
- * prefix, normalization fails in either order and Exchange keeps the Thread-Topic when the subject
- * ends with it (MS-OXCMAIL 2.2.3.2.6.3).
+ * match follows MS-OXCMAIL 2.2.3.2.6.3 conservatively. A normalizable subject matches only when its
+ * normalized remainder equals the topic, the outcome Exchange reaches in both orders. A subject
+ * Exchange cannot normalize matches when it ends with the topic.
  * @param headers - Inbound header map with lowercase names
  * @param subject - Inbound subject as parsed
  */
@@ -127,11 +136,7 @@ export function describeThreadTopic(
   return {
     threadTopicPresent,
     threadTopicMatches:
-      threadTopicPresent &&
-      inboundTopic.length > 0 &&
-      (normalizeTopic(stripReplyPrefixes(subject)) === inboundTopic ||
-        normalizeTopic(stripReplyAndForwardPrefixes(subject)) === inboundTopic ||
-        (!REPLY_OR_FORWARD_PREFIX.test(subject) && normalizeTopic(subject).endsWith(inboundTopic))),
+      threadTopicPresent && inboundTopic.length > 0 && keepsThreadTopic(subject, inboundTopic),
     subjectHasTag: hasSubjectTag(subject),
   };
 }

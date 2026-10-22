@@ -60,10 +60,13 @@ describe("describeThreadTopic", () => {
     expect(describeThreadTopic({ "thread-topic": "   " }, "").threadTopicPresent).toBe(false);
   });
 
-  it("matches the subject without reply prefixes, ignoring case and whitespace", () => {
+  it("matches the normalized subject, ignoring case and whitespace", () => {
     expect(
-      describeThreadTopic({ "thread-topic": " leave  REQUEST " }, "RE: Re[2]: Leave request")
+      describeThreadTopic({ "thread-topic": " leave  REQUEST " }, "RE:  Leave request")
     ).toEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: false });
+    expect(
+      describeThreadTopic({ "thread-topic": "Leave request" }, "Leave request").threadTopicMatches
+    ).toBe(true);
   });
 
   it.each([
@@ -86,16 +89,19 @@ describe("describeThreadTopic", () => {
     ).toEqual({ threadTopicPresent: true, threadTopicMatches: true, subjectHasTag: true });
   });
 
-  it("matches a forwarded or stacked reply-forward subject by its stripped text", () => {
-    for (const subject of [
-      "FW: Leave request",
-      "Re: FW: Leave request",
-      "RE: Fwd: Re: leave request",
-    ]) {
-      expect(
-        describeThreadTopic({ "thread-topic": "Leave request" }, subject).threadTopicMatches
-      ).toBe(true);
-    }
+  it("normalizes exactly one Exchange prefix, so stacked prefixes do not match", () => {
+    const topic = { "thread-topic": "Leave request" };
+    expect(describeThreadTopic(topic, "FW: Leave request").threadTopicMatches).toBe(true);
+    expect(describeThreadTopic(topic, "Fwd: Leave request").threadTopicMatches).toBe(true);
+    expect(describeThreadTopic(topic, "Re: FW: Leave request").threadTopicMatches).toBe(false);
+    expect(describeThreadTopic(topic, "RE: Re[2]: Leave request").threadTopicMatches).toBe(false);
+  });
+
+  it("uses the suffix check when Exchange cannot normalize the subject", () => {
+    const topic = { "thread-topic": "Leave request" };
+    expect(describeThreadTopic(topic, "Re[2]: Leave request").threadTopicMatches).toBe(true);
+    expect(describeThreadTopic(topic, "Antw: Leave request").threadTopicMatches).toBe(true);
+    expect(describeThreadTopic(topic, "Updated Leave request").threadTopicMatches).toBe(true);
   });
 
   it("does not use the suffix check when Exchange could normalize a prefixed subject", () => {
