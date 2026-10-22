@@ -343,6 +343,53 @@ describe("UserAgent email processing", () => {
     expect(result.delivered.headers?.["X-Agent-Sig-Ts"]).toBeUndefined();
   });
 
+  it("adds a child Thread-Index and Thread-Topic so Exchange groups the reply", async () => {
+    const stub = getUserAgentStub("outlook-thread@forces.gc.ca");
+    const parentIndex = btoa(
+      String.fromCharCode(
+        0x01,
+        0x01,
+        0xdc,
+        0x41,
+        0x2a,
+        0x7b,
+        ...Array.from({ length: 16 }, () => 0x42)
+      )
+    );
+
+    const delivered = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const bindingSend = vi
+        .spyOn(getEmailBinding(instance), "send")
+        .mockResolvedValue({ messageId: "outlook-threaded" });
+      mockSuccessfulSchedule(instance, "schedule-1");
+      mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "Response" })));
+
+      await instance.onEmail(
+        createAgentEmail({
+          envelopeFrom: "outlook-thread@forces.gc.ca",
+          envelopeTo: "agent@caf-gpt.com",
+          from: "outlook-thread@forces.gc.ca",
+          to: ["agent@caf-gpt.com"],
+          subject: "feedback note please",
+          body: "Body",
+          messageId: "<outlook-original@forces.gc.ca>",
+          headers: { "thread-index": parentIndex, "thread-topic": "feedback note please" },
+        })
+      );
+
+      return bindingSend.mock.calls[0][0];
+    });
+
+    const childIndex = atob(delivered.headers?.["Thread-Index"] ?? "");
+    expect(childIndex).toHaveLength(27);
+    expect(childIndex.slice(0, 22)).toBe(atob(parentIndex));
+    expect(delivered.headers).toMatchObject({
+      "In-Reply-To": "<outlook-original@forces.gc.ca>",
+      References: "<outlook-original@forces.gc.ca>",
+      "Thread-Topic": "feedback note please",
+    });
+  });
+
   it.each([
     [
       "falls back to In-Reply-To when References is absent",

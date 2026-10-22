@@ -14,7 +14,8 @@
  * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  *
  * Replies carry only the agent answer and signature (no quoted history) and thread via
- * In-Reply-To/References. Prior turns (inbound email plus our reply) are kept in DO SQLite
+ * In-Reply-To/References, plus a child Thread-Index/Thread-Topic when the inbound email has a
+ * Thread-Index (Exchange groups conversations by it, not by RFC 5322 headers). Prior turns (inbound email plus our reply) are kept in DO SQLite
  * (utils/ThreadHistory) and appended to the model context of the user's next reply.
  *
  * Inbound logging contract: every onEmail invocation logs one receipt line, one line per skip path,
@@ -41,6 +42,7 @@ import {
 } from "../email/utils/EmailValidator";
 import { ERROR_RESPONSE_TEMPLATES } from "../email/utils/ErrorResponseTemplates";
 import { htmlToText } from "../email/utils/HtmlToText";
+import { buildOutlookThreadHeaders } from "../email/utils/OutlookThreading";
 import { normalizeReplySubject } from "../email/utils/ReplySubject";
 import {
   isAuthorizedEmailAddress,
@@ -97,6 +99,12 @@ interface AIResponseResult {
   shouldRespond: boolean;
   content?: string;
   skipReason?: string;
+}
+
+/** Content-free result of the normal reply send. */
+interface SentReply {
+  messageId?: string;
+  outlookThreaded: boolean;
 }
 
 interface ReplyThreadingOptions {
@@ -197,7 +205,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       }
 
       const recipients = resolveReplyRecipients(parsedEmail, config);
-      const outboundMessageId = await this.sendReply(
+      const sentReply = await this.sendReply(
         parsedEmail,
         response.content,
         config,
@@ -206,12 +214,19 @@ export class UserAgent extends Agent<Env, UserAgentState> {
           sendAttempted = true;
         }
       );
-      await this.recordThread(parsedEmail, response.content, thread, outboundMessageId, logContext);
+      await this.recordThread(
+        parsedEmail,
+        response.content,
+        thread,
+        sentReply.messageId,
+        logContext
+      );
       await this.scheduleMemoryUpdate(emailContext, response.content);
       this.logger.info("Inbound email reply accepted", {
         ...logContext,
         toCount: recipients.to.length,
         ccCount: recipients.cc.length,
+        outlookThreaded: sentReply.outlookThreaded,
       });
       outcome = "replied";
       outcomeReason = "reply_sent";
@@ -461,13 +476,18 @@ ${parsedEmail.body}`;
     config: AppConfig,
     recipients: ResolvedReplyRecipients,
     markSendAttempted: () => void
-  ): Promise<string | undefined> {
+  ): Promise<SentReply> {
     // Answer + signature only; the client renders the thread from In-Reply-To/References.
     const replyText = htmlToText(content);
     const fullTextContent = replyText || content.trim();
     const htmlContent = this.htmlEmailComposer.composeHtmlReply(content.trim());
     const subject = normalizeReplySubject(parsedEmail.subject);
     const threadingOptions = this.buildThreadingOptions(parsedEmail);
+    const outlookHeaders = buildOutlookThreadHeaders(
+      parsedEmail.headers,
+      parsedEmail.subject,
+      Date.now()
+    );
     const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
     markSendAttempted();
@@ -480,13 +500,16 @@ ${parsedEmail.body}`;
       text: fullTextContent,
       html: htmlContent,
       inReplyTo: threadingOptions.inReplyTo,
-      headers: threadingOptions.headers,
+      headers: { ...threadingOptions.headers, ...outlookHeaders },
     };
     if (recipients.cc.length > 0) {
       Object.assign(emailOptions, { cc: recipients.cc });
     }
     const result = await this.sendEmail(emailOptions);
-    return result?.messageId;
+    return {
+      messageId: result?.messageId,
+      outlookThreaded: outlookHeaders["Thread-Index"] !== undefined,
+    };
   }
 
   /** Loads stored prior turns for the thread this email continues; storage failure yields none. */
