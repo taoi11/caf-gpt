@@ -12,8 +12,14 @@ import { APICallError } from "ai";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
 
-import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
+import { AgentCoordinator, toPrimeFooToolError } from "../../src/agents/AgentCoordinator";
 import { createConfig } from "../../src/config";
+import {
+  AgentAPIError,
+  AgentValidationError,
+  StorageConnectionError,
+  StorageNotFoundError,
+} from "../../src/errors";
 import { Logger } from "../../src/Logger";
 
 const mockGenerateText = vi.fn();
@@ -112,5 +118,48 @@ describe("AgentCoordinator failure logging", () => {
     });
     expect(failureCall?.[1]).not.toHaveProperty("statusCode");
     expect(failureCall?.[1]).not.toHaveProperty("isRetryable");
+  });
+});
+
+describe("Prime Foo tool error mapping", () => {
+  beforeEach(() => {
+    mockGenerateText.mockReset();
+  });
+
+  it("passes app errors through so the reply names the real cause", () => {
+    const storage = new StorageConnectionError("r2 down");
+    const shortlist = new AgentValidationError(
+      "DOAD policy Clef shortlist failed: clef_invalid_choice"
+    );
+    expect(toPrimeFooToolError(storage)).toBe(storage);
+    expect(toPrimeFooToolError(shortlist)).toBe(shortlist);
+  });
+
+  it("maps Workers AI binding failures to AgentAPIError", () => {
+    for (const name of ["InferenceUpstreamError", "AiInternalError"]) {
+      const upstream = new Error("5006: bad input");
+      upstream.name = name;
+      expect(toPrimeFooToolError(upstream)).toBeInstanceOf(AgentAPIError);
+    }
+  });
+
+  it("keeps unknown tool failures as AgentValidationError", () => {
+    expect(toPrimeFooToolError(new TypeError("boom"))).toBeInstanceOf(AgentValidationError);
+    expect(toPrimeFooToolError("not an error")).toBeInstanceOf(AgentValidationError);
+  });
+
+  it("rethrows the tool's own StorageError instead of a generic validation error", async () => {
+    const storage = new StorageNotFoundError("Document not found");
+    mockGenerateText.mockResolvedValueOnce({
+      text: "",
+      steps: [{ content: [{ type: "tool-error", toolName: "batch_research", error: storage }] }],
+    });
+    const testEnv = createMockEnv();
+    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
+      createModel: createTestModel,
+      generateText: mockGenerateText,
+    });
+
+    await expect(coordinator.processWithPrimeFoo("safe context")).rejects.toBe(storage);
   });
 });

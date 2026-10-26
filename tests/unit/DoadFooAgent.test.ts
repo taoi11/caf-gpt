@@ -17,6 +17,8 @@ import { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 import { DoadFooAgent } from "../../src/agents/sub-agents/DoadFooAgent";
 import type { ClefAiRunner } from "../../src/agents/utils/ClefDecision";
 import { createConfig } from "../../src/config";
+import { AgentValidationError } from "../../src/errors";
+import { Logger } from "../../src/Logger";
 import type { ResearchRequest } from "../../src/types";
 
 const mockGenerateText = vi.fn();
@@ -139,7 +141,8 @@ Members are entitled to relocation assistance when posted.`
 
       expect(result).toContain("DOAD 5019-0");
       expect(mockGenerateText).toHaveBeenCalledTimes(1);
-      expect(clefAi.run).toHaveBeenCalledTimes(1);
+      // One request per rank: pick_1 chooses the document, pick_2 answers none and ends the shortlist.
+      expect(clefAi.run).toHaveBeenCalledTimes(2);
       // SAFETY: generateText fake is invoked once with the answer options object.
 
       const call = mockGenerateText.mock.calls[0][0] as {
@@ -185,6 +188,57 @@ Members are entitled to relocation assistance when posted.`
         "Clef shortlist failed"
       );
       expect(mockGenerateText).not.toHaveBeenCalled();
+    });
+
+    it("logs only the shortlist reason code when the shortlist fails", async () => {
+      clefAi = mockClefAi(shortlistResponse([{ choice: "doc_999" }]));
+      agent = new DoadFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
+      const loggerError = vi.spyOn(Logger.getInstance(), "error");
+
+      await expect(agent.research({ question: "Sensitive member question" })).rejects.toThrow(
+        AgentValidationError
+      );
+
+      const failure = loggerError.mock.calls.find(
+        ([message]) => message === "doad_foo shortlist-prefetch research failed"
+      );
+      expect(failure?.[1]).toEqual({
+        processingTime: expect.any(Number),
+        questionLength: "Sensitive member question".length,
+        errorName: "AgentValidationError",
+        errorCode: "AGENT_VALIDATION_ERROR",
+        recoverable: false,
+        shortlistReason: "clef_invalid_choice",
+      });
+      loggerError.mockRestore();
+    });
+
+    it("logs the Workers AI error name and numeric code, never the message", async () => {
+      const upstream = new Error("5006: input contains sensitive member question");
+      upstream.name = "InferenceUpstreamError";
+      clefAi = { run: vi.fn(async () => Promise.reject(upstream)) };
+      agent = new DoadFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
+      const loggerError = vi.spyOn(Logger.getInstance(), "error");
+
+      await expect(agent.research({ question: "Test question" })).rejects.toBe(upstream);
+
+      const failure = loggerError.mock.calls.find(
+        ([message]) => message === "doad_foo shortlist-prefetch research failed"
+      );
+      expect(failure?.[1]).toEqual({
+        processingTime: expect.any(Number),
+        questionLength: "Test question".length,
+        errorName: "InferenceUpstreamError",
+        aiUpstreamCode: 5006,
+      });
+      expect(JSON.stringify(failure?.[1])).not.toContain("sensitive");
+      loggerError.mockRestore();
     });
 
     it("should allow intentional high-confidence none with an empty prefetch", async () => {

@@ -11,6 +11,7 @@
 
 import type { AppConfig } from "../../config";
 import { AgentValidationError } from "../../errors";
+import { getAiUpstreamCode } from "../../email/utils/LogRedaction";
 import { getSafeErrorMetadata } from "../../Logger";
 import type { ResearchRequest } from "../../types";
 import type { BaseAgentDependencies } from "./BaseAgent";
@@ -18,6 +19,7 @@ import { BaseAgent, createProviderOptions } from "./BaseAgent";
 import {
   type ClefAiRunner,
   CLEF_SHORTLIST_MAX_PICKS,
+  type ShortlistReason,
   shortlistManifestFiles,
 } from "./ClefDecision";
 import { parseManifestRows } from "./ManifestParser";
@@ -66,6 +68,8 @@ export class ToolReadingAgent extends BaseAgent {
 
   async research(request: ResearchRequest): Promise<string> {
     const startTime = Date.now();
+    // Fixed reason code only (never picks, model output, or question text).
+    let shortlistReason: ShortlistReason | undefined;
 
     try {
       this.logger.info(`Starting ${this.agentConfig.category}_foo shortlist-prefetch research`);
@@ -94,8 +98,9 @@ export class ToolReadingAgent extends BaseAgent {
       const shortlist = await shortlistManifestFiles(this.getClefAi(), request.question, rows, {
         maxPicks,
       });
+      shortlistReason = shortlist.reason;
 
-      // Validation failures (malformed / invalid / duplicate / empty-failed) must not draft.
+      // Validation failures (malformed / invalid / too many options / empty-failed) must not draft.
       // Only a confident Clef "none" may proceed with zero prefetched documents.
       if (shortlist.reason !== "clef_shortlist" && shortlist.reason !== "clef_intentional_none") {
         throw new AgentValidationError(
@@ -143,11 +148,22 @@ export class ToolReadingAgent extends BaseAgent {
 
       return response;
     } catch (error) {
-      this.logger.error(`${this.agentConfig.category}_foo shortlist-prefetch research failed`, {
+      const failureMetadata = {
         processingTime: Date.now() - startTime,
         questionLength: request.question?.length ?? 0,
         ...getSafeErrorMetadata(error),
-      });
+      };
+      if (shortlistReason !== undefined) {
+        Object.assign(failureMetadata, { shortlistReason });
+      }
+      const aiUpstreamCode = getAiUpstreamCode(error);
+      if (aiUpstreamCode !== undefined) {
+        Object.assign(failureMetadata, { aiUpstreamCode });
+      }
+      this.logger.error(
+        `${this.agentConfig.category}_foo shortlist-prefetch research failed`,
+        failureMetadata
+      );
       throw error;
     }
   }

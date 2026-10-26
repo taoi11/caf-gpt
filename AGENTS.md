@@ -51,7 +51,10 @@ Emails are processed through **Cloudflare Email Workers**:
   - Research sub-agents are `LeaveFooAgent`, `DoadFooAgent`, and `QroFooAgent`.
   - Each domain accepts up to 3 questions per `batch_research` call.
   - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent`: Clef-flash shortlists allowlisted index ids, DocumentRetriever prefetches those docs (max 3), then one `generateText()` answer call uses only the prefetched content (no `read_file` selection loop).
-  - Shortlist validation failures (malformed / invented / duplicate / empty-failed) throw to the error-email boundary; only a confident Clef `none` may answer with zero prefetched docs.
+  - Shortlist validation failures (malformed / invented or already-chosen / too many options / empty-failed) throw to the error-email boundary; only a confident first-rank Clef `none` may answer with zero prefetched docs. There is no fallback: a failed shortlist always ends in a visible error reply.
+  - Clef answers each question in a request independently, so the shortlist asks one rank per `AI.run` request and drops already-chosen documents from the next rank's options. The manifest is sent once, as the option descriptions; Clef accepts at most 255 options per choice question (`CLEF_CHOICE_MAX_OPTIONS`), checked before sending.
+  - The failure log carries only the fixed `shortlistReason` code and, for Workers AI binding errors, `errorName` plus the numeric `aiUpstreamCode` (never the error message, picks, or model output).
+  - Prime Foo passes a tool's own app error through to the error reply (for example a `StorageError` gets the storage template); Workers AI binding errors become `AgentAPIError`; anything else stays `AgentValidationError`.
   - DOAD and QR&O identifiers come from shared `| Id | Title | File |` manifest tables on R2 (`doad/index_v2.md`, `qro/index_v2.md`), parsed by `parseManifestTable` / `parseManifestRows` in `src/agents/utils/ManifestParser.ts`; it rejects absolute paths, dot or empty segments, backslashes, traversal, and non-`.md` files.
 - `generate_feedback_note` delegates to `PaceFooAgent.generateNote(rank, context)`.
   - PaceFooAgent loads competencies from R2 (`paceNote/{rank}.md`) and generates feedback.
@@ -118,7 +121,7 @@ For agents that answer from indexed documents (like `DoadFooAgent` and `QroFooAg
 2. Configure its category, model key, prompt name, `documentsVariableName`, and `maxPrefetchDocuments`.
 3. Implement `getIndexContent()` and `formatDocumentTag()`.
 4. Rely on `parseManifestRows` / `parseManifestTable` for the shared `| Id | Title | File |` allowlist; identifiers are validated before any R2 read.
-5. Clef-flash shortlists allowlisted ids (`shortlistManifestFiles`); `DocumentRetriever` prefetches those docs; the specialist answers once from `{prefetched_documents}` with no `read_file` selection loop.
+5. Clef-flash shortlists allowlisted ids (`shortlistManifestFiles`, one rank per request); `DocumentRetriever` prefetches those docs; the specialist answers once from `{prefetched_documents}` with no `read_file` selection loop.
 6. Add one answer prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md` that cites only prefetched documents.
 7. Add model config in `src/config.ts`.
 
