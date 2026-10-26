@@ -8,6 +8,7 @@
  * - OTHER_ERROR_NAME / OTHER_ERROR_CODE: Fixed classifications for error names/codes not allowlisted
  * - toLoggableErrorName: Maps an error name to an allowlisted value or OTHER_ERROR_NAME
  * - toLoggableErrorCode: Maps an error code to an allowlisted value or OTHER_ERROR_CODE
+ * - getAiUpstreamCode: Extracts only the numeric Workers AI error code from a binding error
  * - getLogSafeDomain: Extracts a log-safe domain from an email address
  * - createEmailRef: Generates a random per-message correlation id
  * - getEmailRefFromHeaders: Reads the Worker-assigned emailRef, or generates a fresh one
@@ -60,6 +61,9 @@ const LOGGABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
   "StorageNotFoundError",
   "StorageConnectionError",
   "StorageValidationError",
+  // Workers AI binding (workerd src/cloudflare/internal/ai-api.ts default names)
+  "InferenceUpstreamError",
+  "AiInternalError",
   // Vercel AI SDK (every AI_* name in the pinned ai / @ai-sdk/provider builds; drift-tested)
   "AI_APICallError",
   "AI_DownloadError",
@@ -110,6 +114,26 @@ const LOGGABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   "STORAGE_CONNECTION_ERROR",
   "STORAGE_VALIDATION_ERROR",
 ]);
+
+/** Workers AI binding error names whose message starts with a numeric `<code>: ` prefix. */
+const AI_BINDING_ERROR_NAMES: ReadonlySet<string> = new Set([
+  "InferenceUpstreamError",
+  "AiInternalError",
+]);
+
+/** Leading numeric code of a Workers AI binding error message (digits only, nothing after the colon). */
+const AI_UPSTREAM_CODE_PATTERN = /^(\d{1,6}):/;
+
+/**
+ * Returns the numeric Workers AI error code (for example 5006) from a binding error, or undefined.
+ * Only the leading digits are returned; the message text itself is never returned or logged.
+ * @param error - Value caught from env.AI.run
+ */
+export function getAiUpstreamCode<ErrorValue>(error: ErrorValue): number | undefined {
+  if (!(error instanceof Error) || !AI_BINDING_ERROR_NAMES.has(error.name)) return undefined;
+  const match = AI_UPSTREAM_CODE_PATTERN.exec(error.message);
+  return match ? Number(match[1]) : undefined;
+}
 
 /**
  * Returns the error name when it is allowlisted, otherwise OTHER_ERROR_NAME.
