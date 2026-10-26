@@ -19,6 +19,7 @@ import { describe, expect, it } from "vitest";
 import {
   createEmailRef,
   EMAIL_REF_HEADER,
+  getAiUpstreamCode,
   getEmailRefFromHeaders,
   getLogSafeDomain,
   OTHER_ERROR_CODE,
@@ -31,11 +32,40 @@ import { getSafeErrorMetadata } from "../../src/Logger";
 
 const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
 
+describe("getAiUpstreamCode", () => {
+  /** Builds an error with the given name and message. */
+  function namedError(name: string, message: string): Error {
+    const error = new Error(message);
+    error.name = name;
+    return error;
+  }
+
+  it("returns only the leading numeric code of a Workers AI binding error", () => {
+    expect(getAiUpstreamCode(namedError("InferenceUpstreamError", "5006: bad input text"))).toBe(
+      5006
+    );
+    expect(getAiUpstreamCode(namedError("AiInternalError", "3040: capacity"))).toBe(3040);
+  });
+
+  it("returns undefined for other errors and for messages without a leading code", () => {
+    expect(getAiUpstreamCode(namedError("Error", "5006: looks like a code"))).toBeUndefined();
+    expect(
+      getAiUpstreamCode(namedError("InferenceUpstreamError", "raw body 5006:"))
+    ).toBeUndefined();
+    expect(
+      getAiUpstreamCode(namedError("InferenceUpstreamError", "user@forces.gc.ca"))
+    ).toBeUndefined();
+    expect(getAiUpstreamCode("5006: string")).toBeUndefined();
+  });
+});
+
 describe("toLoggableErrorName", () => {
   it("passes allowlisted built-in, app, and AI SDK error names", () => {
     expect(toLoggableErrorName("TypeError")).toBe("TypeError");
     expect(toLoggableErrorName("EmailParsingError")).toBe("EmailParsingError");
     expect(toLoggableErrorName("AI_APICallError")).toBe("AI_APICallError");
+    expect(toLoggableErrorName("InferenceUpstreamError")).toBe("InferenceUpstreamError");
+    expect(toLoggableErrorName("AiInternalError")).toBe("AiInternalError");
   });
 
   it("classifies identifier-shaped and free-text unknown names as OtherError", () => {

@@ -175,7 +175,8 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
       expect(result).toContain("annual leave");
       expect(mockGenerateText).toHaveBeenCalledTimes(1);
-      expect(clefAi.run).toHaveBeenCalledTimes(1);
+      // One request per rank: pick_1 chooses the document, pick_2 answers none and ends the shortlist.
+      expect(clefAi.run).toHaveBeenCalledTimes(2);
       // SAFETY: generateText fake is invoked once with the answer options object.
 
       const call = mockGenerateText.mock.calls[0][0] as {

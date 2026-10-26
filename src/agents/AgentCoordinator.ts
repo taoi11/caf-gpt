@@ -6,13 +6,14 @@
  * Top-level declarations:
  * - AgentCoordinatorDependencies: Injectable model and generation functions for Prime Foo
  * - PrimeFooStepFinishEvent: Minimal step metadata consumed by circuit-breaker logging
+ * - toPrimeFooToolError: Maps a tool failure to its real app error class for the error reply
  * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools and a circuit breaker (maxSteps: 3)
  */
 
 import { APICallError, generateText, stepCountIs, tool } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../config";
-import { AgentValidationError } from "../errors";
+import { AgentAPIError, AgentValidationError, BaseAppError } from "../errors";
 import { getSafeErrorMetadata, Logger } from "../Logger";
 import type { AgentResponse } from "../types";
 import { DoadFooAgent, LeaveFooAgent, PaceFooAgent, QroFooAgent } from "./sub-agents";
@@ -28,6 +29,26 @@ interface PrimeFooStepFinishEvent {
 export interface AgentCoordinatorDependencies {
   createModel: typeof createModel;
   generateText: typeof generateText;
+}
+
+/** Workers AI binding error names (env.AI.run rejections and outages). */
+const WORKERS_AI_ERROR_NAMES: ReadonlySet<string> = new Set([
+  "InferenceUpstreamError",
+  "AiInternalError",
+]);
+
+/**
+ * Maps a failed tool call to the error the reply boundary should see, so the error email names
+ * the real cause: app errors (storage, agent, validation) pass through unchanged, Workers AI
+ * failures become AgentAPIError, and anything else stays AgentValidationError.
+ * @param error - The error a tool's execute threw
+ */
+export function toPrimeFooToolError<ErrorValue>(error: ErrorValue): Error {
+  if (error instanceof BaseAppError) return error;
+  if (error instanceof Error && WORKERS_AI_ERROR_NAMES.has(error.name)) {
+    return new AgentAPIError("Prime_foo tool AI call failed");
+  }
+  return new AgentValidationError("Prime_foo tool execution failed");
 }
 
 export class AgentCoordinator {
@@ -181,8 +202,11 @@ export class AgentCoordinator {
       }
       const result = await this.dependencies.generateText(generationOptions);
 
-      if (result.steps.some((step) => step.content.some((part) => part.type === "tool-error"))) {
-        throw new AgentValidationError("Prime_foo tool execution failed");
+      const toolError = result.steps
+        .flatMap((step) => step.content)
+        .find((part) => part.type === "tool-error");
+      if (toolError) {
+        throw toPrimeFooToolError(toolError.error);
       }
 
       if (!result.text || result.text.trim().length === 0) {
