@@ -4,22 +4,22 @@
  * HTML email composition utility using Outlook-style templates
  *
  * Top-level declarations:
- * - HtmlEmailComposer: Composes the HTML reply body (agent answer only; no quoted history)
+ * - HtmlEmailComposer: Composes the HTML reply body (answer and signature, then quoted history)
  */
 
 /**
- * Composes HTML reply emails with Outlook-style formatting. Quoted thread history is never
- * written into the body: replies thread via In-Reply-To/References so the client shows the
- * conversation itself.
+ * Composes HTML reply emails with Outlook-style formatting: the answer (which already ends with
+ * the CAF-GPT signature) followed by the Outlook-style quoted history built by QuotedHistory.ts.
  */
 export class HtmlEmailComposer {
   /**
    * Composes a full HTML reply email.
    *
    * @param newContent The HTML content of the reply (from LLM, including the signature).
+   * @param quotedHistoryHtml The sanitized Outlook-style quote placed below the signature.
    * @returns The complete HTML string for the email body.
    */
-  composeHtmlReply(newContent: string): string {
+  composeHtmlReply(newContent: string, quotedHistoryHtml: string): string {
     return `
 <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:w="urn:schemas-microsoft-com:office:word" xmlns:m="http://schemas.microsoft.com/office/2004/12/omml" xmlns="http://www.w3.org/TR/REC-html40">
 <head>
@@ -66,6 +66,7 @@ div.WordSection1
 <body lang=EN-CA link="#467886" vlink="#96607D" style='word-wrap:break-word'>
 <div class=WordSection1>
 ${newContent}
+${quotedHistoryHtml}
 </div>
 </body>
 </html>`;
