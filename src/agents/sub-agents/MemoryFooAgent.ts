@@ -53,10 +53,13 @@ export class MemoryFooAgent extends BaseAgent {
 
       if (!emailContext || emailContext.trim().length === 0) {
         this.logger.warn("Empty email context provided, skipping memory update");
+
         return { updated: false };
       }
+
       if (!agentReply || agentReply.trim().length === 0) {
         this.logger.warn("Empty agent reply provided, skipping memory update");
+
         return { updated: false };
       }
 
@@ -73,11 +76,14 @@ ${agentReply}
 
       const modelConfig = this.config.llm.models.memoryFoo;
       const promptName = options?.promptName ?? "memory_foo";
+
       const rendered = await this.promptManager.renderPrompt(promptName, {
         current_memory: memoryContext,
         user_input: emailExchange,
       });
+
       const providerOptions = createProviderOptions(modelConfig.model);
+
       const memoryProviderOptions = providerOptions
         ? {
             ...providerOptions,
@@ -90,6 +96,7 @@ ${agentReply}
 
       let recorded: MemoryUpdateResult | undefined;
       let extraDecision = false;
+
       const assertDecisionNotRecorded = () => {
         if (recorded !== undefined) {
           extraDecision = true;
@@ -111,12 +118,15 @@ ${agentReply}
             inputSchema: MemoryUpdateToolInputSchema,
             execute: async ({ content }: { content: string }) => {
               assertDecisionNotRecorded();
+
               if (content.length > MEMORY_MAX_CONTENT_LENGTH) {
                 throw new Error(
                   `Memory content is ${content.length} characters; maximum is ${MEMORY_MAX_CONTENT_LENGTH}. Rewrite the full narrative shorter.`
                 );
               }
+
               recorded = { updated: true, content };
+
               return "accepted";
             },
           }),
@@ -126,15 +136,18 @@ ${agentReply}
             execute: async () => {
               assertDecisionNotRecorded();
               recorded = { updated: false };
+
               return "unchanged";
             },
           }),
         },
         toolChoice: "required" as const,
       };
+
       if (memoryProviderOptions) {
         Object.assign(generationOptions, { providerOptions: memoryProviderOptions });
       }
+
       const result = await this.dependencies.generateText(generationOptions);
 
       // AI SDK catches execute throws as tool-error parts and still resolves.
@@ -147,9 +160,11 @@ ${agentReply}
               call.toolName === UPDATE_MEMORY_TOOL || call.toolName === LEAVE_MEMORY_UNCHANGED_TOOL
           ).length > 1
       );
+
       if (extraDecision || hasMultipleMemoryToolsInOneStep) {
         throw new Error("Memory decision already recorded");
       }
+
       if (!recorded) {
         throw new Error("Memory update model did not complete a recognized memory tool");
       }

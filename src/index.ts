@@ -54,6 +54,7 @@ export function createUserAgentResolver(env: Env, config = createConfig(env)): E
   return async (emailMessage) => {
     const senderEmail = normalizeEmailAddress(emailMessage.from);
     const recipientEmail = normalizeEmailAddress(emailMessage.to);
+
     const metadata: EmailBoundaryMetadata = {
       emailRef: getEmailRefFromHeaders(emailMessage.headers),
       senderDomain: getLogSafeDomain(senderEmail),
@@ -62,11 +63,13 @@ export function createUserAgentResolver(env: Env, config = createConfig(env)): E
 
     if (!isAuthorizedSender(senderEmail, config)) {
       logger.info("Email ignored - sender not authorized", metadata);
+
       return null;
     }
 
     if (!isMonitoredRecipient(recipientEmail, config)) {
       logger.info("Email ignored - recipient not monitored", metadata);
+
       return null;
     }
 
@@ -177,6 +180,7 @@ function withEmailRefHeader(
 ): ForwardableEmailMessage {
   const headers = new Headers(message.headers);
   headers.set(EMAIL_REF_HEADER, emailRef);
+
   return {
     from: message.from,
     to: message.to,
@@ -200,6 +204,7 @@ async function email(
   const startTime = Date.now();
   const logger = Logger.getInstance();
   const emailRef = createEmailRef();
+
   const metadata = {
     emailRef,
     senderDomain: getLogSafeDomain(message.from),
@@ -212,10 +217,12 @@ async function email(
       missingEmailBinding: !env.EMAIL,
     });
     rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
+
     return;
   }
 
   let config: ReturnType<typeof createConfig>;
+
   try {
     config = createConfig(env);
   } catch (error) {
@@ -224,16 +231,19 @@ async function email(
       ...getSafeErrorMetadata(error),
     });
     rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
+
     return;
   }
 
   const resolver = createUserAgentResolver(env, config);
   let routedToAgent = false;
+
   try {
     await routeAgentEmail(withEmailRefHeader(message, emailRef), env, {
       resolver: async (emailMessage, resolverEnv) => {
         const route = await resolver(emailMessage, resolverEnv);
         routedToAgent = route !== null;
+
         return route;
       },
       onNoRoute: (emailMessage) => {
@@ -248,6 +258,7 @@ async function email(
         );
       },
     });
+
     if (routedToAgent) {
       // Worker-side proof the UserAgent call returned; the DO's own outcome line carries the reason.
       logger.info("Email handed off to UserAgent", {
@@ -257,14 +268,17 @@ async function email(
     }
   } catch (error) {
     const { errorName, errorCode } = getSafeErrorMetadata(error);
+
     const failureMetadata: EmailRoutingFailureMetadata = {
       ...metadata,
       errorName,
       routedToAgent,
     };
+
     if (errorCode !== undefined) {
       failureMetadata.errorCode = errorCode;
     }
+
     logger.error("Top-level email routing failed", failureMetadata);
     rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
   }

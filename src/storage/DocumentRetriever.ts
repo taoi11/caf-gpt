@@ -60,13 +60,16 @@ export class DocumentRetriever {
       if (DocumentRetriever.documentCache.has(key)) {
         // biome-ignore lint/style/noNonNullAssertion: Cache key is verified to exist via .has()
         const entry = DocumentRetriever.documentCache.get(key)!;
+
         if (Date.now() < entry.expiresAt) {
           // Refresh insertion order on hit so eviction is LRU-like rather than FIFO.
           DocumentRetriever.documentCache.delete(key);
           DocumentRetriever.documentCache.set(key, entry);
           this.logger.debug("Document retrieved from cache", { agentName });
+
           return entry.content;
         }
+
         // Cache expired, remove it
         DocumentRetriever.documentCache.delete(key);
       }
@@ -94,9 +97,11 @@ export class DocumentRetriever {
       // Keep cache strictly bounded even when concurrent requests insert around the same time.
       while (DocumentRetriever.documentCache.size > DocumentRetriever.MAX_CACHE_SIZE) {
         const oldestKey = DocumentRetriever.documentCache.keys().next().value;
+
         if (oldestKey === undefined) {
           break;
         }
+
         DocumentRetriever.documentCache.delete(oldestKey);
       }
 
@@ -104,6 +109,7 @@ export class DocumentRetriever {
         agentName,
         size: content.length,
       });
+
       return content;
     } catch (error) {
       // Re-throw typed errors

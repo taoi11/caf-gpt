@@ -20,10 +20,13 @@ import { ToolReadingAgent, type ToolReadingAgentDependencies } from "../utils/To
  */
 export function qroVolumeGroup(row: ManifestRow): ManifestGroup {
   const slash = row.id.indexOf("/");
+
   if (slash < 0) {
     return { key: "", label: "QR&O documents outside a volume" };
   }
+
   const volume = row.id.slice(0, slash);
+
   return { key: volume, label: `QR&O ${volume.replaceAll("-", " ")}` };
 }
 
@@ -44,6 +47,7 @@ export class QroFooAgent extends ToolReadingAgent {
           const chapterName = id.split("/").pop()?.replace(".md", "") ?? id;
           // Sanitize chapter name for XML tag: replace non-alphanumeric chars (except hyphens) with underscores
           const sanitizedName = chapterName.replace(/[^a-zA-Z0-9-]/g, "_");
+
           return `<QRO_chapter_${sanitizedName}>\n${content}\n</QRO_chapter_${sanitizedName}>`;
         },
       },

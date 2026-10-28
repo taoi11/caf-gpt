@@ -75,22 +75,26 @@ export function detectAutoReply(parsedEmail: ParsedEmailData): AutoReplyDetectio
 
   const autoSubmitted = getHeaderValue(headers, "auto-submitted");
   const autoSubmittedToken = autoSubmitted?.split(";")[0]?.trim().toLowerCase();
+
   if (autoSubmittedToken && autoSubmittedToken !== "no") {
     reasons.push(`Auto-Submitted: ${autoSubmitted}`);
     categories.push("auto_submitted");
   }
 
   const precedence = getHeaderValue(headers, "precedence");
+
   const precedenceToken = precedence
     ?.split(/[,;\s]/)[0]
     ?.trim()
     .toLowerCase();
+
   if (precedenceToken && ["bulk", "junk", "list"].includes(precedenceToken)) {
     reasons.push(`Precedence: ${precedence}`);
     categories.push("precedence");
   }
 
   const contentType = getHeaderValue(headers, "content-type")?.toLowerCase() ?? "";
+
   if (contentType.includes("multipart/report") || contentType.includes("message/delivery-status")) {
     reasons.push(`Content-Type: ${contentType}`);
     categories.push("delivery_report");
@@ -103,12 +107,14 @@ export function detectAutoReply(parsedEmail: ParsedEmailData): AutoReplyDetectio
   }
 
   const subject = parsedEmail.subject ?? "";
+
   if (AUTO_REPLY_SUBJECT_PATTERNS.some((pattern) => pattern.test(subject))) {
     lowConfidenceReasons.push(`Subject: ${subject}`);
     lowConfidenceCategories.push("subject_pattern");
   }
 
   const senderLocalPart = parsedEmail.from?.split("@")[0] ?? "";
+
   if (AUTO_REPLY_SENDER_PATTERNS.some((pattern) => pattern.test(senderLocalPart))) {
     lowConfidenceReasons.push(`Sender: ${parsedEmail.from}`);
     lowConfidenceCategories.push("sender_pattern");
@@ -146,10 +152,12 @@ function normalizeHeaders(headers?: Record<string, string>) {
 
   for (const [key, value] of Object.entries(headers)) {
     const lowerKey = key.toLowerCase();
+
     if (normalized[lowerKey]) {
       normalized[lowerKey] = `${normalized[lowerKey]}, ${value}`;
       continue;
     }
+
     normalized[lowerKey] = value;
   }
 

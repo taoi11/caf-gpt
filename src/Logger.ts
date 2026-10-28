@@ -38,6 +38,7 @@ export class Logger {
     if (!Logger.instance) {
       Logger.instance = new Logger();
     }
+
     return Logger.instance;
   }
 
@@ -89,11 +90,14 @@ export function getSafeErrorMetadata<ErrorValue>(error: ErrorValue): SafeErrorMe
 
   const details = ErrorMetadataDetailsSchema.parse(error);
   const metadata: SafeErrorMetadata = { errorName: toLoggableErrorName(error.name) };
+
   if (details.code !== undefined) {
     metadata.errorCode = toLoggableErrorCode(details.code);
   }
+
   if (details.recoverable !== undefined) {
     metadata.recoverable = details.recoverable;
   }
+
   return metadata;
 }

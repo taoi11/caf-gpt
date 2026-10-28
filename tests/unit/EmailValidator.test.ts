@@ -21,6 +21,7 @@ type InvalidEmailInput = null | undefined | number;
 
 // SAFETY: This intermediate value preserves the same function for a deliberate runtime-boundary test.
 const runtimeEmailAddressValidator = isValidEmailAddress as unknown;
+
 // SAFETY: The validator Zod-parses its argument before using it, so these invalid values are rejected.
 const validateUntrustedEmailAddress = runtimeEmailAddressValidator as (
   email: InvalidEmailInput

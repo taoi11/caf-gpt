@@ -29,21 +29,27 @@ export function resolveReplyRecipients(
   config: AppConfig
 ): ResolvedReplyRecipients {
   const selfAddresses = new Set(
-    [config.email.agentFromEmail, ...config.email.monitoredAddresses]
-      .map((address) => normalizeEmailAddress(address))
-      .filter(Boolean)
+    [config.email.agentFromEmail, ...config.email.monitoredAddresses].flatMap((address) => {
+      const normalized = normalizeEmailAddress(address);
+
+      return normalized ? [normalized] : [];
+    })
   );
+
   const to = collectPrimaryRecipients(email, selfAddresses);
+
   const excluded = new Set([
     ...to,
     normalizeEmailAddress(email.envelopeFrom),
     normalizeEmailAddress(email.from),
   ]);
+
   const seen = new Set<string>();
   const cc: string[] = [];
 
   for (const candidate of [...email.to, ...email.cc]) {
     const normalized = normalizeEmailAddress(candidate);
+
     if (
       !normalized ||
       !isValidEmailAddress(normalized) ||
@@ -73,6 +79,7 @@ export function isAuthorizedEmailAddress(
   authorization: AuthorizationConfig
 ): boolean {
   const normalized = normalizeEmailAddress(email);
+
   if (!isValidEmailAddress(normalized)) {
     return false;
   }
@@ -80,11 +87,13 @@ export function isAuthorizedEmailAddress(
   const authorizedEmails = new Set(
     authorization.authorizedEmails.map((address) => normalizeEmailAddress(address)).filter(Boolean)
   );
+
   if (authorizedEmails.has(normalized)) {
     return true;
   }
 
   const domain = normalized.slice(normalized.lastIndexOf("@") + 1);
+
   return authorization.authorizedDomains.some(
     (authorizedDomain) => domain === authorizedDomain.toLowerCase().trim()
   );
@@ -93,11 +102,13 @@ export function isAuthorizedEmailAddress(
 /** Collects unique valid Reply-To recipients and falls back to the RFC From mailbox. */
 function collectPrimaryRecipients(email: ParsedEmailData, selfAddresses: Set<string>): string[] {
   const replyTo = collectUniqueValidAddresses(email.replyTo, selfAddresses);
+
   if (replyTo.length > 0) {
     return replyTo;
   }
 
   const from = collectUniqueValidAddresses([email.from], selfAddresses);
+
   if (from.length === 0) {
     throw new EmailValidationError("Successful reply requires a valid non-service mailbox");
   }
@@ -112,6 +123,7 @@ function collectUniqueValidAddresses(candidates: string[], selfAddresses: Set<st
 
   for (const candidate of candidates) {
     const normalized = normalizeEmailAddress(candidate);
+
     if (
       !normalized ||
       !isValidEmailAddress(normalized) ||
@@ -131,5 +143,6 @@ function collectUniqueValidAddresses(candidates: string[], selfAddresses: Set<st
 /** Checks whether an address is a configured identity or belongs to CAF-GPT's service domain. */
 function isServiceAddress(email: string, selfAddresses: Set<string>): boolean {
   const domain = email.slice(email.lastIndexOf("@") + 1);
+
   return domain === CAF_GPT_SERVICE_DOMAIN || selfAddresses.has(email);
 }

@@ -26,9 +26,11 @@ const GUID = Array.from({ length: 16 }, (_, index) => index + 1);
 function buildParentIndex(ms: number, extraBytes: number[] = [], legacy = false): string {
   const filetime = BigInt(ms) * 10000n + FILETIME_UNIX_EPOCH_OFFSET;
   const lowShift = legacy ? 16 : 24;
+
   const time = Array.from({ length: 5 }, (_, index) =>
     Number((filetime >> BigInt(lowShift + 32 - index * 8)) & 0xffn)
   );
+
   return btoa(String.fromCharCode(0x01, ...time, ...GUID, ...extraBytes));
 }
 
@@ -41,7 +43,9 @@ function decode(value: string | undefined): number[] {
 function headerFiletime(parent: string): bigint {
   const bytes = decode(parent);
   let time = 0n;
+
   for (let index = 1; index <= 5; index++) time = (time << 8n) | BigInt(bytes[index]);
+
   return time << 24n;
 }
 
@@ -131,6 +135,7 @@ describe("buildChildThreadIndex", () => {
 describe("buildOutlookThreadHeaders", () => {
   it("sets a child Thread-Index and reuses the inbound Thread-Topic", () => {
     const parent = buildParentIndex(PARENT_MS);
+
     const headers = buildOutlookThreadHeaders(
       { "thread-index": parent, "thread-topic": "feedback note please" },
       "RE: feedback note please",

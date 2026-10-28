@@ -16,6 +16,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { MemoryFooAgent } from "../../src/agents/sub-agents";
 import {
+  type ClefAiRunner,
   CLEF_FLASH_MODEL,
   CLEF_MEMORY_UPDATE_CONFIDENCE_THRESHOLD,
 } from "../../src/agents/utils/ClefDecision";
@@ -38,6 +39,7 @@ describe("UserAgent Clef memory update gate", () => {
         emailContext: "Subject: Thanks\n\nThanks!",
         agentReply: "You're welcome.",
       });
+
       return instance.state;
     });
 
@@ -47,6 +49,7 @@ describe("UserAgent Clef memory update gate", () => {
 
   it("runs MemoryFoo with edit prompt when Clef chooses update", async () => {
     const stub = getUserAgentStub("clef-memory-update@forces.gc.ca");
+
     const updateMemory = vi.spyOn(MemoryFooAgent.prototype, "updateMemory").mockResolvedValue({
       updated: true,
       content: "Updated via gated edit",
@@ -59,6 +62,7 @@ describe("UserAgent Clef memory update gate", () => {
         emailContext: "Subject: Pref\n\nI prefer short answers.",
         agentReply: "Understood.",
       });
+
       return instance.state;
     });
 
@@ -83,6 +87,7 @@ describe("UserAgent Clef memory update gate", () => {
         emailContext: "Subject: Maybe\n\nMaybe new?",
         agentReply: "Reply",
       });
+
       return instance.state;
     });
 
@@ -95,11 +100,13 @@ describe("UserAgent Clef memory update gate", () => {
     const updateMemory = vi.spyOn(MemoryFooAgent.prototype, "updateMemory");
 
     await runInDurableObject(stub, async (instance: UserAgent) => {
-      const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
-      vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
+      // SAFETY: These tests intercept only the Clef request contract missing from generated AiModels.
+      const ai = env.AI as ClefAiRunner;
+      vi.spyOn(ai, "run").mockImplementation(async (model: string) => {
         if (model === CLEF_FLASH_MODEL) {
           throw new Error("workers ai down");
         }
+
         throw new Error(`Unexpected AI.run model: ${String(model)}`);
       });
 
@@ -117,8 +124,9 @@ describe("UserAgent Clef memory update gate", () => {
 
 /** Mocks env.AI.run to return a Clef update/no_update choice for the memory gate. */
 function mockClefMemoryChoice(choice: "update" | "no_update", confidence: number): void {
-  const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
-  vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
+  // SAFETY: These tests intercept only the Clef request contract missing from generated AiModels.
+  const ai = env.AI as ClefAiRunner;
+  vi.spyOn(ai, "run").mockImplementation(async (model: string) => {
     if (model === CLEF_FLASH_MODEL) {
       return {
         model: "clef-flash",
@@ -136,6 +144,7 @@ function mockClefMemoryChoice(choice: "update" | "no_update", confidence: number
         usage: { input_tokens: 1, output_tokens: 1 },
       };
     }
+
     throw new Error(`Unexpected AI.run model: ${String(model)}`);
   });
 }

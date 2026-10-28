@@ -39,12 +39,15 @@ export interface ThreadTopicDiagnostics {
 
 /** One leading reply or forward prefix: "Re:", "RE[2]:", "FW:", "Fwd:", "AW:", "WG:", "TR:", ... */
 const REPLY_OR_FORWARD_PREFIX = /^\s*(?:re|aw|sv|antw|fw|fwd|wg|tr|rv|vs)\s*(?:\[\d+\])?\s*:\s*/i;
+
 /** A short bracketed token, e.g. "[EXTERNAL]", "[外部]"; a tag needs a letter, so "[2]" is not one. */
 const BRACKETED_TOKEN = /^\s*\[([^\]\r\n]{1,64})\]/;
 const LETTER = /\p{L}/u;
+
 /** A warning-word prefix such as "CAUTION:", "EXTERNAL -", "*EXTERNAL*". */
 const WARNING_PREFIX =
   /^\s*\*?\s*(?:caution|external|ext|warning|suspicious|suspect|spam|phish(?:ing)?)(?:\s*:|\s*\*|\s+-\s)/i;
+
 /** Bounds the prefix scan; real subjects carry only a few stacked prefixes. */
 const MAX_PREFIX_TOKENS = 10;
 
@@ -55,20 +58,27 @@ const MAX_PREFIX_TOKENS = 10;
  */
 export function hasSubjectTag(subject: string): boolean {
   let rest = subject;
+
   for (let step = 0; step < MAX_PREFIX_TOKENS; step++) {
     const bracketed = BRACKETED_TOKEN.exec(rest);
+
     if (bracketed && LETTER.test(bracketed[1])) {
       return true;
     }
+
     if (WARNING_PREFIX.test(rest)) {
       return true;
     }
+
     const prefix = REPLY_OR_FORWARD_PREFIX.exec(rest);
+
     if (!prefix) {
       return false;
     }
+
     rest = rest.slice(prefix[0].length);
   }
+
   return false;
 }
 
@@ -82,6 +92,7 @@ const EXCHANGE_SUBJECT_PREFIX = /^[^:\s0-9]{1,3}: */;
  */
 function normalizeExchangeSubject(subject: string): string | undefined {
   const prefix = EXCHANGE_SUBJECT_PREFIX.exec(subject);
+
   return prefix ? subject.slice(prefix[0].length) : undefined;
 }
 
@@ -113,6 +124,7 @@ function normalizeTopic(topic: string): string {
  */
 function keepsThreadTopic(subject: string, normalizedTopic: string): boolean {
   const normalizedSubject = normalizeExchangeSubject(subject);
+
   return normalizedSubject === undefined
     ? normalizeTopic(subject).endsWith(normalizedTopic)
     : normalizeTopic(normalizedSubject) === normalizedTopic;
@@ -133,6 +145,7 @@ export function describeThreadTopic(
   const rawTopic = headers?.["thread-topic"] ?? "";
   const threadTopicPresent = rawTopic.trim().length > 0;
   const inboundTopic = normalizeTopic(decodeTopicHeader(rawTopic));
+
   return {
     threadTopicPresent,
     threadTopicMatches:

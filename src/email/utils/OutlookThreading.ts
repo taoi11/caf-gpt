@@ -18,13 +18,16 @@ import { stripReplyPrefixes } from "./ReplySubject";
 
 const HEADER_BYTES = 22;
 const RESPONSE_LEVEL_BYTES = 5;
+
 /** Keeps the unfoldable base64 value under the RFC 5322 998-character line limit. */
 const MAX_THREAD_INDEX_BYTES = HEADER_BYTES + RESPONSE_LEVEL_BYTES * 140;
 const MAX_THREAD_TOPIC_LENGTH = 255;
 const BASE64_PATTERN = /^[A-Za-z0-9+/]+={0,2}$/;
 const PRINTABLE_ASCII_PATTERN = /^[\x20-\x7e]+$/;
+
 /** 100 ns intervals between 1601-01-01 (FILETIME epoch) and 1970-01-01. */
 const FILETIME_UNIX_EPOCH_OFFSET = 116444736000000000n;
+
 /** One day in FILETIME units: tolerated sender clock skew before a header time is implausible. */
 const CLOCK_SKEW_TOLERANCE = 864000000000n;
 const LEGACY_HIGH_BYTE_SHIFT = 56n;
@@ -43,20 +46,26 @@ export interface OutlookThreadHeaders {
  */
 function decodeThreadIndex(value: string | undefined): Uint8Array | undefined {
   const trimmed = value?.replace(/[ \t\r\n]+/g, "") ?? "";
+
   if (trimmed.length === 0 || trimmed.length % 4 !== 0 || !BASE64_PATTERN.test(trimmed)) {
     return undefined;
   }
+
   let binary: string;
+
   try {
     binary = atob(trimmed);
   } catch {
     return undefined;
   }
+
   const bytes = Uint8Array.from(binary, (character) => character.charCodeAt(0));
+
   const wholeIndex =
     bytes.length >= HEADER_BYTES &&
     (bytes.length - HEADER_BYTES) % RESPONSE_LEVEL_BYTES === 0 &&
     bytes[0] === 0x01;
+
   return wholeIndex ? bytes : undefined;
 }
 
@@ -68,15 +77,20 @@ function decodeThreadIndex(value: string | undefined): Uint8Array | undefined {
  */
 function decodeHeaderFiletime(parent: Uint8Array, now: bigint): bigint {
   let fields = 0n;
+
   for (let index = 1; index <= 5; index++) {
     fields = (fields << 8n) | BigInt(parent[index]);
   }
+
   const current = fields << 24n;
+
   if (current <= now + CLOCK_SKEW_TOLERANCE) {
     return current;
   }
+
   const highByte = (now >> LEGACY_HIGH_BYTE_SHIFT) << LEGACY_HIGH_BYTE_SHIFT;
   const legacy = highByte | (fields << 16n);
+
   return legacy > now + CLOCK_SKEW_TOLERANCE ? legacy - (1n << LEGACY_HIGH_BYTE_SHIFT) : legacy;
 }
 
@@ -94,6 +108,7 @@ export function buildChildThreadIndex(
   randomByte: number
 ): string | undefined {
   const parent = decodeThreadIndex(parentThreadIndex);
+
   if (!parent || parent.length + RESPONSE_LEVEL_BYTES > MAX_THREAD_INDEX_BYTES) {
     return undefined;
   }
@@ -113,6 +128,7 @@ export function buildChildThreadIndex(
   child[offset + 2] = (level >>> 8) & 0xff;
   child[offset + 3] = level & 0xff;
   child[offset + 4] = randomByte & 0xff;
+
   return btoa(String.fromCharCode(...child));
 }
 
@@ -127,6 +143,7 @@ function resolveThreadTopic(inboundTopic: string | undefined, subject: string): 
       return candidate;
     }
   }
+
   return undefined;
 }
 
@@ -145,13 +162,17 @@ export function buildOutlookThreadHeaders(
 ): OutlookThreadHeaders {
   const randomByte = crypto.getRandomValues(new Uint8Array(1))[0];
   const threadIndex = buildChildThreadIndex(headers?.["thread-index"], nowMs, randomByte);
+
   if (!threadIndex) {
     return {};
   }
+
   const outlookHeaders: OutlookThreadHeaders = { "Thread-Index": threadIndex };
   const threadTopic = resolveThreadTopic(headers?.["thread-topic"], subject);
+
   if (threadTopic) {
     outlookHeaders["Thread-Topic"] = threadTopic;
   }
+
   return outlookHeaders;
 }

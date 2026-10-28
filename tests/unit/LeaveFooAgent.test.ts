@@ -32,11 +32,14 @@ function captureMockMessages() {
 
   return () => {
     const calls = mockGenerateText.mock.calls;
+
     if (calls.length === 0) return null;
     const lastCall = calls[calls.length - 1][0];
+
     if (lastCall?.system) {
       return [{ content: lastCall.system }];
     }
+
     return null;
   };
 }
@@ -95,6 +98,7 @@ Members are entitled to:
     it("should answer leave policy question successfully", async () => {
       const mockResponse =
         "According to the Leave Policy 2025, members are entitled to 20 days of annual leave per year.";
+
       setMockLLMResponse(mockResponse);
 
       const request: ResearchRequest = {

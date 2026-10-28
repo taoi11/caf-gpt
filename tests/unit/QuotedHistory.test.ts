@@ -144,9 +144,11 @@ describe("sanitizeQuotedHtml", () => {
   it("scans long CSS values in linear time", () => {
     const longValue = "a".repeat(1_000_000);
     const started = performance.now();
+
     const { html } = sanitizeQuotedHtml(
       `<span style='font-family:${longValue}'>x</span><span style='color:${longValue}url(y)'>z</span>`
     );
+
     expect(performance.now() - started).toBeLessThan(1000);
     expect(html).toBe(`<span style="font-family:${longValue}">x</span><span>z</span>`);
   });
@@ -162,6 +164,7 @@ describe("buildQuotedHistory", () => {
     const result = buildQuotedHistory(
       createSource({ html: "<html><body><p class=MsoNormal>Hello</p></body></html>" })
     );
+
     if (!result.ok) throw new Error(result.reason);
 
     expect(result.quote.html).toBe(
@@ -201,6 +204,7 @@ describe("buildQuotedHistory", () => {
 
   it("omits the Cc line when there is no Cc", () => {
     const result = buildQuotedHistory(createSource({ cc: [] }));
+
     if (!result.ok) throw new Error(result.reason);
 
     expect(result.quote.html).not.toContain("Cc:");
@@ -217,6 +221,7 @@ describe("buildQuotedHistory", () => {
         body: "Line <script>alert(1)</script>\n\nSecond & last",
       })
     );
+
     if (!result.ok) throw new Error(result.reason);
 
     expect(result.quote.quotedHtml).toBe(false);
@@ -232,13 +237,16 @@ describe("buildQuotedHistory", () => {
 
   it("carries a nested chain forward unchanged below the new header block", () => {
     const nested = buildQuotedHistory(createSource({ body: "LEVEL-1" }));
+
     if (!nested.ok) throw new Error(nested.reason);
+
     const outer = buildQuotedHistory(
       createSource({
         body: `LEVEL-2\n\n${nested.quote.text}`,
         subject: "RE: RE: feedback note please",
       })
     );
+
     if (!outer.ok) throw new Error(outer.reason);
 
     const text = outer.quote.text;

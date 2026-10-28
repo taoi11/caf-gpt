@@ -23,8 +23,10 @@
  * - ShortlistStageDiagnostics / ShortlistDiagnostics: Content-free numbers/booleans per shortlist stage
  * - ShortlistOptions: Grouping function plus optional max picks and confidence threshold
  * - ManifestShortlistDecision: Result of the DOAD/QR&O manifest shortlist
- * - isRecord: Type guard for plain object records
- * - parseChoiceAnswer: Parses a Clef choice answer from an unknown payload
+ * - ClefRequest: Typed System One request contract
+ * - ClefChoiceAnswerSchema: Boundary validation for choice answers
+ * - ClefBoundarySchema: Untrusted AI response type derived from the boundary schema
+ * - ClefResponseSchema / ClefAnswersSchema: Preserve response-versus-answer failure classification
  * - decideShouldReply: Asks Clef whether inbound mail is legitimate or an injection/abuse attempt
  * - decideShouldUpdateMemory: Asks Clef-flash whether MemoryFoo should run; propagates AI.run failures
  * - shortlistManifestFiles: Two-stage Clef-flash shortlist (group, then ranked documents in it); propagates AI.run failures
@@ -38,6 +40,8 @@
  * - roundDiagnostic: Rounds a logged probability to four decimals
  * - describeTopAnswer: Content-free first-rank numbers (confidence, top-2 margin, none flag)
  */
+
+import { z } from "zod";
 
 import type { ManifestRow } from "./ManifestParser";
 
@@ -92,7 +96,14 @@ export const CLEF_CHOICE_MAX_OPTIONS = 255;
 
 /** Injectable Workers AI runner used so unit tests can mock `AI.run` without Env. */
 export interface ClefAiRunner {
-  run(model: string, inputs: Record<string, unknown>): Promise<unknown>;
+  run(model: string, inputs: ClefRequest): Promise<z.input<typeof ClefBoundarySchema>>;
+}
+
+/** System One choice request sent to the two supported Clef models. */
+export interface ClefRequest {
+  model: ClefModelSpec["selector"];
+  state: string;
+  questions: Record<string, ClefChoiceQuestion>;
 }
 
 /** Outcome of the inbound email reply gate. */
@@ -245,30 +256,22 @@ const SHOULD_UPDATE_MEMORY_QUESTION = {
 
 const NONE_OPTION = "none" as const;
 
-/** Returns true when value is a non-null plain object (not an array). */
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
+/** Validates external choices before confidence checks or numeric diagnostics. */
+const ClefChoiceAnswerSchema = z.object({
+  type: z.literal("choice"),
+  choice: z.string().min(1),
+  confidence: z.number().min(0).max(1),
+  probabilities: z.record(z.string(), z.number()),
+});
 
-/**
- * Parses a Clef choice answer from an unknown payload.
- * @param value - Raw Clef choice answer value from Clef-flash
- * @returns Parsed choice answer, or null when malformed
- */
-function parseChoiceAnswer(value: unknown): ClefChoiceAnswer | null {
-  if (!isRecord(value)) return null;
-  if (value.type !== "choice") return null;
-  if (typeof value.choice !== "string" || value.choice.length === 0) return null;
-  if (typeof value.confidence !== "number" || !Number.isFinite(value.confidence)) return null;
-  if (value.confidence < 0 || value.confidence > 1) return null;
-  if (!isRecord(value.probabilities)) return null;
-  return {
-    type: "choice",
-    choice: value.choice,
-    confidence: value.confidence,
-    probabilities: value.probabilities as Record<string, number>,
-  };
-}
+/** Raw responses remain untrusted until their selected choice is parsed. */
+const ClefBoundarySchema = z.unknown();
+
+/** Separates malformed outer responses from malformed answer dictionaries. */
+const ClefResponseSchema = z.object({ answers: z.unknown().optional() });
+
+/** Validates only the selected answer, leaving unrelated answers outside the contract. */
+const ClefAnswersSchema = z.record(z.string(), z.unknown());
 
 /**
  * Runs a fail-closed Clef binary choice gate: malformed/unknown/low-confidence → shouldProceed false.
@@ -290,19 +293,25 @@ async function runBinaryChoiceGate(
     },
   });
 
-  if (!isRecord(raw)) {
+  const response = ClefResponseSchema.safeParse(raw);
+
+  if (!response.success) {
     return { shouldProceed: false, reason: "clef_malformed_response" };
   }
 
-  const answers = raw.answers;
-  if (!isRecord(answers)) {
+  const answers = ClefAnswersSchema.safeParse(response.data.answers);
+
+  if (!answers.success) {
     return { shouldProceed: false, reason: "clef_malformed_answer" };
   }
 
-  const answer = parseChoiceAnswer(answers[options.questionKey]);
-  if (!answer) {
+  const parsedAnswer = ClefChoiceAnswerSchema.safeParse(answers.data[options.questionKey]);
+
+  if (!parsedAnswer.success) {
     return { shouldProceed: false, reason: "clef_malformed_answer" };
   }
+
+  const answer = parsedAnswer.data;
 
   if (answer.choice !== options.affirmative && answer.choice !== options.negative) {
     return {
@@ -352,6 +361,7 @@ export async function decideShouldReply(
   memory?: string
 ): Promise<ReplyGateDecision> {
   const trimmedMemory = memory?.trim() ?? "";
+
   const state =
     trimmedMemory.length > 0
       ? `<memory>\n${trimmedMemory}\n</memory>\n\n${emailContext}`
@@ -373,8 +383,11 @@ export async function decideShouldReply(
   });
 
   const result: ReplyGateDecision = { shouldReply: gate.shouldProceed, reason: gate.reason };
+
   if (gate.choice === "reply" || gate.choice === "no_reply") result.choice = gate.choice;
+
   if (gate.confidence !== undefined) result.confidence = gate.confidence;
+
   return result;
 }
 
@@ -393,6 +406,7 @@ export async function decideShouldUpdateMemory(
 ): Promise<MemoryUpdateGateDecision> {
   const trimmedMemory = memory?.trim() ?? "";
   const memoryBlock = trimmedMemory.length > 0 ? `<memory>\n${trimmedMemory}\n</memory>\n\n` : "";
+
   const state = `${memoryBlock}<user_email>
 ${emailContext}
 </user_email>
@@ -415,8 +429,11 @@ ${agentReply}
     shouldUpdate: gate.shouldProceed,
     reason: gate.reason,
   };
+
   if (gate.choice === "update" || gate.choice === "no_update") result.choice = gate.choice;
+
   if (gate.confidence !== undefined) result.confidence = gate.confidence;
+
   return result;
 }
 
@@ -431,21 +448,25 @@ function groupManifestRows(
   groupOf: (row: ManifestRow) => ManifestGroup
 ): GroupOption[] {
   const groups = new Map<string, GroupOption>();
+
   for (const row of rows) {
     const { key, label } = groupOf(row);
     const existing = groups.get(key);
+
     if (existing) {
       existing.rows.push(row);
     } else {
       groups.set(key, { key: `group_${groups.size}`, label, rows: [row] });
     }
   }
+
   return [...groups.values()];
 }
 
 /** Display title for a row, falling back to its file when the title cell is empty. */
 function rowTitle(row: ManifestRow): string {
   const title = row.title.trim();
+
   return title.length > 0 ? title : row.file;
 }
 
@@ -459,6 +480,7 @@ function buildGroupQuestion(groups: GroupOption[]): ClefChoiceQuestion {
     [NONE_OPTION, "No group of indexed documents applies to this question"],
     ...groups.map(({ key, label, rows }) => [key, `${label}: ${rows.map(rowTitle).join("; ")}`]),
   ]);
+
   return {
     type: "choice",
     instructions:
@@ -478,6 +500,7 @@ function buildShortlistQuestion(remaining: ShortlistOption[], rank: number): Cle
     [NONE_OPTION, "No additional indexed document should be loaded for this question"],
     ...remaining.map(({ key, row }) => [key, `${row.id} — ${rowTitle(row)}`] as const),
   ]);
+
   return {
     type: "choice",
     instructions:
@@ -507,10 +530,20 @@ async function askShortlistChoice(
     state,
     questions: { [questionKey]: question },
   });
-  if (!isRecord(raw)) return { ok: false, reason: "clef_malformed_response" };
-  if (!isRecord(raw.answers)) return { ok: false, reason: "clef_malformed_answer" };
-  const answer = parseChoiceAnswer(raw.answers[questionKey]);
-  return answer ? { ok: true, answer } : { ok: false, reason: "clef_malformed_answer" };
+
+  const response = ClefResponseSchema.safeParse(raw);
+
+  if (!response.success) return { ok: false, reason: "clef_malformed_response" };
+
+  const answers = ClefAnswersSchema.safeParse(response.data.answers);
+
+  if (!answers.success) return { ok: false, reason: "clef_malformed_answer" };
+
+  const answer = ClefChoiceAnswerSchema.safeParse(answers.data[questionKey]);
+
+  return answer.success
+    ? { ok: true, answer: answer.data }
+    : { ok: false, reason: "clef_malformed_answer" };
 }
 
 /** Rounds a 0–1 diagnostic to four decimals for readable logs. */
@@ -530,12 +563,15 @@ function describeTopAnswer(
     topIsNone: answer.choice === NONE_OPTION,
     topConfidence: roundDiagnostic(answer.confidence),
   };
+
   const probabilities = Object.values(answer.probabilities)
     .filter((value) => Number.isFinite(value))
     .sort((a, b) => b - a);
+
   if (probabilities.length > 0) {
     result.topMargin = roundDiagnostic(probabilities[0] - (probabilities[1] ?? 0));
   }
+
   return result;
 }
 
@@ -566,6 +602,7 @@ export async function shortlistManifestFiles(
   const maxPicks = Math.max(0, options.maxPicks ?? CLEF_SHORTLIST_MAX_PICKS);
   const confidenceThreshold = options.confidenceThreshold ?? CLEF_SHORTLIST_CONFIDENCE_THRESHOLD;
   const diagnostics: ShortlistDiagnostics = { shortlistStage: "group" };
+
   const finish = (ids: string[], reason: ShortlistReason): ManifestShortlistDecision => ({
     ids,
     reason,
@@ -577,11 +614,14 @@ export async function shortlistManifestFiles(
   }
 
   const groups = groupManifestRows(rows, options.groupOf);
+
   const groupDiagnostics: ShortlistStageDiagnostics = {
     optionCount: groups.length + 1,
     rankReached: 0,
   };
+
   diagnostics.group = groupDiagnostics;
+
   // Each stage offers its options plus "none"; check both stages before anything is sent.
   if (
     groups.length + 1 > CLEF_CHOICE_MAX_OPTIONS ||
@@ -592,15 +632,18 @@ export async function shortlistManifestFiles(
 
   const questionState = `<user_question>\n${question}\n</user_question>`;
   groupDiagnostics.rankReached = 1;
+
   const groupResult = await askShortlistChoice(
     ai,
     questionState,
     "group_pick",
     buildGroupQuestion(groups)
   );
+
   if (!groupResult.ok) {
     return finish([], groupResult.reason);
   }
+
   const groupAnswer = groupResult.answer;
   Object.assign(groupDiagnostics, describeTopAnswer(groupAnswer));
 
@@ -613,11 +656,14 @@ export async function shortlistManifestFiles(
         : "clef_empty_shortlist"
     );
   }
+
   // Allowlist before confidence so an invented option always fails the shortlist.
   const pickedGroup = groups.find((group) => group.key === groupAnswer.choice);
+
   if (pickedGroup === undefined) {
     return finish([], "clef_invalid_choice");
   }
+
   if (groupAnswer.confidence < confidenceThreshold) {
     return finish([], "clef_empty_shortlist");
   }
@@ -626,33 +672,42 @@ export async function shortlistManifestFiles(
     optionCount: pickedGroup.rows.length + 1,
     rankReached: 0,
   };
+
   diagnostics.shortlistStage = "document";
   diagnostics.document = documentDiagnostics;
 
   const groupState = `${questionState}\n\n<selected_group>\n${pickedGroup.label}\n</selected_group>`;
+
   let remaining: ShortlistOption[] = pickedGroup.rows.map((row, index) => ({
     key: `doc_${index}`,
     row,
   }));
+
   const selected: string[] = [];
 
   for (let rank = 1; rank <= maxPicks && remaining.length > 0; rank++) {
     const pickKey = `pick_${rank}`;
+
     const alreadySelected =
       selected.length > 0
         ? `\n\n<already_selected>\n${selected.join("\n")}\n</already_selected>`
         : "";
+
     documentDiagnostics.rankReached = rank;
+
     const result = await askShortlistChoice(
       ai,
       `${groupState}${alreadySelected}`,
       pickKey,
       buildShortlistQuestion(remaining, rank)
     );
+
     if (!result.ok) {
       return finish([], result.reason);
     }
+
     const answer = result.answer;
+
     if (rank === 1) {
       Object.assign(documentDiagnostics, describeTopAnswer(answer));
     }
@@ -663,9 +718,11 @@ export async function shortlistManifestFiles(
 
     // Allowlist before confidence so an invented or already-chosen option always fails the shortlist.
     const picked = remaining.find((option) => option.key === answer.choice);
+
     if (picked === undefined) {
       return finish([], "clef_invalid_choice");
     }
+
     if (answer.confidence < confidenceThreshold) {
       break;
     }

@@ -42,10 +42,12 @@ function shortlistResponse(
   picks.forEach((pick, index) => {
     answers[`pick_${index + 1}`] = choiceAnswer(pick.choice, pick.confidence ?? 0.9);
   });
+
   // Pad remaining ranks with high-confidence none so incomplete fixtures are not malformed.
   for (let rank = picks.length + 1; rank <= totalRanks; rank++) {
     answers[`pick_${rank}`] = choiceAnswer("none", 0.9);
   }
+
   return { model: "clef-flash", answers, usage: { input_tokens: 10, output_tokens: 3 } };
 }
 
@@ -145,6 +147,7 @@ All members must maintain high standards of conduct.`
 | vol-1-administration/ch-16-leave.md | Leave Regulations | vol-1-administration/ch-16-leave.md |
 | vol-1-administration/ch-19-grievances.md | Grievance Procedures | vol-1-administration/ch-19-grievances.md |
 | vol-2-discipline/ch-107-conduct.md | Service Conduct | vol-2-discipline/ch-107-conduct.md |`);
+
       expect(manifest.size).toBe(3);
       expect(manifest.get("vol-1-administration/ch-16-leave.md")).toBe(
         "vol-1-administration/ch-16-leave.md"
@@ -167,6 +170,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 | vol-1\\\\ch-7.md | Backslash path | vol-1\\\\ch-7.md |
 | Bad-Only | Two column row |
 `);
+
       expect([...manifest.keys()]).toEqual(["vol-1-administration/ch-16-leave.md"]);
     });
   });
@@ -189,6 +193,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
         prompt?: string;
         tools?: unknown;
       };
+
       expect(call.tools).toBeUndefined();
       expect(call.system).toContain("<QRO_chapter_ch-16-leave>");
       expect(call.prompt).toContain("annual leave");
@@ -227,10 +232,9 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
     it("groups QR&O rows by volume for the stage-1 question", async () => {
       await agent.research({ question: "leave?" });
-      // SAFETY: the ClefAiRunner mock is invoked with the stage-1 Clef System One request first.
-      const request = vi.mocked(clefAi.run).mock.calls[0][1] as {
-        questions: { group_pick: { criteria: Record<string, string> } };
-      };
+
+      const request = vi.mocked(clefAi.run).mock.calls[0][1];
+
       expect(request.questions.group_pick.criteria).toEqual({
         none: expect.any(String),
         group_0: "QR&O vol 1 administration: Leave Regulations; Grievance Procedures",
