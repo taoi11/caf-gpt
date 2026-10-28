@@ -45,7 +45,11 @@ export class EmailCompositionError extends EmailError {
   readonly recoverable = false;
 }
 
-// The reply's quoted history could not be built; carries only a fixed, content-free reason code
+/**
+ * The reply's Outlook-style quoted history could not be built. Carries only a fixed,
+ * content-free reason code (never email content), which UserAgent logs as the outcome reason;
+ * as an EmailCompositionError it gets the funny composition error reply.
+ */
 export class QuotedHistoryError extends EmailCompositionError {
   readonly reason: QuoteFailureReason;
 

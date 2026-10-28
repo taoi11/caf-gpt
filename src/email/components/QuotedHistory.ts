@@ -23,7 +23,8 @@
  * - textToOutlookHtml: Converts escaped plain text to Outlook MsoNormal paragraphs
  * - collapseHeaderValue: Folds a header value onto one line
  * - isAllowedUrl: Checks a link or image URL against the allowed schemes
- * - isSafeStyle: Rejects inline CSS that can run code or load resources
+ * - sanitizeStyle: Keeps only allowlisted CSS declarations with inert values
+ * - styleFunctionNames: Linear scan for CSS function names in a declaration value
  * - renderNodes: Serializes allowlisted DOM nodes back to HTML
  * - renderElement: Serializes one element (dropped, unwrapped, or kept with safe attributes)
  */
@@ -210,8 +211,75 @@ const ALLOWED_ATTRIBUTES: ReadonlySet<string> = new Set([
 
 const ALLOWED_LINK_PATTERN = /^(?:https?:|mailto:|tel:|#)/i;
 const ALLOWED_IMAGE_PATTERN = /^(?:https?:|data:image\/(?:png|gif|jpeg|jpg|webp);base64,)/i;
-const UNSAFE_STYLE_PATTERN =
-  /expression\s*\(|javascript:|vbscript:|behavior\s*:|-moz-binding|@import|url\s*\(|\\/i;
+/** Inline CSS properties kept (plus any `mso-*` Outlook property); all others are dropped. */
+const ALLOWED_STYLE_PROPERTIES: ReadonlySet<string> = new Set([
+  "background",
+  "background-color",
+  "border",
+  "border-bottom",
+  "border-bottom-color",
+  "border-bottom-style",
+  "border-bottom-width",
+  "border-collapse",
+  "border-color",
+  "border-left",
+  "border-left-color",
+  "border-left-style",
+  "border-left-width",
+  "border-right",
+  "border-right-color",
+  "border-right-style",
+  "border-right-width",
+  "border-spacing",
+  "border-style",
+  "border-top",
+  "border-top-color",
+  "border-top-style",
+  "border-top-width",
+  "border-width",
+  "color",
+  "direction",
+  "display",
+  "font",
+  "font-family",
+  "font-size",
+  "font-style",
+  "font-variant",
+  "font-weight",
+  "height",
+  "letter-spacing",
+  "line-height",
+  "list-style-type",
+  "margin",
+  "margin-bottom",
+  "margin-left",
+  "margin-right",
+  "margin-top",
+  "max-width",
+  "min-width",
+  "overflow-wrap",
+  "padding",
+  "padding-bottom",
+  "padding-left",
+  "padding-right",
+  "padding-top",
+  "table-layout",
+  "text-align",
+  "text-decoration",
+  "text-indent",
+  "text-transform",
+  "vertical-align",
+  "white-space",
+  "width",
+  "word-break",
+  "word-wrap",
+]);
+
+/** Characters a kept CSS value may use: no escapes, comments, at-rules, or angle brackets. */
+const SAFE_STYLE_VALUE_PATTERN = /^[a-z0-9#%.,\s"'\-+!/()]*$/i;
+const STYLE_PROPERTY_PATTERN = /^-?[a-z][a-z0-9-]*$/;
+/** The only CSS functions a kept value may call (colours); url(), image-set(), etc. are dropped. */
+const ALLOWED_STYLE_FUNCTIONS: ReadonlySet<string> = new Set(["rgb", "rgba", "hsl", "hsla"]);
 
 const OUTLOOK_SENT_FORMAT = new Intl.DateTimeFormat("en-US", {
   timeZone: OUTLOOK_SENT_TIME_ZONE,
@@ -370,9 +438,52 @@ function isAllowedUrl(value: string, pattern: RegExp): boolean {
   return pattern.test(compact);
 }
 
-/** Rejects inline CSS that can run code or load resources (escapes are rejected outright). */
-function isSafeStyle(value: string): boolean {
-  return !UNSAFE_STYLE_PATTERN.test(value);
+/**
+ * Lists the CSS function names in a value, e.g. "rgb" for "rgb(1,2,3)".
+ * Single pass per "(" so scanning stays linear in the value length.
+ * @param value - CSS declaration value
+ */
+function styleFunctionNames(value: string): string[] {
+  const names: string[] = [];
+  let segmentStart = 0;
+  for (let open = value.indexOf("("); open !== -1; open = value.indexOf("(", open + 1)) {
+    let end = open;
+    while (end > segmentStart && /\s/.test(value[end - 1])) end -= 1;
+    let start = end;
+    while (start > segmentStart && /[a-z-]/i.test(value[start - 1])) start -= 1;
+    names.push(value.slice(start, end).toLowerCase());
+    segmentStart = open + 1;
+  }
+  return names;
+}
+
+/**
+ * Keeps only allowlisted inline CSS declarations whose values cannot run code or load resources:
+ * no escapes, comments, or at-rules, and no functions other than rgb/rgba/hsl/hsla (so url(),
+ * image-set(), expression() and the like are dropped). Returns undefined when nothing is kept.
+ * @param value - Raw style attribute value (entities already decoded)
+ * @param counter - Running count of dropped declarations
+ */
+function sanitizeStyle(value: string, counter: { removed: number }): string | undefined {
+  const kept: string[] = [];
+  for (const declaration of value.split(";")) {
+    if (declaration.trim().length === 0) continue;
+    const separator = declaration.indexOf(":");
+    const property = declaration.slice(0, Math.max(separator, 0)).trim().toLowerCase();
+    const propertyValue = declaration.slice(separator + 1).trim();
+    const safe =
+      separator > 0 &&
+      STYLE_PROPERTY_PATTERN.test(property) &&
+      (ALLOWED_STYLE_PROPERTIES.has(property) || property.startsWith("mso-")) &&
+      SAFE_STYLE_VALUE_PATTERN.test(propertyValue) &&
+      styleFunctionNames(propertyValue).every((name) => ALLOWED_STYLE_FUNCTIONS.has(name));
+    if (safe) {
+      kept.push(`${property}:${propertyValue}`);
+    } else {
+      counter.removed += 1;
+    }
+  }
+  return kept.length > 0 ? kept.join(";") : undefined;
 }
 
 /**
@@ -412,9 +523,13 @@ function renderElement(element: Element, counter: { removed: number }): string {
   const attributes: string[] = [];
   for (const [rawName, value] of Object.entries(element.attribs)) {
     const attribute = rawName.toLowerCase();
+    if (attribute === "style") {
+      const style = sanitizeStyle(value, counter);
+      if (style !== undefined) attributes.push(` style="${escapeHtml(style)}"`);
+      continue;
+    }
     const keep =
       ALLOWED_ATTRIBUTES.has(attribute) ||
-      (attribute === "style" && isSafeStyle(value)) ||
       (attribute === "href" && name === "a" && isAllowedUrl(value, ALLOWED_LINK_PATTERN)) ||
       (attribute === "src" && name === "img" && isAllowedUrl(value, ALLOWED_IMAGE_PATTERN));
     if (keep) {

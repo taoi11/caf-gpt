@@ -7,7 +7,7 @@
  * Top-level declarations:
  * - formatOutlookSentDate suite: Edmonton time, no weekday, DST start/end boundaries
  * - formatOutlookMailbox suite: Name <address>, bare address, groups
- * - sanitizeQuotedHtml suite: Active content, document wrappers, attributes, URLs, styles
+ * - sanitizeQuotedHtml suite: Active content, document wrappers, attributes, URLs, CSS allowlist
  * - buildQuotedHistory suite: HTML/text layout, Cc only when present, escaping, fail-loud reasons
  * - createSource: Builds a QuoteSource fixture
  */
@@ -113,6 +113,42 @@ describe("sanitizeQuotedHtml", () => {
         "<b>bold</b> &lt;not a tag&gt;",
       ].join("")
     );
+  });
+
+  it("keeps only allowlisted CSS declarations with inert values", () => {
+    const { html, removedNodes } = sanitizeQuotedHtml(
+      [
+        `<span style='background-image: image-set("https://track.example/p.gif" 1x)'>a</span>`,
+        `<span style="background: image-set('https://track.example/p.gif' 1x)">b</span>`,
+        "<span style='color:rgb(1, 2, 3); position:fixed; font-family:\"Aptos\",sans-serif'>c</span>",
+        "<span style='mso-ligatures:standardcontextual;color:/**/red;behavior:url(x.htc)'>d</span>",
+        "<span style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>e</span>",
+        "<span style='font-size:11.0pt;color:var(--x);width:calc(1px + 2px)'>f</span>",
+      ].join("")
+    );
+
+    expect(html).toBe(
+      [
+        "<span>a</span>",
+        "<span>b</span>",
+        '<span style="color:rgb(1, 2, 3);font-family:&quot;Aptos&quot;,sans-serif">c</span>',
+        '<span style="mso-ligatures:standardcontextual">d</span>',
+        '<span style="border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm">e</span>',
+        '<span style="font-size:11.0pt">f</span>',
+      ].join("")
+    );
+    expect(html).not.toContain("track.example");
+    expect(removedNodes).toBe(7);
+  });
+
+  it("scans long CSS values in linear time", () => {
+    const longValue = "a".repeat(1_000_000);
+    const started = performance.now();
+    const { html } = sanitizeQuotedHtml(
+      `<span style='font-family:${longValue}'>x</span><span style='color:${longValue}url(y)'>z</span>`
+    );
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(html).toBe(`<span style="font-family:${longValue}">x</span><span>z</span>`);
   });
 
   it("cannot be broken out of with stray closing tags", () => {
