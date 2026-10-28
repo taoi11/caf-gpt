@@ -30,10 +30,12 @@
  * - shortlistManifestFiles: Two-stage Clef-flash shortlist (group, then ranked documents in it); propagates AI.run failures
  * - runBinaryChoiceGate: Shared fail-closed Clef choice validation/confidence/result construction
  * - groupManifestRows: Groups allowlisted rows in first-appearance order
+ * - rowTitle: Manifest title of a row, or its file when the title is blank
  * - buildGroupQuestion: Builds the stage-1 Clef choice question over manifest groups
  * - buildShortlistQuestion: Builds one ranked stage-2 Clef choice question over the documents not yet selected
  * - ShortlistChoiceResult: Parsed shortlist answer, or the fixed malformed code
  * - askShortlistChoice: Sends one shortlist choice question and returns its parsed answer or a malformed code
+ * - roundDiagnostic: Rounds a logged probability to four decimals
  * - describeTopAnswer: Content-free first-rank numbers (confidence, top-2 margin, none flag)
  */
 
