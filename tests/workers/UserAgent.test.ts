@@ -7,7 +7,9 @@
  * - UserAgent routing suite: Verifies sender-keyed routing and fail-closed configuration
  * - UserAgent processing suite: Verifies SDK reply-all, sender-only errors, memory timing, reply
  *   bodies with Outlook-style quoted history (signature above the quote, chain carried forward,
- *   fail-loud on a missing Date), subject/threading headers, and DO-stored thread context
+ *   fail-loud on a missing Date), the Sent: offset learned from the user's own quote of our reply
+ *   (default, learned, saved and reused, retention), subject/threading headers, and DO-stored
+ *   thread context
  * - getUserAgentStub: Gets a per-sender UserAgent Durable Object stub
  * - getEmailBinding: Gets the UserAgent's structured Email Service binding
  * - mockPrimeFoo: Replaces Prime Foo processing through its public method contract
@@ -529,6 +531,106 @@ describe("UserAgent email processing", () => {
     expect(html.indexOf("border-top:solid #E1E1E1 1.0pt")).toBeLessThan(
       html.indexOf("UNIQUE-ORIGINAL-BODY")
     );
+  });
+
+  it("learns the Sent: offset from the user's quote of our reply, saves it, and reuses it", async () => {
+    const sender = "sent-offset@forces.gc.ca";
+    const stub = getUserAgentStub(sender);
+    const runTurn = (
+      nowIso: string,
+      outboundId: string,
+      fields: Partial<Parameters<typeof createAgentEmail>[0]>
+    ) =>
+      runInDurableObject(stub, async (instance: UserAgent) => {
+        vi.spyOn(Date, "now").mockReturnValue(Date.parse(nowIso));
+        const send = vi
+          .spyOn(getEmailBinding(instance), "send")
+          .mockResolvedValue({ messageId: outboundId });
+        mockSuccessfulSchedule(instance, "schedule-1");
+        // SAFETY: scheduleEvery resolves a Schedule; UserAgent ignores it, and the fixture is a complete one.
+        vi.spyOn(instance, "scheduleEvery").mockResolvedValue(createMockSchedule("prune") as never);
+        mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "<p>Ok</p>" })));
+        await instance.onEmail(
+          createAgentEmail({
+            envelopeFrom: sender,
+            envelopeTo: "agent@caf-gpt.com",
+            from: sender,
+            to: ["CAF-GPT <agent@caf-gpt.com>"],
+            subject: "Leave",
+            body: "First question",
+            ...fields,
+          })
+        );
+        const stored = instance.sql<{ message_id: string; sent_at: number }>`
+          SELECT message_id, sent_at FROM cafgpt_reply_sent_times ORDER BY sent_at`;
+        const offset = instance.sql<{ offset_minutes: number }>`
+          SELECT offset_minutes FROM cafgpt_sent_offset`;
+        // The spy survives across runInDurableObject calls, so read this turn's (last) send.
+        const message = send.mock.calls.at(-1)?.[0];
+        return {
+          text: message?.text ?? "",
+          html: message?.html ?? "",
+          stored,
+          offset: offset[0]?.offset_minutes,
+        };
+      });
+
+    // First email, nothing learned: America/Edmonton (17:29Z = 11:29 AM MDT).
+    const first = await runTurn("2026-10-28T17:30:10Z", "<reply1@caf-gpt.com>", {
+      messageId: "<q1@forces.gc.ca>",
+      date: "Wed, 28 Oct 2026 17:29:00 +0000",
+    });
+    expect(first.text).toContain("Sent: October 28, 2026 11:29 AM");
+    expect(first.stored).toEqual([
+      { message_id: "<reply1@caf-gpt.com>", sent_at: Date.parse("2026-10-28T17:30:10Z") },
+    ]);
+    expect(first.offset).toBeUndefined();
+
+    // The user's PC is on UTC-3: Outlook quoted our 17:30Z reply as 2:30 PM (HTML part only).
+    const quotedHtml =
+      "<div class=WordSection1><p class=MsoNormal>Thanks</p>" +
+      "<div style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>" +
+      "<p class=MsoNormal><b>From:</b> CAF-GPT &lt;agent@caf-gpt.com&gt;<br>" +
+      "<b>Sent:</b> Wednesday, October 28, 2026 2:30 PM<br>" +
+      "<b>To:</b> Luffy &lt;sent-offset@forces.gc.ca&gt;<br>" +
+      "<b>Subject:</b> Re: Leave</p></div></div>";
+    const second = await runTurn("2026-10-28T17:46:00Z", "<reply2@caf-gpt.com>", {
+      messageId: "<q2@forces.gc.ca>",
+      date: "Wed, 28 Oct 2026 17:45:00 +0000",
+      body: "Thanks",
+      html: quotedHtml,
+      headers: {
+        "in-reply-to": "<reply1@caf-gpt.com>",
+        references: "<q1@forces.gc.ca> <reply1@caf-gpt.com>",
+      },
+    });
+    expect(second.text).toContain("Sent: October 28, 2026 2:45 PM");
+    expect(second.html).toContain("<b>Sent:</b> October 28, 2026 2:45 PM<br>");
+    expect(second.offset).toBe(-180);
+    expect(second.stored).toHaveLength(2);
+
+    // A new thread with no CAF-GPT quote reuses the saved offset instead of Edmonton.
+    const third = await runTurn("2026-10-28T18:01:00Z", "<reply3@caf-gpt.com>", {
+      messageId: "<q3@forces.gc.ca>",
+      date: "Wed, 28 Oct 2026 18:00:00 +0000",
+      body: "New question",
+    });
+    expect(third.text).toContain("Sent: October 28, 2026 3:00 PM");
+
+    // Send times and the saved offset follow ThreadHistory's 30-day retention.
+    const expired = await runInDurableObject(stub, async (instance: UserAgent) => {
+      vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-11-28T18:02:00Z"));
+      await instance.runThreadHistoryPrune(undefined, { id: "missing" });
+      return {
+        times: instance.sql<{
+          count: number;
+        }>`SELECT COUNT(*) AS count FROM cafgpt_reply_sent_times`[0].count,
+        offsets: instance.sql<{
+          count: number;
+        }>`SELECT COUNT(*) AS count FROM cafgpt_sent_offset`[0].count,
+      };
+    });
+    expect(expired).toEqual({ times: 0, offsets: 0 });
   });
 
   it("carries a multi-level Outlook chain forward from the inbound HTML body", async () => {

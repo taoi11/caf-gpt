@@ -13,6 +13,8 @@
  * - toLoggableShortlistDiagnostics: Keeps only allowlisted numeric/boolean shortlist diagnostics
  * - QuoteDiagnostics / LoggableQuoteDiagnostics: Quoted-history log fields (flags, counts, fixed reason)
  * - toLoggableQuoteDiagnostics: Keeps only allowlisted boolean/count/reason quoted-history fields
+ * - SentZoneDiagnostics / LoggableSentZoneDiagnostics: Quoted Sent: zone log fields (source, offset, flag, reason)
+ * - toLoggableSentZoneDiagnostics: Keeps only allowlisted Sent: zone fields
  * - getLogSafeDomain: Extracts a log-safe domain from an email address
  * - createEmailRef: Generates a random per-message correlation id
  * - getEmailRefFromHeaders: Reads the Worker-assigned emailRef, or generates a fresh one
@@ -20,6 +22,7 @@
 
 import { z } from "zod";
 import type { ShortlistDiagnostics } from "../../agents/utils/ClefDecision";
+import type { SentZoneReason, SentZoneSource } from "../../agents/utils/SentTimeZone";
 import type { QuoteFailureReason } from "../components/QuotedHistory";
 import { normalizeEmailAddress } from "./EmailNormalizer";
 
@@ -238,6 +241,58 @@ export function toLoggableQuoteDiagnostics(
   if (parsed.quoteFailureReason !== undefined) {
     fields.quoteFailureReason = parsed.quoteFailureReason;
   }
+  return fields;
+}
+
+/** Quoted Sent: zone facts a caller may offer for logging (no quoted text, times, or IDs). */
+export interface SentZoneDiagnostics {
+  source: SentZoneSource;
+  offsetMinutes?: number;
+  lineFound: boolean;
+  reason?: SentZoneReason;
+}
+
+/** Allowlisted Sent: zone log fields; strings other than the fixed enums never pass. */
+const SentZoneDiagnosticsLogSchema = z.object({
+  source: z.enum(["learned", "saved", "default"]).catch("default"),
+  offsetMinutes: z.number().int().min(-720).max(840).optional().catch(undefined),
+  lineFound: z.boolean().catch(false),
+  reason: z
+    .enum([
+      "quoted_sent_unparseable",
+      "quoted_sent_no_record",
+      "quoted_sent_unmatched",
+      "quoted_sent_ambiguous",
+      "quoted_sent_storage_failed",
+    ])
+    .optional()
+    .catch(undefined),
+});
+
+/** Sent: zone log fields after the allowlist. */
+export interface LoggableSentZoneDiagnostics {
+  quoteSentZoneSource: SentZoneSource;
+  quoteSentLineFound: boolean;
+  quoteSentOffsetMinutes?: number;
+  quoteSentReason?: SentZoneReason;
+}
+
+/**
+ * Returns the quoted Sent: zone as log fields: where the zone came from, the offset used (minutes
+ * east of UTC), whether CAF-GPT's own quoted Sent: line was found, and the fixed failure reason.
+ * The quoted text, its times, addresses, and Message-IDs are never logged.
+ * @param diagnostics - SentZoneDecision from resolveSentZone
+ */
+export function toLoggableSentZoneDiagnostics(
+  diagnostics: SentZoneDiagnostics
+): LoggableSentZoneDiagnostics {
+  const parsed = SentZoneDiagnosticsLogSchema.parse(diagnostics);
+  const fields: LoggableSentZoneDiagnostics = {
+    quoteSentZoneSource: parsed.source,
+    quoteSentLineFound: parsed.lineFound,
+  };
+  if (parsed.offsetMinutes !== undefined) fields.quoteSentOffsetMinutes = parsed.offsetMinutes;
+  if (parsed.reason !== undefined) fields.quoteSentReason = parsed.reason;
   return fields;
 }
 

@@ -5,7 +5,7 @@
  * formatting, and the inbound HTML sanitizer
  *
  * Top-level declarations:
- * - formatOutlookSentDate suite: Edmonton time, no weekday, DST start/end boundaries
+ * - formatOutlookSentDate suite: Edmonton time, no weekday, DST start/end boundaries, learned offsets
  * - formatOutlookMailbox suite: Name <address>, bare address, groups
  * - sanitizeQuotedHtml suite: Active content, document wrappers, attributes, URLs, CSS allowlist
  * - buildQuotedHistory suite: HTML/text layout, Cc only when present, escaping, fail-loud reasons
@@ -38,6 +38,24 @@ describe("formatOutlookSentDate", () => {
     ["2027-01-01T06:59:00Z", "December 31, 2026 11:59 PM"],
   ])("formats %s as %s in America/Edmonton without a weekday", (iso, expected) => {
     expect(formatOutlookSentDate(new Date(iso))).toBe(expected);
+  });
+});
+
+describe("formatOutlookSentDate with a learned offset", () => {
+  it.each([
+    [-180, "2026-10-28T17:45:00Z", "October 28, 2026 2:45 PM"],
+    [-360, "2026-10-28T17:29:00Z", "October 28, 2026 11:29 AM"],
+    [-150, "2026-10-28T17:29:00Z", "October 28, 2026 2:59 PM"],
+    [330, "2026-10-28T20:00:00Z", "October 29, 2026 1:30 AM"],
+    [0, "2026-10-28T00:00:00Z", "October 28, 2026 12:00 AM"],
+  ])("offset %i formats %s as %s", (offsetMinutes, iso, expected) => {
+    expect(formatOutlookSentDate(new Date(iso), { offsetMinutes })).toBe(expected);
+  });
+
+  it("writes the Sent: line of a built quote in the learned offset", () => {
+    const result = buildQuotedHistory(createSource({}), { offsetMinutes: -180 });
+    expect(result.ok && result.quote.text).toContain("Sent: October 28, 2026 2:29 PM");
+    expect(result.ok && result.quote.html).toContain("<b>Sent:</b> October 28, 2026 2:29 PM<br>");
   });
 });
 

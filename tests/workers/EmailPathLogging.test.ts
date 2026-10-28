@@ -3,7 +3,8 @@
  *
  * Workers tests for the inbound email logging contract: receipt, skip, Clef, and terminal outcome
  * lines share one emailRef and never contain addresses, subjects, bodies, or Message-IDs; quoted
- * history is logged as flags, counts, and a fixed failure reason only
+ * history is logged as flags, counts, and a fixed failure reason only; the learned Sent: zone as
+ * source, offsetMinutes, a found flag, and a fixed reason only
  *
  * Top-level declarations:
  * - LoggedLine: Structured log payload captured from console
@@ -271,6 +272,107 @@ describe("inbound email logging contract", () => {
     expectNoSensitiveContent(lines);
   });
 
+  it.each([
+    ["Wednesday, October 28, 2026 2:30 PM", "quoted_sent_no_record"],
+    ["sometime on Wednesday", "quoted_sent_unparseable"],
+  ])("logs a fixed Sent zone reason for %j at error level and still replies", async (sentValue, reason) => {
+    const stub = getUserAgentStub(SENDER);
+    const body = [
+      "Thanks",
+      "",
+      "From: CAF-GPT <agent@caf-gpt.com>",
+      `Sent: ${sentValue}`,
+      `To: Luffy <${SENDER}>`,
+      `Subject: Re: ${SUBJECT}`,
+    ].join("\n");
+    const { lines, sent } = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const logs = captureLogs();
+      vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockResolvedValue({
+        shouldRespond: true,
+        content: "<p>Reply</p>",
+      });
+      mockClefChoice("reply", 0.91);
+      // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
+      vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
+      const send = vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
+        messageId: "<structured-reply@caf-gpt.com>",
+      });
+      await instance.onEmail(
+        createAgentEmail({ body, headers: { "in-reply-to": "<unknown-reply@caf-gpt.com>" } })
+      );
+      return { lines: logs, sent: send.mock.calls.map(([message]) => message) };
+    });
+
+    expect(lines.find((line) => line.message === "Quoted Sent time zone not learned")).toEqual({
+      level: "error",
+      message: "Quoted Sent time zone not learned",
+      emailRef: WORKER_EMAIL_REF,
+      senderDomain: "forces.gc.ca",
+      quoteSentZoneSource: "default",
+      quoteSentLineFound: true,
+      quoteSentReason: reason,
+    });
+    expect(lines.find((line) => line.message === "Inbound email reply accepted")).toMatchObject({
+      quoteSentZoneSource: "default",
+      quoteSentLineFound: true,
+      quoteSentReason: reason,
+      sentTimeRecorded: true,
+    });
+    expect(lines.at(-1)).toMatchObject({ outcome: "replied", reason: "reply_sent" });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].text).toContain("Sent: October 28, 2026 11:29 AM");
+    expectNoSensitiveContent(lines);
+    const serialized = JSON.stringify(lines).toLowerCase();
+    for (const forbidden of ["2:30", "october", "sometime", "unknown-reply", "structured-reply"]) {
+      expect(serialized).not.toContain(forbidden);
+    }
+  });
+
+  it("logs only the learned source and offset when the user's quote matches our reply", async () => {
+    const stub = getUserAgentStub(SENDER);
+    const body = [
+      "Merci",
+      "",
+      "De : CAF-GPT <agent@caf-gpt.com>",
+      "Envoyé : mercredi 28 octobre 2026 14:30",
+      `À : Luffy <${SENDER}>`,
+      `Objet : RE: ${SUBJECT}`,
+    ].join("\n");
+    const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const { recordReplySentTime } = await import("../../src/agents/utils/SentTimeZone");
+      recordReplySentTime(
+        instance.sql.bind(instance),
+        "<earlier-reply@caf-gpt.com>",
+        Date.parse("2026-10-28T17:30:30Z"),
+        Date.now()
+      );
+      const logs = captureLogs();
+      vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockResolvedValue({
+        shouldRespond: true,
+        content: "<p>Reply</p>",
+      });
+      mockClefChoice("reply", 0.91);
+      // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
+      vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
+      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({ messageId: "next-reply" });
+      await instance.onEmail(
+        createAgentEmail({ body, headers: { "in-reply-to": "<earlier-reply@caf-gpt.com>" } })
+      );
+      return logs;
+    });
+
+    expect(lines.some((line) => line.message === "Quoted Sent time zone not learned")).toBe(false);
+    const accepted = lines.find((line) => line.message === "Inbound email reply accepted");
+    expect(accepted).toMatchObject({
+      quoteSentZoneSource: "learned",
+      quoteSentOffsetMinutes: -180,
+      quoteSentLineFound: true,
+    });
+    expect(accepted).not.toHaveProperty("quoteSentReason");
+    expectNoSensitiveContent(lines);
+    expect(JSON.stringify(lines).toLowerCase()).not.toContain("earlier-reply");
+  });
+
   it("logs an error outcome with the error-reply status and no exception text", async () => {
     const stub = getUserAgentStub(SENDER);
     const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
@@ -494,6 +596,7 @@ function createAgentEmail(options: {
   omitEmailRef?: boolean;
   omitDate?: boolean;
   html?: string;
+  body?: string;
 }): AgentEmail {
   const from = options.from ?? SENDER;
   const extraHeaders = Object.entries(options.headers ?? {}).map(([k, v]) => `${k}: ${v}`);
@@ -518,7 +621,7 @@ function createAgentEmail(options: {
           options.html,
           "--b1--",
         ]
-      : ["Content-Type: text/plain; charset=utf-8", "", BODY]),
+      : ["Content-Type: text/plain; charset=utf-8", "", options.body ?? BODY]),
   ].join("\r\n");
 
   const headers = new Headers({ from, to: "agent@caf-gpt.com", subject: SUBJECT });
