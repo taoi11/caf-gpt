@@ -10,6 +10,7 @@
  * - createEmailRef is random, 16 hex chars, and unique per call
  * - getEmailRefFromHeaders reuses a well-formed Worker ref and never falls back to a shared constant
  * - getSafeErrorMetadata never leaks non-allowlisted error names or codes
+ * - toLoggableShortlistDiagnostics keeps only allowlisted numeric/boolean fields and the fixed stage code
  */
 
 import { readFileSync } from "node:fs";
@@ -26,6 +27,7 @@ import {
   OTHER_ERROR_NAME,
   toLoggableErrorCode,
   toLoggableErrorName,
+  toLoggableShortlistDiagnostics,
 } from "../../src/email/utils/LogRedaction";
 import { EmailParsingError } from "../../src/errors";
 import { getSafeErrorMetadata } from "../../src/Logger";
@@ -174,5 +176,58 @@ describe("getSafeErrorMetadata", () => {
 
   it("classifies non-Error values without echoing them", () => {
     expect(getSafeErrorMetadata("user@forces.gc.ca")).toEqual({ errorName: "UnknownError" });
+  });
+});
+
+describe("toLoggableShortlistDiagnostics", () => {
+  const group = {
+    optionCount: 9,
+    rankReached: 1,
+    topIsNone: false,
+    topConfidence: 0.82,
+    topMargin: 0.7,
+  };
+  const document = {
+    optionCount: 82,
+    rankReached: 1,
+    topIsNone: true,
+    topConfidence: 0.41,
+    topMargin: 0.05,
+  };
+
+  it("keeps the stage code and per-stage numbers under stage-named fields", () => {
+    expect(toLoggableShortlistDiagnostics({ shortlistStage: "document", group, document })).toEqual(
+      { shortlistStage: "document", shortlistGroup: group, shortlistDocument: document }
+    );
+  });
+
+  it("drops strings, unknown fields, unknown stages, and non-finite numbers", () => {
+    const untrusted = JSON.parse(
+      JSON.stringify({
+        shortlistStage: "member question text",
+        question: "What is my leave entitlement?",
+        choice: "doc_4",
+        group: {
+          optionCount: "9",
+          rankReached: "1",
+          topIsNone: "no",
+          topConfidence: "high",
+          title: "Leave Regulations",
+        },
+        document: { topChoice: "vol-1-administration/ch-16-leave.md", topMargin: 0.2 },
+        extra: { optionCount: 3 },
+      })
+    );
+    untrusted.group.topMargin = Number.POSITIVE_INFINITY;
+    const logged = toLoggableShortlistDiagnostics(untrusted);
+    expect(logged).toEqual({ shortlistGroup: {}, shortlistDocument: { topMargin: 0.2 } });
+    const serialized = JSON.stringify(logged);
+    for (const content of ["leave", "Leave", "doc_4", "member", "vol-1", "extra"]) {
+      expect(serialized).not.toContain(content);
+    }
+  });
+
+  it("returns no fields for missing diagnostics", () => {
+    expect(toLoggableShortlistDiagnostics(undefined)).toEqual({});
   });
 });

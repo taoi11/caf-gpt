@@ -7,10 +7,11 @@
  * - AgentCoordinatorDependencies: Injectable model and generation functions for Prime Foo
  * - PrimeFooStepFinishEvent: Minimal step metadata consumed by circuit-breaker logging
  * - toPrimeFooToolError: Maps a tool failure to its real app error class for the error reply
+ * - stopOnToolError: Stop condition that ends the Prime Foo loop after the first failed tool call
  * - AgentCoordinator: Coordinates prime_foo processing with built-in AI SDK tools and a circuit breaker (maxSteps: 3)
  */
 
-import { APICallError, generateText, stepCountIs, tool } from "ai";
+import { APICallError, generateText, type StepResult, stepCountIs, tool, type ToolSet } from "ai";
 import { z } from "zod";
 import type { AppConfig } from "../config";
 import { AgentAPIError, AgentValidationError, BaseAppError } from "../errors";
@@ -49,6 +50,19 @@ export function toPrimeFooToolError<ErrorValue>(error: ErrorValue): Error {
     return new AgentAPIError("Prime_foo tool AI call failed");
   }
   return new AgentValidationError("Prime_foo tool execution failed");
+}
+
+/**
+ * Stops the Prime Foo loop once the latest step has a failed tool call, so a failure is not
+ * re-run by the model (each batch_research retry redid every sub-agent call) and reaches the
+ * error-reply boundary after one step.
+ */
+export function stopOnToolError<Tools extends ToolSet>({
+  steps,
+}: {
+  steps: Array<StepResult<Tools>>;
+}): boolean {
+  return steps.at(-1)?.content.some((part) => part.type === "tool-error") ?? false;
 }
 
 export class AgentCoordinator {
@@ -113,7 +127,8 @@ export class AgentCoordinator {
         prompt: `Email context:\n\n${context}`,
         temperature: modelConfig.temperature,
         maxOutputTokens: modelConfig.maxOutputTokens,
-        stopWhen: stepCountIs(maxSteps),
+        // Fail loudly: a tool error ends generation; never let the model re-call the tool.
+        stopWhen: [stepCountIs(maxSteps), stopOnToolError],
         onStepFinish: ({ stepNumber, toolCalls }: PrimeFooStepFinishEvent) => {
           if (toolCalls.length > 0) {
             this.logger.info("Tool call tracked", { stepNumber: stepNumber + 1, maxSteps });

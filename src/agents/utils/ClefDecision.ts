@@ -18,14 +18,23 @@
  * - ReplyGateDecision: Result of the inbound prompt-injection/abuse screen (reply vs no_reply)
  * - MemoryUpdateGateDecision: Result of the scheduled memory update vs no_update gate
  * - ShortlistReason: Fixed, content-free shortlist outcome codes
+ * - ShortlistStage: Shortlist stage a diagnostic belongs to (group, then document)
+ * - ManifestGroup: Stage-1 group (QR&O volume, DAOD series) a manifest row belongs to
+ * - ShortlistStageDiagnostics / ShortlistDiagnostics: Content-free numbers/booleans per shortlist stage
+ * - ShortlistOptions: Grouping function plus optional max picks and confidence threshold
  * - ManifestShortlistDecision: Result of the DOAD/QR&O manifest shortlist
  * - isRecord: Type guard for plain object records
  * - parseChoiceAnswer: Parses a Clef choice answer from an unknown payload
  * - decideShouldReply: Asks Clef whether inbound mail is legitimate or an injection/abuse attempt
  * - decideShouldUpdateMemory: Asks Clef-flash whether MemoryFoo should run; propagates AI.run failures
- * - shortlistManifestFiles: Asks Clef-flash for ranked files to prefetch, one rank per request; propagates AI.run failures
+ * - shortlistManifestFiles: Two-stage Clef-flash shortlist (group, then ranked documents in it); propagates AI.run failures
  * - runBinaryChoiceGate: Shared fail-closed Clef choice validation/confidence/result construction
- * - buildShortlistQuestion: Builds one ranked Clef choice question over the documents not yet selected
+ * - groupManifestRows: Groups allowlisted rows in first-appearance order
+ * - buildGroupQuestion: Builds the stage-1 Clef choice question over manifest groups
+ * - buildShortlistQuestion: Builds one ranked stage-2 Clef choice question over the documents not yet selected
+ * - ShortlistChoiceResult: Parsed shortlist answer, or the fixed malformed code
+ * - askShortlistChoice: Sends one shortlist choice question and returns its parsed answer or a malformed code
+ * - describeTopAnswer: Content-free first-rank numbers (confidence, top-2 margin, none flag)
  */
 
 import type { ManifestRow } from "./ManifestParser";
@@ -111,10 +120,48 @@ export type ShortlistReason =
   | "clef_invalid_choice"
   | "clef_empty_shortlist";
 
+/** Shortlist stage a diagnostic belongs to: "group" (stage 1) or "document" (stage 2). */
+export type ShortlistStage = "group" | "document";
+
+/** Stage-1 group a manifest row belongs to (QR&O volume, DAOD series); label is sent to Clef, never logged. */
+export interface ManifestGroup {
+  key: string;
+  label: string;
+}
+
+/** Content-free numbers/booleans for one shortlist stage (never choice keys, titles, or question text). */
+export interface ShortlistStageDiagnostics {
+  /** Options offered at the stage's first rank, including none. */
+  optionCount: number;
+  /** Clef requests sent at this stage. */
+  rankReached: number;
+  /** Whether the first-rank answer was none. */
+  topIsNone?: boolean;
+  /** First-rank answer confidence. */
+  topConfidence?: number;
+  /** First-rank gap between the two highest option probabilities. */
+  topMargin?: number;
+}
+
+/** Content-free shortlist diagnostics: the last stage reached plus per-stage numbers. */
+export interface ShortlistDiagnostics {
+  shortlistStage: ShortlistStage;
+  group?: ShortlistStageDiagnostics;
+  document?: ShortlistStageDiagnostics;
+}
+
+/** Shortlist options: the domain grouping function plus optional max picks and threshold overrides. */
+export interface ShortlistOptions {
+  groupOf: (row: ManifestRow) => ManifestGroup;
+  maxPicks?: number;
+  confidenceThreshold?: number;
+}
+
 /** Outcome of the DOAD/QR&O manifest shortlist (allowlisted ids only). */
 export interface ManifestShortlistDecision {
   ids: string[];
   reason: ShortlistReason;
+  diagnostics: ShortlistDiagnostics;
 }
 
 interface ClefChoiceAnswer {
@@ -154,6 +201,18 @@ interface BinaryChoiceGateResult {
 interface ShortlistOption {
   key: string;
   row: ManifestRow;
+}
+
+/** Parsed shortlist answer, or the fixed malformed code. */
+type ShortlistChoiceResult =
+  | { ok: true; answer: ClefChoiceAnswer }
+  | { ok: false; reason: "clef_malformed_response" | "clef_malformed_answer" };
+
+/** One manifest group with its rows, offered to Clef under a stable option key. */
+interface GroupOption {
+  key: string;
+  label: string;
+  rows: ManifestRow[];
 }
 
 /**
@@ -360,64 +419,220 @@ ${agentReply}
 }
 
 /**
- * Builds one ranked Clef choice question over the documents not yet selected.
+ * Groups allowlisted rows by their domain group key, in first-appearance order.
+ * The first row of a group supplies its label.
+ * @param rows - Allowlisted manifest rows
+ * @param groupOf - Domain grouping function (QR&O volume, DAOD series)
+ */
+function groupManifestRows(
+  rows: ManifestRow[],
+  groupOf: (row: ManifestRow) => ManifestGroup
+): GroupOption[] {
+  const groups = new Map<string, GroupOption>();
+  for (const row of rows) {
+    const { key, label } = groupOf(row);
+    const existing = groups.get(key);
+    if (existing) {
+      existing.rows.push(row);
+    } else {
+      groups.set(key, { key: `group_${groups.size}`, label, rows: [row] });
+    }
+  }
+  return [...groups.values()];
+}
+
+/** Display title for a row, falling back to its file when the title cell is empty. */
+function rowTitle(row: ManifestRow): string {
+  const title = row.title.trim();
+  return title.length > 0 ? title : row.file;
+}
+
+/**
+ * Builds the stage-1 Clef choice question over manifest groups.
+ * Each option lists its documents' titles, so the manifest is still sent once per request.
+ * @param groups - Manifest groups with their stable `group_N` option keys
+ */
+function buildGroupQuestion(groups: GroupOption[]): ClefChoiceQuestion {
+  const criteria = Object.fromEntries([
+    [NONE_OPTION, "No group of indexed documents applies to this question"],
+    ...groups.map(({ key, label, rows }) => [key, `${label}: ${rows.map(rowTitle).join("; ")}`]),
+  ]);
+  return {
+    type: "choice",
+    instructions:
+      "Which group of indexed documents is MOST likely to contain the document to load for the user question? Each option lists the titles of the documents in that group. Choose none if no group applies.",
+    criteria,
+  };
+}
+
+/**
+ * Builds one ranked stage-2 Clef choice question over the documents not yet selected.
  * Option keys are stable `doc_N` tokens mapped back to manifest ids (paths stay out of option keys).
- * @param remaining - Allowlisted rows still eligible, with their stable option keys
+ * @param remaining - Allowlisted rows of the chosen group still eligible, with their stable option keys
  * @param rank - 1-based rank of the pick being asked for
  */
 function buildShortlistQuestion(remaining: ShortlistOption[], rank: number): ClefChoiceQuestion {
   const criteria = Object.fromEntries([
     [NONE_OPTION, "No additional indexed document should be loaded for this question"],
-    ...remaining.map(({ key, row }) => {
-      const title = row.title.trim().length > 0 ? row.title.trim() : row.file;
-      return [key, `${row.id} — ${title}`] as const;
-    }),
+    ...remaining.map(({ key, row }) => [key, `${row.id} — ${rowTitle(row)}`] as const),
   ]);
   return {
     type: "choice",
     instructions:
       rank === 1
-        ? "Which indexed document from the options is MOST relevant to load for the user question? Choose none if none apply."
+        ? "Which indexed document from the options (all in the <selected_group>) is MOST relevant to load for the user question? Choose none if none apply."
         : `Which remaining indexed document is the next most relevant to load for the user question (rank ${rank})? Documents listed in <already_selected> are loaded already and are not options. Choose none if no further document is needed.`,
     criteria,
   };
 }
 
 /**
- * Ask Clef-flash which allowlisted manifest ids to prefetch for a policy question.
- * Picks are asked one rank per request, and each request drops the documents already chosen,
- * because Clef answers every question in a request independently (same-request ranks repeat
- * the top document). Propagates AI.run failures (outages/timeouts/rejections).
- * Fail-closed reasons: > CLEF_CHOICE_MAX_OPTIONS options → clef_too_many_options (not sent);
- * malformed → clef_malformed_*; an option that was not offered → clef_invalid_choice;
- * no confident pick and no confident none → clef_empty_shortlist; confident none first → clef_intentional_none.
- * A low-confidence or none answer at a later rank ends the shortlist with the picks so far.
- * Never invents paths outside the allowlist.
+ * Sends one shortlist choice question and returns the parsed answer, or the fixed malformed code.
+ * Propagates AI.run failures.
+ * @param ai - Injectable Workers AI runner
+ * @param state - Clef state (user question plus stage context)
+ * @param questionKey - Question id for this request
+ * @param question - Clef choice question
+ */
+async function askShortlistChoice(
+  ai: ClefAiRunner,
+  state: string,
+  questionKey: string,
+  question: ClefChoiceQuestion
+): Promise<ShortlistChoiceResult> {
+  const raw = await ai.run(CLEF_FLASH_MODEL, {
+    model: "clef-flash",
+    state,
+    questions: { [questionKey]: question },
+  });
+  if (!isRecord(raw)) return { ok: false, reason: "clef_malformed_response" };
+  if (!isRecord(raw.answers)) return { ok: false, reason: "clef_malformed_answer" };
+  const answer = parseChoiceAnswer(raw.answers[questionKey]);
+  return answer ? { ok: true, answer } : { ok: false, reason: "clef_malformed_answer" };
+}
+
+/** Rounds a 0–1 diagnostic to four decimals for readable logs. */
+function roundDiagnostic(value: number): number {
+  return Math.round(value * 10_000) / 10_000;
+}
+
+/**
+ * Content-free first-rank numbers: none flag, confidence, and the gap between the two highest
+ * option probabilities (the only probability when Clef returned one). Never returns choice keys.
+ * @param answer - Parsed first-rank Clef choice answer
+ */
+function describeTopAnswer(
+  answer: ClefChoiceAnswer
+): Pick<ShortlistStageDiagnostics, "topIsNone" | "topConfidence" | "topMargin"> {
+  const result: Pick<ShortlistStageDiagnostics, "topIsNone" | "topConfidence" | "topMargin"> = {
+    topIsNone: answer.choice === NONE_OPTION,
+    topConfidence: roundDiagnostic(answer.confidence),
+  };
+  const probabilities = Object.values(answer.probabilities)
+    .filter((value) => Number.isFinite(value))
+    .sort((a, b) => b - a);
+  if (probabilities.length > 0) {
+    result.topMargin = roundDiagnostic(probabilities[0] - (probabilities[1] ?? 0));
+  }
+  return result;
+}
+
+/**
+ * Ask Clef-flash which allowlisted manifest ids to prefetch for a policy question, in two stages.
+ * Stage 1 picks one group (QR&O volume, DAOD series) in one request; stage 2 ranks documents in
+ * that group, one rank per request, dropping documents already chosen, because Clef answers every
+ * question in a request independently. A single choice over the whole manifest never reached the
+ * confidence threshold, so each stage offers a short option list instead.
+ * Propagates AI.run failures (outages/timeouts/rejections).
+ * Fail-closed reasons: more than CLEF_CHOICE_MAX_OPTIONS options at either stage →
+ * clef_too_many_options (nothing sent); malformed → clef_malformed_*; an option that was not
+ * offered → clef_invalid_choice; a low-confidence group, a stage-1 none below the threshold, or no
+ * confident document in the chosen group (including a stage-2 none) → clef_empty_shortlist; a
+ * confident stage-1 none → clef_intentional_none. A low-confidence or none answer at a later
+ * stage-2 rank ends the shortlist with the picks so far. Never invents paths outside the allowlist.
  * @param ai - Injectable Workers AI runner
  * @param question - User research question
  * @param rows - Allowlisted manifest rows (Id/Title/File)
- * @param options - Optional max picks and confidence threshold overrides
+ * @param options - Grouping function plus optional max picks and confidence threshold overrides
  */
 export async function shortlistManifestFiles(
   ai: ClefAiRunner,
   question: string,
   rows: ManifestRow[],
-  options: { maxPicks?: number; confidenceThreshold?: number } = {}
+  options: ShortlistOptions
 ): Promise<ManifestShortlistDecision> {
   const maxPicks = Math.max(0, options.maxPicks ?? CLEF_SHORTLIST_MAX_PICKS);
   const confidenceThreshold = options.confidenceThreshold ?? CLEF_SHORTLIST_CONFIDENCE_THRESHOLD;
+  const diagnostics: ShortlistDiagnostics = { shortlistStage: "group" };
+  const finish = (ids: string[], reason: ShortlistReason): ManifestShortlistDecision => ({
+    ids,
+    reason,
+    diagnostics,
+  });
 
   if (rows.length === 0 || maxPicks === 0) {
-    return { ids: [], reason: "clef_empty_manifest" };
-  }
-  // Every row plus "none" is one option; Clef rejects a choice question above the limit.
-  if (rows.length + 1 > CLEF_CHOICE_MAX_OPTIONS) {
-    return { ids: [], reason: "clef_too_many_options" };
+    return finish([], "clef_empty_manifest");
   }
 
-  let remaining: ShortlistOption[] = rows.map((row, index) => ({ key: `doc_${index}`, row }));
+  const groups = groupManifestRows(rows, options.groupOf);
+  const groupDiagnostics: ShortlistStageDiagnostics = {
+    optionCount: groups.length + 1,
+    rankReached: 0,
+  };
+  diagnostics.group = groupDiagnostics;
+  // Each stage offers its options plus "none"; check both stages before anything is sent.
+  if (
+    groups.length + 1 > CLEF_CHOICE_MAX_OPTIONS ||
+    groups.some((group) => group.rows.length + 1 > CLEF_CHOICE_MAX_OPTIONS)
+  ) {
+    return finish([], "clef_too_many_options");
+  }
+
+  const questionState = `<user_question>\n${question}\n</user_question>`;
+  groupDiagnostics.rankReached = 1;
+  const groupResult = await askShortlistChoice(
+    ai,
+    questionState,
+    "group_pick",
+    buildGroupQuestion(groups)
+  );
+  if (!groupResult.ok) {
+    return finish([], groupResult.reason);
+  }
+  const groupAnswer = groupResult.answer;
+  Object.assign(groupDiagnostics, describeTopAnswer(groupAnswer));
+
+  if (groupAnswer.choice === NONE_OPTION) {
+    // Intentional empty only when Clef confidently chose none for every group.
+    return finish(
+      [],
+      groupAnswer.confidence >= confidenceThreshold
+        ? "clef_intentional_none"
+        : "clef_empty_shortlist"
+    );
+  }
+  // Allowlist before confidence so an invented option always fails the shortlist.
+  const pickedGroup = groups.find((group) => group.key === groupAnswer.choice);
+  if (pickedGroup === undefined) {
+    return finish([], "clef_invalid_choice");
+  }
+  if (groupAnswer.confidence < confidenceThreshold) {
+    return finish([], "clef_empty_shortlist");
+  }
+
+  const documentDiagnostics: ShortlistStageDiagnostics = {
+    optionCount: pickedGroup.rows.length + 1,
+    rankReached: 0,
+  };
+  diagnostics.shortlistStage = "document";
+  diagnostics.document = documentDiagnostics;
+
+  const groupState = `${questionState}\n\n<selected_group>\n${pickedGroup.label}\n</selected_group>`;
+  let remaining: ShortlistOption[] = pickedGroup.rows.map((row, index) => ({
+    key: `doc_${index}`,
+    row,
+  }));
   const selected: string[] = [];
-  let stoppedOnConfidentNone = false;
 
   for (let rank = 1; rank <= maxPicks && remaining.length > 0; rank++) {
     const pickKey = `pick_${rank}`;
@@ -425,32 +640,29 @@ export async function shortlistManifestFiles(
       selected.length > 0
         ? `\n\n<already_selected>\n${selected.join("\n")}\n</already_selected>`
         : "";
-    const raw = await ai.run(CLEF_FLASH_MODEL, {
-      model: "clef-flash",
-      state: `<user_question>\n${question}\n</user_question>${alreadySelected}`,
-      questions: { [pickKey]: buildShortlistQuestion(remaining, rank) },
-    });
-
-    if (!isRecord(raw)) {
-      return { ids: [], reason: "clef_malformed_response" };
+    documentDiagnostics.rankReached = rank;
+    const result = await askShortlistChoice(
+      ai,
+      `${groupState}${alreadySelected}`,
+      pickKey,
+      buildShortlistQuestion(remaining, rank)
+    );
+    if (!result.ok) {
+      return finish([], result.reason);
     }
-    if (!isRecord(raw.answers)) {
-      return { ids: [], reason: "clef_malformed_answer" };
-    }
-    const answer = parseChoiceAnswer(raw.answers[pickKey]);
-    if (!answer) {
-      return { ids: [], reason: "clef_malformed_answer" };
+    const answer = result.answer;
+    if (rank === 1) {
+      Object.assign(documentDiagnostics, describeTopAnswer(answer));
     }
 
     if (answer.choice === NONE_OPTION) {
-      stoppedOnConfidentNone = answer.confidence >= confidenceThreshold;
       break;
     }
 
     // Allowlist before confidence so an invented or already-chosen option always fails the shortlist.
     const picked = remaining.find((option) => option.key === answer.choice);
     if (picked === undefined) {
-      return { ids: [], reason: "clef_invalid_choice" };
+      return finish([], "clef_invalid_choice");
     }
     if (answer.confidence < confidenceThreshold) {
       break;
@@ -460,13 +672,8 @@ export async function shortlistManifestFiles(
     remaining = remaining.filter((option) => option.row.id !== picked.row.id);
   }
 
-  if (selected.length === 0) {
-    // Intentional empty only when Clef confidently chose none at the first rank.
-    return {
-      ids: [],
-      reason: stoppedOnConfidentNone ? "clef_intentional_none" : "clef_empty_shortlist",
-    };
-  }
-
-  return { ids: selected, reason: "clef_shortlist" };
+  // A group was confidently chosen, so no confident document in it is a miss, never an intentional none.
+  return selected.length === 0
+    ? finish([], "clef_empty_shortlist")
+    : finish(selected, "clef_shortlist");
 }

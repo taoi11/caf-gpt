@@ -5,7 +5,7 @@
  *
  * Top-level declarations:
  * - choiceAnswer: Builds a Clef choice answer fixture
- * - shortlistResponse: Builds a Clef shortlist answers payload for pick_1..N
+ * - shortlistResponse: Builds a Clef shortlist answers payload for group_pick and pick_1..N
  * - mockClefAi: Returns a ClefAiRunner resolving to a fixed result
  */
 
@@ -14,7 +14,7 @@ import { DocumentRetriever } from "../../src/storage/DocumentRetriever";
 import { createMockEnv } from "../mocks";
 import { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
-import { DoadFooAgent } from "../../src/agents/sub-agents/DoadFooAgent";
+import { DoadFooAgent, doadSeriesGroup } from "../../src/agents/sub-agents/DoadFooAgent";
 import type { ClefAiRunner } from "../../src/agents/utils/ClefDecision";
 import { createConfig } from "../../src/config";
 import { AgentValidationError } from "../../src/errors";
@@ -33,9 +33,13 @@ function choiceAnswer(choice: string, confidence: number) {
   };
 }
 
-/** Builds a Clef shortlist answers payload mapping pick ranks to doc keys or none. */
-function shortlistResponse(picks: Array<{ choice: string; confidence?: number }>, totalRanks = 3) {
+/** Builds a Clef shortlist payload: the stage-1 group pick plus stage-2 pick ranks (doc keys or none). */
+function shortlistResponse(
+  picks: Array<{ choice: string; confidence?: number }>,
+  { group = "group_0", totalRanks = 3 }: { group?: string; totalRanks?: number } = {}
+) {
   const answers: { [pickKey: string]: ReturnType<typeof choiceAnswer> } = {};
+  answers.group_pick = choiceAnswer(group, 0.9);
   picks.forEach((pick, index) => {
     answers[`pick_${index + 1}`] = choiceAnswer(pick.choice, pick.confidence ?? 0.9);
   });
@@ -121,7 +125,8 @@ Establishes grievance procedures.`
 Members are entitled to relocation assistance when posted.`
     );
 
-    // doc_0=5019-0, doc_1=5031-1, doc_2=7023-1, doc_3=6000-1
+    // Series groups: group_0=5000 (doc_0=5019-0, doc_1=5031-1), group_1=7000 (doc_0=7023-1),
+    // group_2=6000 (doc_0=6000-1)
     clefAi = mockClefAi(shortlistResponse([{ choice: "doc_0" }]));
     mockGenerateText.mockResolvedValue({
       text: "According to DOAD 5019-0, conduct deficiencies are addressed by policy.",
@@ -141,8 +146,9 @@ Members are entitled to relocation assistance when posted.`
 
       expect(result).toContain("DOAD 5019-0");
       expect(mockGenerateText).toHaveBeenCalledTimes(1);
-      // One request per rank: pick_1 chooses the document, pick_2 answers none and ends the shortlist.
-      expect(clefAi.run).toHaveBeenCalledTimes(2);
+      // group_pick chooses the group, then one request per rank: pick_1 chooses the document,
+      // pick_2 answers none and ends the shortlist.
+      expect(clefAi.run).toHaveBeenCalledTimes(3);
       // SAFETY: generateText fake is invoked once with the answer options object.
 
       const call = mockGenerateText.mock.calls[0][0] as {
@@ -156,11 +162,9 @@ Members are entitled to relocation assistance when posted.`
       expect(call.prompt).toContain("conduct deficiencies");
     });
 
-    it("should prefetch up to three shortlisted DOADs", async () => {
-      clefAi = mockClefAi(
-        shortlistResponse([{ choice: "doc_0" }, { choice: "doc_1" }, { choice: "doc_2" }])
-      );
-      mockGenerateText.mockResolvedValue({ text: "Answer based on three DOADs" });
+    it("should prefetch every confident pick within the chosen series only", async () => {
+      clefAi = mockClefAi(shortlistResponse([{ choice: "doc_0" }, { choice: "doc_1" }]));
+      mockGenerateText.mockResolvedValue({ text: "Answer based on two DOADs" });
       agent = new DoadFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
         clefAi,
@@ -168,13 +172,37 @@ Members are entitled to relocation assistance when posted.`
 
       const result = await agent.research({ question: "Tell me about CAF policies" });
 
-      expect(result).toContain("three DOADs");
+      expect(result).toContain("two DOADs");
       // SAFETY: generateText fake is invoked once with the answer options object.
 
       const call = mockGenerateText.mock.calls[0][0] as { system?: string };
       expect(call.system).toContain("<DOAD_5019-0>");
       expect(call.system).toContain("<DOAD_5031-1>");
-      expect(call.system).toContain("<DOAD_7023-1>");
+      expect(call.system).not.toContain("<DOAD_7023-1>");
+    });
+
+    it("groups DOAD rows by series for the stage-1 question", async () => {
+      await agent.research({ question: "conduct?" });
+      // SAFETY: the ClefAiRunner mock is invoked with the stage-1 Clef System One request first.
+      const request = vi.mocked(clefAi.run).mock.calls[0][1] as {
+        questions: { group_pick: { criteria: Record<string, string> } };
+      };
+      expect(request.questions.group_pick.criteria).toEqual({
+        none: expect.any(String),
+        group_0:
+          "DAOD 5000 series: Conduct and Performance Deficiency; Canadian Forces Grievance Board",
+        group_1: "DAOD 7000 series: Relocation Benefits",
+        group_2: "DAOD 6000 series: Indexed but unavailable test document",
+      });
+    });
+
+    it("maps DAOD ids to their thousand series", () => {
+      expect(doadSeriesGroup({ id: "5019-0", title: "", file: "5019-0.md" })).toEqual({
+        key: "5000",
+        label: "DAOD 5000 series",
+      });
+      expect(doadSeriesGroup({ id: "1000-10", title: "", file: "1000-10.md" }).key).toBe("1000");
+      expect(doadSeriesGroup({ id: "misc", title: "", file: "misc.md" }).key).toBe("");
     });
 
     it("should reject invented shortlist ids that are not in the allowlist", async () => {
@@ -190,7 +218,7 @@ Members are entitled to relocation assistance when posted.`
       expect(mockGenerateText).not.toHaveBeenCalled();
     });
 
-    it("logs only the shortlist reason code when the shortlist fails", async () => {
+    it("logs only the reason code and content-free diagnostics when the shortlist fails", async () => {
       clefAi = mockClefAi(shortlistResponse([{ choice: "doc_999" }]));
       agent = new DoadFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
@@ -212,7 +240,26 @@ Members are entitled to relocation assistance when posted.`
         errorCode: "AGENT_VALIDATION_ERROR",
         recoverable: false,
         shortlistReason: "clef_invalid_choice",
+        shortlistStage: "document",
+        shortlistGroup: {
+          optionCount: 4,
+          rankReached: 1,
+          topIsNone: false,
+          topConfidence: 0.9,
+          topMargin: 0.9,
+        },
+        shortlistDocument: {
+          optionCount: 3,
+          rankReached: 1,
+          topIsNone: false,
+          topConfidence: 0.9,
+          topMargin: 0.9,
+        },
       });
+      const logged = JSON.stringify(failure?.[1]);
+      for (const content of ["Sensitive", "doc_999", "group_0", "5019", "Conduct", "DAOD"]) {
+        expect(logged).not.toContain(content);
+      }
       loggerError.mockRestore();
     });
 
@@ -242,7 +289,7 @@ Members are entitled to relocation assistance when posted.`
     });
 
     it("should allow intentional high-confidence none with an empty prefetch", async () => {
-      clefAi = mockClefAi(shortlistResponse([{ choice: "none" }]));
+      clefAi = mockClefAi(shortlistResponse([], { group: "none" }));
       mockGenerateText.mockResolvedValue({ text: "No relevant DOAD was available." });
       agent = new DoadFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
@@ -311,8 +358,8 @@ Members are entitled to relocation assistance when posted.`
     });
 
     it("should reject when a shortlisted DOAD document cannot be retrieved", async () => {
-      // doc_3 = 6000-1 is indexed but not seeded in R2
-      clefAi = mockClefAi(shortlistResponse([{ choice: "doc_3" }]));
+      // group_2 doc_0 = 6000-1 is indexed but not seeded in R2
+      clefAi = mockClefAi(shortlistResponse([{ choice: "doc_0" }], { group: "group_2" }));
       agent = new DoadFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
         clefAi,
