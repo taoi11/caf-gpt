@@ -8,6 +8,8 @@
  * - ThreadingHeaders: RFC 5322 threading headers
  */
 
+import type { QuoteHeaders } from "./components/QuotedHistory";
+
 export interface ParsedEmailData {
   envelopeFrom: string;
   envelopeTo: string;
@@ -24,6 +26,8 @@ export interface ParsedEmailData {
   inReplyTo?: string;
   references?: string;
   date?: Date;
+  /** Outlook-style display headers (names kept, real Date only) for the reply's quoted history. */
+  quoteHeaders?: QuoteHeaders;
   originalMessage?: ForwardableEmailMessage;
 }
 

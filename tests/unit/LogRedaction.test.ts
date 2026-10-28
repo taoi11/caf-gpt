@@ -11,6 +11,7 @@
  * - getEmailRefFromHeaders reuses a well-formed Worker ref and never falls back to a shared constant
  * - getSafeErrorMetadata never leaks non-allowlisted error names or codes
  * - toLoggableShortlistDiagnostics keeps only allowlisted numeric/boolean fields and the fixed stage code
+ * - toLoggableQuoteDiagnostics keeps only quote flags, counts, and the fixed failure reason
  */
 
 import { readFileSync } from "node:fs";
@@ -27,9 +28,10 @@ import {
   OTHER_ERROR_NAME,
   toLoggableErrorCode,
   toLoggableErrorName,
+  toLoggableQuoteDiagnostics,
   toLoggableShortlistDiagnostics,
 } from "../../src/email/utils/LogRedaction";
-import { EmailParsingError } from "../../src/errors";
+import { EmailParsingError, QuotedHistoryError } from "../../src/errors";
 import { getSafeErrorMetadata } from "../../src/Logger";
 
 const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
@@ -229,5 +231,56 @@ describe("toLoggableShortlistDiagnostics", () => {
 
   it("returns no fields for missing diagnostics", () => {
     expect(toLoggableShortlistDiagnostics(undefined)).toEqual({});
+  });
+});
+
+describe("toLoggableQuoteDiagnostics", () => {
+  it("keeps quote flags and counts", () => {
+    expect(
+      toLoggableQuoteDiagnostics({
+        quotedHistoryIncluded: true,
+        quotedHtml: true,
+        quoteSourceBytes: 1234,
+        quoteRemovedNodes: 3,
+      })
+    ).toEqual({
+      quotedHistoryIncluded: true,
+      quotedHtml: true,
+      quoteSourceBytes: 1234,
+      quoteRemovedNodes: 3,
+    });
+  });
+
+  it("drops content, unknown reasons, and non-count numbers", () => {
+    const untrusted = JSON.parse(
+      JSON.stringify({
+        quotedHistoryIncluded: "yes",
+        quotedHtml: "<p>body</p>",
+        quoteSourceBytes: -1,
+        quoteRemovedNodes: 1.5,
+        quoteFailureReason: "Luffy <luffy@forces.gc.ca>",
+        subject: "RE: feedback note please",
+      })
+    );
+    const logged = toLoggableQuoteDiagnostics(untrusted);
+    expect(logged).toEqual({ quotedHistoryIncluded: false });
+    expect(JSON.stringify(logged)).not.toMatch(/luffy|feedback|body/i);
+  });
+
+  it("keeps the fixed failure reason", () => {
+    expect(
+      toLoggableQuoteDiagnostics({
+        quotedHistoryIncluded: false,
+        quoteFailureReason: "quote_missing_date",
+      })
+    ).toEqual({ quotedHistoryIncluded: false, quoteFailureReason: "quote_missing_date" });
+  });
+
+  it("logs QuotedHistoryError by its allowlisted name and composition code only", () => {
+    expect(getSafeErrorMetadata(new QuotedHistoryError("quote_missing_sender"))).toEqual({
+      errorName: "QuotedHistoryError",
+      errorCode: "EMAIL_COMPOSITION_ERROR",
+      recoverable: false,
+    });
   });
 });

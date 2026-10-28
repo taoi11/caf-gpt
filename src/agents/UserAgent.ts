@@ -13,9 +13,11 @@
  * Clef (27B) prompt-injection/abuse screen runs in getAIResponse (with memory) before Prime Foo.
  * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
  *
- * Replies carry only the agent answer and signature (no quoted history) and thread via
- * In-Reply-To/References, plus a child Thread-Index/Thread-Topic when the inbound email has a
- * Thread-Index (Exchange groups conversations by it, not by RFC 5322 headers). Prior turns (inbound email plus our reply) are kept in DO SQLite
+ * Replies carry the agent answer and signature, then Outlook-style quoted history of the inbound
+ * email (components/QuotedHistory; its body already carries the earlier chain). A quote that
+ * cannot be built throws QuotedHistoryError before sending, so the funny error reply runs instead
+ * of a quoteless reply. Replies thread via In-Reply-To/References, plus a child
+ * Thread-Index/Thread-Topic when the inbound email has a Thread-Index (Exchange groups conversations by it, not by RFC 5322 headers). Prior turns (inbound email plus our reply) are kept in DO SQLite
  * (utils/ThreadHistory) and appended to the model context of the user's next reply.
  *
  * Inbound logging contract: every onEmail invocation logs one receipt line, one line per skip path,
@@ -30,10 +32,19 @@ import type { AgentEmail } from "agents/email";
 import PostalMime, { type Address } from "postal-mime";
 import type { AppConfig } from "../config";
 import { createConfig } from "../config";
-import { formatQuotedContent, HtmlEmailComposer } from "../email/components";
+import {
+  buildQuotedHistory,
+  formatOutlookMailbox,
+  formatQuotedContent,
+  HtmlEmailComposer,
+} from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
-import { getEmailRefFromHeaders, getLogSafeDomain } from "../email/utils/LogRedaction";
+import {
+  getEmailRefFromHeaders,
+  getLogSafeDomain,
+  toLoggableQuoteDiagnostics,
+} from "../email/utils/LogRedaction";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
 import {
   isValidMessageId,
@@ -50,7 +61,7 @@ import {
   type ResolvedReplyRecipients,
   resolveReplyRecipients,
 } from "../email/utils/ReplyRecipients";
-import { EmailValidationError } from "../errors";
+import { EmailValidationError, QuotedHistoryError } from "../errors";
 import { getSafeErrorMetadata, Logger } from "../Logger";
 import { AgentCoordinator } from "./AgentCoordinator";
 import {
@@ -106,6 +117,9 @@ interface AIResponseResult {
 interface SentReply {
   messageId?: string;
   outlookThreaded: boolean;
+  quotedHtml: boolean;
+  quoteSourceBytes: number;
+  quoteRemovedNodes: number;
 }
 
 interface ReplyThreadingOptions {
@@ -211,6 +225,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         response.content,
         config,
         recipients,
+        logContext,
         () => {
           sendAttempted = true;
         }
@@ -228,6 +243,12 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         toCount: recipients.to.length,
         ccCount: recipients.cc.length,
         outlookThreaded: sentReply.outlookThreaded,
+        ...toLoggableQuoteDiagnostics({
+          quotedHistoryIncluded: true,
+          quotedHtml: sentReply.quotedHtml,
+          quoteSourceBytes: sentReply.quoteSourceBytes,
+          quoteRemovedNodes: sentReply.quoteRemovedNodes,
+        }),
         ...describeThreadTopic(parsedEmail.headers, parsedEmail.subject),
       });
       outcome = "replied";
@@ -277,6 +298,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   ): string {
     if (!config) return "config_unavailable";
     if (sendAttempted) return "reply_send_failed";
+    if (error instanceof QuotedHistoryError) return error.reason;
     if (error instanceof EmailValidationError) return "content_validation_failed";
     return "processing_failed";
   }
@@ -385,6 +407,13 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       inReplyTo: parsed.inReplyTo ?? email.headers.get("in-reply-to") ?? undefined,
       references: parsed.references ?? email.headers.get("references") ?? undefined,
       date: parsed.date ? new Date(parsed.date) : new Date(),
+      quoteHeaders: {
+        from: formatOutlookMailbox(parsed.from ? [parsed.from] : undefined)[0] ?? "",
+        to: formatOutlookMailbox(parsed.to),
+        cc: formatOutlookMailbox(parsed.cc),
+        // Only a real Date header; the quote never invents a Sent time.
+        sent: parsed.date ? new Date(parsed.date) : undefined,
+      },
     };
   }
 
@@ -477,12 +506,25 @@ ${parsedEmail.body}`;
     content: string,
     config: AppConfig,
     recipients: ResolvedReplyRecipients,
+    logContext: InboundLogContext,
     markSendAttempted: () => void
   ): Promise<SentReply> {
-    // Answer + signature only; the client renders the thread from In-Reply-To/References.
+    // Answer + signature, then the Outlook-style quote of the inbound email (carrying its chain).
+    // Built before markSendAttempted so a failure still gets the funny error reply.
+    const quoted = buildQuotedHistory(parsedEmail);
+    if (!quoted.ok) {
+      this.logger.error("Quoted history build failed", {
+        ...logContext,
+        ...toLoggableQuoteDiagnostics({
+          quotedHistoryIncluded: false,
+          quoteFailureReason: quoted.reason,
+        }),
+      });
+      throw new QuotedHistoryError(quoted.reason);
+    }
     const replyText = htmlToText(content);
-    const fullTextContent = replyText || content.trim();
-    const htmlContent = this.htmlEmailComposer.composeHtmlReply(content.trim());
+    const fullTextContent = `${replyText || content.trim()}\n\n${quoted.quote.text}`;
+    const htmlContent = this.htmlEmailComposer.composeHtmlReply(content.trim(), quoted.quote.html);
     const subject = normalizeReplySubject(parsedEmail.subject);
     const threadingOptions = this.buildThreadingOptions(parsedEmail);
     const outlookHeaders = buildOutlookThreadHeaders(
@@ -511,6 +553,9 @@ ${parsedEmail.body}`;
     return {
       messageId: result?.messageId,
       outlookThreaded: outlookHeaders["Thread-Index"] !== undefined,
+      quotedHtml: quoted.quote.quotedHtml,
+      quoteSourceBytes: quoted.quote.sourceBytes,
+      quoteRemovedNodes: quoted.quote.removedNodes,
     };
   }
 

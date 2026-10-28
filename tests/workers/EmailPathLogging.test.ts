@@ -2,7 +2,8 @@
  * tests/workers/EmailPathLogging.test.ts
  *
  * Workers tests for the inbound email logging contract: receipt, skip, Clef, and terminal outcome
- * lines share one emailRef and never contain addresses, subjects, bodies, or Message-IDs
+ * lines share one emailRef and never contain addresses, subjects, bodies, or Message-IDs; quoted
+ * history is logged as flags, counts, and a fixed failure reason only
  *
  * Top-level declarations:
  * - LoggedLine: Structured log payload captured from console
@@ -33,6 +34,7 @@ const SENDER = "Luffy.Dhaliwal@forces.gc.ca";
 const SUBJECT = "Secret subject line";
 const BODY = "Private body text about my leave";
 const MESSAGE_ID = "<private-message-id@forces.gc.ca>";
+const DATE_HEADER = "Wed, 28 Oct 2026 17:29:00 +0000";
 const WORKER_EMAIL_REF = "0123456789abcdef";
 const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
 
@@ -180,6 +182,92 @@ describe("inbound email logging contract", () => {
       threadTopicMatches: true,
       subjectHasTag: false,
     });
+    expectNoSensitiveContent(lines);
+  });
+
+  it("logs quoted-history flags and counts on the reply-accepted line, never quote content", async () => {
+    const stub = getUserAgentStub(SENDER);
+    const html = `<html><body><p>${BODY}</p><script>alert(1)</script></body></html>`;
+    const { lines, sent } = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const logs = captureLogs();
+      vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockResolvedValue({
+        shouldRespond: true,
+        content: "<p>Reply</p>",
+      });
+      mockClefChoice("reply", 0.91);
+      // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
+      vi.spyOn(instance, "schedule").mockResolvedValue({
+        id: "schedule-1",
+        callback: "runMemoryUpdate",
+        payload: "",
+        type: "delayed",
+        time: 1,
+        delayInSeconds: 1,
+      } as never);
+      const send = vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
+        messageId: "structured-reply",
+      });
+      await instance.onEmail(createAgentEmail({ from: `"Dhaliwal, Luffy" <${SENDER}>`, html }));
+      return { lines: logs, sent: send.mock.calls[0][0] };
+    });
+
+    // The reply itself does quote the sender, subject, and body.
+    expect(sent.html).toContain(BODY);
+    expect(sent.text).toContain(`Subject: ${SUBJECT}`);
+    const accepted = lines.find((line) => line.message === "Inbound email reply accepted");
+    expect(accepted).toMatchObject({
+      quotedHistoryIncluded: true,
+      quotedHtml: true,
+      quoteRemovedNodes: 1,
+    });
+    // postal-mime keeps the MIME part's trailing line break, so the count may exceed the fixture.
+    expect(accepted?.quoteSourceBytes).toBeGreaterThanOrEqual(
+      new TextEncoder().encode(html).length
+    );
+    expect(accepted?.quoteSourceBytes).toBeLessThanOrEqual(
+      new TextEncoder().encode(html).length + 2
+    );
+    expectNoSensitiveContent(lines);
+    expect(JSON.stringify(lines).toLowerCase()).not.toContain("dhaliwal");
+  });
+
+  it("logs a fixed quote failure reason and sends the funny error reply when the quote fails", async () => {
+    const stub = getUserAgentStub(SENDER);
+    const { lines, sent } = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const logs = captureLogs();
+      vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockResolvedValue({
+        shouldRespond: true,
+        content: "<p>Reply that must not go out without its quote</p>",
+      });
+      mockClefChoice("reply", 0.91);
+      const send = vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
+        messageId: "error-reply",
+      });
+      await instance.onEmail(createAgentEmail({ omitDate: true }));
+      return { lines: logs, sent: send.mock.calls.map(([message]) => message) };
+    });
+
+    expect(lines.find((line) => line.message === "Quoted history build failed")).toMatchObject({
+      level: "error",
+      emailRef: WORKER_EMAIL_REF,
+      quotedHistoryIncluded: false,
+      quoteFailureReason: "quote_missing_date",
+    });
+    expect(lines.find((line) => line.message === "Email processing failed")).toMatchObject({
+      errorName: "QuotedHistoryError",
+      errorCode: "EMAIL_COMPOSITION_ERROR",
+      sendAttempted: false,
+    });
+    expect(lines.at(-1)).toMatchObject({
+      outcome: "error",
+      reason: "quote_missing_date",
+      errorReply: "sent",
+    });
+    expect(sent).toHaveLength(1);
+    expect(sent[0].subject).toBe("Error Processing Email");
+    expect(sent[0].text).toContain("face-planted");
+    expect(sent[0].text).not.toContain("quote");
+    expect(sent[0].text).not.toContain("Reply that must not go out");
     expectNoSensitiveContent(lines);
   });
 
@@ -404,6 +492,8 @@ function createAgentEmail(options: {
   headers?: Record<string, string>;
   omitMessageId?: boolean;
   omitEmailRef?: boolean;
+  omitDate?: boolean;
+  html?: string;
 }): AgentEmail {
   const from = options.from ?? SENDER;
   const extraHeaders = Object.entries(options.headers ?? {}).map(([k, v]) => `${k}: ${v}`);
@@ -412,10 +502,23 @@ function createAgentEmail(options: {
     "To: agent@caf-gpt.com",
     `Subject: ${SUBJECT}`,
     ...(options.omitMessageId ? [] : [`Message-ID: ${MESSAGE_ID}`]),
+    ...(options.omitDate ? [] : [`Date: ${DATE_HEADER}`]),
     ...extraHeaders,
-    "Content-Type: text/plain; charset=utf-8",
-    "",
-    BODY,
+    ...(options.html
+      ? [
+          'Content-Type: multipart/alternative; boundary="b1"',
+          "",
+          "--b1",
+          "Content-Type: text/plain; charset=utf-8",
+          "",
+          BODY,
+          "--b1",
+          "Content-Type: text/html; charset=utf-8",
+          "",
+          options.html,
+          "--b1--",
+        ]
+      : ["Content-Type: text/plain; charset=utf-8", "", BODY]),
   ].join("\r\n");
 
   const headers = new Headers({ from, to: "agent@caf-gpt.com", subject: SUBJECT });

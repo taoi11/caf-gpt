@@ -1,0 +1,435 @@
+/**
+ * src/email/components/QuotedHistory.ts
+ *
+ * Builds the Outlook-style quoted history written below the answer and signature in every
+ * normal reply. The quote is the inbound email itself (its headers plus its full body), and that
+ * body already carries the earlier history the sender's client quoted, so the whole chain carries
+ * forward one level per reply. Nothing is rebuilt from storage.
+ *
+ * Top-level declarations:
+ * - OUTLOOK_SENT_TIME_ZONE: Time zone of the quoted Sent: line
+ * - OUTLOOK_TEXT_RULE: Plain-text divider Outlook writes above a quoted header block
+ * - QuoteHeaders: Display headers of the inbound email used for the quoted header block
+ * - QuoteFailureReason: Fixed, content-free reasons the quote could not be built
+ * - QuotedHistory: Built HTML/text quote plus content-free counts
+ * - SanitizedHtml: Sanitized inbound HTML plus the dropped-node count
+ * - QuotedHistoryResult: Built quote, or the fixed failure reason
+ * - QuoteSource: Inbound fields the quote is built from
+ * - formatOutlookMailbox: Formats parsed mailboxes as Outlook does (Name <address>)
+ * - formatOutlookSentDate: Formats a date as Outlook's Sent: value in America/Edmonton
+ * - sanitizeQuotedHtml: Allowlist sanitizer for inbound HTML embedded in the reply
+ * - buildQuotedHistory: Builds the HTML and plain-text quote for one inbound email
+ * - escapeHtml: Escapes text for HTML element content and attribute values
+ * - textToOutlookHtml: Converts escaped plain text to Outlook MsoNormal paragraphs
+ * - collapseHeaderValue: Folds a header value onto one line
+ * - isAllowedUrl: Checks a link or image URL against the allowed schemes
+ * - isSafeStyle: Rejects inline CSS that can run code or load resources
+ * - renderNodes: Serializes allowlisted DOM nodes back to HTML
+ * - renderElement: Serializes one element (dropped, unwrapped, or kept with safe attributes)
+ */
+
+import type { ChildNode, Element } from "domhandler";
+import { parseDocument } from "htmlparser2";
+import type { Address } from "postal-mime";
+
+/** Time zone of the quoted Sent: line (the CAF-GPT users' local time). */
+export const OUTLOOK_SENT_TIME_ZONE = "America/Edmonton";
+
+/** Plain-text divider Outlook writes above a quoted header block (32 underscores). */
+export const OUTLOOK_TEXT_RULE = "________________________________";
+
+/** Divider Outlook writes above a quoted header block in HTML replies. */
+const OUTLOOK_HTML_RULE_STYLE =
+  "border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm";
+
+/** Display headers of the inbound email, already formatted the way Outlook shows them. */
+export interface QuoteHeaders {
+  from: string;
+  to: string[];
+  cc: string[];
+  /** Inbound Date header; undefined when missing or unparseable. */
+  sent?: Date;
+}
+
+/** Fixed, content-free reasons the quote could not be built. */
+export type QuoteFailureReason =
+  | "quote_missing_headers"
+  | "quote_missing_sender"
+  | "quote_missing_date"
+  | "quote_sanitize_failed";
+
+/** Built HTML/text quote plus content-free counts for logs. */
+export interface QuotedHistory {
+  html: string;
+  text: string;
+  /** True when the inbound HTML body was embedded; false when its text body was escaped. */
+  quotedHtml: boolean;
+  /** UTF-8 byte length of the inbound body the quote embeds. */
+  sourceBytes: number;
+  /** Elements, comments, and attributes the sanitizer dropped. */
+  removedNodes: number;
+}
+
+/** Sanitized inbound HTML plus the count of dropped elements, comments, and attributes. */
+export interface SanitizedHtml {
+  html: string;
+  removedNodes: number;
+}
+
+/** Built quote, or the fixed failure reason. */
+export type QuotedHistoryResult =
+  | { ok: true; quote: QuotedHistory }
+  | { ok: false; reason: QuoteFailureReason };
+
+/** Inbound fields the quote is built from. */
+export interface QuoteSource {
+  quoteHeaders?: QuoteHeaders;
+  subject: string;
+  body: string;
+  html?: string;
+}
+
+/** Elements kept (with allowlisted attributes); anything else not dropped is unwrapped. */
+const ALLOWED_ELEMENTS: ReadonlySet<string> = new Set([
+  "a",
+  "abbr",
+  "b",
+  "big",
+  "blockquote",
+  "br",
+  "caption",
+  "center",
+  "cite",
+  "code",
+  "col",
+  "colgroup",
+  "dd",
+  "del",
+  "div",
+  "dl",
+  "dt",
+  "em",
+  "font",
+  "h1",
+  "h2",
+  "h3",
+  "h4",
+  "h5",
+  "h6",
+  "hr",
+  "i",
+  "img",
+  "ins",
+  "kbd",
+  "li",
+  "ol",
+  "p",
+  "pre",
+  "q",
+  "s",
+  "small",
+  "span",
+  "strike",
+  "strong",
+  "sub",
+  "sup",
+  "table",
+  "tbody",
+  "td",
+  "tfoot",
+  "th",
+  "thead",
+  "tr",
+  "tt",
+  "u",
+  "ul",
+]);
+
+/** Elements dropped with everything inside them (active content, document chrome, forms). */
+const DROPPED_ELEMENTS: ReadonlySet<string> = new Set([
+  "applet",
+  "audio",
+  "base",
+  "button",
+  "canvas",
+  "embed",
+  "form",
+  "frame",
+  "frameset",
+  "head",
+  "iframe",
+  "input",
+  "link",
+  "math",
+  "meta",
+  "noscript",
+  "object",
+  "option",
+  "param",
+  "script",
+  "select",
+  "source",
+  "style",
+  "svg",
+  "template",
+  "textarea",
+  "title",
+  "track",
+  "video",
+  "xml",
+]);
+
+/** Void elements serialized without a closing tag. */
+const VOID_ELEMENTS: ReadonlySet<string> = new Set(["br", "col", "hr", "img"]);
+
+/** Presentational attributes kept as-is (href/src/style are checked separately). */
+const ALLOWED_ATTRIBUTES: ReadonlySet<string> = new Set([
+  "align",
+  "alt",
+  "bgcolor",
+  "border",
+  "cellpadding",
+  "cellspacing",
+  "class",
+  "color",
+  "colspan",
+  "dir",
+  "face",
+  "height",
+  "lang",
+  "nowrap",
+  "rowspan",
+  "size",
+  "span",
+  "start",
+  "title",
+  "type",
+  "valign",
+  "width",
+]);
+
+const ALLOWED_LINK_PATTERN = /^(?:https?:|mailto:|tel:|#)/i;
+const ALLOWED_IMAGE_PATTERN = /^(?:https?:|data:image\/(?:png|gif|jpeg|jpg|webp);base64,)/i;
+const UNSAFE_STYLE_PATTERN =
+  /expression\s*\(|javascript:|vbscript:|behavior\s*:|-moz-binding|@import|url\s*\(|\\/i;
+
+const OUTLOOK_SENT_FORMAT = new Intl.DateTimeFormat("en-US", {
+  timeZone: OUTLOOK_SENT_TIME_ZONE,
+  year: "numeric",
+  month: "long",
+  day: "numeric",
+  hour: "numeric",
+  minute: "2-digit",
+  hour12: true,
+});
+
+/**
+ * Formats parsed mailboxes the way Outlook's quoted header shows them: `Name <address>` when a
+ * display name is present, otherwise the bare address. Group members are flattened.
+ * @param addresses - postal-mime address list
+ */
+export function formatOutlookMailbox(addresses: Address[] | undefined): string[] {
+  return (addresses ?? [])
+    .flatMap((entry) => (entry.group ? entry.group : [entry]))
+    .filter((mailbox) => mailbox.address.trim().length > 0)
+    .map((mailbox) => {
+      const name = collapseHeaderValue(mailbox.name);
+      const address = collapseHeaderValue(mailbox.address);
+      return name.length > 0 && name !== address ? `${name} <${address}>` : address;
+    });
+}
+
+/**
+ * Formats a date as Outlook's quoted Sent: value in America/Edmonton, for example
+ * `October 28, 2026 11:29 AM` (no weekday, no "at", matching Outlook's reply header).
+ * @param date - Inbound Date header value
+ */
+export function formatOutlookSentDate(date: Date): string {
+  const parts = new Map(
+    OUTLOOK_SENT_FORMAT.formatToParts(date).map((part) => [part.type, part.value])
+  );
+  return `${parts.get("month")} ${parts.get("day")}, ${parts.get("year")} ${parts.get("hour")}:${parts.get("minute")} ${parts.get("dayPeriod")}`;
+}
+
+/**
+ * Sanitizes inbound HTML for embedding in our reply. Allowlist only: scripts, styles, forms,
+ * frames, media, and the inbound html/head/body wrappers are removed (body content is kept),
+ * comments are dropped, unknown elements are unwrapped to their content, event handlers and
+ * other unlisted attributes are dropped, links keep only http(s)/mailto/tel/# targets, images
+ * keep only http(s) or inline raster data sources, and inline styles that can run code or load
+ * resources are dropped. Text and attribute values are re-escaped on output.
+ * @param html - Raw inbound HTML body
+ */
+export function sanitizeQuotedHtml(html: string): SanitizedHtml {
+  const document = parseDocument(html, { decodeEntities: true, lowerCaseTags: true });
+  const counter = { removed: 0 };
+  return { html: renderNodes(document.children, counter), removedNodes: counter.removed };
+}
+
+/**
+ * Builds the Outlook-style quote of one inbound email: a divider, the From/Sent/To/(Cc)/Subject
+ * block, then the inbound body (sanitized HTML when present, otherwise escaped text). Fails with a
+ * fixed reason instead of guessing when the headers, sender, or Date are missing.
+ * @param source - Inbound headers and bodies
+ */
+export function buildQuotedHistory(source: QuoteSource): QuotedHistoryResult {
+  const headers = source.quoteHeaders;
+  if (!headers) return { ok: false, reason: "quote_missing_headers" };
+  const from = collapseHeaderValue(headers.from);
+  if (from.length === 0) return { ok: false, reason: "quote_missing_sender" };
+  if (!headers.sent || Number.isNaN(headers.sent.getTime())) {
+    return { ok: false, reason: "quote_missing_date" };
+  }
+
+  const sent = formatOutlookSentDate(headers.sent);
+  const to = headers.to.map(collapseHeaderValue).join("; ");
+  const cc = headers.cc.map(collapseHeaderValue).join("; ");
+  const subject = collapseHeaderValue(source.subject);
+  const quotedHtml = (source.html ?? "").trim().length > 0;
+
+  let bodyHtml: string;
+  let removedNodes = 0;
+  if (quotedHtml) {
+    try {
+      const sanitized = sanitizeQuotedHtml(source.html ?? "");
+      bodyHtml = sanitized.html;
+      removedNodes = sanitized.removedNodes;
+    } catch {
+      return { ok: false, reason: "quote_sanitize_failed" };
+    }
+  } else {
+    bodyHtml = textToOutlookHtml(source.body);
+  }
+
+  const headerLines = [
+    `<b>From:</b> ${escapeHtml(from)}`,
+    `<b>Sent:</b> ${escapeHtml(sent)}`,
+    `<b>To:</b> ${escapeHtml(to)}`,
+    ...(cc.length > 0 ? [`<b>Cc:</b> ${escapeHtml(cc)}`] : []),
+    `<b>Subject:</b> ${escapeHtml(subject)}`,
+  ];
+  const html = `<p class=MsoNormal>&nbsp;</p>
+<div style='${OUTLOOK_HTML_RULE_STYLE}'>
+<p class=MsoNormal>${headerLines.join("<br>\n")}</p>
+</div>
+<p class=MsoNormal>&nbsp;</p>
+<div>
+${bodyHtml}
+</div>`;
+
+  const textLines = [
+    OUTLOOK_TEXT_RULE,
+    `From: ${from}`,
+    `Sent: ${sent}`,
+    `To: ${to}`,
+    ...(cc.length > 0 ? [`Cc: ${cc}`] : []),
+    `Subject: ${subject}`,
+  ];
+  const text = `${textLines.join("\n")}\n\n${source.body.trim()}`;
+  const sourceBytes = new TextEncoder().encode(
+    quotedHtml ? (source.html ?? "") : source.body
+  ).byteLength;
+
+  return { ok: true, quote: { html, text, quotedHtml, sourceBytes, removedNodes } };
+}
+
+/** Escapes text for HTML element content and quoted attribute values. */
+function escapeHtml(value: string): string {
+  return value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+}
+
+/** Converts plain text to Outlook MsoNormal paragraphs, one per line, escaping every line. */
+function textToOutlookHtml(text: string): string {
+  return text
+    .trim()
+    .split(/\r?\n/)
+    .map((line) =>
+      line.trim().length > 0
+        ? `<p class=MsoNormal>${escapeHtml(line)}</p>`
+        : "<p class=MsoNormal>&nbsp;</p>"
+    )
+    .join("\n");
+}
+
+/** Folds a header value onto one line so it cannot add lines to the text header block. */
+function collapseHeaderValue(value: string): string {
+  return value.replace(/[\r\n\t]+/g, " ").trim();
+}
+
+/** Checks a link or image URL against the allowed schemes (ignoring leading whitespace/controls). */
+function isAllowedUrl(value: string, pattern: RegExp): boolean {
+  // Browsers ignore whitespace and control characters inside URL schemes ("java\tscript:").
+  const compact = Array.from(value)
+    .filter((character) => character.charCodeAt(0) > 0x20)
+    .join("");
+  return pattern.test(compact);
+}
+
+/** Rejects inline CSS that can run code or load resources (escapes are rejected outright). */
+function isSafeStyle(value: string): boolean {
+  return !UNSAFE_STYLE_PATTERN.test(value);
+}
+
+/**
+ * Serializes nodes back to HTML, keeping only allowlisted elements and attributes.
+ * @param nodes - Parsed child nodes
+ * @param counter - Running count of dropped nodes and attributes
+ */
+function renderNodes(nodes: ChildNode[], counter: { removed: number }): string {
+  let output = "";
+  for (const node of nodes) {
+    if (node.type === "text") {
+      output += escapeHtml(node.data);
+      continue;
+    }
+    if (node.type !== "tag" && node.type !== "script" && node.type !== "style") {
+      // Comments, CDATA, doctype and processing instructions never reach the reply.
+      counter.removed += 1;
+      continue;
+    }
+    output += renderElement(node, counter);
+  }
+  return output;
+}
+
+/** Serializes one element: dropped, unwrapped to its children, or kept with safe attributes. */
+function renderElement(element: Element, counter: { removed: number }): string {
+  const name = element.name.toLowerCase();
+  if (DROPPED_ELEMENTS.has(name)) {
+    counter.removed += 1;
+    return "";
+  }
+  if (!ALLOWED_ELEMENTS.has(name)) {
+    // html/body/o:p and other unknown wrappers: keep their content, not the tag.
+    return renderNodes(element.children, counter);
+  }
+
+  const attributes: string[] = [];
+  for (const [rawName, value] of Object.entries(element.attribs)) {
+    const attribute = rawName.toLowerCase();
+    const keep =
+      ALLOWED_ATTRIBUTES.has(attribute) ||
+      (attribute === "style" && isSafeStyle(value)) ||
+      (attribute === "href" && name === "a" && isAllowedUrl(value, ALLOWED_LINK_PATTERN)) ||
+      (attribute === "src" && name === "img" && isAllowedUrl(value, ALLOWED_IMAGE_PATTERN));
+    if (keep) {
+      attributes.push(` ${attribute}="${escapeHtml(value)}"`);
+    } else {
+      counter.removed += 1;
+    }
+  }
+  if (name === "img" && !attributes.some((attribute) => attribute.startsWith(" src="))) {
+    // An image without a safe source would only render as a broken placeholder.
+    counter.removed += 1;
+    return "";
+  }
+
+  const open = `<${name}${attributes.join("")}>`;
+  if (VOID_ELEMENTS.has(name)) return open;
+  return `${open}${renderNodes(element.children, counter)}</${name}>`;
+}
