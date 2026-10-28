@@ -11,7 +11,7 @@
 
 import type { AppConfig } from "../../config";
 import { AgentValidationError } from "../../errors";
-import { getAiUpstreamCode } from "../../email/utils/LogRedaction";
+import { getAiUpstreamCode, toLoggableShortlistDiagnostics } from "../../email/utils/LogRedaction";
 import { getSafeErrorMetadata } from "../../Logger";
 import type { ResearchRequest } from "../../types";
 import type { BaseAgentDependencies } from "./BaseAgent";
@@ -19,10 +19,12 @@ import { BaseAgent, createProviderOptions } from "./BaseAgent";
 import {
   type ClefAiRunner,
   CLEF_SHORTLIST_MAX_PICKS,
+  type ManifestGroup,
+  type ShortlistDiagnostics,
   type ShortlistReason,
   shortlistManifestFiles,
 } from "./ClefDecision";
-import { parseManifestRows } from "./ManifestParser";
+import { type ManifestRow, parseManifestRows } from "./ManifestParser";
 
 /** Configuration for one-call shortlist-prefetch agent behavior. */
 export interface ToolReadingAgentConfig {
@@ -42,6 +44,8 @@ export interface ToolReadingAgentConfig {
   indexFile?: string;
   /** Domain-specific XML tag formatter for a shortlisted id and its document body */
   formatDocumentTag: (id: string, content: string) => string;
+  /** Stage-1 shortlist group of a manifest row (QR&O volume, DAOD series) */
+  groupOf: (row: ManifestRow) => ManifestGroup;
 }
 
 /** Injectable dependencies for ToolReadingAgent, including an optional Clef AI runner. */
@@ -68,8 +72,9 @@ export class ToolReadingAgent extends BaseAgent {
 
   async research(request: ResearchRequest): Promise<string> {
     const startTime = Date.now();
-    // Fixed reason code only (never picks, model output, or question text).
+    // Fixed reason code and content-free numbers only (never picks, model output, or question text).
     let shortlistReason: ShortlistReason | undefined;
+    let shortlistDiagnostics: ShortlistDiagnostics | undefined;
 
     try {
       this.logger.info(`Starting ${this.agentConfig.category}_foo shortlist-prefetch research`);
@@ -96,9 +101,11 @@ export class ToolReadingAgent extends BaseAgent {
       );
 
       const shortlist = await shortlistManifestFiles(this.getClefAi(), request.question, rows, {
+        groupOf: this.agentConfig.groupOf,
         maxPicks,
       });
       shortlistReason = shortlist.reason;
+      shortlistDiagnostics = shortlist.diagnostics;
 
       // Validation failures (malformed / invalid / too many options / empty-failed) must not draft.
       // Only a confident Clef "none" may proceed with zero prefetched documents.
@@ -142,6 +149,7 @@ export class ToolReadingAgent extends BaseAgent {
           questionLength: request.question.length,
           shortlistCount: shortlist.ids.length,
           shortlistReason: shortlist.reason,
+          ...toLoggableShortlistDiagnostics(shortlist.diagnostics),
           prefetchedCount: prefetchedParts.length,
         }
       );
@@ -154,7 +162,10 @@ export class ToolReadingAgent extends BaseAgent {
         ...getSafeErrorMetadata(error),
       };
       if (shortlistReason !== undefined) {
-        Object.assign(failureMetadata, { shortlistReason });
+        Object.assign(failureMetadata, {
+          shortlistReason,
+          ...toLoggableShortlistDiagnostics(shortlistDiagnostics),
+        });
       }
       const aiUpstreamCode = getAiUpstreamCode(error);
       if (aiUpstreamCode !== undefined) {

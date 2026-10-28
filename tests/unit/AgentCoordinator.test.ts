@@ -5,14 +5,18 @@
  *
  * Top-level declarations:
  * - AgentCoordinator failure logging suite: Verifies safe AI API metadata classification
+ * - Prime Foo tool error mapping suite: Verifies tool failures reach the reply boundary honestly
+ * - Prime Foo fail-loudly suite: Verifies a failed tool call ends generation after one step
  */
 
 import { createOpenAI } from "@ai-sdk/openai";
-import { APICallError } from "ai";
+import { APICallError, generateText } from "ai";
+import { MockLanguageModelV3 } from "ai/test";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { createMockEnv } from "../mocks";
 
 import { AgentCoordinator, toPrimeFooToolError } from "../../src/agents/AgentCoordinator";
+import { DoadFooAgent } from "../../src/agents/sub-agents/DoadFooAgent";
 import { createConfig } from "../../src/config";
 import {
   AgentAPIError,
@@ -161,5 +165,80 @@ describe("Prime Foo tool error mapping", () => {
     });
 
     await expect(coordinator.processWithPrimeFoo("safe context")).rejects.toBe(storage);
+  });
+});
+
+describe("Prime Foo fail-loudly on tool errors", () => {
+  const usage = {
+    inputTokens: { total: 1, noCache: 1, cacheRead: 0, cacheWrite: 0 },
+    outputTokens: { total: 1, text: 1, reasoning: 0 },
+  };
+
+  /** One model step that asks for batch_research with a DOAD question. */
+  function researchStep() {
+    return {
+      content: [
+        {
+          type: "tool-call" as const,
+          toolCallId: `call-${crypto.randomUUID()}`,
+          toolName: "batch_research",
+          input: JSON.stringify({ doad_queries: ["What does the DOAD say?"] }),
+        },
+      ],
+      finishReason: { unified: "tool-calls" as const, raw: undefined },
+      usage,
+      warnings: [],
+    };
+  }
+
+  /** Model that always asks for batch_research, so any re-call would show as an extra step. */
+  function alwaysResearchModel() {
+    return new MockLanguageModelV3({ doGenerate: async () => researchStep() });
+  }
+
+  it("stops after the first failed batch_research step with no re-calls", async () => {
+    const model = alwaysResearchModel();
+    const failure = new AgentValidationError(
+      "DOAD policy Clef shortlist failed: clef_empty_shortlist"
+    );
+    const research = vi.spyOn(DoadFooAgent.prototype, "research").mockRejectedValue(failure);
+    const testEnv = createMockEnv();
+    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
+      createModel: () => model,
+      generateText,
+    });
+
+    await expect(coordinator.processWithPrimeFoo("safe context")).rejects.toBe(failure);
+    expect(model.doGenerateCalls).toHaveLength(1);
+    expect(research).toHaveBeenCalledTimes(1);
+    research.mockRestore();
+  });
+
+  it("still continues to the answer step after a successful tool call", async () => {
+    const answerStep = {
+      content: [{ type: "text" as const, text: "Here is the answer." }],
+      finishReason: { unified: "stop" as const, raw: undefined },
+      usage,
+      warnings: [],
+    };
+    let modelCalls = 0;
+    const model = new MockLanguageModelV3({
+      doGenerate: async () => {
+        modelCalls += 1;
+        return modelCalls === 1 ? researchStep() : answerStep;
+      },
+    });
+    const research = vi.spyOn(DoadFooAgent.prototype, "research").mockResolvedValue("DOAD answer");
+    const testEnv = createMockEnv();
+    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
+      createModel: () => model,
+      generateText,
+    });
+
+    const response = await coordinator.processWithPrimeFoo("safe context");
+    expect(response.shouldRespond).toBe(true);
+    expect(response.content).toContain("Here is the answer.");
+    expect(model.doGenerateCalls).toHaveLength(2);
+    research.mockRestore();
   });
 });
