@@ -24,6 +24,7 @@
  * - collapseHeaderValue: Folds a header value onto one line
  * - isAllowedUrl: Checks a link or image URL against the allowed schemes
  * - sanitizeStyle: Keeps only allowlisted CSS declarations with inert values
+ * - styleFunctionNames: Linear scan for CSS function names in a declaration value
  * - renderNodes: Serializes allowlisted DOM nodes back to HTML
  * - renderElement: Serializes one element (dropped, unwrapped, or kept with safe attributes)
  */
@@ -277,7 +278,6 @@ const ALLOWED_STYLE_PROPERTIES: ReadonlySet<string> = new Set([
 /** Characters a kept CSS value may use: no escapes, comments, at-rules, or angle brackets. */
 const SAFE_STYLE_VALUE_PATTERN = /^[a-z0-9#%.,\s"'\-+!/()]*$/i;
 const STYLE_PROPERTY_PATTERN = /^-?[a-z][a-z0-9-]*$/;
-const STYLE_FUNCTION_PATTERN = /([a-z-]*)\s*\(/gi;
 /** The only CSS functions a kept value may call (colours); url(), image-set(), etc. are dropped. */
 const ALLOWED_STYLE_FUNCTIONS: ReadonlySet<string> = new Set(["rgb", "rgba", "hsl", "hsla"]);
 
@@ -439,6 +439,25 @@ function isAllowedUrl(value: string, pattern: RegExp): boolean {
 }
 
 /**
+ * Lists the CSS function names in a value, e.g. "rgb" for "rgb(1,2,3)".
+ * Single pass per "(" so scanning stays linear in the value length.
+ * @param value - CSS declaration value
+ */
+function styleFunctionNames(value: string): string[] {
+  const names: string[] = [];
+  let segmentStart = 0;
+  for (let open = value.indexOf("("); open !== -1; open = value.indexOf("(", open + 1)) {
+    let end = open;
+    while (end > segmentStart && /\s/.test(value[end - 1])) end -= 1;
+    let start = end;
+    while (start > segmentStart && /[a-z-]/i.test(value[start - 1])) start -= 1;
+    names.push(value.slice(start, end).toLowerCase());
+    segmentStart = open + 1;
+  }
+  return names;
+}
+
+/**
  * Keeps only allowlisted inline CSS declarations whose values cannot run code or load resources:
  * no escapes, comments, or at-rules, and no functions other than rgb/rgba/hsl/hsla (so url(),
  * image-set(), expression() and the like are dropped). Returns undefined when nothing is kept.
@@ -452,15 +471,12 @@ function sanitizeStyle(value: string, counter: { removed: number }): string | un
     const separator = declaration.indexOf(":");
     const property = declaration.slice(0, Math.max(separator, 0)).trim().toLowerCase();
     const propertyValue = declaration.slice(separator + 1).trim();
-    const functions = Array.from(propertyValue.matchAll(STYLE_FUNCTION_PATTERN), (match) =>
-      match[1].toLowerCase()
-    );
     const safe =
       separator > 0 &&
       STYLE_PROPERTY_PATTERN.test(property) &&
       (ALLOWED_STYLE_PROPERTIES.has(property) || property.startsWith("mso-")) &&
       SAFE_STYLE_VALUE_PATTERN.test(propertyValue) &&
-      functions.every((name) => ALLOWED_STYLE_FUNCTIONS.has(name));
+      styleFunctionNames(propertyValue).every((name) => ALLOWED_STYLE_FUNCTIONS.has(name));
     if (safe) {
       kept.push(`${property}:${propertyValue}`);
     } else {

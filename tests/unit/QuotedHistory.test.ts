@@ -141,6 +141,16 @@ describe("sanitizeQuotedHtml", () => {
     expect(removedNodes).toBe(7);
   });
 
+  it("scans long CSS values in linear time", () => {
+    const longValue = "a".repeat(1_000_000);
+    const started = performance.now();
+    const { html } = sanitizeQuotedHtml(
+      `<span style='font-family:${longValue}'>x</span><span style='color:${longValue}url(y)'>z</span>`
+    );
+    expect(performance.now() - started).toBeLessThan(1000);
+    expect(html).toBe(`<span style="font-family:${longValue}">x</span><span>z</span>`);
+  });
+
   it("cannot be broken out of with stray closing tags", () => {
     const { html } = sanitizeQuotedHtml("<p>x</p></div></body></html><div>y");
     expect(html).toBe("<p>x</p><div>y</div>");
