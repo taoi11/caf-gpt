@@ -15,7 +15,7 @@ The three new generic rules are registered and enabled at error severity: `no-ar
 - Generic production source is formatted with CAF-GPT's Biome settings (two spaces, 100-column width, no trailing function-argument commas). No behavior customization or pending generic merge conflict remains.
 - Optional `effect/` is not copied or enabled: CAF-GPT does not use Effect.
 - Upstream test files remain outside the production vendor copy. During this update all 18 generic RuleTester suites from the pinned snapshot were executed against the reconciled local files. The CLI spacing regression was also run, replacing only its `pnpm exec oxlint` invocation with the installed npm project's Oxlint binary.
-- Existing plugin path, severities, ignores, and `typescript/no-explicit-any` remain in `oxlint.config.ts`.
+- Existing plugin path, severities, ignores, and `typescript/no-explicit-any` remain in `oxlint.config.ts`. `ClefAiRunner.run` has one documented `no-unknown-returns` boundary exception: raw external AI data stays untrusted until both consumers immediately schema-parse it, rather than disguising `unknown` through a type alias.
 - The root MIT `LICENSE` is retained. The spacing engine additionally retains ESLint Stylistic's MIT license and separate provenance in `vendor/eslint-stylistic/`.
 
 ## Verification (2026-10-28)

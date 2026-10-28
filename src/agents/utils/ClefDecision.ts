@@ -25,7 +25,6 @@
  * - ManifestShortlistDecision: Result of the DOAD/QR&O manifest shortlist
  * - ClefRequest: Typed System One request contract
  * - ClefChoiceAnswerSchema: Boundary validation for choice answers
- * - ClefBoundarySchema: Untrusted AI response type derived from the boundary schema
  * - ClefResponseSchema / ClefAnswersSchema: Preserve response-versus-answer failure classification
  * - decideShouldReply: Asks Clef whether inbound mail is legitimate or an injection/abuse attempt
  * - decideShouldUpdateMemory: Asks Clef-flash whether MemoryFoo should run; propagates AI.run failures
@@ -96,7 +95,9 @@ export const CLEF_CHOICE_MAX_OPTIONS = 255;
 
 /** Injectable Workers AI runner used so unit tests can mock `AI.run` without Env. */
 export interface ClefAiRunner {
-  run(model: string, inputs: ClefRequest): Promise<z.input<typeof ClefBoundarySchema>>;
+  // External I/O stays untrusted here; both callers immediately parse it with ClefResponseSchema.
+  // oxlint-disable-next-line anti-slop/no-unknown-returns
+  run(model: string, inputs: ClefRequest): Promise<unknown>;
 }
 
 /** System One choice request sent to the two supported Clef models. */
@@ -263,9 +264,6 @@ const ClefChoiceAnswerSchema = z.object({
   confidence: z.number().min(0).max(1),
   probabilities: z.record(z.string(), z.number()),
 });
-
-/** Raw responses remain untrusted until their selected choice is parsed. */
-const ClefBoundarySchema = z.unknown();
 
 /** Separates malformed outer responses from malformed answer dictionaries. */
 const ClefResponseSchema = z.object({ answers: z.unknown().optional() });
