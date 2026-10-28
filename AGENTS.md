@@ -51,15 +51,16 @@ Emails are processed through **Cloudflare Email Workers**:
   - Research sub-agents are `LeaveFooAgent`, `DoadFooAgent`, and `QroFooAgent`.
   - Each domain accepts up to 3 questions per `batch_research` call.
   - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent`: Clef-flash shortlists allowlisted index ids, DocumentRetriever prefetches those docs (max 3), then one `generateText()` answer call uses only the prefetched content (no `read_file` selection loop).
-  - Shortlist validation failures (malformed / invented or already-chosen / too many options / empty-failed) throw to the error-email boundary; only a confident first-rank Clef `none` may answer with zero prefetched docs. There is no fallback: a failed shortlist always ends in a visible error reply.
-  - Clef answers each question in a request independently, so the shortlist asks one rank per `AI.run` request and drops already-chosen documents from the next rank's options. The manifest is sent once, as the option descriptions; Clef accepts at most 255 options per choice question (`CLEF_CHOICE_MAX_OPTIONS`), checked before sending.
-  - The failure log carries only the fixed `shortlistReason` code and, for Workers AI binding errors, `errorName` plus the numeric `aiUpstreamCode` (never the error message, picks, or model output).
+  - The shortlist is two-stage, because one choice over the whole 10–15 KB manifest never reached the 0.6 confidence threshold. Stage 1 (`group_pick`, one request) picks one group: the QR&O volume folder (first id segment, e.g. `vol-1-administration`, `qroVolumeGroup`) or the DAOD thousand series (`5019-0` → 5000 series, `doadSeriesGroup`); each group option lists its documents' titles. Stage 2 ranks documents in that group only (`pick_1..3`), so a shortlist is at most 1 + 3 = 4 Clef-flash calls. The same `CLEF_SHORTLIST_CONFIDENCE_THRESHOLD` (0.6) applies at every rank of both stages.
+  - Shortlist validation failures (malformed / invented or already-chosen / too many options / empty-failed) throw to the error-email boundary. A low-confidence group, a low-confidence stage-1 `none`, or no confident document in the chosen group (a stage-2 `none` included) is `clef_empty_shortlist`; only a confident stage-1 `none` (no group applies) may answer with zero prefetched docs. There is no fallback: a failed shortlist always ends in a visible error reply.
+  - Clef answers each question in a request independently, so stage 2 asks one rank per `AI.run` request and drops already-chosen documents from the next rank's options. Each request sends the manifest (or the chosen group) once, as option descriptions; Clef accepts at most 255 options per choice question (`CLEF_CHOICE_MAX_OPTIONS`), and both stages (group count, and every group's size, plus `none`) are checked before anything is sent.
+  - The failure log carries only the fixed `shortlistReason` code, the content-free shortlist diagnostics, and, for Workers AI binding errors, `errorName` plus the numeric `aiUpstreamCode` (never the error message, picks, choice keys, titles, question text, or model output). Diagnostics pass through `toLoggableShortlistDiagnostics` in `LogRedaction.ts`, which keeps only `shortlistStage` (`group` | `document`, the last stage reached) and, per stage (`shortlistGroup` / `shortlistDocument` objects), `optionCount`, `rankReached`, `topIsNone`, `topConfidence` (rank-1 confidence) and `topMargin` (rank-1 gap between the two highest probabilities), as finite numbers and booleans only; the success performance log carries the same fields.
   - Prime Foo passes a tool's own app error through to the error reply (for example a `StorageError` gets the storage template); Workers AI binding errors become `AgentAPIError`; anything else stays `AgentValidationError`.
   - DOAD and QR&O identifiers come from shared `| Id | Title | File |` manifest tables on R2 (`doad/index_v2.md`, `qro/index_v2.md`), parsed by `parseManifestTable` / `parseManifestRows` in `src/agents/utils/ManifestParser.ts`; it rejects absolute paths, dot or empty segments, backslashes, traversal, and non-`.md` files.
 - `generate_feedback_note` delegates to `PaceFooAgent.generateNote(rank, context)`.
   - PaceFooAgent loads competencies from R2 (`paceNote/{rank}.md`) and generates feedback.
   - Rank files: `cpl.md`, `mcpl.md`, `sgt.md`, `wo.md`.
-- **Circuit breaker**: `stopWhen: stepCountIs(3)` limits the Prime Foo tool loop to 3 model steps.
+- **Circuit breaker**: `stopWhen: [stepCountIs(3), stopOnToolError]` limits the Prime Foo tool loop to 3 model steps and ends it right after the first step with a failed tool call, so a `batch_research` failure is never re-called (each re-call redid every sub-agent) and reaches the error-reply boundary once.
 - `MemoryFooAgent` runs from `UserAgent` around the main response path to update user memory after successful replies.
 
 ### Tool Input Validation with Zod
@@ -121,9 +122,10 @@ For agents that answer from indexed documents (like `DoadFooAgent` and `QroFooAg
 2. Configure its category, model key, prompt name, `documentsVariableName`, and `maxPrefetchDocuments`.
 3. Implement `getIndexContent()` and `formatDocumentTag()`.
 4. Rely on `parseManifestRows` / `parseManifestTable` for the shared `| Id | Title | File |` allowlist; identifiers are validated before any R2 read.
-5. Clef-flash shortlists allowlisted ids (`shortlistManifestFiles`, one rank per request); `DocumentRetriever` prefetches those docs; the specialist answers once from `{prefetched_documents}` with no `read_file` selection loop.
-6. Add one answer prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md` that cites only prefetched documents.
-7. Add model config in `src/config.ts`.
+5. Provide a `groupOf(row)` stage-1 grouping (`{ key, label }`) derived from the manifest ids.
+6. Clef-flash shortlists allowlisted ids (`shortlistManifestFiles`: one group request, then one rank per request inside it); `DocumentRetriever` prefetches those docs; the specialist answers once from `{prefetched_documents}` with no `read_file` selection loop.
+7. Add one answer prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md` that cites only prefetched documents.
+8. Add model config in `src/config.ts`.
 
 The current policy prompt assets are `doad_foo_tool_reader.md`, `qro_foo_tool_reader.md`, and `leave_foo_research.md`. The DOAD and QR&O indexes live on R2, not in `public/prompts/`. There are no separate DOAD or QR&O selector/answer prompts.
 

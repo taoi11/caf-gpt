@@ -9,11 +9,15 @@
  * - toLoggableErrorName: Maps an error name to an allowlisted value or OTHER_ERROR_NAME
  * - toLoggableErrorCode: Maps an error code to an allowlisted value or OTHER_ERROR_CODE
  * - getAiUpstreamCode: Extracts only the numeric Workers AI error code from a binding error
+ * - LoggableShortlistDiagnostics: Allowlisted shortlist diagnostic log fields (stage code, per-stage numbers)
+ * - toLoggableShortlistDiagnostics: Keeps only allowlisted numeric/boolean shortlist diagnostics
  * - getLogSafeDomain: Extracts a log-safe domain from an email address
  * - createEmailRef: Generates a random per-message correlation id
  * - getEmailRefFromHeaders: Reads the Worker-assigned emailRef, or generates a fresh one
  */
 
+import { z } from "zod";
+import type { ShortlistDiagnostics } from "../../agents/utils/ClefDecision";
 import { normalizeEmailAddress } from "./EmailNormalizer";
 
 /** Internal header the Worker sets before routing; the UserAgent logs reuse its value. */
@@ -133,6 +137,55 @@ export function getAiUpstreamCode<ErrorValue>(error: ErrorValue): number | undef
   if (!(error instanceof Error) || !AI_BINDING_ERROR_NAMES.has(error.name)) return undefined;
   const match = AI_UPSTREAM_CODE_PATTERN.exec(error.message);
   return match ? Number(match[1]) : undefined;
+}
+
+/** Finite number, or dropped (strings, NaN, Infinity, and other types never reach the log). */
+const LoggableNumberSchema = z.number().finite().optional().catch(undefined);
+
+/** Allowlisted per-stage shortlist diagnostics; unknown keys are stripped. */
+const ShortlistStageLogSchema = z
+  .object({
+    optionCount: LoggableNumberSchema,
+    rankReached: LoggableNumberSchema,
+    topIsNone: z.boolean().optional().catch(undefined),
+    topConfidence: LoggableNumberSchema,
+    topMargin: LoggableNumberSchema,
+  })
+  .optional()
+  .catch(undefined);
+
+/** Allowlisted shortlist diagnostics: the fixed stage code plus per-stage numbers and booleans. */
+const ShortlistDiagnosticsLogSchema = z
+  .object({
+    shortlistStage: z.enum(["group", "document"]).optional().catch(undefined),
+    group: ShortlistStageLogSchema,
+    document: ShortlistStageLogSchema,
+  })
+  .catch({});
+
+/** Shortlist diagnostic log fields: `shortlistStage` plus `shortlistGroup` / `shortlistDocument` numbers. */
+export interface LoggableShortlistDiagnostics {
+  shortlistStage?: "group" | "document";
+  shortlistGroup?: z.infer<typeof ShortlistStageLogSchema>;
+  shortlistDocument?: z.infer<typeof ShortlistStageLogSchema>;
+}
+
+/**
+ * Returns shortlist diagnostics as log fields, keeping only the fixed stage code and allowlisted
+ * numeric/boolean per-stage fields (stage 1 under shortlistGroup, stage 2 under shortlistDocument).
+ * Anything else (strings, choice keys, titles, question text, unknown fields) is dropped, so a
+ * caller bug cannot leak content into logs.
+ * @param diagnostics - ShortlistDiagnostics from shortlistManifestFiles
+ */
+export function toLoggableShortlistDiagnostics(
+  diagnostics: ShortlistDiagnostics | undefined
+): LoggableShortlistDiagnostics {
+  const parsed = ShortlistDiagnosticsLogSchema.parse(diagnostics ?? {});
+  const fields: LoggableShortlistDiagnostics = {};
+  if (parsed.shortlistStage !== undefined) fields.shortlistStage = parsed.shortlistStage;
+  if (parsed.group !== undefined) fields.shortlistGroup = parsed.group;
+  if (parsed.document !== undefined) fields.shortlistDocument = parsed.document;
+  return fields;
 }
 
 /**

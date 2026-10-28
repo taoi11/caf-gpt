@@ -5,7 +5,7 @@
  *
  * Top-level declarations:
  * - choiceAnswer: Builds a Clef choice answer fixture
- * - shortlistResponse: Builds a Clef shortlist answers payload for pick_1..N
+ * - shortlistResponse: Builds a Clef shortlist answers payload for group_pick and pick_1..N
  * - mockClefAi: Returns a ClefAiRunner resolving to a fixed result
  */
 
@@ -14,7 +14,7 @@ import { DocumentRetriever } from "../../src/storage/DocumentRetriever";
 import { createMockEnv } from "../mocks";
 import { MockFetcher, MockR2Bucket } from "../mocks/cloudflare";
 
-import { QroFooAgent } from "../../src/agents/sub-agents/QroFooAgent";
+import { QroFooAgent, qroVolumeGroup } from "../../src/agents/sub-agents/QroFooAgent";
 import type { ClefAiRunner } from "../../src/agents/utils/ClefDecision";
 import { parseManifestTable } from "../../src/agents/utils/ManifestParser";
 import { createConfig } from "../../src/config";
@@ -32,9 +32,13 @@ function choiceAnswer(choice: string, confidence: number) {
   };
 }
 
-/** Builds a Clef shortlist answers payload mapping pick ranks to doc keys or none. */
-function shortlistResponse(picks: Array<{ choice: string; confidence?: number }>, totalRanks = 3) {
+/** Builds a Clef shortlist payload: the stage-1 group pick plus stage-2 pick ranks (doc keys or none). */
+function shortlistResponse(
+  picks: Array<{ choice: string; confidence?: number }>,
+  { group = "group_0", totalRanks = 3 }: { group?: string; totalRanks?: number } = {}
+) {
   const answers: { [pickKey: string]: ReturnType<typeof choiceAnswer> } = {};
+  answers.group_pick = choiceAnswer(group, 0.9);
   picks.forEach((pick, index) => {
     answers[`pick_${index + 1}`] = choiceAnswer(pick.choice, pick.confidence ?? 0.9);
   });
@@ -122,7 +126,7 @@ Members may submit grievances through the chain of command.`
 All members must maintain high standards of conduct.`
     );
 
-    // doc_0=leave, doc_1=grievances, doc_2=conduct
+    // Volume groups: group_0=vol-1 (doc_0=leave, doc_1=grievances), group_1=vol-2 (doc_0=conduct)
     clefAi = mockClefAi(shortlistResponse([{ choice: "doc_0" }]));
     mockGenerateText.mockResolvedValue({
       text: "QR&O Chapter 16 prescribes annual leave entitlements.",
@@ -175,8 +179,9 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 
       expect(result).toContain("annual leave");
       expect(mockGenerateText).toHaveBeenCalledTimes(1);
-      // One request per rank: pick_1 chooses the document, pick_2 answers none and ends the shortlist.
-      expect(clefAi.run).toHaveBeenCalledTimes(2);
+      // group_pick chooses the group, then one request per rank: pick_1 chooses the document,
+      // pick_2 answers none and ends the shortlist.
+      expect(clefAi.run).toHaveBeenCalledTimes(3);
       // SAFETY: generateText fake is invoked once with the answer options object.
 
       const call = mockGenerateText.mock.calls[0][0] as {
@@ -189,25 +194,57 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
       expect(call.prompt).toContain("annual leave");
     });
 
-    it("should prefetch up to three shortlisted chapters", async () => {
-      clefAi = mockClefAi(
-        shortlistResponse([{ choice: "doc_0" }, { choice: "doc_1" }, { choice: "doc_2" }])
-      );
-      mockGenerateText.mockResolvedValue({ text: "Answer based on three chapters" });
+    it("should prefetch every confident pick within the chosen volume only", async () => {
+      clefAi = mockClefAi(shortlistResponse([{ choice: "doc_0" }, { choice: "doc_1" }]));
+      mockGenerateText.mockResolvedValue({ text: "Answer based on two chapters" });
       agent = new QroFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
         clefAi,
       });
 
-      const result = await agent.research({ question: "Tell me about QR&O policies" });
+      const result = await agent.research({ question: "Tell me about QR&O" });
 
-      expect(result).toContain("three chapters");
+      expect(result).toContain("two chapters");
       // SAFETY: generateText fake is invoked once with the answer options object.
-
       const call = mockGenerateText.mock.calls[0][0] as { system?: string };
       expect(call.system).toContain("<QRO_chapter_ch-16-leave>");
       expect(call.system).toContain("<QRO_chapter_ch-19-grievances>");
+      expect(call.system).not.toContain("<QRO_chapter_ch-107-conduct>");
+    });
+
+    it("prefetches from the second volume when Clef picks it", async () => {
+      clefAi = mockClefAi(shortlistResponse([{ choice: "doc_0" }], { group: "group_1" }));
+      agent = new QroFooAgent(mockEnv, config, {
+        generateText: mockGenerateText,
+        clefAi,
+      });
+
+      await agent.research({ question: "conduct?" });
+      // SAFETY: generateText fake is invoked once with the answer options object.
+      const call = mockGenerateText.mock.calls[0][0] as { system?: string };
       expect(call.system).toContain("<QRO_chapter_ch-107-conduct>");
+    });
+
+    it("groups QR&O rows by volume for the stage-1 question", async () => {
+      await agent.research({ question: "leave?" });
+      // SAFETY: the ClefAiRunner mock is invoked with the stage-1 Clef System One request first.
+      const request = vi.mocked(clefAi.run).mock.calls[0][1] as {
+        questions: { group_pick: { criteria: Record<string, string> } };
+      };
+      expect(request.questions.group_pick.criteria).toEqual({
+        none: expect.any(String),
+        group_0: "QR&O vol 1 administration: Leave Regulations; Grievance Procedures",
+        group_1: "QR&O vol 2 discipline: Service Conduct",
+      });
+    });
+
+    it("maps QR&O ids to their volume folder", () => {
+      const row = { id: "vol-1-administration/ch-16-leave.md", title: "", file: "x.md" };
+      expect(qroVolumeGroup(row)).toEqual({
+        key: "vol-1-administration",
+        label: "QR&O vol 1 administration",
+      });
+      expect(qroVolumeGroup({ id: "ch-1.md", title: "", file: "ch-1.md" }).key).toBe("");
     });
 
     it("should reject invented shortlist ids that are not in the allowlist", async () => {
@@ -224,7 +261,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
     });
 
     it("should allow intentional high-confidence none with an empty prefetch", async () => {
-      clefAi = mockClefAi(shortlistResponse([{ choice: "none" }]));
+      clefAi = mockClefAi(shortlistResponse([], { group: "none" }));
       mockGenerateText.mockResolvedValue({ text: "No relevant chapter was available." });
       agent = new QroFooAgent(mockEnv, config, {
         generateText: mockGenerateText,
