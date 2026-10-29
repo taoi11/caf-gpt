@@ -9,6 +9,7 @@ import {
 describe("retainMemoryVersions", () => {
   it("keeps at most the last 10 recent snapshots", () => {
     const now = Date.now();
+
     const versions = Array.from({ length: 12 }, (_, index) => ({
       ts: now - (12 - index) * 1000,
       text: `memory-${index + 1}`,
@@ -33,6 +34,7 @@ describe("retainMemoryVersions", () => {
 
   it("keeps only the newest expired snapshot as the dormant-user fallback", () => {
     const now = Date.now();
+
     const retained = retainMemoryVersions(
       [
         { ts: now - MEMORY_VERSION_RETENTION_MS - 3000, text: "oldest" },
@@ -48,6 +50,7 @@ describe("retainMemoryVersions", () => {
 
   it("keeps one expired fallback alongside recent snapshots without exceeding 10", () => {
     const now = Date.now();
+
     const versions = [
       { ts: now - MEMORY_VERSION_RETENTION_MS - 2000, text: "expired-old" },
       { ts: now - MEMORY_VERSION_RETENTION_MS - 1000, text: "expired-fallback" },

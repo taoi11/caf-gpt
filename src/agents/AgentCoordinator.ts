@@ -46,9 +46,11 @@ const WORKERS_AI_ERROR_NAMES: ReadonlySet<string> = new Set([
  */
 export function toPrimeFooToolError<ErrorValue>(error: ErrorValue): Error {
   if (error instanceof BaseAppError) return error;
+
   if (error instanceof Error && WORKERS_AI_ERROR_NAMES.has(error.name)) {
     return new AgentAPIError("Prime_foo tool AI call failed");
   }
+
   return new AgentValidationError("Prime_foo tool execution failed");
 }
 
@@ -89,6 +91,7 @@ export class AgentCoordinator {
     dependencies: Partial<AgentCoordinatorDependencies> = {}
   ): Promise<AgentCoordinator> {
     const promptManager = new PromptManager(env.ASSETS);
+
     return new AgentCoordinator(
       env,
       config,
@@ -109,10 +112,12 @@ export class AgentCoordinator {
 
       if (!context || context.trim().length === 0) {
         this.logger.warn("Empty context provided to prime_foo");
+
         return { content: "", shouldRespond: false };
       }
 
       let systemPrompt = await this.promptManager.getPrompt("prime_foo");
+
       if (memory && memory.trim().length > 0) {
         systemPrompt = `${systemPrompt}\n\n<memory>\n${memory}\n</memory>`;
       }
@@ -121,6 +126,7 @@ export class AgentCoordinator {
       const model = this.dependencies.createModel(this.env, modelConfig.model);
       const providerOptions = createProviderOptions(modelConfig.model);
       const maxSteps = 3;
+
       const generationOptions = {
         model,
         system: systemPrompt,
@@ -132,6 +138,7 @@ export class AgentCoordinator {
         onStepFinish: ({ stepNumber, toolCalls }: PrimeFooStepFinishEvent) => {
           if (toolCalls.length > 0) {
             this.logger.info("Tool call tracked", { stepNumber: stepNumber + 1, maxSteps });
+
             if (stepNumber + 1 >= maxSteps) {
               this.logger.warn("Circuit breaker: tool call limit reached", {
                 stepNumber: stepNumber + 1,
@@ -183,6 +190,7 @@ export class AgentCoordinator {
                     ? Promise.all(
                         queries.map(async (query, index) => {
                           const answer = await research(query);
+
                           return `Query ${index + 1}: "${query}"\nAnswer: ${answer}\n`;
                         })
                       )
@@ -191,8 +199,10 @@ export class AgentCoordinator {
               );
 
               const results: string[] = [];
+
               for (let i = 0; i < domains.length; i++) {
                 const answers = domainAnswers[i];
+
                 if (!answers) continue;
                 results.push(domains[i].heading);
                 results.push(answers.join("\n"));
@@ -212,14 +222,17 @@ export class AgentCoordinator {
           }),
         },
       };
+
       if (providerOptions) {
         Object.assign(generationOptions, { providerOptions });
       }
+
       const result = await this.dependencies.generateText(generationOptions);
 
       const toolError = result.steps
         .flatMap((step) => step.content)
         .find((part) => part.type === "tool-error");
+
       if (toolError) {
         throw toPrimeFooToolError(toolError.error);
       }
@@ -227,6 +240,7 @@ export class AgentCoordinator {
       if (!result.text || result.text.trim().length === 0) {
         this.logger.info("Prime_foo chose not to respond");
         this.logger.performance("prime_foo processing", startTime);
+
         return { content: "", shouldRespond: false };
       }
 
@@ -239,6 +253,7 @@ Source Code:<br>
 How to use CAF-GPT:<br>
 <pre><code>https://caf-gpt.com</code></pre>
 </div>`;
+
       const finalContent = result.text + signature;
 
       this.logger.performance("prime_foo processing", startTime);
@@ -252,12 +267,15 @@ How to use CAF-GPT:<br>
         processingTime: Date.now() - startTime,
         ...getSafeErrorMetadata(error),
       };
+
       if (APICallError.isInstance(error)) {
         if (error.statusCode !== undefined) {
           Object.assign(errorMetadata, { statusCode: error.statusCode });
         }
+
         Object.assign(errorMetadata, { isRetryable: error.isRetryable });
       }
+
       this.logger.error("Prime_foo processing failed", errorMetadata);
       throw error;
     }

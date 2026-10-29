@@ -90,9 +90,11 @@ const WEEKDAYS: ReadonlyMap<string, number> = new Map([
 ]);
 
 const WEEKDAY_PREFIX = /^([a-zà-ÿ]+)\.?,?\s+(.*)$/;
+
 /** "October 28, 2026 11:29 AM" / "October 28, 2026 at 11:29" (Outlook English). */
 const MONTH_FIRST =
   /^([a-zà-ÿ]+)\.?\s+(\d{1,2}),?\s+(\d{4}),?(?:\s+at)?\s+(\d{1,2}):(\d{2})(?:\s*([ap])\.?\s?m\.?)?$/;
+
 /** "28 octobre 2026 11:29" / "1er mars 2026 à 9 h 05" / "28 October 2026 11:29" (French, en-GB). */
 const DAY_FIRST =
   /^(\d{1,2})(?:er)?\s+([a-zà-ÿ]+)\.?,?\s+(\d{4}),?(?:\s+(?:at|à))?\s+(\d{1,2})(?:\s*h\s*|:)(\d{2})(?:\s*([ap])\.?\s?m\.?)?$/;
@@ -115,9 +117,11 @@ interface LabelValue {
 /** Returns a label's value, taking the next non-empty line when the label stands alone. */
 function labelValue(lines: string[], index: number, inline: string): LabelValue {
   if (inline.trim().length > 0) return { value: inline.trim(), index };
+
   for (let next = index + 1; next < lines.length && next <= index + 2; next++) {
     if (lines[next].length > 0) return { value: lines[next], index: next };
   }
+
   return { value: "", index };
 }
 
@@ -129,19 +133,24 @@ function labelValue(lines: string[], index: number, inline: string): LabelValue 
  */
 export function findTopQuotedHeader(body: string): QuotedHeaderBlock | undefined {
   const lines = body.split(/\r?\n/).map(normalizeLine);
+
   for (let index = 0; index < lines.length; index++) {
     const fromMatch = FROM_LABEL.exec(lines[index]);
+
     if (!fromMatch) continue;
     const from = labelValue(lines, index, fromMatch[1]);
     const limit = Math.min(lines.length, from.index + 1 + HEADER_WINDOW_LINES);
+
     for (let next = from.index + 1; next < limit; next++) {
       if (FROM_LABEL.test(lines[next])) break;
       const sentMatch = SENT_LABEL.exec(lines[next]);
+
       if (sentMatch) {
         return { from: from.value, sent: labelValue(lines, next, sentMatch[1]).value };
       }
     }
   }
+
   return undefined;
 }
 
@@ -155,9 +164,12 @@ export function isSelfQuotedSender(from: string, selfAddresses: readonly string[
   const value = from.toLowerCase().trim();
   const angle = value.indexOf("<");
   const name = (angle === -1 ? value : value.slice(0, angle)).replace(/["']/g, "").trim();
+
   if (name === "caf-gpt") return true;
+
   return selfAddresses.some((address) => {
     const own = address.toLowerCase();
+
     return value === own || value.includes(`<${own}>`);
   });
 }
@@ -170,14 +182,17 @@ export function isSelfQuotedSender(from: string, selfAddresses: readonly string[
  */
 export function parseOutlookSentLine(value: string): number | undefined {
   if (value.length > SENT_VALUE_MAX_LENGTH) return undefined;
+
   let text = value
     .normalize("NFC")
     .toLowerCase()
     .replace(/[\u00a0\u2007\u202f]/g, " ")
     .replace(/\s+/g, " ")
     .trim();
+
   let weekday: number | undefined;
   const prefix = WEEKDAY_PREFIX.exec(text);
+
   if (prefix && WEEKDAYS.has(prefix[1])) {
     weekday = WEEKDAYS.get(prefix[1]);
     text = prefix[2];
@@ -188,6 +203,7 @@ export function parseOutlookSentLine(value: string): number | undefined {
   let rest: RegExpExecArray;
   const monthFirst = MONTH_FIRST.exec(text);
   const dayFirst = monthFirst ? null : DAY_FIRST.exec(text);
+
   if (monthFirst) {
     monthName = monthFirst[1];
     day = Number(monthFirst[2]);
@@ -199,12 +215,15 @@ export function parseOutlookSentLine(value: string): number | undefined {
   } else {
     return undefined;
   }
+
   const month = MONTHS.get(monthName);
   const year = Number(rest[3]);
   let hour = Number(rest[4]);
   const minute = Number(rest[5]);
   const meridiem = rest[6];
+
   if (month === undefined || minute > 59) return undefined;
+
   if (meridiem) {
     if (hour < 1 || hour > 12) return undefined;
     hour = (hour % 12) + (meridiem === "p" ? 12 : 0);
@@ -214,8 +233,11 @@ export function parseOutlookSentLine(value: string): number | undefined {
 
   const wallMs = Date.UTC(year, month, day, hour, minute);
   const check = new Date(wallMs);
+
   if (check.getUTCMonth() !== month || check.getUTCDate() !== day) return undefined;
+
   if (weekday !== undefined && check.getUTCDay() !== weekday) return undefined;
+
   return wallMs;
 }
 
@@ -229,9 +251,12 @@ export function parseOutlookSentLine(value: string): number | undefined {
 export function learnSentOffset(quotedWallMs: number, sentAtMs: number): number | undefined {
   const rawMinutes = (quotedWallMs - sentAtMs) / 60_000;
   const offset = Math.round(rawMinutes / 15) * 15;
+
   if (Math.abs(rawMinutes - offset) > QUOTED_SENT_MAX_SKEW_MINUTES) return undefined;
+
   if (offset < QUOTED_SENT_MIN_OFFSET_MINUTES || offset > QUOTED_SENT_MAX_OFFSET_MINUTES) {
     return undefined;
   }
+
   return offset === 0 ? 0 : offset;
 }

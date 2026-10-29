@@ -143,6 +143,7 @@ const AI_UPSTREAM_CODE_PATTERN = /^(\d{1,6}):/;
 export function getAiUpstreamCode<ErrorValue>(error: ErrorValue): number | undefined {
   if (!(error instanceof Error) || !AI_BINDING_ERROR_NAMES.has(error.name)) return undefined;
   const match = AI_UPSTREAM_CODE_PATTERN.exec(error.message);
+
   return match ? Number(match[1]) : undefined;
 }
 
@@ -189,9 +190,13 @@ export function toLoggableShortlistDiagnostics(
 ): LoggableShortlistDiagnostics {
   const parsed = ShortlistDiagnosticsLogSchema.parse(diagnostics ?? {});
   const fields: LoggableShortlistDiagnostics = {};
+
   if (parsed.shortlistStage !== undefined) fields.shortlistStage = parsed.shortlistStage;
+
   if (parsed.group !== undefined) fields.shortlistGroup = parsed.group;
+
   if (parsed.document !== undefined) fields.shortlistDocument = parsed.document;
+
   return fields;
 }
 
@@ -235,12 +240,17 @@ export function toLoggableQuoteDiagnostics(
 ): LoggableQuoteDiagnostics {
   const parsed = QuoteDiagnosticsLogSchema.parse(diagnostics);
   const fields: LoggableQuoteDiagnostics = { quotedHistoryIncluded: parsed.quotedHistoryIncluded };
+
   if (parsed.quotedHtml !== undefined) fields.quotedHtml = parsed.quotedHtml;
+
   if (parsed.quoteSourceBytes !== undefined) fields.quoteSourceBytes = parsed.quoteSourceBytes;
+
   if (parsed.quoteRemovedNodes !== undefined) fields.quoteRemovedNodes = parsed.quoteRemovedNodes;
+
   if (parsed.quoteFailureReason !== undefined) {
     fields.quoteFailureReason = parsed.quoteFailureReason;
   }
+
   return fields;
 }
 
@@ -287,12 +297,16 @@ export function toLoggableSentZoneDiagnostics(
   diagnostics: SentZoneDiagnostics
 ): LoggableSentZoneDiagnostics {
   const parsed = SentZoneDiagnosticsLogSchema.parse(diagnostics);
+
   const fields: LoggableSentZoneDiagnostics = {
     quoteSentZoneSource: parsed.source,
     quoteSentLineFound: parsed.lineFound,
   };
+
   if (parsed.offsetMinutes !== undefined) fields.quoteSentOffsetMinutes = parsed.offsetMinutes;
+
   if (parsed.reason !== undefined) fields.quoteSentReason = parsed.reason;
+
   return fields;
 }
 
@@ -320,10 +334,13 @@ export function toLoggableErrorCode(code: string): string {
 export function getLogSafeDomain(address?: string | null): string {
   const normalized = normalizeEmailAddress(address);
   const at = normalized.lastIndexOf("@");
+
   if (at < 0) {
     return "";
   }
+
   const domain = normalized.slice(at + 1);
+
   return SAFE_DOMAIN_PATTERN.test(domain) ? domain : "invalid";
 }
 
@@ -342,5 +359,6 @@ export function createEmailRef(): string {
  */
 export function getEmailRefFromHeaders(headers: Headers): string {
   const value = headers.get(EMAIL_REF_HEADER)?.trim().toLowerCase() ?? "";
+
   return EMAIL_REF_PATTERN.test(value) ? value : createEmailRef();
 }

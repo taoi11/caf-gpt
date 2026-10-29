@@ -171,10 +171,12 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   /** Handles inbound email routed by the Agents SDK. */
   async onEmail(email: AgentEmail): Promise<void> {
     const startTime = Date.now();
+
     const logContext: InboundLogContext = {
       emailRef: getEmailRefFromHeaders(email.headers),
       senderDomain: getLogSafeDomain(email.from),
     };
+
     this.logger.info("Inbound email received by UserAgent", {
       ...logContext,
       receivingDomain: getLogSafeDomain(email.to),
@@ -195,6 +197,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       parsedEmail = await this.parseEmail(email, rawEmail);
 
       const selfLoopReason = this.getSelfLoopSkipReason(parsedEmail, config);
+
       if (selfLoopReason) {
         this.logger.info("Inbound email skipped by self-loop guard", {
           ...logContext,
@@ -202,10 +205,12 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         });
         outcome = "skipped";
         outcomeReason = selfLoopReason;
+
         return;
       }
 
       const autoReplyDetection = detectAutoReply(parsedEmail);
+
       if (autoReplyDetection.ignore) {
         // Only fixed category labels and allowlisted header names; `reasons` quotes header values.
         this.logger.info("Ignoring auto-reply or bounce email", {
@@ -216,6 +221,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         });
         outcome = "skipped";
         outcomeReason = "auto_reply";
+
         return;
       }
 
@@ -231,10 +237,12 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         });
         outcome = "skipped";
         outcomeReason = response.skipReason ?? "prime_foo_no_response";
+
         return;
       }
 
       const recipients = resolveReplyRecipients(parsedEmail, config);
+
       const sentReply = await this.sendReply(
         parsedEmail,
         response.content,
@@ -245,7 +253,9 @@ export class UserAgent extends Agent<Env, UserAgentState> {
           sendAttempted = true;
         }
       );
+
       const sentTimeRecorded = await this.recordSentTime(sentReply, logContext);
+
       await this.recordThread(
         parsedEmail,
         response.content,
@@ -279,8 +289,10 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       });
       outcome = "error";
       outcomeReason = this.classifyProcessingFailure(error, sendAttempted, config);
+
       if (sendAttempted || !config) {
         errorReply = "not_attempted";
+
         return;
       }
 
@@ -297,9 +309,11 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         reason: outcomeReason,
         durationMs: Date.now() - startTime,
       };
+
       if (errorReply !== undefined) {
         Object.assign(outcomeFields, { errorReply });
       }
+
       if (outcome === "error") {
         this.logger.error("Inbound email outcome", outcomeFields);
       } else {
@@ -315,9 +329,13 @@ export class UserAgent extends Agent<Env, UserAgentState> {
     config: AppConfig | undefined
   ): string {
     if (!config) return "config_unavailable";
+
     if (sendAttempted) return "reply_send_failed";
+
     if (error instanceof QuotedHistoryError) return error.reason;
+
     if (error instanceof EmailValidationError) return "content_validation_failed";
+
     return "processing_failed";
   }
 
@@ -327,32 +345,38 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       // Clef is a System One decision model; cast until wrangler AiModels lists it.
       const memoryGate = await decideShouldUpdateMemory(
         {
+          // SAFETY: ClefDecision constructs System One requests; generated AiModels does not yet list Clef.
           run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
         },
         task.emailContext,
         task.agentReply,
         this.state.memory
       );
+
       if (!memoryGate.shouldUpdate) {
         this.persistPrunedVersions(Date.now());
         this.logger.info("Clef memory gate skipped MemoryFoo", {
           reason: memoryGate.reason,
         });
+
         return;
       }
 
       const memoryAgent = new MemoryFooAgent(this.env, createConfig(this.env));
+
       const result = await memoryAgent.updateMemory(
         this.state.memory,
         task.emailContext,
         task.agentReply,
         { promptName: "memory_foo_edit" }
       );
+
       const now = Date.now();
 
       if (!result.updated || !result.content) {
         this.persistPrunedVersions(now);
         this.logger.info("User memory unchanged");
+
         return;
       }
 
@@ -361,12 +385,14 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         this.logger.warn("Rejected oversize memory update", {
           contentLength: result.content.length,
         });
+
         return;
       }
 
       // Success path: prune for nextVersions only — one setState, no intermediate write.
       const versions = retainMemoryVersions(this.state.versions ?? [], now);
       const previous = this.state.memory;
+
       const nextVersions =
         previous.trim().length > 0
           ? retainMemoryVersions([...versions, { ts: now, text: previous }], now)
@@ -389,12 +415,14 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   private persistPrunedVersions(now: number): MemoryVersion[] {
     const storedVersions = this.state.versions ?? [];
     const versions = retainMemoryVersions(storedVersions, now);
+
     if (
       versions.length !== storedVersions.length ||
       versions.some((version, index) => version !== storedVersions[index])
     ) {
       this.setState({ memory: this.state.memory, versions });
     }
+
     return versions;
   }
 
@@ -405,8 +433,10 @@ export class UserAgent extends Agent<Env, UserAgentState> {
     const headers = this.buildHeaderMap(email.headers);
     const rawTextBody = parsed.text ?? "";
     const rawHtmlBody = parsed.html;
+
     const derivedBody =
       rawTextBody.trim().length > 0 ? rawTextBody : rawHtmlBody ? htmlToText(rawHtmlBody) : "";
+
     const fromAddresses = this.extractAddresses(parsed.from ? [parsed.from] : undefined);
 
     return {
@@ -445,6 +475,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
     }
 
     const normalizedFrom = normalizeEmailAddress(parsedEmail.envelopeFrom);
+
     const selfAddresses = new Set(
       [config.email.agentFromEmail, ...config.email.monitoredAddresses].map((address) =>
         normalizeEmailAddress(address)
@@ -457,6 +488,7 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   /** Validates inbound content before recipient policy handles reply-all candidates. */
   private validateEmail(parsedEmail: ParsedEmailData, logContext: InboundLogContext): void {
     const contentValidation = validateEmailContent(parsedEmail);
+
     if (!contentValidation.isValid) {
       this.logger.error("Email content validation failed", {
         ...logContext,
@@ -495,26 +527,32 @@ ${parsedEmail.body}`;
     // Clef is a System One decision model; cast until wrangler AiModels lists it.
     const replyGate = await decideShouldReply(
       {
+        // SAFETY: ClefDecision constructs System One requests; generated AiModels does not yet list Clef.
         run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
       },
       emailContext,
       this.state.memory
     );
+
     const gateFields = {
       ...logContext,
       reason: replyGate.reason,
       choice: replyGate.choice ?? "none",
       confidence: replyGate.confidence ?? null,
     };
+
     if (!replyGate.shouldReply) {
       this.logger.info("Clef injection screen blocked Prime Foo", gateFields);
+
       return { shouldRespond: false, skipReason: replyGate.reason };
     }
+
     this.logger.info("Clef injection screen allowed Prime Foo", gateFields);
 
     if (!this.agentCoordinator) {
       this.agentCoordinator = await AgentCoordinator.create(this.env, config);
     }
+
     return await this.agentCoordinator.processWithPrimeFoo(emailContext, this.state.memory);
   }
 
@@ -531,6 +569,7 @@ ${parsedEmail.body}`;
     // Built before markSendAttempted so a failure still gets the funny error reply.
     const sentZone = this.resolveQuotedSentZone(parsedEmail, config, logContext);
     const quoted = buildQuotedHistory(parsedEmail, sentZone.zone);
+
     if (!quoted.ok) {
       this.logger.error("Quoted history build failed", {
         ...logContext,
@@ -541,19 +580,23 @@ ${parsedEmail.body}`;
       });
       throw new QuotedHistoryError(quoted.reason);
     }
+
     const replyText = htmlToText(content);
     const fullTextContent = `${replyText || content.trim()}\n\n${quoted.quote.text}`;
     const htmlContent = this.htmlEmailComposer.composeHtmlReply(content.trim(), quoted.quote.html);
     const subject = normalizeReplySubject(parsedEmail.subject);
     const threadingOptions = this.buildThreadingOptions(parsedEmail);
+
     const outlookHeaders = buildOutlookThreadHeaders(
       parsedEmail.headers,
       parsedEmail.subject,
       Date.now()
     );
+
     const replyFromAddress = this.resolveReplyFromAddress(parsedEmail, config);
 
     markSendAttempted();
+
     const emailOptions = {
       binding: this.env.EMAIL,
       to: recipients.to,
@@ -565,11 +608,14 @@ ${parsedEmail.body}`;
       inReplyTo: threadingOptions.inReplyTo,
       headers: { ...threadingOptions.headers, ...outlookHeaders },
     };
+
     if (recipients.cc.length > 0) {
       Object.assign(emailOptions, { cc: recipients.cc });
     }
+
     const sentAtMs = Date.now();
     const result = await this.sendEmail(emailOptions);
+
     return {
       messageId: result?.messageId,
       sentAtMs,
@@ -594,7 +640,9 @@ ${parsedEmail.body}`;
     const selfAddresses = [config.email.agentFromEmail, ...config.email.monitoredAddresses].map(
       (address) => normalizeEmailAddress(address)
     );
+
     let decision: SentZoneDecision;
+
     try {
       decision = resolveSentZone(this.sql.bind(this), parsedEmail, selfAddresses, Date.now());
     } catch (error) {
@@ -609,12 +657,14 @@ ${parsedEmail.body}`;
         ...getSafeErrorMetadata(error),
       });
     }
+
     if (decision.reason) {
       this.logger.error("Quoted Sent time zone not learned", {
         ...logContext,
         ...toLoggableSentZoneDiagnostics(decision),
       });
     }
+
     return decision;
   }
 
@@ -631,18 +681,21 @@ ${parsedEmail.body}`;
       await this.scheduleEvery(THREAD_HISTORY_PRUNE_INTERVAL_SECONDS, "runThreadHistoryPrune");
       const now = Date.now();
       const sql = this.sql.bind(this);
+
       if (
         sentReply.sentZone.source === "learned" &&
         sentReply.sentZone.offsetMinutes !== undefined
       ) {
         saveSentOffset(sql, sentReply.sentZone.offsetMinutes, now);
       }
+
       return recordReplySentTime(sql, sentReply.messageId, sentReply.sentAtMs, now);
     } catch (error) {
       this.logger.warn("Reply send time save failed", {
         ...logContext,
         ...getSafeErrorMetadata(error),
       });
+
       return false;
     }
   }
@@ -656,6 +709,7 @@ ${parsedEmail.body}`;
         ...logContext,
         ...getSafeErrorMetadata(error),
       });
+
       return { history: "" };
     }
   }
@@ -694,10 +748,12 @@ ${parsedEmail.body}`;
   }
 
   /** Scheduled: prunes expired thread history and send times; cancels itself once none remain. */
-  async runThreadHistoryPrune(_payload: unknown, schedule?: { id: string }): Promise<void> {
+  async runThreadHistoryPrune(_payload: undefined, schedule?: { id: string }): Promise<void> {
     const now = Date.now();
+
     const remaining =
       pruneThreadHistory(this.sql.bind(this), now) + pruneSentTimes(this.sql.bind(this), now);
+
     if (remaining === 0 && schedule) {
       await this.cancelSchedule(schedule.id);
     }
@@ -725,11 +781,13 @@ ${parsedEmail.body}`;
     logContext: InboundLogContext
   ): Promise<ErrorReplyStatus> {
     const envelopeSender = normalizeEmailAddress(parsedEmail.envelopeFrom);
+
     if (!isAuthorizedEmailAddress(envelopeSender, config.authorization)) {
       this.logger.warn(
         "Skipping error reply to unauthorized or malformed envelope sender",
         logContext
       );
+
       return "skipped_unauthorized";
     }
 
@@ -747,12 +805,14 @@ ${parsedEmail.body}`;
         headers: threadingOptions.headers,
       });
       this.logger.info("Sender-only error reply sent", logContext);
+
       return "sent";
     } catch (replyError) {
       this.logger.error("Failed to send error reply", {
         ...logContext,
         ...getSafeErrorMetadata(replyError),
       });
+
       return "failed";
     }
   }
@@ -762,6 +822,7 @@ ${parsedEmail.body}`;
     const template =
       ERROR_RESPONSE_TEMPLATES.find((entry) => entry.match(error)) ??
       ERROR_RESPONSE_TEMPLATES[ERROR_RESPONSE_TEMPLATES.length - 1];
+
     return template.lines.join("\n");
   }
 
@@ -770,6 +831,7 @@ ${parsedEmail.body}`;
     const monitoredAddresses = new Set(
       config.email.monitoredAddresses.map((address) => normalizeEmailAddress(address))
     );
+
     const inboundRecipient = normalizeEmailAddress(parsedEmail.envelopeTo);
 
     return monitoredAddresses.has(inboundRecipient)
@@ -784,12 +846,15 @@ ${parsedEmail.body}`;
     }
 
     const references = this.buildReferencesHeader(parsedEmail);
+
     const threadingOptions: ReplyThreadingOptions = {
       inReplyTo: parsedEmail.messageId,
     };
+
     if (references) {
       threadingOptions.headers = { References: references };
     }
+
     return threadingOptions;
   }
 
@@ -801,23 +866,28 @@ ${parsedEmail.body}`;
   /** Builds the reply References chain from prior threading headers plus the original Message-ID. */
   private buildReferencesHeader(parsedEmail: ParsedEmailData): string {
     const messageId = parsedEmail.messageId;
+
     if (!messageId || !isValidMessageId(messageId)) {
       return "";
     }
 
     const inboundReferences = parseMessageIdList(parsedEmail.references);
+
     const priorMessageIds =
       inboundReferences.length > 0 ? inboundReferences : parseMessageIdList(parsedEmail.inReplyTo);
+
     const chain = [
       ...new Set(priorMessageIds.filter((priorMessageId) => priorMessageId !== messageId)),
       messageId,
     ].join(" ");
+
     return this.trimReferences(chain, REFERENCES_MAX_LENGTH);
   }
 
   /** Trims long References chains while keeping the most recent valid message IDs. */
   private trimReferences(references: string, maxLength: number): string {
     const trimmedReferences = references.trim();
+
     if (trimmedReferences.length <= maxLength) {
       return trimmedReferences;
     }
@@ -825,12 +895,14 @@ ${parsedEmail.body}`;
     const messageIds = trimmedReferences
       .split(/\s+/)
       .filter((messageId) => messageId.length > 0 && isValidMessageId(messageId));
+
     const kept: string[] = [];
     let currentLength = 0;
 
     for (let index = messageIds.length - 1; index >= 0; index--) {
       const messageId = messageIds[index];
       const neededLength = currentLength + (kept.length > 0 ? 1 : 0) + messageId.length;
+
       if (neededLength > maxLength) {
         break;
       }
@@ -852,6 +924,7 @@ ${parsedEmail.body}`;
       if (entry.group) {
         return entry.group.map((mailbox) => normalizeEmailAddress(mailbox.address));
       }
+
       return [normalizeEmailAddress(entry.address)];
     });
   }
@@ -875,6 +948,7 @@ ${parsedEmail.body}`;
   /** Adds available envelope headers to fallback metadata before raw MIME parsing. */
   private buildFallbackEmailData(email: AgentEmail): ParsedEmailData {
     const headers = this.buildHeaderMap(email.headers);
+
     return {
       ...this.buildEnvelopeEmailData(email),
       headers,

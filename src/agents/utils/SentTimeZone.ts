@@ -80,6 +80,7 @@ function ensureSentTables(sql: ThreadSql): void {
 function toMessageId(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const messageId = value.startsWith("<") ? value : `<${value}>`;
+
   return isValidMessageId(messageId) ? messageId : undefined;
 }
 
@@ -99,10 +100,12 @@ export function recordReplySentTime(
 ): boolean {
   ensureSentTables(sql);
   const messageId = toMessageId(outboundMessageId);
+
   if (!messageId) return false;
   void sql`INSERT OR REPLACE INTO cafgpt_reply_sent_times (message_id, sent_at, created_at)
     VALUES (${messageId}, ${sentAtMs}, ${now})`;
   pruneSentTimes(sql, now);
+
   return true;
 }
 
@@ -125,6 +128,7 @@ export function saveSentOffset(sql: ThreadSql, offsetMinutes: number, now: numbe
  */
 export function loadSavedSentOffset(sql: ThreadSql, now: number): number | undefined {
   pruneSentTimes(sql, now);
+
   return sql<OffsetRow>`SELECT offset_minutes FROM cafgpt_sent_offset WHERE id = 1`[0]
     ?.offset_minutes;
 }
@@ -137,11 +141,14 @@ function fallbackZone(
   reason?: SentZoneReason
 ): SentZoneDecision {
   const saved = loadSavedSentOffset(sql, now);
+
   const decision: SentZoneDecision =
     saved === undefined
       ? { zone: { timeZone: OUTLOOK_SENT_TIME_ZONE }, source: "default", lineFound }
       : { zone: { offsetMinutes: saved }, source: "saved", offsetMinutes: saved, lineFound };
+
   if (reason) decision.reason = reason;
+
   return decision;
 }
 
@@ -170,21 +177,27 @@ export function resolveSentZone(
   const header =
     findTopQuotedHeader(parsedEmail.body) ??
     (parsedEmail.html ? findTopQuotedHeader(htmlToText(parsedEmail.html)) : undefined);
+
   if (!header || !isSelfQuotedSender(header.from, selfAddresses)) {
     return fallbackZone(sql, now, false);
   }
 
   const quotedWallMs = parseOutlookSentLine(header.sent);
+
   if (quotedWallMs === undefined) return fallbackZone(sql, now, true, "quoted_sent_unparseable");
 
   pruneSentTimes(sql, now);
+
   const inReplyTo = parseMessageIdList(parsedEmail.inReplyTo).filter(
     (id) => id !== parsedEmail.messageId
   );
+
   for (const messageId of inReplyTo) {
     const sentAt = loadSentAt(sql, messageId);
+
     if (sentAt === undefined) continue;
     const offset = learnSentOffset(quotedWallMs, sentAt);
+
     return offset === undefined
       ? fallbackZone(sql, now, true, "quoted_sent_unmatched")
       : {
@@ -199,15 +212,20 @@ export function resolveSentZone(
     .filter((id) => !inReplyTo.includes(id))
     .map((id) => loadSentAt(sql, id))
     .filter((sentAt): sentAt is number => sentAt !== undefined);
+
   if (sentTimes.length === 0) return fallbackZone(sql, now, true, "quoted_sent_no_record");
+
   const offsets = new Set(
     sentTimes
       .map((sentAt) => learnSentOffset(quotedWallMs, sentAt))
       .filter((offset): offset is number => offset !== undefined)
   );
+
   if (offsets.size === 0) return fallbackZone(sql, now, true, "quoted_sent_unmatched");
+
   if (offsets.size > 1) return fallbackZone(sql, now, true, "quoted_sent_ambiguous");
   const [offset] = offsets;
+
   return {
     zone: { offsetMinutes: offset },
     source: "learned",
@@ -227,9 +245,12 @@ export function pruneSentTimes(sql: ThreadSql, now: number): number {
   const cutoff = now - THREAD_HISTORY_RETENTION_MS;
   void sql`DELETE FROM cafgpt_reply_sent_times WHERE created_at < ${cutoff}`;
   void sql`DELETE FROM cafgpt_sent_offset WHERE updated_at < ${cutoff}`;
+
   const times =
     sql<{ count: number }>`SELECT COUNT(*) AS count FROM cafgpt_reply_sent_times`[0]?.count ?? 0;
+
   const offsets =
     sql<{ count: number }>`SELECT COUNT(*) AS count FROM cafgpt_sent_offset`[0]?.count ?? 0;
+
   return times + offsets;
 }

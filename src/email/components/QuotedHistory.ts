@@ -218,6 +218,7 @@ const ALLOWED_ATTRIBUTES: ReadonlySet<string> = new Set([
 
 const ALLOWED_LINK_PATTERN = /^(?:https?:|mailto:|tel:|#)/i;
 const ALLOWED_IMAGE_PATTERN = /^(?:https?:|data:image\/(?:png|gif|jpeg|jpg|webp);base64,)/i;
+
 /** Inline CSS properties kept (plus any `mso-*` Outlook property); all others are dropped. */
 const ALLOWED_STYLE_PROPERTIES: ReadonlySet<string> = new Set([
   "background",
@@ -285,6 +286,7 @@ const ALLOWED_STYLE_PROPERTIES: ReadonlySet<string> = new Set([
 /** Characters a kept CSS value may use: no escapes, comments, at-rules, or angle brackets. */
 const SAFE_STYLE_VALUE_PATTERN = /^[a-z0-9#%.,\s"'\-+!/()]*$/i;
 const STYLE_PROPERTY_PATTERN = /^-?[a-z][a-z0-9-]*$/;
+
 /** The only CSS functions a kept value may call (colours); url(), image-set(), etc. are dropped. */
 const ALLOWED_STYLE_FUNCTIONS: ReadonlySet<string> = new Set(["rgb", "rgba", "hsl", "hsla"]);
 
@@ -296,6 +298,7 @@ const OUTLOOK_SENT_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   minute: "2-digit",
   hour12: true,
 };
+
 const OUTLOOK_SENT_FORMATS = new Map<string, Intl.DateTimeFormat>();
 
 /**
@@ -310,6 +313,7 @@ export function formatOutlookMailbox(addresses: Address[] | undefined): string[]
     .map((mailbox) => {
       const name = collapseHeaderValue(mailbox.name);
       const address = collapseHeaderValue(mailbox.address);
+
       return name.length > 0 && name !== address ? `${name} <${address}>` : address;
     });
 }
@@ -326,14 +330,19 @@ export function formatOutlookSentDate(
   zone: SentZone = { timeZone: OUTLOOK_SENT_TIME_ZONE }
 ): string {
   const timeZone = "offsetMinutes" in zone ? "UTC" : zone.timeZone;
+
   const instant =
     "offsetMinutes" in zone ? new Date(date.getTime() + zone.offsetMinutes * 60_000) : date;
+
   let format = OUTLOOK_SENT_FORMATS.get(timeZone);
+
   if (!format) {
     format = new Intl.DateTimeFormat("en-US", { ...OUTLOOK_SENT_FORMAT_OPTIONS, timeZone });
     OUTLOOK_SENT_FORMATS.set(timeZone, format);
   }
+
   const parts = new Map(format.formatToParts(instant).map((part) => [part.type, part.value]));
+
   return `${parts.get("month")} ${parts.get("day")}, ${parts.get("year")} ${parts.get("hour")}:${parts.get("minute")} ${parts.get("dayPeriod")}`;
 }
 
@@ -349,6 +358,7 @@ export function formatOutlookSentDate(
 export function sanitizeQuotedHtml(html: string): SanitizedHtml {
   const document = parseDocument(html, { decodeEntities: true, lowerCaseTags: true });
   const counter = { removed: 0 };
+
   return { html: renderNodes(document.children, counter), removedNodes: counter.removed };
 }
 
@@ -364,9 +374,12 @@ export function buildQuotedHistory(
   sentZone: SentZone = { timeZone: OUTLOOK_SENT_TIME_ZONE }
 ): QuotedHistoryResult {
   const headers = source.quoteHeaders;
+
   if (!headers) return { ok: false, reason: "quote_missing_headers" };
   const from = collapseHeaderValue(headers.from);
+
   if (from.length === 0) return { ok: false, reason: "quote_missing_sender" };
+
   if (!headers.sent || Number.isNaN(headers.sent.getTime())) {
     return { ok: false, reason: "quote_missing_date" };
   }
@@ -379,6 +392,7 @@ export function buildQuotedHistory(
 
   let bodyHtml: string;
   let removedNodes = 0;
+
   if (quotedHtml) {
     try {
       const sanitized = sanitizeQuotedHtml(source.html ?? "");
@@ -398,6 +412,7 @@ export function buildQuotedHistory(
     ...(cc.length > 0 ? [`<b>Cc:</b> ${escapeHtml(cc)}`] : []),
     `<b>Subject:</b> ${escapeHtml(subject)}`,
   ];
+
   const html = `<p class=MsoNormal>&nbsp;</p>
 <div style='${OUTLOOK_HTML_RULE_STYLE}'>
 <p class=MsoNormal>${headerLines.join("<br>\n")}</p>
@@ -415,7 +430,9 @@ ${bodyHtml}
     ...(cc.length > 0 ? [`Cc: ${cc}`] : []),
     `Subject: ${subject}`,
   ];
+
   const text = `${textLines.join("\n")}\n\n${source.body.trim()}`;
+
   const sourceBytes = new TextEncoder().encode(
     quotedHtml ? (source.html ?? "") : source.body
   ).byteLength;
@@ -457,6 +474,7 @@ function isAllowedUrl(value: string, pattern: RegExp): boolean {
   const compact = Array.from(value)
     .filter((character) => character.charCodeAt(0) > 0x20)
     .join("");
+
   return pattern.test(compact);
 }
 
@@ -468,14 +486,18 @@ function isAllowedUrl(value: string, pattern: RegExp): boolean {
 function styleFunctionNames(value: string): string[] {
   const names: string[] = [];
   let segmentStart = 0;
+
   for (let open = value.indexOf("("); open !== -1; open = value.indexOf("(", open + 1)) {
     let end = open;
+
     while (end > segmentStart && /\s/.test(value[end - 1])) end -= 1;
     let start = end;
+
     while (start > segmentStart && /[a-z-]/i.test(value[start - 1])) start -= 1;
     names.push(value.slice(start, end).toLowerCase());
     segmentStart = open + 1;
   }
+
   return names;
 }
 
@@ -488,23 +510,27 @@ function styleFunctionNames(value: string): string[] {
  */
 function sanitizeStyle(value: string, counter: { removed: number }): string | undefined {
   const kept: string[] = [];
+
   for (const declaration of value.split(";")) {
     if (declaration.trim().length === 0) continue;
     const separator = declaration.indexOf(":");
     const property = declaration.slice(0, Math.max(separator, 0)).trim().toLowerCase();
     const propertyValue = declaration.slice(separator + 1).trim();
+
     const safe =
       separator > 0 &&
       STYLE_PROPERTY_PATTERN.test(property) &&
       (ALLOWED_STYLE_PROPERTIES.has(property) || property.startsWith("mso-")) &&
       SAFE_STYLE_VALUE_PATTERN.test(propertyValue) &&
       styleFunctionNames(propertyValue).every((name) => ALLOWED_STYLE_FUNCTIONS.has(name));
+
     if (safe) {
       kept.push(`${property}:${propertyValue}`);
     } else {
       counter.removed += 1;
     }
   }
+
   return kept.length > 0 ? kept.join(";") : undefined;
 }
 
@@ -515,58 +541,74 @@ function sanitizeStyle(value: string, counter: { removed: number }): string | un
  */
 function renderNodes(nodes: ChildNode[], counter: { removed: number }): string {
   let output = "";
+
   for (const node of nodes) {
     if (node.type === "text") {
       output += escapeHtml(node.data);
       continue;
     }
+
     if (node.type !== "tag" && node.type !== "script" && node.type !== "style") {
       // Comments, CDATA, doctype and processing instructions never reach the reply.
       counter.removed += 1;
       continue;
     }
+
     output += renderElement(node, counter);
   }
+
   return output;
 }
 
 /** Serializes one element: dropped, unwrapped to its children, or kept with safe attributes. */
 function renderElement(element: Element, counter: { removed: number }): string {
   const name = element.name.toLowerCase();
+
   if (DROPPED_ELEMENTS.has(name)) {
     counter.removed += 1;
+
     return "";
   }
+
   if (!ALLOWED_ELEMENTS.has(name)) {
     // html/body/o:p and other unknown wrappers: keep their content, not the tag.
     return renderNodes(element.children, counter);
   }
 
   const attributes: string[] = [];
+
   for (const [rawName, value] of Object.entries(element.attribs)) {
     const attribute = rawName.toLowerCase();
+
     if (attribute === "style") {
       const style = sanitizeStyle(value, counter);
+
       if (style !== undefined) attributes.push(` style="${escapeHtml(style)}"`);
       continue;
     }
+
     const keep =
       ALLOWED_ATTRIBUTES.has(attribute) ||
       (attribute === "href" && name === "a" && isAllowedUrl(value, ALLOWED_LINK_PATTERN)) ||
       (attribute === "src" && name === "img" && isAllowedUrl(value, ALLOWED_IMAGE_PATTERN));
+
     if (keep) {
       attributes.push(` ${attribute}="${escapeHtml(value)}"`);
     } else {
       counter.removed += 1;
     }
   }
+
   if (name === "img" && !attributes.some((attribute) => attribute.startsWith(" src="))) {
     // An image without a safe source would only render as a broken placeholder.
     counter.removed += 1;
+
     return "";
   }
 
   const open = `<${name}${attributes.join("")}>`;
+
   if (VOID_ELEMENTS.has(name)) return open;
+
   return `${open}${renderNodes(element.children, counter)}</${name}>`;
 }

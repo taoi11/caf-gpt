@@ -54,6 +54,7 @@ describe("formatQuotedContent", () => {
     const originalMessage = createMockParsedEmail({
       body: "",
     });
+
     const formatted = formatQuotedContent(originalMessage);
 
     expect(formatted).toContain("From: ");

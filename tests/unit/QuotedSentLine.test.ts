@@ -110,6 +110,7 @@ describe("findTopQuotedHeader", () => {
       "From: Dhaliwal, MCpl Luffy <luffy@forces.gc.ca>",
       "Sent: October 28, 2026 11:29 AM",
     ].join("\n");
+
     expect(findTopQuotedHeader(body)).toEqual({
       from: "CAF-GPT <agent@caf-gpt.com>",
       sent: "Wednesday, October 28, 2026 11:30 AM",
@@ -127,6 +128,7 @@ describe("findTopQuotedHeader", () => {
       "",
       "To: Dhaliwal, MCpl Luffy <luffy@forces.gc.ca>",
     ].join("\n");
+
     expect(findTopQuotedHeader(body)).toEqual({
       from: "CAF-GPT <agent@caf-gpt.com>",
       sent: "October 21, 2026 1:10 PM",
@@ -141,6 +143,7 @@ describe("findTopQuotedHeader", () => {
       "<b>Envoy&eacute;&nbsp;:</b> mercredi 28 octobre 2026 11:30<br>" +
       "<b>&Agrave;&nbsp;:</b> Luffy &lt;luffy@forces.gc.ca&gt;<br>" +
       "<b>Objet&nbsp;:</b> RE: Cong&eacute;</p></div></div>";
+
     expect(findTopQuotedHeader(htmlToText(html))).toEqual({
       from: "CAF-GPT <agent@caf-gpt.com>",
       sent: "mercredi 28 octobre 2026 11:30",
@@ -154,6 +157,7 @@ describe("findTopQuotedHeader", () => {
       "> *Envoyé\u00a0:* mercredi 28 octobre 2026 11:30",
       "> *À\u00a0:* Luffy",
     ].join("\n");
+
     expect(findTopQuotedHeader(body)).toEqual({
       from: "CAF-GPT <agent@caf-gpt.com>",
       sent: "mercredi 28 octobre 2026 11:30",

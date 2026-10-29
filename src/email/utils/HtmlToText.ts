@@ -35,6 +35,7 @@ export function htmlToText(html: string): string {
 
   try {
     const text = htmlToTextLib(html, DEFAULT_HTML_TO_TEXT_OPTIONS);
+
     return text.replace(/\n{3,}/g, "\n\n").trim();
   } catch {
     return html

@@ -62,9 +62,11 @@ export class PaceFooAgent extends BaseAgent {
     rank: string
   ): Promise<{ competencies: string; examples: string; effectiveRank: string }> {
     const rankLower = rank.toLowerCase();
+
     if (!VALID_RANKS.has(rankLower)) {
       throw new Error("Unknown rank provided");
     }
+
     const effectiveRank = rankLower;
 
     const [competencies, examples] = await Promise.all([
