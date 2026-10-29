@@ -98,6 +98,7 @@ describe("BaseAgent OpenAI Responses routing", () => {
     mockGenerateText.mockResolvedValueOnce({ text: "answer" });
 
     const testEnv = createMockEnv();
+
     const agent = new TestBaseAgent(testEnv, createConfig(testEnv), {
       createModel: vi.fn(() => testModel),
       generateText: mockGenerateText,
@@ -121,13 +122,16 @@ describe("BaseAgent OpenAI Responses routing", () => {
     mockGenerateText.mockResolvedValueOnce({ text: "answer" });
 
     const logger = Logger.getInstance();
+
     const logSpies = [
       vi.spyOn(logger, "debug"),
       vi.spyOn(logger, "info"),
       vi.spyOn(logger, "warn"),
       vi.spyOn(logger, "error"),
     ];
+
     const testEnv = createMockEnv();
+
     const agent = new TestBaseAgent(testEnv, createConfig(testEnv), {
       createModel: vi.fn(() => testModel),
       generateText: mockGenerateText,
@@ -139,11 +143,13 @@ describe("BaseAgent OpenAI Responses routing", () => {
 
     const calls = logSpies.flatMap((spy) => spy.mock.calls);
     expect(calls.length).toBeGreaterThan(0);
+
     for (const call of calls) {
       if (call[1]) {
         expect(call[1]).not.toHaveProperty("model");
       }
     }
+
     expect(JSON.stringify(calls)).not.toContain(modelIdentifier);
   });
 });

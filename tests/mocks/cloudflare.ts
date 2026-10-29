@@ -22,19 +22,25 @@ export class MockR2Object {
     if (!(this.body instanceof ReadableStream)) {
       return this.body;
     }
+
     const reader = this.body.getReader();
     const chunks: Uint8Array[] = [];
+
     while (true) {
       const { done, value } = await reader.read();
+
       if (done) break;
       chunks.push(value);
     }
+
     const combined = new Uint8Array(chunks.reduce((acc, chunk) => acc + chunk.length, 0));
     let offset = 0;
+
     for (const chunk of chunks) {
       combined.set(chunk, offset);
       offset += chunk.length;
     }
+
     return new TextDecoder().decode(combined);
   }
 }
@@ -65,6 +71,7 @@ export class MockR2Bucket {
     const keys = Array.from(this.storage.keys());
     const prefix = options?.prefix;
     const filtered = prefix ? keys.filter((key) => key.startsWith(prefix)) : keys;
+
     return { objects: filtered.map((key) => ({ key })) };
   }
 

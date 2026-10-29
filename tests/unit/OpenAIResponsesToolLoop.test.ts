@@ -76,10 +76,13 @@ function createTextResponse(): Response {
 describe("OpenAI Responses no-store tool loop", () => {
   it("serializes prior tool state instead of emitting an item_reference", async () => {
     const requestBodies: Array<z.infer<typeof requestBodySchema>> = [];
+
     const mockFetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
       requestBodies.push(requestBodySchema.parse(JSON.parse(String(init?.body))));
+
       return requestBodies.length === 1 ? createFunctionCallResponse() : createTextResponse();
     });
+
     const openai = createOpenAI({
       apiKey: "test-api-key",
       baseURL: "https://openai.test/v1",

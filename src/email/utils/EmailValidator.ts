@@ -22,6 +22,7 @@ const emailAddressSchema = z
   .string()
   .transform((val) => {
     const match = val.match(/<([^>]+)>/);
+
     return match ? match[1] : val;
   })
   .pipe(
@@ -74,6 +75,7 @@ export function validateEmailContent(parsedEmail: ParsedEmailData): ValidationRe
 
   // Content security validation
   const combinedContent = `${parsedEmail.body ?? ""}\n${parsedEmail.html ?? ""}`.trim();
+
   if (combinedContent.length > 0 && containsSuspiciousContent(combinedContent)) {
     warnings.push("Email contains potentially suspicious content");
   }
@@ -114,11 +116,13 @@ export function validateEmailContent(parsedEmail: ParsedEmailData): ValidationRe
 // Validate email address format using Zod's built-in email validator
 export function isValidEmailAddress(email: string): boolean {
   const parsedEmail = nonEmptyStringSchema.safeParse(email);
+
   if (!parsedEmail.success) {
     return false;
   }
 
   const emailValue = parsedEmail.data;
+
   if (emailValue.length > 254) {
     return false;
   }
@@ -130,6 +134,7 @@ export function isValidEmailAddress(email: string): boolean {
 export function hasControlCharacters(value: string): boolean {
   return Array.from(value).some((character) => {
     const code = character.charCodeAt(0);
+
     return code <= 31 || code === 127;
   });
 }
@@ -137,6 +142,7 @@ export function hasControlCharacters(value: string): boolean {
 const MESSAGE_ID_ATOM = "[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+";
 const MESSAGE_ID_LOCAL = `${MESSAGE_ID_ATOM}(?:\\.${MESSAGE_ID_ATOM})*`;
 const MESSAGE_ID_LABEL = "[A-Za-z0-9](?:[A-Za-z0-9-]{0,61}[A-Za-z0-9])?";
+
 const MESSAGE_ID_REGEX = new RegExp(
   `^<${MESSAGE_ID_LOCAL}@${MESSAGE_ID_LABEL}(?:\\.${MESSAGE_ID_LABEL})*>$`
 );
@@ -144,10 +150,13 @@ const MESSAGE_ID_REGEX = new RegExp(
 /** Validates a strict ASCII dot-atom and hostname Message-ID subset. */
 export function isValidMessageId(messageId: string): boolean {
   const parsedMessageId = nonEmptyStringSchema.safeParse(messageId);
+
   if (!parsedMessageId.success) {
     return false;
   }
+
   const messageIdValue = parsedMessageId.data;
+
   if (
     messageIdValue.length > 998 ||
     messageIdValue !== messageIdValue.trim() ||
@@ -155,6 +164,7 @@ export function isValidMessageId(messageId: string): boolean {
   ) {
     return false;
   }
+
   return MESSAGE_ID_REGEX.test(messageIdValue);
 }
 

@@ -38,6 +38,7 @@ describe("AgentCoordinator failure logging", () => {
   it("passes ZDR-safe Responses options to the Prime Foo tool loop", async () => {
     mockGenerateText.mockResolvedValueOnce({ text: "answer", steps: [] });
     const testEnv = createMockEnv();
+
     const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
       createModel: createTestModel,
       generateText: mockGenerateText,
@@ -63,6 +64,7 @@ describe("AgentCoordinator failure logging", () => {
 
   it("logs only safe API call status metadata for AI_APICallError", async () => {
     const sensitiveValue = "sensitive prompt and response content";
+
     const apiError = new APICallError({
       message: sensitiveValue,
       url: "https://gateway.example/sensitive-model-id",
@@ -73,9 +75,11 @@ describe("AgentCoordinator failure logging", () => {
       cause: new Error(sensitiveValue),
       isRetryable: true,
     });
+
     mockGenerateText.mockRejectedValueOnce(apiError);
     const loggerError = vi.spyOn(Logger.getInstance(), "error");
     const testEnv = createMockEnv();
+
     const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
       createModel: createTestModel,
       generateText: mockGenerateText,
@@ -86,6 +90,7 @@ describe("AgentCoordinator failure logging", () => {
     const failureCall = loggerError.mock.calls.find(
       ([message]) => message === "Prime_foo processing failed"
     );
+
     expect(failureCall).toBeDefined();
     expect(failureCall?.[1]).toEqual({
       processingTime: expect.any(Number),
@@ -102,9 +107,11 @@ describe("AgentCoordinator failure logging", () => {
       statusCode: 418,
       isRetryable: false,
     });
+
     mockGenerateText.mockRejectedValueOnce(ordinaryError);
     const loggerError = vi.spyOn(Logger.getInstance(), "error");
     const testEnv = createMockEnv();
+
     const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
       createModel: createTestModel,
       generateText: mockGenerateText,
@@ -115,6 +122,7 @@ describe("AgentCoordinator failure logging", () => {
     const failureCall = loggerError.mock.calls.find(
       ([message]) => message === "Prime_foo processing failed"
     );
+
     expect(failureCall).toBeDefined();
     expect(failureCall?.[1]).toEqual({
       processingTime: expect.any(Number),
@@ -132,9 +140,11 @@ describe("Prime Foo tool error mapping", () => {
 
   it("passes app errors through so the reply names the real cause", () => {
     const storage = new StorageConnectionError("r2 down");
+
     const shortlist = new AgentValidationError(
       "DOAD policy Clef shortlist failed: clef_invalid_choice"
     );
+
     expect(toPrimeFooToolError(storage)).toBe(storage);
     expect(toPrimeFooToolError(shortlist)).toBe(shortlist);
   });
@@ -159,6 +169,7 @@ describe("Prime Foo tool error mapping", () => {
       steps: [{ content: [{ type: "tool-error", toolName: "batch_research", error: storage }] }],
     });
     const testEnv = createMockEnv();
+
     const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
       createModel: createTestModel,
       generateText: mockGenerateText,
@@ -198,11 +209,14 @@ describe("Prime Foo fail-loudly on tool errors", () => {
 
   it("stops after the first failed batch_research step with no re-calls", async () => {
     const model = alwaysResearchModel();
+
     const failure = new AgentValidationError(
       "DOAD policy Clef shortlist failed: clef_empty_shortlist"
     );
+
     const research = vi.spyOn(DoadFooAgent.prototype, "research").mockRejectedValue(failure);
     const testEnv = createMockEnv();
+
     const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
       createModel: () => model,
       generateText,
@@ -221,15 +235,20 @@ describe("Prime Foo fail-loudly on tool errors", () => {
       usage,
       warnings: [],
     };
+
     let modelCalls = 0;
+
     const model = new MockLanguageModelV3({
       doGenerate: async () => {
         modelCalls += 1;
+
         return modelCalls === 1 ? researchStep() : answerStep;
       },
     });
+
     const research = vi.spyOn(DoadFooAgent.prototype, "research").mockResolvedValue("DOAD answer");
     const testEnv = createMockEnv();
+
     const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
       createModel: () => model,
       generateText,

@@ -11,6 +11,10 @@
  * - getAiUpstreamCode: Extracts only the numeric Workers AI error code from a binding error
  * - LoggableShortlistDiagnostics: Allowlisted shortlist diagnostic log fields (stage code, per-stage numbers)
  * - toLoggableShortlistDiagnostics: Keeps only allowlisted numeric/boolean shortlist diagnostics
+ * - QuoteDiagnostics / LoggableQuoteDiagnostics: Quoted-history log fields (flags, counts, fixed reason)
+ * - toLoggableQuoteDiagnostics: Keeps only allowlisted boolean/count/reason quoted-history fields
+ * - SentZoneDiagnostics / LoggableSentZoneDiagnostics: Quoted Sent: zone log fields (source, offset, flag, reason)
+ * - toLoggableSentZoneDiagnostics: Keeps only allowlisted Sent: zone fields
  * - getLogSafeDomain: Extracts a log-safe domain from an email address
  * - createEmailRef: Generates a random per-message correlation id
  * - getEmailRefFromHeaders: Reads the Worker-assigned emailRef, or generates a fresh one
@@ -18,6 +22,8 @@
 
 import { z } from "zod";
 import type { ShortlistDiagnostics } from "../../agents/utils/ClefDecision";
+import type { SentZoneReason, SentZoneSource } from "../../agents/utils/SentTimeZone";
+import type { QuoteFailureReason } from "../components/QuotedHistory";
 import { normalizeEmailAddress } from "./EmailNormalizer";
 
 /** Internal header the Worker sets before routing; the UserAgent logs reuse its value. */
@@ -56,6 +62,7 @@ const LOGGABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
   "UnknownError",
   // App errors (src/errors.ts)
   "EmailCompositionError",
+  "QuotedHistoryError",
   "EmailParsingError",
   "EmailThreadingError",
   "EmailValidationError",
@@ -136,6 +143,7 @@ const AI_UPSTREAM_CODE_PATTERN = /^(\d{1,6}):/;
 export function getAiUpstreamCode<ErrorValue>(error: ErrorValue): number | undefined {
   if (!(error instanceof Error) || !AI_BINDING_ERROR_NAMES.has(error.name)) return undefined;
   const match = AI_UPSTREAM_CODE_PATTERN.exec(error.message);
+
   return match ? Number(match[1]) : undefined;
 }
 
@@ -182,9 +190,123 @@ export function toLoggableShortlistDiagnostics(
 ): LoggableShortlistDiagnostics {
   const parsed = ShortlistDiagnosticsLogSchema.parse(diagnostics ?? {});
   const fields: LoggableShortlistDiagnostics = {};
+
   if (parsed.shortlistStage !== undefined) fields.shortlistStage = parsed.shortlistStage;
+
   if (parsed.group !== undefined) fields.shortlistGroup = parsed.group;
+
   if (parsed.document !== undefined) fields.shortlistDocument = parsed.document;
+
+  return fields;
+}
+
+/** Quoted-history facts a caller may offer for logging (flags, counts, and a fixed reason). */
+export interface QuoteDiagnostics {
+  quotedHistoryIncluded: boolean;
+  quotedHtml?: boolean;
+  quoteSourceBytes?: number;
+  quoteRemovedNodes?: number;
+  quoteFailureReason?: QuoteFailureReason;
+}
+
+/** Allowlisted quoted-history log fields; strings other than the fixed reasons never pass. */
+const QuoteDiagnosticsLogSchema = z.object({
+  quotedHistoryIncluded: z.boolean().catch(false),
+  quotedHtml: z.boolean().optional().catch(undefined),
+  quoteSourceBytes: z.number().int().nonnegative().optional().catch(undefined),
+  quoteRemovedNodes: z.number().int().nonnegative().optional().catch(undefined),
+  quoteFailureReason: z
+    .enum([
+      "quote_missing_headers",
+      "quote_missing_sender",
+      "quote_missing_date",
+      "quote_sanitize_failed",
+    ])
+    .optional()
+    .catch(undefined),
+});
+
+/** Quoted-history log fields after the allowlist (unknown keys stripped). */
+export type LoggableQuoteDiagnostics = z.infer<typeof QuoteDiagnosticsLogSchema>;
+
+/**
+ * Returns quoted-history diagnostics as log fields: whether the quote was included, whether it
+ * embedded HTML, the source byte count, the sanitizer drop count, and the fixed failure reason.
+ * Anything else (names, addresses, subjects, bodies, header values) is dropped.
+ * @param diagnostics - Quoted-history facts from UserAgent.sendReply
+ */
+export function toLoggableQuoteDiagnostics(
+  diagnostics: QuoteDiagnostics
+): LoggableQuoteDiagnostics {
+  const parsed = QuoteDiagnosticsLogSchema.parse(diagnostics);
+  const fields: LoggableQuoteDiagnostics = { quotedHistoryIncluded: parsed.quotedHistoryIncluded };
+
+  if (parsed.quotedHtml !== undefined) fields.quotedHtml = parsed.quotedHtml;
+
+  if (parsed.quoteSourceBytes !== undefined) fields.quoteSourceBytes = parsed.quoteSourceBytes;
+
+  if (parsed.quoteRemovedNodes !== undefined) fields.quoteRemovedNodes = parsed.quoteRemovedNodes;
+
+  if (parsed.quoteFailureReason !== undefined) {
+    fields.quoteFailureReason = parsed.quoteFailureReason;
+  }
+
+  return fields;
+}
+
+/** Quoted Sent: zone facts a caller may offer for logging (no quoted text, times, or IDs). */
+export interface SentZoneDiagnostics {
+  source: SentZoneSource;
+  offsetMinutes?: number;
+  lineFound: boolean;
+  reason?: SentZoneReason;
+}
+
+/** Allowlisted Sent: zone log fields; strings other than the fixed enums never pass. */
+const SentZoneDiagnosticsLogSchema = z.object({
+  source: z.enum(["learned", "saved", "default"]).catch("default"),
+  offsetMinutes: z.number().int().min(-720).max(840).optional().catch(undefined),
+  lineFound: z.boolean().catch(false),
+  reason: z
+    .enum([
+      "quoted_sent_unparseable",
+      "quoted_sent_no_record",
+      "quoted_sent_unmatched",
+      "quoted_sent_ambiguous",
+      "quoted_sent_storage_failed",
+    ])
+    .optional()
+    .catch(undefined),
+});
+
+/** Sent: zone log fields after the allowlist. */
+export interface LoggableSentZoneDiagnostics {
+  quoteSentZoneSource: SentZoneSource;
+  quoteSentLineFound: boolean;
+  quoteSentOffsetMinutes?: number;
+  quoteSentReason?: SentZoneReason;
+}
+
+/**
+ * Returns the quoted Sent: zone as log fields: where the zone came from, the offset used (minutes
+ * east of UTC), whether CAF-GPT's own quoted Sent: line was found, and the fixed failure reason.
+ * The quoted text, its times, addresses, and Message-IDs are never logged.
+ * @param diagnostics - SentZoneDecision from resolveSentZone
+ */
+export function toLoggableSentZoneDiagnostics(
+  diagnostics: SentZoneDiagnostics
+): LoggableSentZoneDiagnostics {
+  const parsed = SentZoneDiagnosticsLogSchema.parse(diagnostics);
+
+  const fields: LoggableSentZoneDiagnostics = {
+    quoteSentZoneSource: parsed.source,
+    quoteSentLineFound: parsed.lineFound,
+  };
+
+  if (parsed.offsetMinutes !== undefined) fields.quoteSentOffsetMinutes = parsed.offsetMinutes;
+
+  if (parsed.reason !== undefined) fields.quoteSentReason = parsed.reason;
+
   return fields;
 }
 
@@ -212,10 +334,13 @@ export function toLoggableErrorCode(code: string): string {
 export function getLogSafeDomain(address?: string | null): string {
   const normalized = normalizeEmailAddress(address);
   const at = normalized.lastIndexOf("@");
+
   if (at < 0) {
     return "";
   }
+
   const domain = normalized.slice(at + 1);
+
   return SAFE_DOMAIN_PATTERN.test(domain) ? domain : "invalid";
 }
 
@@ -234,5 +359,6 @@ export function createEmailRef(): string {
  */
 export function getEmailRefFromHeaders(headers: Headers): string {
   const value = headers.get(EMAIL_REF_HEADER)?.trim().toLowerCase() ?? "";
+
   return EMAIL_REF_PATTERN.test(value) ? value : createEmailRef();
 }

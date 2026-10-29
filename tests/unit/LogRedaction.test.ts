@@ -11,6 +11,8 @@
  * - getEmailRefFromHeaders reuses a well-formed Worker ref and never falls back to a shared constant
  * - getSafeErrorMetadata never leaks non-allowlisted error names or codes
  * - toLoggableShortlistDiagnostics keeps only allowlisted numeric/boolean fields and the fixed stage code
+ * - toLoggableQuoteDiagnostics keeps only quote flags, counts, and the fixed failure reason
+ * - toLoggableSentZoneDiagnostics keeps only the zone source, offset, found flag, and fixed reason
  */
 
 import { readFileSync } from "node:fs";
@@ -27,9 +29,11 @@ import {
   OTHER_ERROR_NAME,
   toLoggableErrorCode,
   toLoggableErrorName,
+  toLoggableQuoteDiagnostics,
+  toLoggableSentZoneDiagnostics,
   toLoggableShortlistDiagnostics,
 } from "../../src/email/utils/LogRedaction";
-import { EmailParsingError } from "../../src/errors";
+import { EmailParsingError, QuotedHistoryError } from "../../src/errors";
 import { getSafeErrorMetadata } from "../../src/Logger";
 
 const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
@@ -39,6 +43,7 @@ describe("getAiUpstreamCode", () => {
   function namedError(name: string, message: string): Error {
     const error = new Error(message);
     error.name = name;
+
     return error;
   }
 
@@ -82,9 +87,11 @@ describe("AI SDK error name allowlist", () => {
   it("covers every AI_* error name in the installed ai and @ai-sdk/provider builds", () => {
     const require = createRequire(import.meta.url);
     const sdkNames = new Set<string>();
+
     for (const pkg of ["ai", "@ai-sdk/provider"]) {
       const packageDir = dirname(require.resolve(`${pkg}/package.json`));
       const source = readFileSync(join(packageDir, "dist", "index.mjs"), "utf8");
+
       for (const match of source.matchAll(/"(AI_[A-Za-z]+Error)"/g)) {
         sdkNames.add(match[1]);
       }
@@ -122,6 +129,7 @@ describe("createEmailRef", () => {
   it("returns 16 hex characters that differ on every call", () => {
     const refs = new Set(Array.from({ length: 50 }, () => createEmailRef()));
     expect(refs.size).toBe(50);
+
     for (const ref of refs) {
       expect(ref).toMatch(EMAIL_REF_PATTERN);
     }
@@ -137,6 +145,7 @@ describe("getEmailRefFromHeaders", () => {
   it("generates distinct fresh refs when the header is missing or malformed", () => {
     const missingA = getEmailRefFromHeaders(new Headers());
     const missingB = getEmailRefFromHeaders(new Headers());
+
     const malformed = getEmailRefFromHeaders(
       new Headers({ [EMAIL_REF_HEADER]: "user@forces.gc.ca" })
     );
@@ -187,6 +196,7 @@ describe("toLoggableShortlistDiagnostics", () => {
     topConfidence: 0.82,
     topMargin: 0.7,
   };
+
   const document = {
     optionCount: 82,
     rankReached: 1,
@@ -218,10 +228,12 @@ describe("toLoggableShortlistDiagnostics", () => {
         extra: { optionCount: 3 },
       })
     );
+
     untrusted.group.topMargin = Number.POSITIVE_INFINITY;
     const logged = toLoggableShortlistDiagnostics(untrusted);
     expect(logged).toEqual({ shortlistGroup: {}, shortlistDocument: { topMargin: 0.2 } });
     const serialized = JSON.stringify(logged);
+
     for (const content of ["leave", "Leave", "doc_4", "member", "vol-1", "extra"]) {
       expect(serialized).not.toContain(content);
     }
@@ -229,5 +241,99 @@ describe("toLoggableShortlistDiagnostics", () => {
 
   it("returns no fields for missing diagnostics", () => {
     expect(toLoggableShortlistDiagnostics(undefined)).toEqual({});
+  });
+});
+
+describe("toLoggableQuoteDiagnostics", () => {
+  it("keeps quote flags and counts", () => {
+    expect(
+      toLoggableQuoteDiagnostics({
+        quotedHistoryIncluded: true,
+        quotedHtml: true,
+        quoteSourceBytes: 1234,
+        quoteRemovedNodes: 3,
+      })
+    ).toEqual({
+      quotedHistoryIncluded: true,
+      quotedHtml: true,
+      quoteSourceBytes: 1234,
+      quoteRemovedNodes: 3,
+    });
+  });
+
+  it("drops content, unknown reasons, and non-count numbers", () => {
+    const untrusted = JSON.parse(
+      JSON.stringify({
+        quotedHistoryIncluded: "yes",
+        quotedHtml: "<p>body</p>",
+        quoteSourceBytes: -1,
+        quoteRemovedNodes: 1.5,
+        quoteFailureReason: "Luffy <luffy@forces.gc.ca>",
+        subject: "RE: feedback note please",
+      })
+    );
+
+    const logged = toLoggableQuoteDiagnostics(untrusted);
+    expect(logged).toEqual({ quotedHistoryIncluded: false });
+    expect(JSON.stringify(logged)).not.toMatch(/luffy|feedback|body/i);
+  });
+
+  it("keeps the fixed failure reason", () => {
+    expect(
+      toLoggableQuoteDiagnostics({
+        quotedHistoryIncluded: false,
+        quoteFailureReason: "quote_missing_date",
+      })
+    ).toEqual({ quotedHistoryIncluded: false, quoteFailureReason: "quote_missing_date" });
+  });
+
+  it("logs QuotedHistoryError by its allowlisted name and composition code only", () => {
+    expect(getSafeErrorMetadata(new QuotedHistoryError("quote_missing_sender"))).toEqual({
+      errorName: "QuotedHistoryError",
+      errorCode: "EMAIL_COMPOSITION_ERROR",
+      recoverable: false,
+    });
+  });
+});
+
+describe("toLoggableSentZoneDiagnostics", () => {
+  it("keeps only the zone source, offset, found flag, and fixed reason", () => {
+    // A SentZoneDecision also carries the zone; extra keys never reach the log fields.
+    const decision = {
+      source: "learned" as const,
+      offsetMinutes: -180,
+      lineFound: true,
+      zone: { offsetMinutes: -180 },
+      sent: "October 28, 2026 2:30 PM",
+    };
+
+    expect(toLoggableSentZoneDiagnostics(decision)).toEqual({
+      quoteSentZoneSource: "learned",
+      quoteSentOffsetMinutes: -180,
+      quoteSentLineFound: true,
+    });
+  });
+
+  it("drops unknown reasons and out-of-range offsets", () => {
+    expect(
+      // SAFETY: deliberately invalid values prove the allowlist rejects them.
+      toLoggableSentZoneDiagnostics({
+        source: "agent@caf-gpt.com",
+        offsetMinutes: 9999,
+        lineFound: true,
+        reason: "October 28, 2026 2:30 PM",
+      } as never)
+    ).toEqual({ quoteSentZoneSource: "default", quoteSentLineFound: true });
+    expect(
+      toLoggableSentZoneDiagnostics({
+        source: "default",
+        lineFound: true,
+        reason: "quoted_sent_unmatched",
+      })
+    ).toEqual({
+      quoteSentZoneSource: "default",
+      quoteSentLineFound: true,
+      quoteSentReason: "quoted_sent_unmatched",
+    });
   });
 });

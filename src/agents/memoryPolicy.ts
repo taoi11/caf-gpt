@@ -46,5 +46,6 @@ export function retainMemoryVersions(
   }
 
   const recentLimit = latestExpired ? MEMORY_VERSION_LIMIT - 1 : MEMORY_VERSION_LIMIT;
+
   return [...(latestExpired ? [latestExpired] : []), ...recent.slice(-recentLimit)];
 }

@@ -4,6 +4,8 @@ import type { ESTree, SourceCode } from "@oxlint/plugins";
 
 type TypeAssertion = ESTree.TSAsExpression | ESTree.TSTypeAssertion;
 
+const DEFAULT_SAFETY_MARKERS = ["SAFETY"] as const;
+
 const commentOwnerKinds = new Set([
   "ExpressionStatement",
   "PropertyDefinition",
@@ -20,17 +22,53 @@ function isConstAssertion(node: TypeAssertion): boolean {
   );
 }
 
-function hasSafetyComment(sourceCode: SourceCode, node: TypeAssertion): boolean {
+/** Read non-empty configured safety markers, falling back to the default markers when none are set. */
+function configuredSafetyMarkers(option: unknown): readonly string[] {
+  if (typeof option !== "object" || option === null || !("markers" in option)) {
+    return DEFAULT_SAFETY_MARKERS;
+  }
+  const configured = option.markers;
+  if (!Array.isArray(configured)) return DEFAULT_SAFETY_MARKERS;
+  const markers = configured.flatMap((marker) =>
+    typeof marker === "string" && marker.trim().length > 0 ? [marker.trim()] : []
+  );
+  return markers.length > 0 ? markers : DEFAULT_SAFETY_MARKERS;
+}
+
+/** Build a pattern matching a `MARKER: reason` comment for any of the (regex-escaped) markers. */
+function markerPattern(markers: readonly string[]): RegExp {
+  const alternation = markers
+    .map((marker) => marker.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`))
+    .join("|");
+  return new RegExp(String.raw`(?:^|[^\p{L}\p{N}_])(?:${alternation})\s*:\s*\S`, "u");
+}
+
+/** Return whether a safety comment precedes both the owner node and the assertion. */
+function hasSafetyJustificationBefore(
+  sourceCode: SourceCode,
+  owner: ESTree.Node,
+  assertion: TypeAssertion,
+  pattern: RegExp
+): boolean {
+  return sourceCode
+    .getCommentsBefore(owner)
+    .some((comment) => comment.end <= assertion.start && pattern.test(comment.value));
+}
+
+/** Return whether a safety comment sits above the assertion's statement, declaration, or its export. */
+function hasSafetyComment(sourceCode: SourceCode, node: TypeAssertion, pattern: RegExp): boolean {
   let current: ESTree.Node = node;
   while (true) {
-    if (
-      sourceCode
-        .getCommentsBefore(current)
-        .some((comment) => comment.end <= node.start && /\bSAFETY\s*:/u.test(comment.value))
-    ) {
-      return true;
+    if (hasSafetyJustificationBefore(sourceCode, current, node, pattern)) return true;
+    if (commentOwnerKinds.has(current.type)) {
+      const exportDeclaration = current.parent;
+      return (
+        exportDeclaration.type === "ExportNamedDeclaration" &&
+        exportDeclaration.declaration === current &&
+        hasSafetyJustificationBefore(sourceCode, exportDeclaration, node, pattern)
+      );
     }
-    if (commentOwnerKinds.has(current.type) || current.parent.type === "Program") return false;
+    if (current.parent.type === "Program") return false;
     current = current.parent;
   }
 }
@@ -45,13 +83,39 @@ export const requireSafetyCommentForTypeAssertionRule = defineRule({
     },
     messages: {
       missingSafetyComment:
-        "This type assertion has no `SAFETY:` justification. State the checked invariant immediately before the assertion or its containing statement.",
+        "This type assertion has no `{{marker}}:` justification. State the checked invariant immediately before the assertion or its containing statement.",
     },
+    schema: [
+      {
+        type: "object",
+        properties: {
+          markers: {
+            type: "array",
+            items: { type: "string", minLength: 1 },
+            minItems: 1,
+            uniqueItems: true,
+          },
+        },
+        additionalProperties: false,
+      },
+    ],
+    defaultOptions: [{ markers: ["SAFETY"] }],
   },
   createOnce(context) {
+    const patterns = new Map<string, RegExp>();
+
     const checkAssertion = (node: TypeAssertion) => {
-      if (isConstAssertion(node) || hasSafetyComment(context.sourceCode, node)) return;
-      context.report({ node, messageId: "missingSafetyComment" });
+      if (isConstAssertion(node)) return;
+      const markers = configuredSafetyMarkers(context.options?.[0]);
+      const patternKey = markers.join("\u0000");
+      const pattern = patterns.get(patternKey) ?? markerPattern(markers);
+      patterns.set(patternKey, pattern);
+      if (hasSafetyComment(context.sourceCode, node, pattern)) return;
+      context.report({
+        node,
+        messageId: "missingSafetyComment",
+        data: { marker: markers[0] ?? DEFAULT_SAFETY_MARKERS[0] },
+      });
     };
 
     return {

@@ -33,6 +33,7 @@ export function isSafeId(value: string): boolean {
   ) {
     return false;
   }
+
   return value
     .split("/")
     .every(
@@ -59,12 +60,16 @@ export function parseManifestRows(markdown: string): ManifestRow[] {
 
   for (const rawLine of markdown.split(/\r?\n/)) {
     const line = rawLine.trim();
+
     if (!line.startsWith("|") || !line.endsWith("|")) continue;
+
     const cells = line
       .split("|")
       .slice(1, -1)
       .map((cell) => cell.trim());
+
     if (cells.length !== 3 || cells.every((cell) => SEPARATOR_CELL_PATTERN.test(cell))) continue;
+
     if (!isSafeId(cells[0]) || !isSafeFilePath(cells[2])) continue;
     rows.push({ id: cells[0], title: cells[1], file: cells[2] });
   }
@@ -75,8 +80,10 @@ export function parseManifestRows(markdown: string): ManifestRow[] {
 /** Parse a `| Id | Title | File |` markdown table into an Id-to-File map. Invalid rows are skipped silently. */
 export function parseManifestTable(markdown: string): Map<string, string> {
   const manifest = new Map<string, string>();
+
   for (const row of parseManifestRows(markdown)) {
     manifest.set(row.id, row.file);
   }
+
   return manifest;
 }

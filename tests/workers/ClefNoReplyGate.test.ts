@@ -18,7 +18,7 @@ import type { AgentEmail } from "agents/email";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
-import { CLEF_MODEL } from "../../src/agents/utils/ClefDecision";
+import { type ClefAiRunner, CLEF_MODEL } from "../../src/agents/utils/ClefDecision";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
 
 afterEach(async () => {
@@ -35,6 +35,7 @@ describe("UserAgent Clef injection screen", () => {
         shouldRespond: true,
         content: "<p>should not send</p>",
       }));
+
       vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockImplementation(
         processWithPrimeFoo
       );
@@ -50,9 +51,11 @@ describe("UserAgent Clef injection screen", () => {
         body: "Thanks!",
         messageId: "<clef-no-reply@forces.gc.ca>",
       });
+
       const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
 
       await instance.onEmail(email);
+
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
         structuredSends: bindingSend.mock.calls.length,
@@ -71,15 +74,18 @@ describe("UserAgent Clef injection screen", () => {
         shouldRespond: true,
         content: "<p>should not send</p>",
       }));
+
       vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockImplementation(
         processWithPrimeFoo
       );
 
-      const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
-      vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
+      // SAFETY: These tests intercept only the Clef request contract missing from generated AiModels.
+      const ai = env.AI as ClefAiRunner;
+      vi.spyOn(ai, "run").mockImplementation(async (model: string) => {
         if (model === CLEF_MODEL) {
           throw new Error("workers ai down");
         }
+
         throw new Error(`Unexpected AI.run model: ${String(model)}`);
       });
 
@@ -92,9 +98,11 @@ describe("UserAgent Clef injection screen", () => {
         body: "Body",
         messageId: "<clef-error@forces.gc.ca>",
       });
+
       const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
 
       await instance.onEmail(email);
+
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
         structuredSends: bindingSend.mock.calls,
@@ -120,6 +128,7 @@ describe("UserAgent Clef injection screen", () => {
         shouldRespond: true,
         content: "<p>should not send</p>",
       }));
+
       vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockImplementation(
         processWithPrimeFoo
       );
@@ -134,9 +143,11 @@ describe("UserAgent Clef injection screen", () => {
         body: "Thanks everyone!",
         messageId: "<clef-many-rcpt@forces.gc.ca>",
       });
+
       const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
 
       await instance.onEmail(email);
+
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
         structuredSends: bindingSend.mock.calls.length,
@@ -160,12 +171,15 @@ describe("UserAgent Clef injection screen", () => {
         shouldRespond: true,
         content: "<p>drafted</p>",
       }));
+
       vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockImplementation(
         processWithPrimeFoo
       );
 
-      const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
-      const runSpy = vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
+      // SAFETY: These tests intercept only the Clef request contract missing from generated AiModels.
+      const ai = env.AI as ClefAiRunner;
+
+      const runSpy = vi.spyOn(ai, "run").mockImplementation(async (model: string) => {
         if (model === CLEF_MODEL) {
           return {
             model: "clef",
@@ -180,6 +194,7 @@ describe("UserAgent Clef injection screen", () => {
             usage: { input_tokens: 1, output_tokens: 1 },
           };
         }
+
         throw new Error(`Unexpected AI.run model: ${String(model)}`);
       });
 
@@ -190,7 +205,7 @@ describe("UserAgent Clef injection screen", () => {
         type: "delayed",
         time: 1,
         delayInSeconds: 1,
-      } as never);
+      });
 
       const email = createAgentEmail({
         envelopeFrom: "clef-memory@forces.gc.ca",
@@ -201,13 +216,15 @@ describe("UserAgent Clef injection screen", () => {
         body: "Yes, please",
         messageId: "<clef-memory@forces.gc.ca>",
       });
+
       vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
         messageId: "structured-reply",
       });
 
       await instance.onEmail(email);
       const clefCall = runSpy.mock.calls.find((call) => call[0] === CLEF_MODEL);
-      const inputs = clefCall?.[1] as { state?: string } | undefined;
+      const inputs = clefCall?.[1];
+
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
         stateIncludesMemory: Boolean(inputs?.state?.includes("<memory>")),
@@ -234,6 +251,7 @@ describe("UserAgent Clef injection screen", () => {
         shouldRespond: true,
         content: "<p>AI response</p>",
       }));
+
       vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockImplementation(
         processWithPrimeFoo
       );
@@ -245,7 +263,7 @@ describe("UserAgent Clef injection screen", () => {
         type: "delayed",
         time: 1,
         delayInSeconds: 1,
-      } as never);
+      });
 
       const email = createAgentEmail({
         envelopeFrom: "clef-reply@forces.gc.ca",
@@ -256,11 +274,13 @@ describe("UserAgent Clef injection screen", () => {
         body: "Can I take leave?",
         messageId: "<clef-reply@forces.gc.ca>",
       });
+
       const bindingSend = vi
         .spyOn(getEmailBinding(instance), "send")
         .mockResolvedValue({ messageId: "structured-reply" });
 
       await instance.onEmail(email);
+
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
         structuredSends: bindingSend.mock.calls.length,
@@ -273,8 +293,9 @@ describe("UserAgent Clef injection screen", () => {
 
 /** Mocks env.AI.run to return a Clef reply/no_reply choice for the gate. */
 function mockClefChoice(choice: "reply" | "no_reply", confidence: number): void {
-  const ai = env.AI as { run: (...args: unknown[]) => Promise<unknown> };
-  vi.spyOn(ai, "run").mockImplementation(async (model: unknown) => {
+  // SAFETY: These tests intercept only the Clef request contract missing from generated AiModels.
+  const ai = env.AI as ClefAiRunner;
+  vi.spyOn(ai, "run").mockImplementation(async (model: string) => {
     if (model === CLEF_MODEL) {
       return {
         model: "clef",
@@ -292,6 +313,7 @@ function mockClefChoice(choice: "reply" | "no_reply", confidence: number): void 
         usage: { input_tokens: 1, output_tokens: 1 },
       };
     }
+
     throw new Error(`Unexpected AI.run model: ${String(model)}`);
   });
 }
@@ -303,7 +325,9 @@ function getUserAgentStub(senderEmail: string) {
 
 /** Gets the structured Email Service binding held by a UserAgent instance. */
 function getEmailBinding(instance: UserAgent): Env["EMAIL"] {
+  // SAFETY: Agent stores its constructor Env on the runtime instance; this test reads only EMAIL.
   const runtimeAccess = instance as UserAgent & { env: Env };
+
   return runtimeAccess.env.EMAIL;
 }
 
@@ -333,15 +357,18 @@ function createAgentEmail(options: AgentEmailOptions): MockAgentEmail {
     options.body,
   ].join("\r\n");
 
+  const headers = new Headers({
+    from: options.from,
+    to: options.to.join(", "),
+    subject: options.subject,
+  });
+
+  if (options.messageId) headers.set("message-id", options.messageId);
+
   return {
     from: options.envelopeFrom,
     to: options.envelopeTo,
-    headers: new Headers({
-      from: options.from,
-      to: options.to.join(", "),
-      subject: options.subject,
-      ...(options.messageId ? { "message-id": options.messageId } : {}),
-    }),
+    headers,
     rawSize: raw.length,
     getRaw: vi.fn(async () => new TextEncoder().encode(raw)),
     setReject: vi.fn(),

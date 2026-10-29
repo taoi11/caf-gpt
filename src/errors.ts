@@ -7,6 +7,7 @@
  * - BaseAppError: Base error class for all application errors
  * - EmailError: Base class for email-related errors
  * - EmailCompositionError: Email composition failures
+ * - QuotedHistoryError: Outlook-style quoted history could not be built (fixed reason code)
  * - EmailParsingError: Email parsing failures
  * - EmailThreadingError: Email threading failures
  * - EmailValidationError: Email validation failures
@@ -17,6 +18,8 @@
  * - StorageNotFoundError: Document/resource not found
  * - StorageConnectionError: Database/R2 connection failures
  */
+
+import type { QuoteFailureReason } from "./email/components/QuotedHistory";
 
 // Base error class for all application errors
 export abstract class BaseAppError extends Error {
@@ -40,6 +43,20 @@ export abstract class EmailError extends BaseAppError {}
 export class EmailCompositionError extends EmailError {
   readonly code = "EMAIL_COMPOSITION_ERROR";
   readonly recoverable = false;
+}
+
+/**
+ * The reply's Outlook-style quoted history could not be built. Carries only a fixed,
+ * content-free reason code (never email content), which UserAgent logs as the outcome reason;
+ * as an EmailCompositionError it gets the funny composition error reply.
+ */
+export class QuotedHistoryError extends EmailCompositionError {
+  readonly reason: QuoteFailureReason;
+
+  constructor(reason: QuoteFailureReason) {
+    super("Quoted history could not be built");
+    this.reason = reason;
+  }
 }
 
 export class EmailParsingError extends EmailError {
