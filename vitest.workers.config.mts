@@ -17,6 +17,13 @@ export default defineConfig({
       wrangler: {
         configPath: "./wrangler.jsonc",
       },
+      // Test-only placeholder secrets; Resend is reached only through mocked fetch.
+      miniflare: {
+        bindings: {
+          RESEND_API_KEY: "re_test_placeholder",
+          RESEND_WEBHOOK_SECRET: "whsec_dGVzdC13ZWJob29rLXNpZ25pbmctc2VjcmV0",
+        },
+      },
     }),
   ],
   test: {

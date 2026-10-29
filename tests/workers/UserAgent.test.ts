@@ -1,36 +1,32 @@
 /**
  * tests/workers/UserAgent.test.ts
  *
- * Workers runtime integration tests for the UserAgent Durable Object and top-level email boundary
+ * Workers runtime integration tests for the UserAgent Durable Object on the Resend Inboxes path
  *
  * Top-level declarations:
- * - UserAgent routing suite: Verifies sender-keyed routing and fail-closed configuration
- * - UserAgent processing suite: Verifies SDK reply-all, sender-only errors, memory timing, reply
- *   bodies with Outlook-style quoted history (signature above the quote, chain carried forward,
- *   fail-loud on a missing Date), the Sent: offset learned from the user's own quote of our reply
- *   (default, learned, saved and reused, retention), subject/threading headers, and DO-stored
- *   thread context
+ * - UserAgent inbound suite: Verifies receiveResendEmail dedupe by Resend email id and the
+ *   claim release when scheduling fails
+ * - UserAgent processing suite: Verifies the Resend call sequence, the thread reply request
+ *   (subject, cc, Thread-Index/Thread-Topic, no In-Reply-To/References, Idempotency-Key), the
+ *   sender-authentication and monitored-inbox gates, sender-only error replies, memory timing,
+ *   Outlook-style quoted history (signature above the quote, chain carried forward, fail-loud on
+ *   a missing Date), the Sent: offset learned from the user's own quote of our reply (including
+ *   a Message-ID Resend reports late), and DO-stored thread context
  * - getUserAgentStub: Gets a per-sender UserAgent Durable Object stub
- * - getEmailBinding: Gets the UserAgent's structured Email Service binding
  * - mockPrimeFoo: Replaces Prime Foo processing through its public method contract
  * - mockSuccessfulSchedule: Replaces durable scheduling with a faithful delayed schedule
- * - createAgentEmail: Builds a mock AgentEmail with configurable RFC and envelope recipients
- * - createRoutingMessage: Builds a mock top-level Email Worker message
- * - buildRawEmail: Builds raw MIME fixtures (Date by default, optional HTML part) without
- *   propagating Bcc into parsed data
  */
 
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { createExecutionContext, reset, runInDurableObject } from "cloudflare:test";
+import { reset, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { AgentEmail } from "agents/email";
-import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
 import { MemoryFooAgent } from "../../src/agents/sub-agents";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
-import worker, { createUserAgentResolver } from "../../src/index";
+import { createInboundEmail, type InboundEmailOptions, installResendMock } from "./resendHarness";
 
 const mockGenerateText = vi.fn();
 
@@ -47,111 +43,85 @@ afterEach(async () => {
   await reset();
 });
 
-describe("UserAgent email routing", () => {
-  it("routes authorized direct mail to a full-email UserAgent id", async () => {
-    const resolver = createUserAgentResolver(env);
+describe("UserAgent inbound acceptance", () => {
+  it("schedules a new Resend email once and ignores repeated webhook deliveries", async () => {
+    const sender = "dedupe@forces.gc.ca";
 
-    const message = createRoutingMessage({
-      from: "Test@forces.gc.ca",
-      to: "agent@caf-gpt.com",
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const schedule = mockSuccessfulSchedule(instance, "process-1");
+      // SAFETY: scheduleEvery resolves a Schedule; UserAgent ignores it, and the fixture is a complete one.
+      vi.spyOn(instance, "scheduleEvery").mockResolvedValue(createMockSchedule("prune") as never);
+
+      const email = createInboundEmail({
+        envelopeFrom: sender,
+        envelopeTo: "agent@caf-gpt.com",
+        from: sender,
+        to: ["agent@caf-gpt.com"],
+        subject: "Duplicate",
+        body: "Same delivery",
+        resendEmailId: "dedupe-email-1",
+      });
+
+      const first = await instance.receiveResendEmail(email.task);
+      const second = await instance.receiveResendEmail(email.task);
+
+      return { first, second, schedules: schedule.mock.calls };
     });
 
-    await expect(resolver(message, env)).resolves.toEqual({
-      agentName: "UserAgent",
-      agentId: getUserAgentId("test@forces.gc.ca"),
-    });
+    expect(result.first).toBe("accepted");
+    expect(result.second).toBe("duplicate");
+    expect(result.schedules).toHaveLength(1);
+    expect(result.schedules[0]).toEqual([
+      0,
+      "processResendEmail",
+      expect.objectContaining({ emailId: "dedupe-email-1", inboxId: "inbox-agent" }),
+      { retry: { maxAttempts: 1 } },
+    ]);
   });
 
-  it("ignores agent routing headers and routes by the authorized envelope sender", async () => {
-    const resolver = createUserAgentResolver(env);
+  it("releases the claim when scheduling fails so Resend's retry is processed", async () => {
+    const sender = "claim-release@forces.gc.ca";
 
-    const message = createRoutingMessage({
-      from: "test@forces.gc.ca",
-      to: "agent@caf-gpt.com",
-      headers: {
-        "X-Agent-Name": "other-agent",
-        "X-Agent-ID": getUserAgentId("victim@forces.gc.ca"),
-        "X-Agent-Sig": "forged",
-        "X-Agent-Sig-Ts": "1",
-      },
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      // SAFETY: scheduleEvery resolves a Schedule; UserAgent ignores it, and the fixture is a complete one.
+      vi.spyOn(instance, "scheduleEvery").mockResolvedValue(createMockSchedule("prune") as never);
+
+      const schedule = vi
+        .spyOn(instance, "schedule")
+        .mockRejectedValueOnce(new Error("schedule unavailable"));
+
+      // SAFETY: Vitest erases the generic schedule result to never; the fixture is a complete one.
+      schedule.mockResolvedValue(createMockSchedule("process-1") as never);
+
+      const email = createInboundEmail({
+        envelopeFrom: sender,
+        envelopeTo: "agent@caf-gpt.com",
+        from: sender,
+        to: ["agent@caf-gpt.com"],
+        subject: "Retry",
+        body: "Body",
+      });
+
+      const firstError = await instance.receiveResendEmail(email.task).then(
+        () => "resolved",
+        () => "rejected"
+      );
+
+      const retry = await instance.receiveResendEmail(email.task);
+
+      return { firstError, retry };
     });
 
-    await expect(resolver(message, env)).resolves.toEqual({
-      agentName: "UserAgent",
-      agentId: getUserAgentId("test@forces.gc.ca"),
-    });
-  });
-
-  it("drops unauthorized direct mail before it reaches an Agent", async () => {
-    const resolver = createUserAgentResolver(env);
-
-    const message = createRoutingMessage({
-      from: "intruder@example.com",
-      to: "agent@caf-gpt.com",
-    });
-
-    await expect(resolver(message, env)).resolves.toBeNull();
-  });
-
-  it("routes the exact approved external sender without authorizing its domain", async () => {
-    const resolver = createUserAgentResolver(env);
-
-    const approvedMessage = createRoutingMessage({
-      from: "munshi@dhaliwal.info",
-      to: "agent@caf-gpt.com",
-    });
-
-    const adjacentMessage = createRoutingMessage({
-      from: "other@dhaliwal.info",
-      to: "agent@caf-gpt.com",
-    });
-
-    await expect(resolver(approvedMessage, env)).resolves.toEqual({
-      agentName: "UserAgent",
-      agentId: getUserAgentId("munshi@dhaliwal.info"),
-    });
-    await expect(resolver(adjacentMessage, env)).resolves.toBeNull();
-  });
-
-  it("fails closed before routing when the email binding is missing", async () => {
-    const message = createRoutingMessage({
-      from: "test@forces.gc.ca",
-      to: "agent@caf-gpt.com",
-    });
-
-    const boundaryEnv = { ...env };
-    Reflect.deleteProperty(boundaryEnv, "EMAIL");
-
-    await expect(
-      worker.email(message, boundaryEnv, createExecutionContext())
-    ).resolves.toBeUndefined();
-    expect(message.setReject).toHaveBeenCalledOnce();
-    expect(message.setReject).toHaveBeenCalledWith("Service temporarily unavailable");
-  });
-
-  it("rejects and returns on top-level routing failures", async () => {
-    const message = createRoutingMessage({
-      from: "test@forces.gc.ca",
-      to: "agent@caf-gpt.com",
-    });
-
-    const brokenEnv = { ...env };
-    Reflect.deleteProperty(brokenEnv, "UserAgent");
-
-    await expect(
-      worker.email(message, brokenEnv, createExecutionContext())
-    ).resolves.toBeUndefined();
-    expect(message.setReject).toHaveBeenCalledOnce();
-    expect(message.setReject).toHaveBeenCalledWith("Service temporarily unavailable");
+    expect(result).toEqual({ firstError: "rejected", retry: "accepted" });
   });
 });
 
 describe("UserAgent email processing", () => {
-  it("uses Agent.sendEmail for Outlook-style reply-all and schedules memory", async () => {
-    const stub = getUserAgentStub("test@forces.gc.ca");
+  it("fetches the email from Resend and replies on its thread with reply-all cc", async () => {
+    const sender = "test@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const sentMessages: StructuredEmailMessage[] = [];
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
 
       const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(
         async (_context, memory) => ({
@@ -161,10 +131,10 @@ describe("UserAgent email processing", () => {
         })
       );
 
-      const email = createAgentEmail({
-        envelopeFrom: "test@forces.gc.ca",
+      const email = createInboundEmail({
+        envelopeFrom: sender,
         envelopeTo: "agent@caf-gpt.com",
-        from: "Spoofed Admin <luffy@luffy.email>",
+        from: `Test Member <${sender}>`,
         replyTo: ["TEST@forces.gc.ca", "outside@example.com"],
         to: ["agent@caf-gpt.com", "test@forces.gc.ca", "ally@forces.gc.ca"],
         cc: ["external@example.com", "not-an-address", "ALLY@forces.gc.ca", "second@forces.gc.ca"],
@@ -178,48 +148,45 @@ describe("UserAgent email processing", () => {
       });
 
       instance.setState({ memory: "remembered preference", versions: [] });
-      const agentSendEmail = vi.spyOn(instance, "sendEmail");
-      vi.spyOn(getEmailBinding(instance), "send").mockImplementation(async (message) => {
-        sentMessages.push(message);
-
-        return { messageId: "structured-reply" };
-      });
       const schedule = mockSuccessfulSchedule(instance, "schedule-1");
       mockPrimeFoo(processWithPrimeFoo);
 
-      await instance.onEmail(email);
+      await resend.deliver(instance, email);
 
       return {
-        inboundReplyCount: getReplyCalls(email).length,
+        emailId: email.task.emailId,
+        requests: resend.requests,
+        replies: resend.replies,
         schedules: schedule.mock.calls,
-        sentMessages,
         primeFooCalls: processWithPrimeFoo.mock.calls,
-        agentSendCalls: agentSendEmail.mock.calls.length,
-        rawReadCalls: getRawCalls(email).length,
       };
     });
 
+    const id = result.emailId;
+    expect(result.requests.slice(0, 4)).toEqual([
+      "GET /inboxes/inbox-agent",
+      `GET /emails/receiving/${id}`,
+      `GET https://raw.resend.test/${id}`,
+      `POST /inboxes/inbox-agent/threads/thread-${id}/emails/${id}/reply`,
+    ]);
+    // Then the sent Message-ID lookup for the reply.
+    expect(result.requests[4]).toMatch(/^GET \/emails\/reply-\d+$/);
     expect(result.primeFooCalls[0][1]).toBe("remembered preference");
     expect(result.primeFooCalls[0][0]).toContain("Authenticated-Sender: test@forces.gc.ca");
-    expect(result.primeFooCalls[0][0]).toContain("RFC-From: luffy@luffy.email");
-    expect(result.inboundReplyCount).toBe(0);
-    expect(result.agentSendCalls).toBe(1);
-    expect(result.rawReadCalls).toBe(1);
-    expect(result.sentMessages).toHaveLength(1);
-    expect(result.sentMessages[0]).toMatchObject({
-      to: ["test@forces.gc.ca", "outside@example.com"],
-      cc: ["ally@forces.gc.ca", "external@example.com", "second@forces.gc.ca"],
-      from: { email: "agent@caf-gpt.com", name: "CAF-GPT" },
-      replyTo: "agent@caf-gpt.com",
+    expect(result.replies).toHaveLength(1);
+    expect(result.replies[0].idempotencyKey).toBe(`caf-gpt-reply/${id}`);
+    expect(result.replies[0].body).toMatchObject({
       subject: "Re: Leave question",
-      headers: {
-        "In-Reply-To": "<msg-1@forces.gc.ca>",
-        References: "<root@forces.gc.ca> <parent@forces.gc.ca> <msg-1@forces.gc.ca>",
-      },
+      reply_all: false,
+      // Resend sends To = Reply-To (test@, outside@); cc carries the rest of reply-all.
+      cc: ["ally@forces.gc.ca", "external@example.com", "second@forces.gc.ca"],
     });
-    const sentHeaders = result.sentMessages[0].headers;
-    expect(sentHeaders ?? {}).not.toHaveProperty("Message-ID");
-    expect(JSON.stringify(result.sentMessages[0])).not.toContain("hidden@forces.gc.ca");
+    expect(result.replies[0].body.headers).toBeUndefined();
+    const serialized = JSON.stringify(result.replies[0].body);
+    expect(serialized).not.toContain("hidden@forces.gc.ca");
+    expect(serialized).not.toContain("In-Reply-To");
+    expect(serialized).not.toContain("References");
+    expect(serialized).not.toContain("Message-ID");
     expect(result.schedules).toEqual([
       [
         1,
@@ -233,71 +200,59 @@ describe("UserAgent email processing", () => {
     ]);
   });
 
-  it("swallows rejected memory scheduling after a successful structured send", async () => {
-    const stub = getUserAgentStub("schedule-failure@forces.gc.ca");
+  it("swallows rejected memory scheduling after a successful reply", async () => {
+    const sender = "schedule-failure@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "schedule-failure@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "schedule-failure@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Question",
-        body: "Body",
-        messageId: "<schedule-failure@forces.gc.ca>",
-      });
-
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "structured-reply" });
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
 
       const schedule = vi
         .spyOn(instance, "schedule")
         .mockRejectedValue(new Error("schedule unavailable"));
 
-      mockPrimeFoo(
-        vi.fn(async () => ({
-          shouldRespond: true,
-          content: "Response",
-        }))
-      );
+      mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "Response" })));
 
-      await expect(instance.onEmail(email)).resolves.toBeUndefined();
+      await expect(
+        resend.deliver(
+          instance,
+          createInboundEmail({
+            envelopeFrom: sender,
+            envelopeTo: "agent@caf-gpt.com",
+            from: sender,
+            to: ["agent@caf-gpt.com"],
+            subject: "Question",
+            body: "Body",
+            messageId: "<schedule-failure@forces.gc.ca>",
+          })
+        )
+      ).resolves.toBeUndefined();
 
-      return {
-        sends: bindingSend.mock.calls.length,
-        schedules: schedule.mock.calls.length,
-        replies: getReplyCalls(email).length,
-      };
+      return { sends: resend.replies.length, schedules: schedule.mock.calls.length };
     });
 
-    expect(result).toEqual({ sends: 1, schedules: 1, replies: 0 });
+    expect(result).toEqual({ sends: 1, schedules: 1 });
   });
 
-  it("uses the pacenote envelope recipient as sender, Reply-To, and AI context", async () => {
-    const stub = getUserAgentStub("pacenote-user@forces.gc.ca");
+  it("uses the pacenote inbox for the reply thread and AI context", async () => {
+    const sender = "pacenote-user@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const sentMessages: StructuredEmailMessage[] = [];
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
 
       const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
         shouldRespond: true,
         content: "<p>Feedback note</p>",
       }));
 
-      vi.spyOn(getEmailBinding(instance), "send").mockImplementation(async (message) => {
-        sentMessages.push(message);
-
-        return { messageId: "structured-reply" };
-      });
       mockSuccessfulSchedule(instance, "schedule-1");
       mockPrimeFoo(processWithPrimeFoo);
 
-      await instance.onEmail(
-        createAgentEmail({
-          envelopeFrom: "pacenote-user@forces.gc.ca",
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
           envelopeTo: "pacenote@caf-gpt.com",
-          from: "pacenote-user@forces.gc.ca",
+          from: sender,
           to: ["forwarder@forces.gc.ca"],
           subject: "Feedback note",
           body: "Write a feedback note.",
@@ -305,69 +260,77 @@ describe("UserAgent email processing", () => {
         })
       );
 
-      return { sentMessages, primeFooCalls: processWithPrimeFoo.mock.calls };
+      return { replies: resend.replies, primeFooCalls: processWithPrimeFoo.mock.calls };
     });
 
     expect(result.primeFooCalls[0][0]).toContain("Envelope-To: pacenote@caf-gpt.com");
     expect(result.primeFooCalls[0][0]).toContain("To: forwarder@forces.gc.ca");
-    expect(result.sentMessages[0]).toMatchObject({
-      from: { email: "pacenote@caf-gpt.com", name: "CAF-GPT" },
-      replyTo: "pacenote@caf-gpt.com",
-      to: ["pacenote-user@forces.gc.ca"],
-      cc: ["forwarder@forces.gc.ca"],
-    });
+    expect(result.replies[0].path).toMatch(/^\/inboxes\/inbox-pacenote\/threads\//);
+    expect(result.replies[0].body.cc).toEqual(["forwarder@forces.gc.ca"]);
   });
 
-  it("passes canonical threading through Agent.sendEmail without signatures", async () => {
-    const stub = getUserAgentStub("threaded-output@forces.gc.ca");
+  it("skips an inbox that is not monitored before reading the email", async () => {
+    const sender = "unmonitored@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const agentSendEmail = vi.spyOn(instance, "sendEmail");
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
+      mockPrimeFoo(processWithPrimeFoo);
 
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "direct-binding" });
-
-      mockSuccessfulSchedule(instance, "schedule-1");
-      mockPrimeFoo(
-        vi.fn(async () => ({
-          shouldRespond: true,
-          content: "Response",
-        }))
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "other@caf-gpt.com",
+          from: sender,
+          to: ["other@caf-gpt.com"],
+          subject: "Hello",
+          body: "Body",
+        })
       );
 
-      await instance.onEmail(
-        createAgentEmail({
-          envelopeFrom: "threaded-output@forces.gc.ca",
+      return { requests: resend.requests, replies: resend.replies.length };
+    });
+
+    expect(result).toEqual({ requests: ["GET /inboxes/inbox-other"], replies: 0 });
+  });
+
+  it.each([
+    ["failed DMARC and DKIM", { spf: "pass", dkim: "fail", dmarc: "fail" }],
+    ["missing authentication results", null],
+  ])("drops mail with %s without AI work, raw download, or a reply", async (_label, auth) => {
+    const sender = "spoofed@forces.gc.ca";
+
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
+      mockPrimeFoo(processWithPrimeFoo);
+
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
           envelopeTo: "agent@caf-gpt.com",
-          from: "threaded-output@forces.gc.ca",
+          from: sender,
           to: ["agent@caf-gpt.com"],
-          subject: "Threaded",
-          body: "Body",
-          messageId: "<original@forces.gc.ca>",
-          headers: { references: "<root@forces.gc.ca>" },
+          subject: "Hello",
+          body: "",
+          authentication: auth,
         })
       );
 
       return {
-        delivered: bindingSend.mock.calls[0][0],
-        agentSendCalls: agentSendEmail.mock.calls.length,
-        bindingSendCalls: bindingSend.mock.calls.length,
+        aiCalls: processWithPrimeFoo.mock.calls.length,
+        rawDownloads: resend.requests.filter((entry) => entry.includes("raw.resend.test")).length,
+        replies: resend.replies.length,
       };
     });
 
-    expect(result.agentSendCalls).toBe(1);
-    expect(result.bindingSendCalls).toBe(1);
-    expect(result.delivered.headers).toMatchObject({
-      "In-Reply-To": "<original@forces.gc.ca>",
-      References: "<root@forces.gc.ca> <original@forces.gc.ca>",
-    });
-    expect(result.delivered.headers?.["X-Agent-Sig"]).toBeUndefined();
-    expect(result.delivered.headers?.["X-Agent-Sig-Ts"]).toBeUndefined();
+    expect(result).toEqual({ aiCalls: 0, rawDownloads: 0, replies: 0 });
   });
 
   it("adds a child Thread-Index and Thread-Topic so Exchange groups the reply", async () => {
-    const stub = getUserAgentStub("outlook-thread@forces.gc.ca");
+    const sender = "outlook-thread@forces.gc.ca";
 
     const parentIndex = btoa(
       String.fromCharCode(
@@ -381,19 +344,17 @@ describe("UserAgent email processing", () => {
       )
     );
 
-    const delivered = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "outlook-threaded" });
-
+    const reply = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
       mockSuccessfulSchedule(instance, "schedule-1");
       mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "Response" })));
 
-      await instance.onEmail(
-        createAgentEmail({
-          envelopeFrom: "outlook-thread@forces.gc.ca",
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
           envelopeTo: "agent@caf-gpt.com",
-          from: "outlook-thread@forces.gc.ca",
+          from: sender,
           to: ["agent@caf-gpt.com"],
           subject: "feedback note please",
           body: "Body",
@@ -402,93 +363,27 @@ describe("UserAgent email processing", () => {
         })
       );
 
-      return bindingSend.mock.calls[0][0];
+      return resend.replies[0].body;
     });
 
-    const childIndex = atob(delivered.headers?.["Thread-Index"] ?? "");
+    const childIndex = atob(reply.headers?.["Thread-Index"] ?? "");
     expect(childIndex).toHaveLength(27);
     expect(childIndex.slice(0, 22)).toBe(atob(parentIndex));
-    expect(delivered.headers).toMatchObject({
-      "In-Reply-To": "<outlook-original@forces.gc.ca>",
-      References: "<outlook-original@forces.gc.ca>",
+    // Resend sets In-Reply-To/References itself and rejects them as custom headers.
+    expect(reply.headers).toEqual({
+      "Thread-Index": reply.headers?.["Thread-Index"],
       "Thread-Topic": "feedback note please",
     });
   });
 
-  it.each([
-    [
-      "falls back to In-Reply-To when References is absent",
-      "thread-fallback@forces.gc.ca",
-      { "in-reply-to": "<parent@forces.gc.ca>" },
-      "<fallback-current@forces.gc.ca>",
-      "<parent@forces.gc.ca> <fallback-current@forces.gc.ca>",
-    ],
-    [
-      "prefers References over In-Reply-To",
-      "thread-precedence@forces.gc.ca",
-      {
-        references: "<root@forces.gc.ca>",
-        "in-reply-to": "<ignored-parent@forces.gc.ca>",
-      },
-      "<precedence-current@forces.gc.ca>",
-      "<root@forces.gc.ca> <precedence-current@forces.gc.ca>",
-    ],
-    [
-      "does not duplicate the current Message-ID",
-      "thread-deduplicate@forces.gc.ca",
-      { references: "<root@forces.gc.ca> <deduplicate-current@forces.gc.ca>" },
-      "<deduplicate-current@forces.gc.ca>",
-      "<root@forces.gc.ca> <deduplicate-current@forces.gc.ca>",
-    ],
-    [
-      "filters malformed References tokens without rejecting the email",
-      "thread-filter@forces.gc.ca",
-      { references: "<root@forces.gc.ca> malformed <next@forces.gc.ca>" },
-      "<filter-current@forces.gc.ca>",
-      "<root@forces.gc.ca> <next@forces.gc.ca> <filter-current@forces.gc.ca>",
-    ],
-  ])("%s", async (_label, sender, headers, messageId, expectedReferences) => {
-    const stub = getUserAgentStub(sender);
-
-    const delivered = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "threaded-reply" });
-
-      mockSuccessfulSchedule(instance, "schedule-1");
-      mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "Response" })));
-
-      await instance.onEmail(
-        createAgentEmail({
-          envelopeFrom: sender,
-          envelopeTo: "agent@caf-gpt.com",
-          from: sender,
-          to: ["agent@caf-gpt.com"],
-          subject: "Threading",
-          body: "Body",
-          messageId,
-          headers,
-        })
-      );
-
-      return bindingSend.mock.calls[0][0];
-    });
-
-    expect(delivered.headers?.References).toBe(expectedReferences);
-  });
-
   it("quotes the inbound email below the answer and signature in Outlook's layout", async () => {
     const sender = "quote-layout@forces.gc.ca";
-    const stub = getUserAgentStub(sender);
 
     const signature =
       '<div class="MsoNormal">\n<br><br>\nCAF-GPT<br>\nSource Code:<br>\n<pre><code>https://github.com/taoi11/caf-gpt</code></pre>\nHow to use CAF-GPT:<br>\n<pre><code>https://caf-gpt.com</code></pre>\n</div>';
 
-    const delivered = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "quote-reply" });
-
+    const delivered = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
       mockSuccessfulSchedule(instance, "schedule-1");
       mockPrimeFoo(
         vi.fn(async () => ({
@@ -497,8 +392,9 @@ describe("UserAgent email processing", () => {
         }))
       );
 
-      await instance.onEmail(
-        createAgentEmail({
+      await resend.deliver(
+        instance,
+        createInboundEmail({
           envelopeFrom: sender,
           envelopeTo: "agent@caf-gpt.com",
           from: `"Dhaliwal, MCpl Luffy" <${sender}>`,
@@ -515,17 +411,11 @@ describe("UserAgent email processing", () => {
         })
       );
 
-      return bindingSend.mock.calls[0][0];
+      return resend.replies[0].body;
     });
 
     expect(delivered.subject).toBe("Re: Feedback note for Cpl Example");
-    // Threading headers are unchanged by the quote.
-    expect(delivered.headers).toEqual({
-      "In-Reply-To": "<current@forces.gc.ca>",
-      References: "<root@forces.gc.ca> <parent@forces.gc.ca> <current@forces.gc.ca>",
-      "X-Agent-ID": "quote-layout%40forces.gc.ca",
-      "X-Agent-Name": "user-agent",
-    });
+    expect(delivered.headers).toBeUndefined();
     const text = delivered.text ?? "";
     expect(text).toContain(
       [
@@ -561,24 +451,17 @@ describe("UserAgent email processing", () => {
     const sender = "sent-offset@forces.gc.ca";
     const stub = getUserAgentStub(sender);
 
-    const runTurn = (
-      nowIso: string,
-      outboundId: string,
-      fields: Partial<Parameters<typeof createAgentEmail>[0]>
-    ) =>
+    const runTurn = (nowIso: string, outboundId: string, fields: Partial<InboundEmailOptions>) =>
       runInDurableObject(stub, async (instance: UserAgent) => {
         vi.spyOn(Date, "now").mockReturnValue(Date.parse(nowIso));
-
-        const send = vi
-          .spyOn(getEmailBinding(instance), "send")
-          .mockResolvedValue({ messageId: outboundId });
-
+        const resend = installResendMock({ sentMessageId: () => outboundId });
         mockSuccessfulSchedule(instance, "schedule-1");
         // SAFETY: scheduleEvery resolves a Schedule; UserAgent ignores it, and the fixture is a complete one.
         vi.spyOn(instance, "scheduleEvery").mockResolvedValue(createMockSchedule("prune") as never);
         mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "<p>Ok</p>" })));
-        await instance.onEmail(
-          createAgentEmail({
+        await resend.deliver(
+          instance,
+          createInboundEmail({
             envelopeFrom: sender,
             envelopeTo: "agent@caf-gpt.com",
             from: sender,
@@ -595,8 +478,7 @@ describe("UserAgent email processing", () => {
         const offset = instance.sql<{ offset_minutes: number }>`
           SELECT offset_minutes FROM cafgpt_sent_offset`;
 
-        // The spy survives across runInDurableObject calls, so read this turn's (last) send.
-        const message = send.mock.calls.at(-1)?.[0];
+        const message = resend.replies.at(-1)?.body;
 
         return {
           text: message?.text ?? "",
@@ -619,19 +501,11 @@ describe("UserAgent email processing", () => {
     expect(first.offset).toBeUndefined();
 
     // The user's PC is on UTC-3: Outlook quoted our 17:30Z reply as 2:30 PM (HTML part only).
-    const quotedHtml =
-      "<div class=WordSection1><p class=MsoNormal>Thanks</p>" +
-      "<div style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>" +
-      "<p class=MsoNormal><b>From:</b> CAF-GPT &lt;agent@caf-gpt.com&gt;<br>" +
-      "<b>Sent:</b> Wednesday, October 28, 2026 2:30 PM<br>" +
-      "<b>To:</b> Luffy &lt;sent-offset@forces.gc.ca&gt;<br>" +
-      "<b>Subject:</b> Re: Leave</p></div></div>";
-
     const second = await runTurn("2026-10-28T17:46:00Z", "<reply2@caf-gpt.com>", {
       messageId: "<q2@forces.gc.ca>",
       date: "Wed, 28 Oct 2026 17:45:00 +0000",
       body: "Thanks",
-      html: quotedHtml,
+      html: buildQuotedReplyHtml("2:30 PM"),
       headers: {
         "in-reply-to": "<reply1@caf-gpt.com>",
         references: "<q1@forces.gc.ca> <reply1@caf-gpt.com>",
@@ -670,9 +544,89 @@ describe("UserAgent email processing", () => {
     expect(expired).toEqual({ times: 0, offsets: 0 });
   });
 
+  it("keeps a send time pending until Resend reports the reply's Message-ID", async () => {
+    const sender = "pending-sent@forces.gc.ca";
+    const stub = getUserAgentStub(sender);
+
+    const first = await runInDurableObject(stub, async (instance: UserAgent) => {
+      vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-28T17:30:10Z"));
+      const resend = installResendMock({ sentMessageId: () => null });
+      mockSuccessfulSchedule(instance, "schedule-1");
+      mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "<p>Ok</p>" })));
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          to: ["CAF-GPT <agent@caf-gpt.com>"],
+          subject: "Leave",
+          body: "PENDING-FIRST-ASK",
+          messageId: "<p1@forces.gc.ca>",
+          date: "Wed, 28 Oct 2026 17:29:00 +0000",
+        })
+      );
+
+      return {
+        replyId: resend.replyIds[0],
+        pending: instance.sql<{
+          count: number;
+        }>`SELECT COUNT(*) AS count FROM cafgpt_pending_sent_times`[0].count,
+      };
+    });
+
+    expect(first.pending).toBe(1);
+
+    const second = await runInDurableObject(stub, async (instance: UserAgent) => {
+      vi.spyOn(Date, "now").mockReturnValue(Date.parse("2026-10-28T17:46:00Z"));
+
+      const resend = installResendMock({
+        sentMessageId: (id) => (id === first.replyId ? "<late1@caf-gpt.com>" : `<${id}@caf-gpt>`),
+      });
+
+      mockSuccessfulSchedule(instance, "schedule-1");
+
+      const primeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
+        shouldRespond: true,
+        content: "<p>Ok</p>",
+      }));
+
+      mockPrimeFoo(primeFoo);
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          to: ["CAF-GPT <agent@caf-gpt.com>"],
+          subject: "RE: Leave",
+          body: "Thanks",
+          html: buildQuotedReplyHtml("2:30 PM"),
+          messageId: "<p2@forces.gc.ca>",
+          date: "Wed, 28 Oct 2026 17:45:00 +0000",
+          headers: { "in-reply-to": "<late1@caf-gpt.com>" },
+        })
+      );
+
+      return {
+        context: primeFoo.mock.calls[0][0],
+        offset: instance.sql<{
+          offset_minutes: number;
+        }>`SELECT offset_minutes FROM cafgpt_sent_offset`[0]?.offset_minutes,
+        pending: instance.sql<{
+          count: number;
+        }>`SELECT COUNT(*) AS count FROM cafgpt_pending_sent_times`[0].count,
+      };
+    });
+
+    // The late Message-ID resolves the send time and links the thread for In-Reply-To matching.
+    expect(second.offset).toBe(-180);
+    expect(second.pending).toBe(0);
+    expect(second.context).toContain("PENDING-FIRST-ASK");
+  });
+
   it("carries a multi-level Outlook chain forward from the inbound HTML body", async () => {
     const sender = "quote-chain@forces.gc.ca";
-    const stub = getUserAgentStub(sender);
 
     const inboundHtml = [
       "<html><head><style>p{color:red}</style></head><body>",
@@ -687,16 +641,14 @@ describe("UserAgent email processing", () => {
       "</body></html>",
     ].join("\n");
 
-    const delivered = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "chain-reply" });
-
+    const delivered = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
       mockSuccessfulSchedule(instance, "schedule-1");
       mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "<p>LEVEL-4 answer</p>" })));
 
-      await instance.onEmail(
-        createAgentEmail({
+      await resend.deliver(
+        instance,
+        createInboundEmail({
           envelopeFrom: sender,
           envelopeTo: "agent@caf-gpt.com",
           from: sender,
@@ -708,7 +660,7 @@ describe("UserAgent email processing", () => {
         })
       );
 
-      return bindingSend.mock.calls[0][0];
+      return resend.replies[0].body;
     });
 
     const html = delivered.html ?? "";
@@ -726,51 +678,52 @@ describe("UserAgent email processing", () => {
     expect(html).not.toContain("color:red");
     expect(html.match(/<html/g)).toHaveLength(1);
     expect(html.match(/<\/body>/g)).toHaveLength(1);
-    const text = delivered.text ?? "";
+    const text = delivered.text;
     expect(text.indexOf("LEVEL-4")).toBeLessThan(text.indexOf("Subject: RE: Re: chain"));
     expect(text.indexOf("LEVEL-3")).toBeLessThan(text.indexOf("LEVEL-1"));
   });
 
   it("fails loudly with the funny error reply instead of sending without the quote", async () => {
     const sender = "quote-fail@forces.gc.ca";
-    const stub = getUserAgentStub(sender);
 
-    const sent = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "error-reply" });
-
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
       mockSuccessfulSchedule(instance, "schedule-1");
       mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "<p>UNQUOTED-ANSWER</p>" })));
 
-      await instance.onEmail(
-        createAgentEmail({
-          envelopeFrom: sender,
-          envelopeTo: "agent@caf-gpt.com",
-          from: sender,
-          to: ["agent@caf-gpt.com"],
-          subject: "No date",
-          body: "Body",
-          date: null,
-          messageId: "<no-date@forces.gc.ca>",
-        })
-      );
+      const email = createInboundEmail({
+        envelopeFrom: sender,
+        envelopeTo: "agent@caf-gpt.com",
+        from: sender,
+        to: ["agent@caf-gpt.com"],
+        subject: "No date",
+        body: "Body",
+        date: null,
+        messageId: "<no-date@forces.gc.ca>",
+      });
 
-      return bindingSend.mock.calls.map(([message]) => message);
+      await resend.deliver(instance, email);
+
+      return { replies: resend.replies, emailId: email.task.emailId };
     });
 
-    expect(sent).toHaveLength(1);
-    expect(sent[0]).toMatchObject({ to: sender, subject: "Error Processing Email" });
-    expect(sent[0].text).toContain("I tried to write a reply and face-planted. Classic me.");
-    expect(JSON.stringify(sent[0])).not.toContain("UNQUOTED-ANSWER");
+    expect(result.replies).toHaveLength(1);
+    expect(result.replies[0].idempotencyKey).toBe(`caf-gpt-error/${result.emailId}`);
+    expect(result.replies[0].body).toMatchObject({
+      subject: "Error Processing Email",
+      reply_all: false,
+    });
+    expect(result.replies[0].body.text).toContain(
+      "I tried to write a reply and face-planted. Classic me."
+    );
+    expect(JSON.stringify(result.replies[0])).not.toContain("UNQUOTED-ANSWER");
   });
 
   it("keeps prior-turn context for Prime Foo on the user's next reply in the thread", async () => {
     const sender = "thread-memory@forces.gc.ca";
-    const stub = getUserAgentStub(sender);
 
-    const contexts = await runInDurableObject(stub, async (instance: UserAgent) => {
-      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({ messageId: "reply" });
+    const contexts = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
       mockSuccessfulSchedule(instance, "schedule-1");
 
       const primeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
@@ -787,8 +740,9 @@ describe("UserAgent email processing", () => {
         to: ["agent@caf-gpt.com"],
       };
 
-      await instance.onEmail(
-        createAgentEmail({
+      await resend.deliver(
+        instance,
+        createInboundEmail({
           ...base,
           subject: "Feedback note",
           body: "Pte Smith led the vehicle recovery TURN-ONE-NARRATIVE",
@@ -796,8 +750,9 @@ describe("UserAgent email processing", () => {
         })
       );
       // Outlook's reply to our message: References keeps turn 1, In-Reply-To is our reply's id.
-      await instance.onEmail(
-        createAgentEmail({
+      await resend.deliver(
+        instance,
+        createInboundEmail({
           ...base,
           subject: "RE: Feedback note",
           body: "Sgt TURN-TWO-ANSWER",
@@ -808,8 +763,9 @@ describe("UserAgent email processing", () => {
           },
         })
       );
-      await instance.onEmail(
-        createAgentEmail({
+      await resend.deliver(
+        instance,
+        createInboundEmail({
           ...base,
           subject: "RE: Feedback note",
           body: "Make it shorter TURN-THREE",
@@ -821,8 +777,9 @@ describe("UserAgent email processing", () => {
           },
         })
       );
-      await instance.onEmail(
-        createAgentEmail({
+      await resend.deliver(
+        instance,
+        createInboundEmail({
           ...base,
           subject: "Unrelated",
           body: "New topic UNRELATED",
@@ -852,11 +809,9 @@ describe("UserAgent email processing", () => {
     const owner = "thread-owner@forces.gc.ca";
     const other = "thread-other@forces.gc.ca";
 
-    const runTurn = (sender: string, fields: Partial<Parameters<typeof createAgentEmail>[0]>) =>
+    const runTurn = (sender: string, fields: Partial<InboundEmailOptions>) =>
       runInDurableObject(getUserAgentStub(sender), async (instance: UserAgent) => {
-        vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
-          messageId: `out-${sender}`,
-        });
+        const resend = installResendMock({ sentMessageId: () => `<out-${sender}>` });
         mockSuccessfulSchedule(instance, "schedule-1");
 
         const primeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
@@ -865,8 +820,9 @@ describe("UserAgent email processing", () => {
         }));
 
         mockPrimeFoo(primeFoo);
-        await instance.onEmail(
-          createAgentEmail({
+        await resend.deliver(
+          instance,
+          createInboundEmail({
             envelopeFrom: sender,
             envelopeTo: "agent@caf-gpt.com",
             from: sender,
@@ -909,13 +865,14 @@ describe("UserAgent email processing", () => {
     // A very long answer cannot push the inbound email out of the stored turn.
     const longSender = "thread-long@forces.gc.ca";
     await runInDurableObject(getUserAgentStub(longSender), async (instance: UserAgent) => {
-      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({ messageId: "out" });
+      const resend = installResendMock();
       mockSuccessfulSchedule(instance, "schedule-1");
       mockPrimeFoo(
         vi.fn(async () => ({ shouldRespond: true, content: `<p>${"x".repeat(30_000)}</p>` }))
       );
-      await instance.onEmail(
-        createAgentEmail({
+      await resend.deliver(
+        instance,
+        createInboundEmail({
           envelopeFrom: longSender,
           envelopeTo: "agent@caf-gpt.com",
           from: longSender,
@@ -949,12 +906,13 @@ describe("UserAgent email processing", () => {
     const unscheduled = await runInDurableObject(
       getUserAgentStub("thread-unscheduled@forces.gc.ca"),
       async (instance: UserAgent) => {
-        vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({ messageId: "out" });
+        const resend = installResendMock();
         mockSuccessfulSchedule(instance, "schedule-1");
         vi.spyOn(instance, "scheduleEvery").mockRejectedValue(new Error("schedule unavailable"));
         mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "<p>Ok</p>" })));
-        await instance.onEmail(
-          createAgentEmail({
+        await resend.deliver(
+          instance,
+          createInboundEmail({
             envelopeFrom: "thread-unscheduled@forces.gc.ca",
             envelopeTo: "agent@caf-gpt.com",
             from: "thread-unscheduled@forces.gc.ca",
@@ -988,54 +946,42 @@ describe("UserAgent email processing", () => {
   });
 
   it("treats blank real-coordinator output as an intentional no-response decision", async () => {
-    const stub = getUserAgentStub("blank-output@forces.gc.ca");
+    const sender = "blank-output@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "blank-output@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "blank-output@forces.gc.ca",
-        to: ["agent@caf-gpt.com", "ally@forces.gc.ca"],
-        cc: ["second@forces.gc.ca"],
-        subject: "Question",
-        body: "Sensitive inbound body",
-        messageId: "<blank-output@forces.gc.ca>",
-      });
-
+    const replies = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
       mockGenerateText.mockResolvedValueOnce({ text: "", steps: [] });
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
 
-      await instance.onEmail(email);
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          to: ["agent@caf-gpt.com", "ally@forces.gc.ca"],
+          cc: ["second@forces.gc.ca"],
+          subject: "Question",
+          body: "Sensitive inbound body",
+          messageId: "<blank-output@forces.gc.ca>",
+        })
+      );
 
-      return {
-        replies: getReplyCalls(email),
-        structuredSends: bindingSend.mock.calls.length,
-      };
+      return resend.replies.length;
     });
 
-    expect(result.structuredSends).toBe(0);
-    expect(result.replies).toHaveLength(0);
+    expect(replies).toBe(0);
   });
 
   it.each([
     "model",
     "storage",
-  ])("routes real coordinator %s failures to one plain sender-only error reply", async (_label) => {
-    const stub = getUserAgentStub(`${_label}@forces.gc.ca`);
+  ])("routes real coordinator %s failures to one plain sender-only error reply", async (label) => {
+    const sender = `${label}@forces.gc.ca`;
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: `${_label}@forces.gc.ca`,
-        envelopeTo: "agent@caf-gpt.com",
-        from: `${_label}@forces.gc.ca`,
-        to: ["agent@caf-gpt.com", "ally@forces.gc.ca"],
-        cc: ["second@forces.gc.ca"],
-        subject: "Question",
-        body: "Sensitive inbound body",
-        messageId: `<${_label}@forces.gc.ca>`,
-      });
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
 
-      if (_label === "model") {
+      if (label === "model") {
         mockGenerateText.mockRejectedValueOnce(new Error("model down with sensitive content"));
       } else {
         mockGenerateText.mockImplementationOnce(async (options: PrimeCoordinatorCallOptions) => {
@@ -1047,291 +993,217 @@ describe("UserAgent email processing", () => {
         });
       }
 
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
+      const email = createInboundEmail({
+        envelopeFrom: sender,
+        envelopeTo: "agent@caf-gpt.com",
+        from: sender,
+        to: ["agent@caf-gpt.com", "ally@forces.gc.ca"],
+        cc: ["second@forces.gc.ca"],
+        subject: "Question",
+        body: "Sensitive inbound body",
+        messageId: `<${label}@forces.gc.ca>`,
+      });
 
-      await instance.onEmail(email);
+      await resend.deliver(instance, email);
 
-      return { replies: getReplyCalls(email), structuredSends: bindingSend.mock.calls };
+      return { replies: resend.replies, emailId: email.task.emailId };
     });
 
-    expect(result.structuredSends).toHaveLength(1);
-    expect(result.replies).toHaveLength(0);
-    const sent = result.structuredSends[0][0];
-    expect(sent).toMatchObject({
-      from: { email: "agent@caf-gpt.com", name: "CAF-GPT" },
-      to: `${_label}@forces.gc.ca`,
+    expect(result.replies).toHaveLength(1);
+    const sent = result.replies[0];
+    expect(sent.idempotencyKey).toBe(`caf-gpt-error/${result.emailId}`);
+    expect(sent.body).toEqual({
       subject: "Error Processing Email",
-      headers: {
-        "In-Reply-To": `<${_label}@forces.gc.ca>`,
-        References: `<${_label}@forces.gc.ca>`,
-      },
+      text: expect.any(String),
+      reply_all: false,
     });
-    expect(sent.text).toBeTypeOf("string");
-    expect(sent.html).toBeUndefined();
-    expect(sent.headers).not.toHaveProperty("Message-ID");
     expect(JSON.stringify(sent)).not.toContain("Sensitive inbound body");
     expect(JSON.stringify(sent)).not.toContain("ally@forces.gc.ca");
   });
 
-  it("resolves validation failures without AI work", async () => {
-    const stub = getUserAgentStub("invalid@forces.gc.ca");
+  it("skips the error reply when Reply-To names another address", async () => {
+    const sender = "reply-to-other@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
+    const replies = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
+      mockPrimeFoo(vi.fn());
 
-      const email = createAgentEmail({
-        envelopeFrom: "invalid@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "invalid@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Empty",
-        body: "",
-        messageId: "<invalid@forces.gc.ca>",
-      });
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          replyTo: ["victim@example.com"],
+          to: ["agent@caf-gpt.com"],
+          subject: "Empty",
+          body: "",
+        })
+      );
 
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-      mockPrimeFoo(processWithPrimeFoo);
-
-      await instance.onEmail(email);
-
-      return {
-        aiCalls: processWithPrimeFoo.mock.calls.length,
-        replies: getReplyCalls(email).length,
-        sends: bindingSend.mock.calls.length,
-      };
+      return resend.replies.length;
     });
 
-    expect(result).toEqual({ aiCalls: 0, replies: 0, sends: 1 });
+    expect(replies).toBe(0);
+  });
+
+  it("resolves validation failures without AI work", async () => {
+    const sender = "invalid@forces.gc.ca";
+
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
+      mockPrimeFoo(processWithPrimeFoo);
+
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          to: ["agent@caf-gpt.com"],
+          subject: "Empty",
+          body: "",
+          messageId: "<invalid@forces.gc.ca>",
+        })
+      );
+
+      return { aiCalls: processWithPrimeFoo.mock.calls.length, sends: resend.replies.length };
+    });
+
+    expect(result).toEqual({ aiCalls: 0, sends: 1 });
   });
 
   it.each([
     ["missing", undefined],
     ["malformed", "not-a-message-id"],
-  ])("omits %s threading values from structured error replies", async (label, messageId) => {
-    const sender = `${label}@forces.gc.ca`;
-    const stub = getUserAgentStub(sender);
+    ["control-character", "=?utf-8?Q?<forged@attacker.example>=00?="],
+  ])("sends error replies without custom headers for %s threading values", async (label, id) => {
+    const sender = `${label}-threading@forces.gc.ca`;
 
-    const sent = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-
-      const email = createAgentEmail({
-        envelopeFrom: sender,
-        envelopeTo: "agent@caf-gpt.com",
-        from: sender,
-        to: ["agent@caf-gpt.com"],
-        subject: "Invalid",
-        body: "",
-        messageId,
-      });
-
+    const sent = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
       mockPrimeFoo(vi.fn());
 
-      await instance.onEmail(email);
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          to: ["agent@caf-gpt.com"],
+          subject: "Invalid",
+          body: "",
+          messageId: "<current@forces.gc.ca>",
+          headers: id ? { "in-reply-to": id } : {},
+        })
+      );
 
-      return bindingSend.mock.calls[0][0];
+      return resend.replies[0];
     });
 
-    expect(sent.to).toBe(sender);
-    expect(sent.headers ?? {}).not.toHaveProperty("Message-ID");
-    expect(sent.headers ?? {}).not.toHaveProperty("In-Reply-To");
-    expect(sent.headers ?? {}).not.toHaveProperty("References");
-  });
-
-  it("excludes an encoded control-character In-Reply-To from the structured error reply", async () => {
-    const sender = "invalid-in-reply-to@forces.gc.ca";
-    const currentMessageId = "<safe-current@forces.gc.ca>";
-    const invalidInReplyTo = "=?utf-8?Q?<forged@attacker.example>=00?=";
-    const stub = getUserAgentStub(sender);
-
-    const sent = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-
-      const email = createAgentEmail({
-        envelopeFrom: sender,
-        envelopeTo: "agent@caf-gpt.com",
-        from: sender,
-        to: ["agent@caf-gpt.com"],
-        subject: "Invalid threading",
-        body: "Body",
-        messageId: currentMessageId,
-        headers: { "in-reply-to": invalidInReplyTo },
-      });
-
-      mockPrimeFoo(vi.fn());
-
-      await instance.onEmail(email);
-
-      return bindingSend.mock.calls[0][0];
-    });
-
-    expect(sent.headers).toMatchObject({
-      "In-Reply-To": currentMessageId,
-      References: currentMessageId,
-    });
+    expect(sent.body.headers).toBeUndefined();
     expect(JSON.stringify(sent)).not.toContain("forged@attacker.example");
-    expect(JSON.stringify(sent)).not.toContain(invalidInReplyTo);
   });
 
-  it("handles each repeated invalid delivery independently", async () => {
-    const stub = getUserAgentStub("repeated-invalid@forces.gc.ca");
+  it("reuses one Idempotency-Key when the same email is processed twice", async () => {
+    const sender = "repeated-invalid@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "repeated-invalid@forces.gc.ca",
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
+      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
+      mockPrimeFoo(processWithPrimeFoo);
+
+      const email = createInboundEmail({
+        envelopeFrom: sender,
         envelopeTo: "agent@caf-gpt.com",
-        from: "repeated-invalid@forces.gc.ca",
+        from: sender,
         to: ["agent@caf-gpt.com"],
         subject: "Empty",
         body: "",
         messageId: "<repeated-invalid@forces.gc.ca>",
       });
 
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
-      mockPrimeFoo(processWithPrimeFoo);
-
-      await instance.onEmail(email);
-      await instance.onEmail(email);
+      await resend.deliver(instance, email);
+      await resend.deliver(instance, email);
 
       return {
-        structuredSends: bindingSend.mock.calls.length,
-        messageIds: bindingSend.mock.calls.map(([message]) => message.headers?.["Message-ID"]),
+        keys: resend.replies.map((reply) => reply.idempotencyKey),
         aiCalls: processWithPrimeFoo.mock.calls.length,
-        replies: getReplyCalls(email).length,
-        rawReads: getRawCalls(email).length,
+        emailId: email.task.emailId,
       };
     });
 
-    expect(result).toMatchObject({ structuredSends: 2, aiCalls: 0, replies: 0, rawReads: 2 });
-    expect(result.messageIds).toEqual([undefined, undefined]);
-  });
-
-  it("processes repeated deliveries twice without a deduplication ledger", async () => {
-    const stub = getUserAgentStub("duplicate@forces.gc.ca");
-
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "duplicate@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "duplicate@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Duplicate",
-        body: "Same delivery",
-        messageId: "<duplicate@forces.gc.ca>",
-      });
-
-      const processWithPrimeFoo = vi.fn(async () => ({
-        shouldRespond: true,
-        content: "One response",
-      }));
-
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "reply" });
-
-      const schedule = mockSuccessfulSchedule(instance, "memory");
-      mockPrimeFoo(processWithPrimeFoo);
-
-      await instance.onEmail(email);
-      await instance.onEmail(email);
-
-      return {
-        aiCalls: processWithPrimeFoo.mock.calls.length,
-        sends: bindingSend.mock.calls.length,
-        schedules: schedule.mock.calls,
-      };
-    });
-
-    expect(result.aiCalls).toBe(2);
-    expect(result.sends).toBe(2);
-    expect(result.schedules).toHaveLength(2);
-    expect(result.schedules[0]).toEqual([
-      1,
-      "runMemoryUpdate",
-      {
-        emailContext: expect.any(String),
-        agentReply: "One response",
-      },
-      { retry: { maxAttempts: 3 }, idempotent: true },
+    // Resend keeps the key for 24 hours, so the second request does not send a second email.
+    expect(result.aiCalls).toBe(0);
+    expect(result.keys).toEqual([
+      `caf-gpt-error/${result.emailId}`,
+      `caf-gpt-error/${result.emailId}`,
     ]);
   });
 
-  it("sends one structured error for each repeated raw-read failure", async () => {
-    const stub = getUserAgentStub("parse@forces.gc.ca");
+  it("sends one sender-only error when the raw download fails", async () => {
+    const sender = "parse@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "parse@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "parse@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Parse",
-        body: "Body",
-        messageId: "<parse@forces.gc.ca>",
-        rawFailure: new Error("raw read failed"),
-      });
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
 
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          to: ["agent@caf-gpt.com"],
+          subject: "Parse",
+          body: "Body",
+          messageId: "<parse@forces.gc.ca>",
+          rawFailureStatus: 403,
+        })
+      );
 
-      await instance.onEmail(email);
-      await instance.onEmail(email);
-
-      return { sends: bindingSend.mock.calls, rawReads: getRawCalls(email).length };
+      return resend.replies;
     });
 
-    expect(result.sends).toHaveLength(2);
-    expect(result.sends[0][0].to).toBe("parse@forces.gc.ca");
-    expect(result.rawReads).toBe(2);
+    expect(result).toHaveLength(1);
+    expect(result[0].body.subject).toBe("Error Processing Email");
   });
 
-  it("does not send a fallback or schedule memory after sendEmail fails", async () => {
-    const stub = getUserAgentStub("send-failure@forces.gc.ca");
+  it("does not send a fallback or schedule memory after the reply request fails", async () => {
+    const sender = "send-failure@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "send-failure@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "send-failure@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Question",
-        body: "Body",
-        messageId: "<send-failure@forces.gc.ca>",
-      });
-
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock({ replyFailureStatus: 503 });
       const schedule = vi.spyOn(instance, "schedule");
-      vi.spyOn(getEmailBinding(instance), "send").mockRejectedValue(
-        new Error("email service unavailable")
-      );
       mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "Response" })));
 
-      await instance.onEmail(email);
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          to: ["agent@caf-gpt.com"],
+          subject: "Question",
+          body: "Body",
+          messageId: "<send-failure@forces.gc.ca>",
+        })
+      );
 
       return {
         schedules: schedule.mock.calls.length,
-        replies: getReplyCalls(email).length,
+        replyKeys: resend.replies.map((reply) => reply.idempotencyKey.split("/")[0]),
       };
     });
 
-    expect(result).toEqual({ schedules: 0, replies: 0 });
+    expect(result).toEqual({ schedules: 0, replyKeys: ["caf-gpt-reply"] });
   });
 
   it("swallows error-reply failures", async () => {
-    const stub = getUserAgentStub("reply-failure@forces.gc.ca");
+    const sender = "reply-failure@forces.gc.ca";
 
-    await runInDurableObject(stub, async (instance: UserAgent) => {
-      const email = createAgentEmail({
-        envelopeFrom: "reply-failure@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "reply-failure@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Question",
-        body: "Body",
-        messageId: "<reply-failure@forces.gc.ca>",
-      });
-
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockRejectedValue(new Error("reply rejected"));
+    await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock({ replyFailureStatus: 500 });
 
       mockPrimeFoo(
         vi.fn(async () => {
@@ -1339,62 +1211,75 @@ describe("UserAgent email processing", () => {
         })
       );
 
-      await expect(instance.onEmail(email)).resolves.toBeUndefined();
-      expect(bindingSend).toHaveBeenCalledOnce();
-      expect(getReplyCalls(email)).toHaveLength(0);
+      await expect(
+        resend.deliver(
+          instance,
+          createInboundEmail({
+            envelopeFrom: sender,
+            envelopeTo: "agent@caf-gpt.com",
+            from: sender,
+            to: ["agent@caf-gpt.com"],
+            subject: "Question",
+            body: "Body",
+            messageId: "<reply-failure@forces.gc.ca>",
+          })
+        )
+      ).resolves.toBeUndefined();
+      expect(resend.replies).toHaveLength(1);
     });
   });
 
   it("does not process self-loop emails", async () => {
-    const stub = getUserAgentStub("agent@caf-gpt.com");
+    const aiCalls = await runInDurableObject(
+      getUserAgentStub("agent@caf-gpt.com"),
+      async (instance) => {
+        const resend = installResendMock();
+        const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
+        mockPrimeFoo(processWithPrimeFoo);
 
-    const aiCalls = await runInDurableObject(stub, async (instance: UserAgent) => {
-      const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
-      mockPrimeFoo(processWithPrimeFoo);
+        await resend.deliver(
+          instance,
+          createInboundEmail({
+            envelopeFrom: "agent@caf-gpt.com",
+            envelopeTo: "agent@caf-gpt.com",
+            from: "agent@caf-gpt.com",
+            to: ["agent@caf-gpt.com"],
+            subject: "Loop",
+            body: "Loop body",
+            messageId: "<loop@caf-gpt.com>",
+          })
+        );
 
-      await instance.onEmail(
-        createAgentEmail({
-          envelopeFrom: "agent@caf-gpt.com",
-          envelopeTo: "agent@caf-gpt.com",
-          from: "agent@caf-gpt.com",
-          to: ["agent@caf-gpt.com"],
-          subject: "Loop",
-          body: "Loop body",
-          messageId: "<loop@caf-gpt.com>",
-        })
-      );
-
-      return processWithPrimeFoo.mock.calls.length;
-    });
+        return processWithPrimeFoo.mock.calls.length + resend.replies.length;
+      }
+    );
 
     expect(aiCalls).toBe(0);
   });
 
   it("suppresses auto-response messages without AI work or a reply", async () => {
-    const stub = getUserAgentStub("auto-response@forces.gc.ca");
+    const sender = "auto-response@forces.gc.ca";
 
-    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
       const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>();
-
-      const email = createAgentEmail({
-        envelopeFrom: "auto-response@forces.gc.ca",
-        envelopeTo: "agent@caf-gpt.com",
-        from: "auto-response@forces.gc.ca",
-        to: ["agent@caf-gpt.com"],
-        subject: "Automatic reply",
-        body: "Away",
-        messageId: "<auto-response@forces.gc.ca>",
-        headers: { "auto-submitted": "auto-replied" },
-      });
-
       mockPrimeFoo(processWithPrimeFoo);
 
-      await instance.onEmail(email);
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: sender,
+          to: ["agent@caf-gpt.com"],
+          subject: "Automatic reply",
+          body: "Away",
+          messageId: "<auto-response@forces.gc.ca>",
+          headers: { "auto-submitted": "auto-replied" },
+        })
+      );
 
-      return {
-        aiCalls: processWithPrimeFoo.mock.calls.length,
-        replies: getReplyCalls(email).length,
-      };
+      return { aiCalls: processWithPrimeFoo.mock.calls.length, replies: resend.replies.length };
     });
 
     expect(result).toEqual({ aiCalls: 0, replies: 0 });
@@ -1518,44 +1403,19 @@ function getUserAgentStub(senderEmail: string): DurableObjectStub<UserAgent> {
   return env.UserAgent.get(env.UserAgent.idFromName(getUserAgentId(senderEmail)));
 }
 
-/** Gets the structured Email Service binding held by a UserAgent instance. */
-function getEmailBinding(instance: UserAgent): Env["EMAIL"] {
-  // SAFETY: The Agents SDK initializes every UserAgent with its configured Env binding object.
-  const runtimeAccess = instance as UserAgent & { env: Env };
-
-  return runtimeAccess.env.EMAIL;
+/** Outlook's HTML quote of our 17:30Z reply as shown on a PC at the given local time. */
+function buildQuotedReplyHtml(localTime: string): string {
+  return (
+    "<div class=WordSection1><p class=MsoNormal>Thanks</p>" +
+    "<div style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>" +
+    "<p class=MsoNormal><b>From:</b> CAF-GPT &lt;agent@caf-gpt.com&gt;<br>" +
+    `<b>Sent:</b> Wednesday, October 28, 2026 ${localTime}<br>` +
+    "<b>To:</b> Luffy &lt;sent-offset@forces.gc.ca&gt;<br>" +
+    "<b>Subject:</b> Re: Leave</p></div></div>"
+  );
 }
-
-type StructuredEmailMessage = Parameters<Env["EMAIL"]["send"]>[0];
 
 type UserAgentSchedule = Awaited<ReturnType<UserAgent["schedule"]>>;
-
-type MockAgentEmail = Omit<AgentEmail, "getRaw" | "setReject" | "forward" | "reply"> & {
-  getRaw: Mock<AgentEmail["getRaw"]>;
-  setReject: Mock<AgentEmail["setReject"]>;
-  forward: Mock<AgentEmail["forward"]>;
-  reply: Mock<AgentEmail["reply"]>;
-};
-
-interface AgentEmailOptions {
-  envelopeFrom: string;
-  envelopeTo: string;
-  from: string;
-  replyTo?: string[];
-  to: string[];
-  cc?: string[];
-  bcc?: string[];
-  subject: string;
-  body: string;
-  /** Date header; defaults to a fixed date, null omits it. */
-  date?: string | null;
-  html?: string;
-  messageId?: string;
-  headers?: Record<string, string>;
-  rawOverride?: string;
-  rawFailure?: Error;
-  replyFailure?: Error;
-}
 
 interface PrimeCoordinatorCallOptions {
   tools?: {
@@ -1592,112 +1452,4 @@ function mockSuccessfulSchedule(instance: UserAgent, id: string) {
   schedule.mockResolvedValue(createMockSchedule(id) as never);
 
   return schedule;
-}
-
-/** Builds a mock AgentEmail with configurable RFC and envelope recipients. */
-function createAgentEmail(options: AgentEmailOptions): MockAgentEmail {
-  const raw = options.rawOverride ?? buildRawEmail(options);
-
-  const headers = new Headers({
-    from: options.from,
-    to: options.to.join(", "),
-    subject: options.subject,
-  });
-
-  if (options.replyTo?.length) headers.set("reply-to", options.replyTo.join(", "));
-
-  if (options.cc?.length) headers.set("cc", options.cc.join(", "));
-
-  if (options.bcc?.length) headers.set("bcc", options.bcc.join(", "));
-
-  if (options.messageId) headers.set("message-id", options.messageId);
-
-  for (const [name, value] of Object.entries(options.headers ?? {})) headers.set(name, value);
-
-  const getRaw = options.rawFailure
-    ? vi.fn<AgentEmail["getRaw"]>(async () => {
-        throw options.rawFailure;
-      })
-    : vi.fn<AgentEmail["getRaw"]>(async () => new TextEncoder().encode(raw));
-
-  const reply = options.replyFailure
-    ? vi.fn<AgentEmail["reply"]>(async () => {
-        throw options.replyFailure;
-      })
-    : vi.fn<AgentEmail["reply"]>(async () => ({ messageId: "mock-reply" }));
-
-  return {
-    from: options.envelopeFrom,
-    to: options.envelopeTo,
-    headers,
-    rawSize: raw.length,
-    getRaw,
-    setReject: vi.fn<AgentEmail["setReject"]>(),
-    forward: vi.fn<AgentEmail["forward"]>(),
-    reply,
-  };
-}
-
-/** Returns the typed inbound reply calls for a mock AgentEmail. */
-function getReplyCalls(email: MockAgentEmail): Array<[Parameters<AgentEmail["reply"]>[0]]> {
-  return email.reply.mock.calls;
-}
-
-/** Returns the recorded raw-read calls for a mock AgentEmail. */
-function getRawCalls(email: MockAgentEmail): Array<Parameters<AgentEmail["getRaw"]>> {
-  return email.getRaw.mock.calls;
-}
-
-/** Builds a mock top-level Email Worker message. */
-function createRoutingMessage(options: {
-  from: string;
-  to: string;
-  headers?: Record<string, string>;
-}) {
-  return {
-    from: options.from,
-    to: options.to,
-    headers: new Headers(options.headers),
-    raw: new ReadableStream<Uint8Array>(),
-    rawSize: 0,
-    setReject: vi.fn<ForwardableEmailMessage["setReject"]>(),
-    forward: vi.fn<ForwardableEmailMessage["forward"]>(),
-    reply: vi.fn<ForwardableEmailMessage["reply"]>(),
-  } satisfies ForwardableEmailMessage;
-}
-
-/** Builds raw MIME fixtures; Bcc is present only to prove it is never propagated. */
-function buildRawEmail(options: AgentEmailOptions): string {
-  const headers = [
-    `From: ${options.from}`,
-    ...(options.replyTo?.length ? [`Reply-To: ${options.replyTo.join(", ")}`] : []),
-    `To: ${options.to.join(", ")}`,
-    ...(options.cc?.length ? [`Cc: ${options.cc.join(", ")}`] : []),
-    ...(options.bcc?.length ? [`Bcc: ${options.bcc.join(", ")}`] : []),
-    `Subject: ${options.subject}`,
-    ...(options.messageId ? [`Message-ID: ${options.messageId}`] : []),
-    ...(options.date === null
-      ? []
-      : [`Date: ${options.date ?? "Wed, 28 Oct 2026 17:29:00 +0000"}`]),
-    ...Object.entries(options.headers ?? {}).map(([name, value]) => `${name}: ${value}`),
-  ];
-
-  if (options.html) {
-    return [
-      ...headers,
-      'Content-Type: multipart/alternative; boundary="caf-gpt-test"',
-      "",
-      "--caf-gpt-test",
-      "Content-Type: text/plain; charset=utf-8",
-      "",
-      options.body,
-      "--caf-gpt-test",
-      "Content-Type: text/html; charset=utf-8",
-      "",
-      options.html,
-      "--caf-gpt-test--",
-    ].join("\r\n");
-  }
-
-  return `${[...headers, "Content-Type: text/plain; charset=utf-8"].join("\r\n")}\r\n\r\n${options.body}`;
 }

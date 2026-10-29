@@ -6,20 +6,20 @@
  * Top-level declarations:
  * - mockClefChoice: Mocks env.AI.run to return a Clef reply/no_reply choice
  * - getUserAgentStub: Gets a per-sender UserAgent Durable Object stub
- * - getEmailBinding: Gets the UserAgent's structured Email Service binding
- * - createAgentEmail: Builds a mock AgentEmail with configurable RFC and envelope recipients
+ *
+ * Inbound email and Resend API calls come from tests/workers/resendHarness (mocked fetch only).
  */
 
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
 import { reset, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { AgentEmail } from "agents/email";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
 import { type ClefAiRunner, CLEF_MODEL } from "../../src/agents/utils/ClefDecision";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
+import { createInboundEmail, installResendMock } from "./resendHarness";
 
 afterEach(async () => {
   vi.restoreAllMocks();
@@ -31,6 +31,8 @@ describe("UserAgent Clef injection screen", () => {
     const stub = getUserAgentStub("clef-no-reply@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const resend = installResendMock();
+
       const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
         shouldRespond: true,
         content: "<p>should not send</p>",
@@ -42,7 +44,7 @@ describe("UserAgent Clef injection screen", () => {
 
       mockClefChoice("no_reply", 0.93);
 
-      const email = createAgentEmail({
+      const email = createInboundEmail({
         envelopeFrom: "clef-no-reply@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
         from: "clef-no-reply@forces.gc.ca",
@@ -52,24 +54,23 @@ describe("UserAgent Clef injection screen", () => {
         messageId: "<clef-no-reply@forces.gc.ca>",
       });
 
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-
-      await instance.onEmail(email);
+      await resend.deliver(instance, email);
 
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
-        structuredSends: bindingSend.mock.calls.length,
-        replies: email.reply.mock.calls.length,
+        structuredSends: resend.replies.length,
       };
     });
 
-    expect(result).toEqual({ primeFooCalls: 0, structuredSends: 0, replies: 0 });
+    expect(result).toEqual({ primeFooCalls: 0, structuredSends: 0 });
   });
 
-  it("propagates Clef AI.run outages to the onEmail error boundary", async () => {
+  it("propagates Clef AI.run outages to the processing error boundary", async () => {
     const stub = getUserAgentStub("clef-error@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const resend = installResendMock();
+
       const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
         shouldRespond: true,
         content: "<p>should not send</p>",
@@ -89,7 +90,7 @@ describe("UserAgent Clef injection screen", () => {
         throw new Error(`Unexpected AI.run model: ${String(model)}`);
       });
 
-      const email = createAgentEmail({
+      const email = createInboundEmail({
         envelopeFrom: "clef-error@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
         from: "clef-error@forces.gc.ca",
@@ -99,23 +100,19 @@ describe("UserAgent Clef injection screen", () => {
         messageId: "<clef-error@forces.gc.ca>",
       });
 
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-
-      await instance.onEmail(email);
+      await resend.deliver(instance, email);
 
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
-        structuredSends: bindingSend.mock.calls,
-        replies: email.reply.mock.calls.length,
+        structuredSends: resend.replies,
       };
     });
 
     expect(result.primeFooCalls).toBe(0);
-    expect(result.replies).toBe(0);
     expect(result.structuredSends).toHaveLength(1);
-    expect(result.structuredSends[0][0]).toMatchObject({
-      to: "clef-error@forces.gc.ca",
+    expect(result.structuredSends[0].body).toMatchObject({
       subject: "Error Processing Email",
+      reply_all: false,
     });
   });
 
@@ -124,6 +121,8 @@ describe("UserAgent Clef injection screen", () => {
     const manyRecipients = Array.from({ length: 51 }, (_, i) => `user${i}@forces.gc.ca`);
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const resend = installResendMock();
+
       const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
         shouldRespond: true,
         content: "<p>should not send</p>",
@@ -134,7 +133,7 @@ describe("UserAgent Clef injection screen", () => {
       );
       mockClefChoice("no_reply", 0.95);
 
-      const email = createAgentEmail({
+      const email = createInboundEmail({
         envelopeFrom: "clef-many-rcpt@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
         from: "clef-many-rcpt@forces.gc.ca",
@@ -144,24 +143,22 @@ describe("UserAgent Clef injection screen", () => {
         messageId: "<clef-many-rcpt@forces.gc.ca>",
       });
 
-      const bindingSend = vi.spyOn(getEmailBinding(instance), "send");
-
-      await instance.onEmail(email);
+      await resend.deliver(instance, email);
 
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
-        structuredSends: bindingSend.mock.calls.length,
-        replies: email.reply.mock.calls.length,
+        structuredSends: resend.replies.length,
       };
     });
 
-    expect(result).toEqual({ primeFooCalls: 0, structuredSends: 0, replies: 0 });
+    expect(result).toEqual({ primeFooCalls: 0, structuredSends: 0 });
   });
 
   it("passes user memory into the Clef gate state", async () => {
     const stub = getUserAgentStub("clef-memory@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const resend = installResendMock();
       instance.setState({
         memory: "User previously asked to draft a leave request.",
         versions: [],
@@ -207,7 +204,7 @@ describe("UserAgent Clef injection screen", () => {
         delayInSeconds: 1,
       });
 
-      const email = createAgentEmail({
+      const email = createInboundEmail({
         envelopeFrom: "clef-memory@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
         from: "clef-memory@forces.gc.ca",
@@ -217,11 +214,7 @@ describe("UserAgent Clef injection screen", () => {
         messageId: "<clef-memory@forces.gc.ca>",
       });
 
-      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
-        messageId: "structured-reply",
-      });
-
-      await instance.onEmail(email);
+      await resend.deliver(instance, email);
       const clefCall = runSpy.mock.calls.find((call) => call[0] === CLEF_MODEL);
       const inputs = clefCall?.[1];
 
@@ -247,6 +240,8 @@ describe("UserAgent Clef injection screen", () => {
     const stub = getUserAgentStub("clef-reply@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const resend = installResendMock();
+
       const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(async () => ({
         shouldRespond: true,
         content: "<p>AI response</p>",
@@ -265,7 +260,7 @@ describe("UserAgent Clef injection screen", () => {
         delayInSeconds: 1,
       });
 
-      const email = createAgentEmail({
+      const email = createInboundEmail({
         envelopeFrom: "clef-reply@forces.gc.ca",
         envelopeTo: "agent@caf-gpt.com",
         from: "clef-reply@forces.gc.ca",
@@ -275,15 +270,11 @@ describe("UserAgent Clef injection screen", () => {
         messageId: "<clef-reply@forces.gc.ca>",
       });
 
-      const bindingSend = vi
-        .spyOn(getEmailBinding(instance), "send")
-        .mockResolvedValue({ messageId: "structured-reply" });
-
-      await instance.onEmail(email);
+      await resend.deliver(instance, email);
 
       return {
         primeFooCalls: processWithPrimeFoo.mock.calls.length,
-        structuredSends: bindingSend.mock.calls.length,
+        structuredSends: resend.replies.length,
       };
     });
 
@@ -321,58 +312,4 @@ function mockClefChoice(choice: "reply" | "no_reply", confidence: number): void 
 /** Gets a per-sender UserAgent Durable Object stub. */
 function getUserAgentStub(senderEmail: string) {
   return env.UserAgent.get(env.UserAgent.idFromName(getUserAgentId(senderEmail)));
-}
-
-/** Gets the structured Email Service binding held by a UserAgent instance. */
-function getEmailBinding(instance: UserAgent): Env["EMAIL"] {
-  // SAFETY: Agent stores its constructor Env on the runtime instance; this test reads only EMAIL.
-  const runtimeAccess = instance as UserAgent & { env: Env };
-
-  return runtimeAccess.env.EMAIL;
-}
-
-interface AgentEmailOptions {
-  envelopeFrom: string;
-  envelopeTo: string;
-  from: string;
-  to: string[];
-  subject: string;
-  body: string;
-  messageId?: string;
-}
-
-type MockAgentEmail = AgentEmail & {
-  reply: ReturnType<typeof vi.fn<AgentEmail["reply"]>>;
-};
-
-/** Builds a mock AgentEmail with configurable RFC and envelope recipients. */
-function createAgentEmail(options: AgentEmailOptions): MockAgentEmail {
-  const raw = [
-    `From: ${options.from}`,
-    `To: ${options.to.join(", ")}`,
-    `Subject: ${options.subject}`,
-    ...(options.messageId ? [`Message-ID: ${options.messageId}`] : []),
-    "Content-Type: text/plain; charset=utf-8",
-    "",
-    options.body,
-  ].join("\r\n");
-
-  const headers = new Headers({
-    from: options.from,
-    to: options.to.join(", "),
-    subject: options.subject,
-  });
-
-  if (options.messageId) headers.set("message-id", options.messageId);
-
-  return {
-    from: options.envelopeFrom,
-    to: options.envelopeTo,
-    headers,
-    rawSize: raw.length,
-    getRaw: vi.fn(async () => new TextEncoder().encode(raw)),
-    setReject: vi.fn(),
-    forward: vi.fn(),
-    reply: vi.fn(async () => ({ messageId: "mock-reply" })),
-  };
 }

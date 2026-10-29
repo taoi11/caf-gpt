@@ -14,22 +14,22 @@
  * - expectNoSensitiveContent: Asserts serialized logs omit addresses, subject, body, and Message-ID
  * - mockClefChoice: Mocks env.AI.run to return a Clef reply/no_reply choice
  * - getUserAgentStub: Gets a per-sender UserAgent Durable Object stub
- * - getEmailBinding: Gets the UserAgent's structured Email Service binding
- * - createAgentEmail: Builds a mock AgentEmail
+ * - deliverEmail: Delivers a fixture email (raw MIME behind a mocked Resend API) to a UserAgent
+ *
+ * Webhook-boundary log lines ("Email routed", unauthorized senders) are covered in
+ * ResendWebhookRoute.test.ts.
  */
 
 /// <reference types="@cloudflare/vitest-pool-workers/types" />
 
-import { createExecutionContext, reset, runInDurableObject } from "cloudflare:test";
+import { reset, runInDurableObject } from "cloudflare:test";
 import { env } from "cloudflare:workers";
-import type { AgentEmail } from "agents/email";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
 import { CLEF_MODEL } from "../../src/agents/utils/ClefDecision";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
-import { EMAIL_REF_HEADER } from "../../src/email/utils/LogRedaction";
-import worker, { createUserAgentResolver } from "../../src/index";
+import { createInboundEmail, installResendMock, type ResendMock } from "./resendHarness";
 
 const SENDER = "Luffy.Dhaliwal@forces.gc.ca";
 const SUBJECT = "Secret subject line";
@@ -55,7 +55,7 @@ describe("inbound email logging contract", () => {
         content: "<p>should not send</p>",
       });
       mockClefChoice("no_reply", 0.93);
-      await instance.onEmail(createAgentEmail({}));
+      await deliverEmail(instance, {});
 
       return logs;
     });
@@ -70,7 +70,7 @@ describe("inbound email logging contract", () => {
     expect(lines.every((line) => line.emailRef === emailRef)).toBe(true);
     expect(lines[0]).toMatchObject({
       senderDomain: "forces.gc.ca",
-      receivingDomain: "caf-gpt.com",
+      resendEmailId: expect.stringMatching(/^email-\d+$/),
     });
     expect(lines[1]).toMatchObject({
       choice: "no_reply",
@@ -91,9 +91,7 @@ describe("inbound email logging contract", () => {
 
     const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
       const logs = captureLogs();
-      await instance.onEmail(
-        createAgentEmail({ headers: { "Auto-Submitted": "auto-replied secret-value" } })
-      );
+      await deliverEmail(instance, { headers: { "Auto-Submitted": "auto-replied secret-value" } });
 
       return logs;
     });
@@ -113,9 +111,10 @@ describe("inbound email logging contract", () => {
 
     const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
       const logs = captureLogs();
-      await instance.onEmail(
-        createAgentEmail({ envelopeFrom: "agent@caf-gpt.com", from: "agent@caf-gpt.com" })
-      );
+      await deliverEmail(instance, {
+        envelopeFrom: "agent@caf-gpt.com",
+        from: "agent@caf-gpt.com",
+      });
 
       return logs;
     });
@@ -143,10 +142,7 @@ describe("inbound email logging contract", () => {
         time: 1,
         delayInSeconds: 1,
       } as never);
-      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
-        messageId: "structured-reply",
-      });
-      await instance.onEmail(createAgentEmail({}));
+      await deliverEmail(instance, {});
 
       return logs;
     });
@@ -178,10 +174,7 @@ describe("inbound email logging contract", () => {
         time: 1,
         delayInSeconds: 1,
       } as never);
-      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
-        messageId: "structured-reply",
-      });
-      await instance.onEmail(createAgentEmail({ headers: { "Thread-Topic": SUBJECT } }));
+      await deliverEmail(instance, { headers: { "Thread-Topic": SUBJECT } });
 
       return logs;
     });
@@ -216,14 +209,11 @@ describe("inbound email logging contract", () => {
         time: 1,
         delayInSeconds: 1,
       } as never);
+      const resend = installResendMock();
 
-      const send = vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
-        messageId: "structured-reply",
-      });
+      await deliverEmail(instance, { from: `"Dhaliwal, Luffy" <${SENDER}>`, html }, resend);
 
-      await instance.onEmail(createAgentEmail({ from: `"Dhaliwal, Luffy" <${SENDER}>`, html }));
-
-      return { lines: logs, sent: send.mock.calls[0][0] };
+      return { lines: logs, sent: resend.replies[0].body };
     });
 
     // The reply itself does quote the sender, subject, and body.
@@ -256,14 +246,11 @@ describe("inbound email logging contract", () => {
         content: "<p>Reply that must not go out without its quote</p>",
       });
       mockClefChoice("reply", 0.91);
+      const resend = installResendMock();
 
-      const send = vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
-        messageId: "error-reply",
-      });
+      await deliverEmail(instance, { omitDate: true }, resend);
 
-      await instance.onEmail(createAgentEmail({ omitDate: true }));
-
-      return { lines: logs, sent: send.mock.calls.map(([message]) => message) };
+      return { lines: logs, sent: resend.replies.map((reply) => reply.body) };
     });
 
     expect(lines.find((line) => line.message === "Quoted history build failed")).toMatchObject({
@@ -314,16 +301,15 @@ describe("inbound email logging contract", () => {
       mockClefChoice("reply", 0.91);
       // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
       vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
+      const resend = installResendMock();
 
-      const send = vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
-        messageId: "<structured-reply@caf-gpt.com>",
-      });
-
-      await instance.onEmail(
-        createAgentEmail({ body, headers: { "in-reply-to": "<unknown-reply@caf-gpt.com>" } })
+      await deliverEmail(
+        instance,
+        { body, headers: { "in-reply-to": "<unknown-reply@caf-gpt.com>" } },
+        resend
       );
 
-      return { lines: logs, sent: send.mock.calls.map(([message]) => message) };
+      return { lines: logs, sent: resend.replies.map((reply) => reply.body) };
     });
 
     expect(lines.find((line) => line.message === "Quoted Sent time zone not learned")).toEqual({
@@ -380,10 +366,10 @@ describe("inbound email logging contract", () => {
       mockClefChoice("reply", 0.91);
       // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
       vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
-      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({ messageId: "next-reply" });
-      await instance.onEmail(
-        createAgentEmail({ body, headers: { "in-reply-to": "<earlier-reply@caf-gpt.com>" } })
-      );
+      await deliverEmail(instance, {
+        body,
+        headers: { "in-reply-to": "<earlier-reply@caf-gpt.com>" },
+      });
 
       return logs;
     });
@@ -408,10 +394,7 @@ describe("inbound email logging contract", () => {
       vi.spyOn(getAiRunStub(), "run").mockRejectedValue(
         new Error(`AI failed for ${SENDER}: ${BODY}`)
       );
-      vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
-        messageId: "error-reply",
-      });
-      await instance.onEmail(createAgentEmail({}));
+      await deliverEmail(instance, {});
 
       return logs;
     });
@@ -431,36 +414,6 @@ describe("inbound email logging contract", () => {
     expectNoSensitiveContent(lines);
   });
 
-  it("tags the Worker boundary Email routed line with the same emailRef and no address", async () => {
-    const logs = captureLogs();
-    const resolver = createUserAgentResolver(env);
-    await resolver(
-      {
-        from: SENDER,
-        to: "agent@caf-gpt.com",
-        headers: new Headers({
-          "message-id": MESSAGE_ID,
-          subject: SUBJECT,
-          [EMAIL_REF_HEADER]: WORKER_EMAIL_REF,
-        }),
-        raw: new ReadableStream<Uint8Array>(),
-        rawSize: 0,
-        setReject: vi.fn(),
-        forward: vi.fn(),
-        reply: vi.fn(),
-      },
-      env
-    );
-
-    const routed = logs.find((line) => line.message === "Email routed");
-    expect(routed).toMatchObject({
-      emailRef: WORKER_EMAIL_REF,
-      senderDomain: "forces.gc.ca",
-      receivingDomain: "caf-gpt.com",
-    });
-    expectNoSensitiveContent(logs);
-  });
-
   it("gives emails without a Message-ID or Worker ref distinct emailRefs, never none", async () => {
     const stub = getUserAgentStub(SENDER);
 
@@ -473,8 +426,8 @@ describe("inbound email logging contract", () => {
         omitEmailRef: true,
       };
 
-      await instance.onEmail(createAgentEmail(options));
-      await instance.onEmail(createAgentEmail(options));
+      await deliverEmail(instance, options);
+      await deliverEmail(instance, options);
 
       return logs
         .filter((line) => line.message === "Inbound email outcome")
@@ -485,58 +438,6 @@ describe("inbound email logging contract", () => {
     expect(refs[0]).toMatch(EMAIL_REF_PATTERN);
     expect(refs[1]).toMatch(EMAIL_REF_PATTERN);
     expect(refs[0]).not.toBe(refs[1]);
-  });
-
-  it("assigns one Worker emailRef per message and overwrites a sender-supplied ref header", async () => {
-    const logs = captureLogs();
-    const spoofedRef = "ffffffffffffffff";
-    const setReject = vi.fn();
-    await worker.email(
-      {
-        from: "outsider.person@example.com",
-        to: "agent@caf-gpt.com",
-        headers: new Headers({ "message-id": MESSAGE_ID, [EMAIL_REF_HEADER]: spoofedRef }),
-        raw: new ReadableStream<Uint8Array>(),
-        rawSize: 0,
-        setReject,
-        forward: vi.fn(),
-        reply: vi.fn(),
-      },
-      env,
-      createExecutionContext()
-    );
-
-    const ignored = logs.find((line) => line.message === "Email ignored - sender not authorized");
-    const rejected = logs.find((line) => line.message === "Email rejected - no UserAgent route");
-    expect(ignored?.emailRef).toMatch(EMAIL_REF_PATTERN);
-    expect(ignored?.emailRef).not.toBe(spoofedRef);
-    expect(rejected?.emailRef).toBe(ignored?.emailRef);
-    expect(setReject).toHaveBeenCalledOnce();
-    expect(JSON.stringify(logs)).not.toContain("outsider.person");
-  });
-
-  it("logs unauthorized senders by domain only", async () => {
-    const logs = captureLogs();
-    const resolver = createUserAgentResolver(env);
-    await resolver(
-      {
-        from: "outsider.person@example.com",
-        to: "agent@caf-gpt.com",
-        headers: new Headers({ "message-id": MESSAGE_ID }),
-        raw: new ReadableStream<Uint8Array>(),
-        rawSize: 0,
-        setReject: vi.fn(),
-        forward: vi.fn(),
-        reply: vi.fn(),
-      },
-      env
-    );
-
-    expect(logs[0]).toMatchObject({
-      message: "Email ignored - sender not authorized",
-      senderDomain: "example.com",
-    });
-    expect(JSON.stringify(logs)).not.toContain("outsider.person");
   });
 });
 
@@ -616,16 +517,8 @@ function getUserAgentStub(senderEmail: string) {
   return env.UserAgent.get(env.UserAgent.idFromName(getUserAgentId(senderEmail)));
 }
 
-/** Gets the structured Email Service binding held by a UserAgent instance. */
-function getEmailBinding(instance: UserAgent): Env["EMAIL"] {
-  // SAFETY: UserAgent extends Agent, which stores the Worker env on the protected env field.
-  const runtimeAccess = instance as UserAgent & { env: Env };
-
-  return runtimeAccess.env.EMAIL;
-}
-
-/** Builds a mock AgentEmail as routed by the Worker (with its emailRef header) from an authorized sender. */
-function createAgentEmail(options: {
+/** Fixture overrides for one inbound email from the authorized test sender. */
+interface DeliveryOptions {
   envelopeFrom?: string;
   from?: string;
   headers?: Record<string, string>;
@@ -634,56 +527,30 @@ function createAgentEmail(options: {
   omitDate?: boolean;
   html?: string;
   body?: string;
-}): AgentEmail {
-  const from = options.from ?? SENDER;
-  const extraHeaders = Object.entries(options.headers ?? {}).map(([k, v]) => `${k}: ${v}`);
+}
 
-  const raw = [
-    `From: ${from}`,
-    "To: agent@caf-gpt.com",
-    `Subject: ${SUBJECT}`,
-    ...(options.omitMessageId ? [] : [`Message-ID: ${MESSAGE_ID}`]),
-    ...(options.omitDate ? [] : [`Date: ${DATE_HEADER}`]),
-    ...extraHeaders,
-    ...(options.html
-      ? [
-          'Content-Type: multipart/alternative; boundary="b1"',
-          "",
-          "--b1",
-          "Content-Type: text/plain; charset=utf-8",
-          "",
-          BODY,
-          "--b1",
-          "Content-Type: text/html; charset=utf-8",
-          "",
-          options.html,
-          "--b1--",
-        ]
-      : ["Content-Type: text/plain; charset=utf-8", "", options.body ?? BODY]),
-  ].join("\r\n");
+/**
+ * Delivers a fixture email as the Worker would route it (with its emailRef) through a mocked
+ * Resend API, creating the fetch mock unless the test passes one to inspect replies.
+ */
+async function deliverEmail(
+  instance: UserAgent,
+  options: DeliveryOptions,
+  resend: ResendMock = installResendMock()
+): Promise<void> {
+  const email = createInboundEmail({
+    envelopeFrom: options.envelopeFrom ?? SENDER,
+    envelopeTo: "agent@caf-gpt.com",
+    from: options.from ?? SENDER,
+    to: ["agent@caf-gpt.com"],
+    subject: SUBJECT,
+    body: options.body ?? BODY,
+    html: options.html,
+    date: options.omitDate ? null : DATE_HEADER,
+    messageId: options.omitMessageId ? undefined : MESSAGE_ID,
+    headers: options.headers,
+  });
 
-  const headers = new Headers({ from, to: "agent@caf-gpt.com", subject: SUBJECT });
-
-  if (!options.omitMessageId) {
-    headers.set("message-id", MESSAGE_ID);
-  }
-
-  if (!options.omitEmailRef) {
-    headers.set(EMAIL_REF_HEADER, WORKER_EMAIL_REF);
-  }
-
-  for (const [name, value] of Object.entries(options.headers ?? {})) {
-    headers.set(name, value);
-  }
-
-  return {
-    from: options.envelopeFrom ?? SENDER,
-    to: "agent@caf-gpt.com",
-    headers,
-    rawSize: raw.length,
-    getRaw: vi.fn(async () => new TextEncoder().encode(raw)),
-    setReject: vi.fn(),
-    forward: vi.fn(),
-    reply: vi.fn(async () => ({ messageId: "mock-reply" })),
-  };
+  email.task.emailRef = options.omitEmailRef ? "" : WORKER_EMAIL_REF;
+  await resend.deliver(instance, email);
 }

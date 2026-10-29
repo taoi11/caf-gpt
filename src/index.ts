@@ -1,37 +1,43 @@
 /**
  * src/index.ts
  *
- * Entry point for Cloudflare Worker with HTTP and Agent-routed Email Worker handlers
+ * Entry point for the Cloudflare Worker: HTTP health/static routes and the Resend Inboxes webhook
+ * that hands inbound email to the sender's UserAgent Durable Object. There is no Email Routing
+ * handler; Resend is the only mail path, and a missing secret fails loudly (500, so Resend retries
+ * once it is configured).
  *
- * Top-level functions:
+ * Top-level declarations:
  * - UserAgent: Durable Object-backed per-user email agent
+ * - RESEND_WEBHOOK_PATH: Path Resend posts inbox.email.received events to
  * - EmailBoundaryMetadata: Safe sender/recipient domain and emailRef metadata for boundary logs
- * - EmailRoutingFailureMetadata: Parsed error metadata for top-level routing failures
- * - createUserAgentResolver: Creates the sender-keyed Agents SDK email resolver
+ * - WebhookOutcome: Fixed outcome codes for the webhook route
  * - isAuthorizedSender: Checks configured sender allow list
  * - isMonitoredRecipient: Checks monitored recipient addresses
- * - rejectEmailSafely: Attempts an SMTP rejection without allowing it to escape
- * - withEmailRefHeader: Wraps the inbound message so the UserAgent receives the emailRef header
- * - fetch: HTTP handler for health checks and static assets
- * - email: Email Worker handler for inbound email processing
+ * - readBoundedBody: Reads the raw request body, refusing bodies over the size limit
+ * - jsonResponse: Small JSON response with a fixed, content-free outcome code
+ * - handleResendWebhook: Verifies a Resend webhook and routes the email to its UserAgent
+ * - fetch: HTTP handler for the webhook, health checks and static assets
  * - default: Default export for Cloudflare Worker
  */
 
-import { routeAgentEmail } from "agents";
-import type { EmailResolver } from "agents/email";
+import { getAgentByName } from "agents";
 import { getUserAgentId, UserAgent } from "./agents/UserAgent";
 import { createConfig } from "./config";
-import { normalizeEmailAddress } from "./email/utils/EmailNormalizer";
 import {
-  createEmailRef,
-  EMAIL_REF_HEADER,
-  getEmailRefFromHeaders,
-  getLogSafeDomain,
-} from "./email/utils/LogRedaction";
+  parseResendWebhookEvent,
+  RESEND_WEBHOOK_MAX_BODY_BYTES,
+  verifyResendWebhook,
+  type WebhookRejectReason,
+} from "./email/resend/ResendWebhook";
+import { normalizeEmailAddress } from "./email/utils/EmailNormalizer";
+import { createEmailRef, getLogSafeDomain, toLoggableResendId } from "./email/utils/LogRedaction";
 import { isAuthorizedEmailAddress } from "./email/utils/ReplyRecipients";
 import { getSafeErrorMetadata, Logger } from "./Logger";
 
 export { UserAgent };
+
+/** Path Resend posts inbox.email.received events to (the webhook endpoint URL's path). */
+export const RESEND_WEBHOOK_PATH = "/webhooks/resend";
 
 /** Safe sender/recipient domains plus the content-free emailRef for inbound boundary logs. */
 interface EmailBoundaryMetadata {
@@ -40,51 +46,18 @@ interface EmailBoundaryMetadata {
   receivingDomain: string;
 }
 
-/** Parsed error metadata for a top-level inbound email routing failure. */
-interface EmailRoutingFailureMetadata extends EmailBoundaryMetadata {
-  errorName: string;
-  errorCode?: string;
-  routedToAgent: boolean;
-}
-
-/** Creates the Agents SDK email resolver for authorized sender-keyed routing. */
-export function createUserAgentResolver(env: Env, config = createConfig(env)): EmailResolver<Env> {
-  const logger = Logger.getInstance();
-
-  return async (emailMessage) => {
-    const senderEmail = normalizeEmailAddress(emailMessage.from);
-    const recipientEmail = normalizeEmailAddress(emailMessage.to);
-
-    const metadata: EmailBoundaryMetadata = {
-      emailRef: getEmailRefFromHeaders(emailMessage.headers),
-      senderDomain: getLogSafeDomain(senderEmail),
-      receivingDomain: getLogSafeDomain(recipientEmail),
-    };
-
-    if (!isAuthorizedSender(senderEmail, config)) {
-      logger.info("Email ignored - sender not authorized", metadata);
-
-      return null;
-    }
-
-    if (!isMonitoredRecipient(recipientEmail, config)) {
-      logger.info("Email ignored - recipient not monitored", metadata);
-
-      return null;
-    }
-
-    logger.info("Email routed", {
-      ...metadata,
-      route: "email",
-      status: "routed",
-    });
-
-    return {
-      agentName: "UserAgent",
-      agentId: getUserAgentId(senderEmail),
-    };
-  };
-}
+/** Fixed outcome codes for the webhook route (logged and returned; never content). */
+type WebhookOutcome =
+  | WebhookRejectReason
+  | "webhook_misconfigured"
+  | "event_ignored"
+  | "email_missing"
+  | "outbound_ignored"
+  | "sender_not_authorized"
+  | "recipient_not_monitored"
+  | "accepted"
+  | "duplicate"
+  | "routing_failed";
 
 /** Checks configured sender allow list. */
 function isAuthorizedSender(senderEmail: string, config: ReturnType<typeof createConfig>): boolean {
@@ -101,36 +74,183 @@ function isMonitoredRecipient(
   );
 }
 
-/** Attempts an SMTP rejection without allowing platform errors to escape. */
-function rejectEmailSafely(
-  message: ForwardableEmailMessage,
-  reason: string,
-  logger: Logger,
-  context: EmailBoundaryMetadata
-): void {
-  try {
-    message.setReject(reason);
-  } catch (error) {
-    logger.error("Email rejection failed", {
-      ...context,
-      errorName: getSafeErrorMetadata(error).errorName,
+/** Reads the raw request body as text, or undefined when it is over the size limit. */
+async function readBoundedBody(request: Request): Promise<string | undefined> {
+  const declared = Number(request.headers.get("content-length") ?? "0");
+
+  if (declared > RESEND_WEBHOOK_MAX_BODY_BYTES) return undefined;
+  const body = await request.text();
+
+  return new TextEncoder().encode(body).byteLength > RESEND_WEBHOOK_MAX_BODY_BYTES
+    ? undefined
+    : body;
+}
+
+/** Small JSON response carrying only a fixed outcome code. */
+function jsonResponse(status: number, outcome: WebhookOutcome): Response {
+  return new Response(JSON.stringify({ outcome }), {
+    status,
+    headers: { "Content-Type": "application/json" },
+  });
+}
+
+/**
+ * Verifies a Resend webhook and routes an inbound inbox email to the sender's UserAgent.
+ * Unsigned, badly signed, stale or malformed requests get a 4xx with a fixed reason; events
+ * CAF-GPT does not act on get a 200 so Resend does not retry them; a routing failure gets a 500
+ * so Resend retries (the UserAgent deduplicates by email id, so a retry never replies twice).
+ * Docs: https://resend.com/docs/webhooks/verify-webhooks-requests
+ */
+async function handleResendWebhook(request: Request, env: Env): Promise<Response> {
+  const logger = Logger.getInstance();
+
+  if (!env.RESEND_WEBHOOK_SECRET || !env.RESEND_API_KEY) {
+    logger.error("Resend webhook rejected", {
+      reason: "webhook_misconfigured",
+      missingWebhookSecret: !env.RESEND_WEBHOOK_SECRET,
+      missingApiKey: !env.RESEND_API_KEY,
     });
+
+    return jsonResponse(500, "webhook_misconfigured");
+  }
+
+  const rawBody = await readBoundedBody(request);
+
+  if (rawBody === undefined) {
+    logger.warn("Resend webhook rejected", { reason: "webhook_body_too_large" });
+
+    return jsonResponse(413, "webhook_body_too_large");
+  }
+
+  const verification = await verifyResendWebhook(
+    env.RESEND_WEBHOOK_SECRET,
+    request.headers,
+    rawBody,
+    Date.now()
+  );
+
+  if (!verification.ok) {
+    if (verification.reason === "webhook_bad_secret") {
+      logger.error("Resend webhook rejected", { reason: verification.reason });
+
+      return jsonResponse(500, verification.reason);
+    }
+
+    logger.warn("Resend webhook rejected", { reason: verification.reason });
+
+    return jsonResponse(
+      verification.reason === "webhook_missing_headers" ? 400 : 401,
+      verification.reason
+    );
+  }
+
+  const parsed = parseResendWebhookEvent(rawBody);
+
+  if (!parsed.ok) {
+    logger.warn("Resend webhook rejected", { reason: parsed.reason });
+
+    return jsonResponse(400, parsed.reason);
+  }
+
+  if (parsed.event.type !== "inbox.email.received") {
+    logger.info("Resend webhook ignored", { reason: "event_ignored" });
+
+    return jsonResponse(200, "event_ignored");
+  }
+
+  const { event } = parsed;
+  const emailRef = createEmailRef();
+
+  if (!event.email) {
+    logger.info("Resend webhook ignored", {
+      emailRef,
+      reason: "email_missing",
+      resendEmailId: toLoggableResendId(event.emailId),
+    });
+
+    return jsonResponse(200, "email_missing");
+  }
+
+  const senderEmail = normalizeEmailAddress(event.email.from);
+  const recipients = event.email.to.map((address) => normalizeEmailAddress(address));
+
+  const metadata: EmailBoundaryMetadata = {
+    emailRef,
+    senderDomain: getLogSafeDomain(senderEmail),
+    receivingDomain: getLogSafeDomain(recipients[0]),
+  };
+
+  if (event.email.direction !== "inbound") {
+    logger.info("Resend webhook ignored", { ...metadata, reason: "outbound_ignored" });
+
+    return jsonResponse(200, "outbound_ignored");
+  }
+
+  const config = createConfig(env);
+
+  if (!isAuthorizedSender(senderEmail, config)) {
+    logger.info("Email ignored - sender not authorized", metadata);
+
+    return jsonResponse(200, "sender_not_authorized");
+  }
+
+  if (!recipients.some((recipient) => isMonitoredRecipient(recipient, config))) {
+    logger.info("Email ignored - recipient not monitored", metadata);
+
+    return jsonResponse(200, "recipient_not_monitored");
+  }
+
+  logger.info("Email routed", {
+    ...metadata,
+    route: "resend_webhook",
+    status: "routed",
+    resendEmailId: toLoggableResendId(event.emailId),
+  });
+
+  try {
+    const agent = await getAgentByName(env.UserAgent, getUserAgentId(senderEmail));
+
+    const acceptance = await agent.receiveResendEmail({
+      emailRef,
+      inboxId: event.inboxId,
+      threadId: event.threadId,
+      emailId: event.emailId,
+      from: senderEmail,
+      replyTo: event.email.replyTo.map((address) => normalizeEmailAddress(address)),
+    });
+
+    logger.info("Email handed off to UserAgent", { ...metadata, acceptance });
+
+    return jsonResponse(200, acceptance);
+  } catch (error) {
+    logger.error("Top-level email routing failed", {
+      ...metadata,
+      ...getSafeErrorMetadata(error),
+    });
+
+    return jsonResponse(500, "routing_failed");
   }
 }
 
-/** Handles HTTP health checks and static assets. */
+/** Handles the Resend webhook, HTTP health checks and static assets. */
 async function fetch(request: Request, env: Env): Promise<Response> {
   const startTime = Date.now();
   const logger = Logger.getInstance();
   const url = new URL(request.url);
   let response: Response;
-  let outcome: "prompts-blocked" | "health" | "favicon" | "error" | "asset";
+  let outcome: "prompts-blocked" | "health" | "favicon" | "webhook" | "error" | "asset";
 
   try {
     // Block public access to internal prompts (still available via ASSETS binding internally)
     if (url.pathname.startsWith("/prompts/")) {
       response = new Response("Not Found", { status: 404 });
       outcome = "prompts-blocked";
+    } else if (url.pathname === RESEND_WEBHOOK_PATH) {
+      response =
+        request.method === "POST"
+          ? await handleResendWebhook(request, env)
+          : new Response("Method Not Allowed", { status: 405, headers: { Allow: "POST" } });
+      outcome = "webhook";
     } else if (url.pathname === "/health" && request.method === "GET") {
       response = new Response("OK", { status: 200 });
       outcome = "health";
@@ -168,123 +288,6 @@ async function fetch(request: Request, env: Env): Promise<Response> {
   return response;
 }
 
-/**
- * Wraps the inbound message so its headers carry the Worker-assigned emailRef to the UserAgent.
- * The value always overwrites any sender-supplied header of the same name.
- * @param message - Inbound platform email message
- * @param emailRef - Random per-message correlation id
- */
-function withEmailRefHeader(
-  message: ForwardableEmailMessage,
-  emailRef: string
-): ForwardableEmailMessage {
-  const headers = new Headers(message.headers);
-  headers.set(EMAIL_REF_HEADER, emailRef);
-
-  return {
-    from: message.from,
-    to: message.to,
-    headers,
-    get raw() {
-      return message.raw;
-    },
-    rawSize: message.rawSize,
-    setReject: (reason) => message.setReject(reason),
-    forward: (rcptTo, extraHeaders) => message.forward(rcptTo, extraHeaders),
-    reply: (reply) => message.reply(reply),
-  };
-}
-
-/** Routes inbound email into the per-user UserAgent Durable Object. */
-async function email(
-  message: ForwardableEmailMessage,
-  env: Env,
-  _ctx: ExecutionContext
-): Promise<void> {
-  const startTime = Date.now();
-  const logger = Logger.getInstance();
-  const emailRef = createEmailRef();
-
-  const metadata = {
-    emailRef,
-    senderDomain: getLogSafeDomain(message.from),
-    receivingDomain: getLogSafeDomain(message.to),
-  } satisfies EmailBoundaryMetadata;
-
-  if (!env.EMAIL) {
-    logger.error("Email service configuration unavailable", {
-      ...metadata,
-      missingEmailBinding: !env.EMAIL,
-    });
-    rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
-
-    return;
-  }
-
-  let config: ReturnType<typeof createConfig>;
-
-  try {
-    config = createConfig(env);
-  } catch (error) {
-    logger.error("Email authorization configuration unavailable", {
-      ...metadata,
-      ...getSafeErrorMetadata(error),
-    });
-    rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
-
-    return;
-  }
-
-  const resolver = createUserAgentResolver(env, config);
-  let routedToAgent = false;
-
-  try {
-    await routeAgentEmail(withEmailRefHeader(message, emailRef), env, {
-      resolver: async (emailMessage, resolverEnv) => {
-        const route = await resolver(emailMessage, resolverEnv);
-        routedToAgent = route !== null;
-
-        return route;
-      },
-      onNoRoute: (emailMessage) => {
-        logger.warn("Email rejected - no UserAgent route", {
-          ...metadata,
-        });
-        rejectEmailSafely(
-          emailMessage,
-          "Unauthorized sender or unknown recipient",
-          logger,
-          metadata
-        );
-      },
-    });
-
-    if (routedToAgent) {
-      // Worker-side proof the UserAgent call returned; the DO's own outcome line carries the reason.
-      logger.info("Email handed off to UserAgent", {
-        ...metadata,
-        durationMs: Date.now() - startTime,
-      });
-    }
-  } catch (error) {
-    const { errorName, errorCode } = getSafeErrorMetadata(error);
-
-    const failureMetadata: EmailRoutingFailureMetadata = {
-      ...metadata,
-      errorName,
-      routedToAgent,
-    };
-
-    if (errorCode !== undefined) {
-      failureMetadata.errorCode = errorCode;
-    }
-
-    logger.error("Top-level email routing failed", failureMetadata);
-    rejectEmailSafely(message, "Service temporarily unavailable", logger, metadata);
-  }
-}
-
 export default {
   fetch,
-  email,
 };

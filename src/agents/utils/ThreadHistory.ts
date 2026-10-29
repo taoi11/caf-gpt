@@ -15,6 +15,7 @@
  * - getThreadMessageIds: Valid Message-IDs that link an inbound email to an earlier turn
  * - loadThreadHistory: Finds the stored thread for an inbound email and returns its history
  * - recordThreadTurn: Stores the replied-to inbound email as the newest turn of its thread
+ * - linkThreadMessageId: Maps one more Message-ID (a reply's, learned late) to a stored thread
  * - pruneThreadHistory: Deletes expired turns and mappings; returns the turns left
  */
 
@@ -56,7 +57,7 @@ interface TurnRow {
   block: string;
 }
 
-/** Normalizes an Email Service message id to an angle-bracketed Message-ID, if valid. */
+/** Normalizes a sent message id to an angle-bracketed Message-ID, if valid. */
 function toMessageId(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const messageId = value.startsWith("<") ? value : `<${value}>`;
@@ -144,9 +145,11 @@ export function loadThreadHistory(
  * @param parsedEmail - Parsed inbound email that was answered
  * @param block - Plain-text history block for this turn (our reply, then the inbound email)
  * @param existingThreadId - Thread id returned by loadThreadHistory, when one matched
- * @param outboundMessageId - Message-ID Email Service assigned our reply, so a reply that carries
- *   only In-Reply-To (no References) still matches
+ * @param outboundMessageId - Message-ID Resend assigned our reply, so a reply that carries
+ *   only In-Reply-To (no References) still matches; when not known yet it is linked later
+ *   with linkThreadMessageId
  * @param now - Current epoch milliseconds
+ * @returns The thread id the turn was stored under, if any
  */
 export function recordThreadTurn(
   sql: ThreadSql,
@@ -155,7 +158,7 @@ export function recordThreadTurn(
   existingThreadId: string | undefined,
   outboundMessageId: string | undefined,
   now: number
-): void {
+): string | undefined {
   ensureThreadTables(sql);
 
   const ownId =
@@ -167,7 +170,7 @@ export function recordThreadTurn(
   const replyId = toMessageId(outboundMessageId);
   const threadId = existingThreadId ?? ownId ?? linkedIds[0] ?? replyId;
 
-  if (!threadId) return;
+  if (!threadId) return undefined;
 
   const storedBlock = block.slice(0, THREAD_HISTORY_MAX_CHARS);
   void sql`INSERT INTO cafgpt_thread_turns (thread_id, created_at, block) VALUES (${threadId}, ${now}, ${storedBlock})`;
@@ -182,6 +185,30 @@ export function recordThreadTurn(
     SELECT id FROM cafgpt_thread_turns WHERE thread_id = ${threadId}
     ORDER BY created_at DESC, id DESC LIMIT ${THREAD_HISTORY_MAX_TURNS})`;
   pruneThreadHistory(sql, now);
+
+  return threadId;
+}
+
+/**
+ * Maps one more Message-ID to a stored thread: our reply's, when Resend had not assigned it yet
+ * at send time (see SentTimeZone pending send times).
+ * @param sql - Agent SQL surface
+ * @param threadId - Thread id returned by recordThreadTurn
+ * @param messageId - Message-ID to map
+ * @param now - Current epoch milliseconds
+ */
+export function linkThreadMessageId(
+  sql: ThreadSql,
+  threadId: string,
+  messageId: string,
+  now: number
+): void {
+  ensureThreadTables(sql);
+  const replyId = toMessageId(messageId);
+
+  if (!replyId) return;
+  void sql`INSERT OR REPLACE INTO cafgpt_thread_messages (message_id, thread_id, created_at)
+    VALUES (${replyId}, ${threadId}, ${now})`;
 }
 
 /**

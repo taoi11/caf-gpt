@@ -4,7 +4,7 @@
  * Type definitions for email processing components
  *
  * Top-level declarations:
- * - ParsedEmailData: Parsed email data from Cloudflare Email Worker inbound event
+ * - ParsedEmailData: Parsed inbound email (raw MIME from Resend plus its authenticated envelope)
  * - ThreadingHeaders: RFC 5322 threading headers
  */
 
@@ -28,7 +28,6 @@ export interface ParsedEmailData {
   date?: Date;
   /** Outlook-style display headers (names kept, real Date only) for the reply's quoted history. */
   quoteHeaders?: QuoteHeaders;
-  originalMessage?: ForwardableEmailMessage;
 }
 
 export interface ThreadingHeaders {

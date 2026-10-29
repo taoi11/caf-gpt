@@ -4,7 +4,7 @@
 
 ```text
 src/
-├── index.ts                    # Main entry point with HTTP + Agents SDK email routing
+├── index.ts                    # Main entry point: HTTP + Resend webhook route
 ├── types.ts                    # TypeScript interfaces
 ├── email/
 │   ├── components/              # Email processing components
@@ -40,7 +40,7 @@ src/
 
 ## Dependencies
 
-- **postal-mime**: MIME parser for Cloudflare Email Worker inbound messages
+- **postal-mime**: MIME parser for the raw inbound email downloaded from Resend
 - **agents**: Cloudflare Agents SDK for Durable Object-backed email routing, sending, state, and scheduling
 - **ai** + **@ai-sdk/openai** + **workers-ai-provider**: Vercel AI SDK OpenAI Responses provider routed through the Cloudflare AI binding/Gateway
 - **zod**: Schema validation for structured agent responses
@@ -50,7 +50,7 @@ src/
 - **R2_BUCKET**: R2 bucket for document storage (policies, prompts)
 - **UserAgent**: Durable Object binding for per-user Agent state and scheduled memory updates
 - **ASSETS**: Static assets binding for prompt templates
-- **EMAIL**: Email Service binding used by `Agent.sendEmail()`; sender-restricted with no destination restriction
+- **RESEND_API_KEY** / **RESEND_WEBHOOK_SECRET**: Worker secrets for the Resend API and webhook signature verification (no email binding)
 
 ## Cloudflare AI Binding
 
@@ -64,19 +64,20 @@ Inbound sender authorization is a code-reviewed policy in `src/config.ts`: `forc
 
 ## Email Delivery Contract
 
-Authorized inbound messages route directly to the `UserAgent` keyed by the normalized SMTP envelope sender; agent-routing headers are ignored. Successful responses use the official `Agent.sendEmail()` helper with the inbound monitored alias as `from`/`replyTo`, validated threading and subject headers, and a maximum of 50 combined recipients. Reply bodies carry only the answer and signature (no quoted history); `In-Reply-To`/`References` follow RFC 5322 and the subject gets a single `Re: ` prefix, so the mail client renders the conversation. When the inbound email carries an Outlook `Thread-Index`, the reply also gets a child `Thread-Index` and `Thread-Topic`, because Exchange groups conversations by that index rather than by `In-Reply-To`/`References`. Because replies no longer quote earlier turns, each answered turn (our reply plus the inbound email) is kept in the UserAgent's SQLite (30-day retention, pruned on read, write, and a daily schedule while any turn is stored; capped at 20 turns and 20,000 chars per block) and appended to Prime Foo's context when the user replies in the same thread. The Agents SDK email observability hook stays disabled because it would emit sender, recipient, and subject.
+Resend POSTs `inbox.email.received` to `/webhooks/resend`; the Worker verifies the Svix signature, applies the sender/recipient policy, and hands the opaque Resend ids to the `UserAgent` keyed by the normalized webhook sender, which dedupes by `email_id` and processes the email in a scheduled task (fetch received email + SPF/DKIM/DMARC, require DMARC or DKIM pass, download raw MIME, parse). Successful responses use Resend's thread reply endpoint with an `Idempotency-Key`, validated subject, explicit Cc, and a maximum of 50 combined recipients; Resend sets From (the inbox), To (Reply-To, else From), `In-Reply-To` and `References`. Reply bodies carry the answer, signature and Outlook-style quoted history, and the subject gets a single `Re: ` prefix. When the inbound email carries an Outlook `Thread-Index`, the reply also gets a child `Thread-Index` and `Thread-Topic`, because Exchange groups conversations by that index rather than by `In-Reply-To`/`References`. Each answered turn (our reply plus the inbound email) is kept in the UserAgent's SQLite (30-day retention, pruned on read, write, and a daily schedule while any turn is stored; capped at 20 turns and 20,000 chars per block) and appended to Prime Foo's context when the user replies in the same thread, matched through the sent Message-ID read back from `GET /emails/{id}`.
 
 Before Prime Foo, a Clef (`@cf/cloudflare/clef`, 27B) choice gate screens each inbound email for prompt injection, jailbreaks, instruction overrides, data-exfiltration attempts, and spam/abuse. Only those are dropped (`no_reply`, reason `clef_suspected_injection`); legitimate member mail, including thanks, FYIs, and feedback-note requests, passes to Prime Foo, which decides how to respond. State over `CLEF_REPLY_MAX_STATE_BYTES` (60,000 UTF-8 bytes) fails closed (`clef_input_too_large`) because Clef would truncate it and screen only part of the email. A `<memory>` block is background notes, not trusted instructions.
 
 ### Email-path logging
 
-Every inbound email is correlated by `emailRef`, a random 16-hex id the Worker generates per message and passes to `UserAgent` in the internal `x-caf-gpt-email-ref` header (overwriting any sender-supplied value), so both sides log the same value even when Message-ID is missing. Logs identify senders and recipients by domain only and never include addresses, subjects, bodies, attachment names, Message-IDs, prompts, model output, or raw error messages (errors log only an allowlisted `errorName`/`errorCode`; anything else is logged as `OtherError`/`other`).
+Every inbound email is correlated by `emailRef`, a random 16-hex id the Worker generates per webhook delivery and passes to `UserAgent` in the scheduled task, so both sides log the same value. Logs identify senders and recipients by domain only (plus the opaque Resend `email_id`) and never include addresses, subjects, bodies, attachment names, Message-IDs, header values, prompts, model output, Resend response bodies, or raw error messages (errors log only an allowlisted `errorName`/`errorCode`, or `resendOperation`/`resendStatus`; anything else is logged as `OtherError`/`other`).
 
-- Worker: `Email routed` / `Email ignored - ...` (resolver), `Email handed off to UserAgent` (with `durationMs`), `Email rejected - no UserAgent route`, `Top-level email routing failed`.
-- UserAgent: `Inbound email received by UserAgent`, one line per skip path (`Inbound email skipped by self-loop guard`, `Ignoring auto-reply or bounce email` with header categories, `Email content validation failed`, `Clef injection screen blocked Prime Foo` / `Clef injection screen allowed Prime Foo` with `choice`, `confidence`, `reason`), then exactly one terminal `Inbound email outcome` line with `outcome` (`replied` / `skipped` / `error`), `reason`, `durationMs`, and `errorReply` status when relevant.
+- Worker: `Resend webhook rejected` / `Resend webhook ignored` (with a fixed `reason`), `Email routed` (route `resend_webhook`) / `Email ignored - ...` (resolver), `Email handed off to UserAgent` (with `acceptance`: `accepted` / `duplicate`), `Top-level email routing failed`.
+- UserAgent hand-off: `Inbound email accepted by UserAgent`, `Inbound email duplicate delivery ignored`, `Inbound email scheduling failed`.
+- UserAgent processing: `Inbound email received by UserAgent`, one line per skip path (`Inbound email skipped - inbox not monitored`, `Inbound email skipped - sender not authenticated`, `Inbound email skipped by self-loop guard`, `Ignoring auto-reply or bounce email` with header categories, `Email content validation failed`, `Clef injection screen blocked Prime Foo` / `Clef injection screen allowed Prime Foo` with `choice`, `confidence`, `reason`), then exactly one terminal `Inbound email outcome` line with `outcome` (`replied` / `skipped` / `error`), `reason`, `durationMs`, and `errorReply` status when relevant.
 
-Platform `invocation_logs` are disabled in `wrangler.jsonc` because the email invocation record indexes the full envelope `mailFrom`/`rcptTo`; Traces still record invocation outcome and timing.
+Platform `invocation_logs` stay disabled in `wrangler.jsonc`; Traces still record invocation outcome and timing.
 
 Reply-all mirrors a normal email client: every valid, unique `Reply-To` mailbox is a primary `To` recipient, with RFC `From` used when no valid `Reply-To` mailbox remains. Original `To` then `Cc` addresses are retained in order as CC recipients after excluding `Bcc`, malformed or duplicate addresses, primary and sender identities, and CAF-GPT/self addresses. Valid external recipients are allowed.
 
-Processing failures before `sendEmail()` begins attempt one generic plain-text, sender-only response through `Agent.replyToEmail()`. Once the normal send attempt begins, failures are logged and stop without a fallback reply. Top-level route/DO/RPC failures use generic `setReject()` and return. Duplicate inbound deliveries may produce duplicate work or replies; this is an accepted hobby-project tradeoff.
+Processing failures before the reply request begins attempt one generic plain-text, sender-only response (authenticated, authorized senders only). Once the normal send attempt begins, failures are logged and stop without a fallback reply. Webhook verification, configuration and hand-off failures return non-2xx so Resend retries; repeated deliveries of the same `email_id` are acknowledged as duplicates, and the reply `Idempotency-Key` stops duplicate sends within Resend's 24-hour window.

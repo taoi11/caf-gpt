@@ -11,6 +11,8 @@
  * - EmailParsingError: Email parsing failures
  * - EmailThreadingError: Email threading failures
  * - EmailValidationError: Email validation failures
+ * - ResendOperation: Fixed names of the Resend API calls the mail path makes
+ * - ResendAPIError: A Resend API call failed (operation and HTTP status only, never the body)
  * - AgentError: Base class for AI agent errors
  * - AgentTimeoutError: Agent/LLM timeout errors
  * - AgentAPIError: Agent/LLM API failures
@@ -72,6 +74,31 @@ export class EmailThreadingError extends EmailError {
 export class EmailValidationError extends EmailError {
   readonly code = "EMAIL_VALIDATION_ERROR";
   readonly recoverable = false;
+}
+
+/** Fixed names of the Resend API calls the mail path makes (safe to log). */
+export type ResendOperation =
+  | "get_inbox"
+  | "get_received_email"
+  | "download_raw"
+  | "reply"
+  | "get_sent_email";
+
+/**
+ * A Resend API call failed. Carries only the fixed operation name and the HTTP status (0 for a
+ * network failure or a refused URL); the response body is never read into the error.
+ */
+export class ResendAPIError extends EmailError {
+  readonly code = "RESEND_API_ERROR";
+  readonly recoverable = true;
+  readonly operation: ResendOperation;
+  readonly status: number;
+
+  constructor(operation: ResendOperation, status: number) {
+    super("Resend API request failed");
+    this.operation = operation;
+    this.status = status;
+  }
 }
 
 // ============================================

@@ -4,7 +4,6 @@
  * Privacy-preserving helpers for email-path log fields (no addresses, subjects, or bodies)
  *
  * Top-level declarations:
- * - EMAIL_REF_HEADER: Internal header the Worker sets so UserAgent logs reuse the same emailRef
  * - OTHER_ERROR_NAME / OTHER_ERROR_CODE: Fixed classifications for error names/codes not allowlisted
  * - toLoggableErrorName: Maps an error name to an allowlisted value or OTHER_ERROR_NAME
  * - toLoggableErrorCode: Maps an error code to an allowlisted value or OTHER_ERROR_CODE
@@ -17,17 +16,18 @@
  * - toLoggableSentZoneDiagnostics: Keeps only allowlisted Sent: zone fields
  * - getLogSafeDomain: Extracts a log-safe domain from an email address
  * - createEmailRef: Generates a random per-message correlation id
- * - getEmailRefFromHeaders: Reads the Worker-assigned emailRef, or generates a fresh one
+ * - toEmailRef: Reuses the Worker-assigned emailRef when well-formed, or generates a fresh one
+ * - LoggableResendErrorFields: Resend operation name and HTTP status of a failed Resend call
+ * - getResendErrorFields: Extracts only the fixed operation and status from a ResendAPIError
+ * - toLoggableResendId: Keeps an opaque Resend id (uuid-like) for correlation, else drops it
  */
 
 import { z } from "zod";
 import type { ShortlistDiagnostics } from "../../agents/utils/ClefDecision";
 import type { SentZoneReason, SentZoneSource } from "../../agents/utils/SentTimeZone";
 import type { QuoteFailureReason } from "../components/QuotedHistory";
+import { ResendAPIError, type ResendOperation } from "../../errors";
 import { normalizeEmailAddress } from "./EmailNormalizer";
-
-/** Internal header the Worker sets before routing; the UserAgent logs reuse its value. */
-export const EMAIL_REF_HEADER = "x-caf-gpt-email-ref";
 
 /** Logged in place of any error name that is not on the allowlist. */
 export const OTHER_ERROR_NAME = "OtherError";
@@ -38,6 +38,7 @@ export const OTHER_ERROR_CODE = "other";
 const SAFE_DOMAIN_PATTERN = /^[a-z0-9.-]{1,253}$/;
 const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
 const EMAIL_REF_HEX_LENGTH = 16;
+const RESEND_ID_PATTERN = /^[A-Za-z0-9_-]{1,64}$/;
 
 /** Error names known to be fixed class names (JS built-ins, platform, app, and AI SDK errors). */
 const LOGGABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
@@ -66,6 +67,7 @@ const LOGGABLE_ERROR_NAMES: ReadonlySet<string> = new Set([
   "EmailParsingError",
   "EmailThreadingError",
   "EmailValidationError",
+  "ResendAPIError",
   "AgentTimeoutError",
   "AgentAPIError",
   "AgentValidationError",
@@ -118,6 +120,7 @@ const LOGGABLE_ERROR_CODES: ReadonlySet<string> = new Set([
   "EMAIL_PARSING_ERROR",
   "EMAIL_THREADING_ERROR",
   "EMAIL_VALIDATION_ERROR",
+  "RESEND_API_ERROR",
   "AGENT_TIMEOUT_ERROR",
   "AGENT_API_ERROR",
   "AGENT_VALIDATION_ERROR",
@@ -353,12 +356,51 @@ export function createEmailRef(): string {
 }
 
 /**
- * Returns the Worker-assigned emailRef from the internal header when well-formed,
- * otherwise a freshly generated one (never a shared constant).
- * @param headers - Inbound message headers as routed by the Worker
+ * Returns the Worker-assigned emailRef when well-formed, otherwise a freshly generated one
+ * (never a shared constant).
+ * @param value - emailRef passed from the Worker to the UserAgent
  */
-export function getEmailRefFromHeaders(headers: Headers): string {
-  const value = headers.get(EMAIL_REF_HEADER)?.trim().toLowerCase() ?? "";
+export function toEmailRef(value: string | undefined): string {
+  const normalized = value?.trim().toLowerCase() ?? "";
 
-  return EMAIL_REF_PATTERN.test(value) ? value : createEmailRef();
+  return EMAIL_REF_PATTERN.test(normalized) ? normalized : createEmailRef();
+}
+
+/** Resend operation name and HTTP status of a failed Resend call (0 = network or refused URL). */
+export interface LoggableResendErrorFields {
+  resendOperation?: ResendOperation;
+  resendStatus?: number;
+}
+
+const ResendErrorLogSchema = z.object({
+  operation: z
+    .enum(["get_inbox", "get_received_email", "download_raw", "reply", "get_sent_email"])
+    .optional()
+    .catch(undefined),
+  status: z.number().int().min(0).max(599).optional().catch(undefined),
+});
+
+/**
+ * Returns the fixed operation name and HTTP status of a ResendAPIError; nothing for other errors.
+ * Resend response bodies are never read into the error, so nothing else can leak.
+ * @param error - Caught value
+ */
+export function getResendErrorFields<ErrorValue>(error: ErrorValue): LoggableResendErrorFields {
+  if (!(error instanceof ResendAPIError)) return {};
+  const parsed = ResendErrorLogSchema.parse({ operation: error.operation, status: error.status });
+  const fields: LoggableResendErrorFields = {};
+
+  if (parsed.operation !== undefined) fields.resendOperation = parsed.operation;
+
+  if (parsed.status !== undefined) fields.resendStatus = parsed.status;
+
+  return fields;
+}
+
+/**
+ * Returns an opaque Resend id (uuid-like characters only) for log correlation, else "invalid".
+ * @param id - Resend email, inbox, or thread id
+ */
+export function toLoggableResendId(id: string | undefined): string {
+  return id !== undefined && RESEND_ID_PATTERN.test(id) ? id : "invalid";
 }

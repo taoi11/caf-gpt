@@ -4,6 +4,13 @@
  *
  * Required bindings:
  * - AI: Cloudflare Workers AI binding used to route OpenAI Responses requests through AI Gateway
+ *
+ * Required secrets (wrangler secret put; locally in .dev.vars, see .dev.vars.example):
+ * - RESEND_API_KEY: Resend API key used to read inbox emails and send replies
+ * - RESEND_WEBHOOK_SECRET: Signing secret (whsec_...) of the Resend webhook endpoint
+ *
+ * Mail arrives as Resend `inbox.email.received` webhooks on POST /webhooks/resend and replies go
+ * out through the Resend Inboxes API; there is no Email Routing handler or send_email binding.
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
@@ -27,9 +34,9 @@
     "binding": "AI"
   },
   // Workers Logs were already on; enable top-level observability + Traces.
-  // Invocation logs are off: the platform email invocation record indexes the full envelope
-  // sender/recipient ($workers.event.mailFrom / rcptTo). App logs carry domains + emailRef instead,
-  // and Traces still record per-invocation outcome and timing.
+  // Invocation logs stay off: the platform invocation record indexes request details (it indexed
+  // the full envelope sender/recipient on the old Email Routing path). App logs carry domains,
+  // emailRef and opaque Resend ids instead, and Traces still record per-invocation outcome/timing.
   "observability": {
     "enabled": true,
     "logs": {
@@ -46,13 +53,6 @@
     {
       "binding": "R2_BUCKET",
       "bucket_name": "policies"
-    }
-  ],
-  "send_email": [
-    {
-      "name": "EMAIL",
-      "remote": true,
-      "allowed_sender_addresses": ["agent@caf-gpt.com", "pacenote@caf-gpt.com"]
     }
   ],
   "durable_objects": {

@@ -14,7 +14,7 @@ npm run deploy
 
 ## Features
 
-- **Email Processing**: Receives emails via Cloudflare Email Workers
+- **Email Processing**: Receives emails via Resend Inboxes webhooks
 - **AI Agent Coordination**: Multi-agent system for policy research and feedback generation
 - **Outlook-Style Reply-All**: Replies to valid Reply-To/From mailboxes and filtered original To/Cc recipients, including external participants
 - **Document Retrieval**: Access to CAF policies stored in Cloudflare R2
@@ -23,7 +23,7 @@ npm run deploy
 ## Architecture
 
 ```text
-Email → Cloudflare Email Routing → sender-based Agent resolver
+Email → Resend Inbox → signed webhook → sender-based Agent resolver
                                       ↓
                          UserAgent Durable Object
                          (per normalized sender email)
@@ -34,14 +34,14 @@ Email → Cloudflare Email Routing → sender-based Agent resolver
                          /        |         \
            LeaveFoo  PaceFoo  DoadFoo  QroFoo (sub-agents)
                                       ↓
-                Agents SDK sendEmail through Email Service
+                Resend thread reply endpoint
                                       ↓
                       Reply-all participants
 ```
 
-Authorized inbound messages route directly to the `UserAgent` keyed by the normalized SMTP envelope sender; unsigned or stale agent-routing headers do not change that identity. Successful responses use the official Agents SDK `Agent.sendEmail()` helper. Reply-all sends to every valid, unique `Reply-To` mailbox, or RFC `From` when no valid `Reply-To` mailbox remains, then preserves original `To` followed by `Cc` as filtered CC recipients. It excludes `Bcc`, malformed or duplicate addresses, sender and primary identities, and CAF-GPT/self addresses, while retaining valid external participants.
+Authorized inbound messages route directly to the `UserAgent` keyed by the normalized webhook sender. Successful responses use Resend's thread reply endpoint. Resend sends To the `Reply-To` (else `From`); the reply-all policy moves any other primary mailbox to Cc and preserves original `To` followed by `Cc` as filtered CC recipients. It excludes `Bcc`, malformed or duplicate addresses, sender and primary identities, and CAF-GPT/self addresses, while retaining valid external participants.
 
-Processing failures before the normal send attempt receive one generic sender-only reply through `Agent.replyToEmail()`. Once `sendEmail()` is invoked, a failure is logged and processing stops without a second fallback message. The application keeps basic operational logs and disables Agents SDK email event emission; it does not maintain a delivery ledger or detailed tracing pipeline.
+Processing failures before the normal send attempt receive one generic sender-only reply. Once the reply request is sent, a failure is logged and processing stops without a second fallback message. The application keeps basic operational logs and keeps only an opaque Resend `email_id` ledger for webhook idempotency; it does not maintain a delivery ledger or detailed tracing pipeline.
 
 ## Setup
 
@@ -63,11 +63,12 @@ Workers Logs and Traces are enabled via `observability` in `wrangler.jsonc` (tak
 npm run deploy
 ```
 
-### 4. Configure Cloudflare Email Routing
+### 4. Configure Resend Inboxes
 
-1. In Cloudflare Email Routing, route `agent@caf-gpt.com` and `pacenote@caf-gpt.com` to this Worker.
-2. Ensure the Worker has the Email event handler enabled (already exported in `src/index.ts`).
-3. Enable Email Sending for `caf-gpt.com`; the committed `EMAIL` binding allows only `agent@caf-gpt.com` and `pacenote@caf-gpt.com` as sender addresses and intentionally has no destination restriction.
+1. Add and verify `caf-gpt.com` in Resend and publish the MX/SPF/DKIM/DMARC records exactly as the Resend dashboard shows them ([add a domain](https://resend.com/docs/add-a-domain), [receiving on a custom domain](https://resend.com/docs/dashboard/receiving/custom-domains)); remove Cloudflare Email Routing for the domain.
+2. Create one Resend inbox each for `agent@caf-gpt.com` and `pacenote@caf-gpt.com`.
+3. Add a webhook endpoint `https://<worker host>/webhooks/resend` for the `inbox.email.received` event and copy its signing secret.
+4. Set the Worker secrets: `npx wrangler secret put RESEND_API_KEY` and `npx wrangler secret put RESEND_WEBHOOK_SECRET` (local dev: copy `.dev.vars.example` to `.dev.vars`).
 
 [For generating/synchronizing types based on your Worker configuration run](https://developers.cloudflare.com/workers/wrangler/commands/#types):
 

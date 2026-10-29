@@ -196,13 +196,12 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     R2_BUCKET: mockR2,
     ASSETS: mockAssets,
     AI: {},
-    EMAIL: {
-      send: async () => ({ messageId: "mock-email" }),
-    },
+    RESEND_API_KEY: "re_test_placeholder",
+    RESEND_WEBHOOK_SECRET: "whsec_dGVzdC13ZWJob29rLXNpZ25pbmctc2VjcmV0",
     ...overrides,
   };
 
-  // SAFETY: Unit tests only consume the four faithful binding contracts above; tests needing
+  // SAFETY: Unit tests only consume the bindings and placeholder secrets above; tests needing
   // additional Env bindings provide them through overrides before the environment is used.
   return bindings as Env;
 }

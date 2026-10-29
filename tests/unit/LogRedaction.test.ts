@@ -8,7 +8,9 @@
  * - every AI_* error name in the installed AI SDK builds is allowlisted (drift guard)
  * - getLogSafeDomain returns only the domain portion of an address
  * - createEmailRef is random, 16 hex chars, and unique per call
- * - getEmailRefFromHeaders reuses a well-formed Worker ref and never falls back to a shared constant
+ * - toEmailRef reuses a well-formed Worker ref and never falls back to a shared constant
+ * - getResendErrorFields keeps only the fixed Resend operation and HTTP status
+ * - toLoggableResendId keeps only well-formed Resend ids
  * - getSafeErrorMetadata never leaks non-allowlisted error names or codes
  * - toLoggableShortlistDiagnostics keeps only allowlisted numeric/boolean fields and the fixed stage code
  * - toLoggableQuoteDiagnostics keeps only quote flags, counts, and the fixed failure reason
@@ -21,19 +23,20 @@ import { dirname, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
   createEmailRef,
-  EMAIL_REF_HEADER,
   getAiUpstreamCode,
-  getEmailRefFromHeaders,
+  getResendErrorFields,
   getLogSafeDomain,
   OTHER_ERROR_CODE,
   OTHER_ERROR_NAME,
   toLoggableErrorCode,
   toLoggableErrorName,
+  toEmailRef,
   toLoggableQuoteDiagnostics,
+  toLoggableResendId,
   toLoggableSentZoneDiagnostics,
   toLoggableShortlistDiagnostics,
 } from "../../src/email/utils/LogRedaction";
-import { EmailParsingError, QuotedHistoryError } from "../../src/errors";
+import { EmailParsingError, QuotedHistoryError, ResendAPIError } from "../../src/errors";
 import { getSafeErrorMetadata } from "../../src/Logger";
 
 const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
@@ -136,25 +139,44 @@ describe("createEmailRef", () => {
   });
 });
 
-describe("getEmailRefFromHeaders", () => {
+describe("toEmailRef", () => {
   it("reuses the Worker-assigned ref", () => {
     const ref = createEmailRef();
-    expect(getEmailRefFromHeaders(new Headers({ [EMAIL_REF_HEADER]: ref }))).toBe(ref);
+    expect(toEmailRef(ref)).toBe(ref);
   });
 
-  it("generates distinct fresh refs when the header is missing or malformed", () => {
-    const missingA = getEmailRefFromHeaders(new Headers());
-    const missingB = getEmailRefFromHeaders(new Headers());
-
-    const malformed = getEmailRefFromHeaders(
-      new Headers({ [EMAIL_REF_HEADER]: "user@forces.gc.ca" })
-    );
+  it("generates distinct fresh refs when the ref is missing or malformed", () => {
+    const missingA = toEmailRef(undefined);
+    const missingB = toEmailRef("");
+    const malformed = toEmailRef("user@forces.gc.ca");
 
     expect(missingA).toMatch(EMAIL_REF_PATTERN);
     expect(missingB).toMatch(EMAIL_REF_PATTERN);
     expect(missingA).not.toBe(missingB);
     expect(malformed).toMatch(EMAIL_REF_PATTERN);
     expect([missingA, missingB, malformed]).not.toContain("none");
+  });
+});
+
+describe("getResendErrorFields", () => {
+  it("keeps the fixed operation and status of a Resend failure", () => {
+    expect(getResendErrorFields(new ResendAPIError("reply", 422))).toEqual({
+      resendOperation: "reply",
+      resendStatus: 422,
+    });
+  });
+
+  it("returns nothing for other errors", () => {
+    expect(getResendErrorFields(new Error("user@forces.gc.ca"))).toEqual({});
+  });
+});
+
+describe("toLoggableResendId", () => {
+  it("keeps well-formed ids and replaces anything else", () => {
+    expect(toLoggableResendId("4ef9a417-02e9-4d39-ad75-9611e0fcc33c")).toBe(
+      "4ef9a417-02e9-4d39-ad75-9611e0fcc33c"
+    );
+    expect(toLoggableResendId("<id@forces.gc.ca>")).toBe("invalid");
   });
 });
 
