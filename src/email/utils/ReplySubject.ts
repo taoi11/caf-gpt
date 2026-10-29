@@ -27,5 +27,6 @@ export function stripReplyPrefixes(subject: string): string {
  */
 export function normalizeReplySubject(subject: string): string {
   const base = stripReplyPrefixes(subject);
+
   return base.length > 0 ? `Re: ${base}` : "Re:";
 }

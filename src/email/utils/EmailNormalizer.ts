@@ -15,6 +15,7 @@ const emailInputSchema = z.string().min(1);
 // Handles formats: "user@domain.com", "Name <user@domain.com>", "<user@domain.com>"
 export function normalizeEmailAddress(email?: string | null): string {
   const parsedEmail = emailInputSchema.safeParse(email);
+
   if (!parsedEmail.success) {
     return "";
   }

@@ -23,10 +23,13 @@ const DOAD_SERIES_PATTERN = /^(\d)\d{3}-/;
  */
 export function doadSeriesGroup(row: ManifestRow): ManifestGroup {
   const match = DOAD_SERIES_PATTERN.exec(row.id);
+
   if (match === null) {
     return { key: "", label: "DAOD documents outside a numbered series" };
   }
+
   const series = `${match[1]}000`;
+
   return { key: series, label: `DAOD ${series} series` };
 }
 

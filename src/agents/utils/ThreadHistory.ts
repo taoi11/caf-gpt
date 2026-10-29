@@ -60,6 +60,7 @@ interface TurnRow {
 function toMessageId(value: string | undefined): string | undefined {
   if (!value) return undefined;
   const messageId = value.startsWith("<") ? value : `<${value}>`;
+
   return isValidMessageId(messageId) ? messageId : undefined;
 }
 
@@ -87,6 +88,7 @@ function ensureThreadTables(sql: ThreadSql): void {
 export function getThreadMessageIds(parsedEmail: ParsedEmailData): string[] {
   const references = parseMessageIdList(parsedEmail.references).reverse();
   const inReplyTo = parseMessageIdList(parsedEmail.inReplyTo);
+
   return [...new Set([...inReplyTo, ...references])]
     .filter((id) => id !== parsedEmail.messageId)
     .slice(0, THREAD_HISTORY_MAX_LINKED_IDS);
@@ -107,22 +109,29 @@ export function loadThreadHistory(
 ): ThreadLookup {
   pruneThreadHistory(sql, now);
   let threadId: string | undefined;
+
   for (const messageId of getThreadMessageIds(parsedEmail)) {
     const rows = sql<ThreadIdRow>`SELECT thread_id FROM cafgpt_thread_messages WHERE message_id = ${messageId}`;
+
     if (rows.length > 0) {
       threadId = rows[0].thread_id;
       break;
     }
   }
+
   if (!threadId) return { history: "" };
 
   const turns = sql<TurnRow>`SELECT block FROM cafgpt_thread_turns WHERE thread_id = ${threadId}
     ORDER BY created_at DESC, id DESC LIMIT ${THREAD_HISTORY_MAX_TURNS}`;
+
   let history = "";
+
   for (const turn of turns) {
     history += turn.block.slice(0, THREAD_HISTORY_MAX_CHARS - history.length);
+
     if (history.length >= THREAD_HISTORY_MAX_CHARS) break;
   }
+
   return { threadId, history };
 }
 
@@ -148,22 +157,27 @@ export function recordThreadTurn(
   now: number
 ): void {
   ensureThreadTables(sql);
+
   const ownId =
     parsedEmail.messageId && isValidMessageId(parsedEmail.messageId)
       ? parsedEmail.messageId
       : undefined;
+
   const linkedIds = getThreadMessageIds(parsedEmail);
   const replyId = toMessageId(outboundMessageId);
   const threadId = existingThreadId ?? ownId ?? linkedIds[0] ?? replyId;
+
   if (!threadId) return;
 
   const storedBlock = block.slice(0, THREAD_HISTORY_MAX_CHARS);
   void sql`INSERT INTO cafgpt_thread_turns (thread_id, created_at, block) VALUES (${threadId}, ${now}, ${storedBlock})`;
   const mappedIds = [...(ownId ? [ownId] : []), ...(replyId ? [replyId] : []), ...linkedIds];
+
   for (const messageId of mappedIds) {
     void sql`INSERT OR REPLACE INTO cafgpt_thread_messages (message_id, thread_id, created_at)
       VALUES (${messageId}, ${threadId}, ${now})`;
   }
+
   void sql`DELETE FROM cafgpt_thread_turns WHERE thread_id = ${threadId} AND id NOT IN (
     SELECT id FROM cafgpt_thread_turns WHERE thread_id = ${threadId}
     ORDER BY created_at DESC, id DESC LIMIT ${THREAD_HISTORY_MAX_TURNS})`;
@@ -181,5 +195,6 @@ export function pruneThreadHistory(sql: ThreadSql, now: number): number {
   const cutoff = now - THREAD_HISTORY_RETENTION_MS;
   void sql`DELETE FROM cafgpt_thread_turns WHERE created_at < ${cutoff}`;
   void sql`DELETE FROM cafgpt_thread_messages WHERE created_at < ${cutoff}`;
+
   return sql<{ count: number }>`SELECT COUNT(*) AS count FROM cafgpt_thread_turns`[0]?.count ?? 0;
 }

@@ -84,16 +84,19 @@ export class ToolReadingAgent extends BaseAgent {
       }
 
       const indexContent = await this.getIndexContent();
+
       if (!indexContent || indexContent.trim().length === 0) {
         throw new Error(`${this.agentConfig.policyType} index not found`);
       }
 
       const rows = parseManifestRows(indexContent);
+
       if (rows.length === 0) {
         throw new Error(`${this.agentConfig.policyType} index did not contain readable files`);
       }
 
       const fileById = new Map(rows.map((row) => [row.id, row.file]));
+
       const maxPicks = Math.min(
         this.agentConfig.maxPrefetchDocuments,
         CLEF_SHORTLIST_MAX_PICKS,
@@ -104,6 +107,7 @@ export class ToolReadingAgent extends BaseAgent {
         groupOf: this.agentConfig.groupOf,
         maxPicks,
       });
+
       shortlistReason = shortlist.reason;
       shortlistDiagnostics = shortlist.diagnostics;
 
@@ -114,6 +118,7 @@ export class ToolReadingAgent extends BaseAgent {
           `${this.agentConfig.policyType} Clef shortlist failed: ${shortlist.reason}`
         );
       }
+
       if (shortlist.ids.length === 0 && shortlist.reason !== "clef_intentional_none") {
         throw new AgentValidationError(
           `${this.agentConfig.policyType} Clef shortlist failed: ${shortlist.reason}`
@@ -121,12 +126,15 @@ export class ToolReadingAgent extends BaseAgent {
       }
 
       const prefetchedParts: string[] = [];
+
       for (const id of shortlist.ids) {
         const filePath = fileById.get(id);
+
         if (filePath === undefined) {
           // Defense in depth: shortlistManifestFiles already allowlists; skip unknowns.
           continue;
         }
+
         const doc = await this.docRetriever.getDocument(this.agentConfig.category, filePath);
         prefetchedParts.push(this.agentConfig.formatDocumentTag(id, doc));
         this.logger.info(`${this.agentConfig.policyType} document prefetched`, {
@@ -161,16 +169,20 @@ export class ToolReadingAgent extends BaseAgent {
         questionLength: request.question?.length ?? 0,
         ...getSafeErrorMetadata(error),
       };
+
       if (shortlistReason !== undefined) {
         Object.assign(failureMetadata, {
           shortlistReason,
           ...toLoggableShortlistDiagnostics(shortlistDiagnostics),
         });
       }
+
       const aiUpstreamCode = getAiUpstreamCode(error);
+
       if (aiUpstreamCode !== undefined) {
         Object.assign(failureMetadata, { aiUpstreamCode });
       }
+
       this.logger.error(
         `${this.agentConfig.category}_foo shortlist-prefetch research failed`,
         failureMetadata
@@ -192,6 +204,7 @@ export class ToolReadingAgent extends BaseAgent {
     if (this.clefAiOverride) {
       return this.clefAiOverride;
     }
+
     return {
       // SAFETY: Workers AI.run model/inputs are wider than ClefAiRunner; ClefDecision only sends Clef System One payloads.
       run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
@@ -203,10 +216,12 @@ export class ToolReadingAgent extends BaseAgent {
     prefetchedDocuments: string
   ): Promise<string> {
     const modelConfig = this.config.llm.models[this.agentConfig.modelKey];
+
     const rendered = await this.promptManager.renderPrompt(this.agentConfig.promptName, {
       [this.agentConfig.documentsVariableName]: prefetchedDocuments,
       user_input: question,
     });
+
     const providerOptions = createProviderOptions(modelConfig.model);
 
     const generationOptions = {
@@ -216,9 +231,11 @@ export class ToolReadingAgent extends BaseAgent {
       temperature: modelConfig.temperature,
       maxOutputTokens: modelConfig.maxOutputTokens,
     };
+
     if (providerOptions) {
       Object.assign(generationOptions, { providerOptions });
     }
+
     const result = await this.dependencies.generateText(generationOptions);
 
     if (!result.text || result.text.trim().length === 0) {

@@ -41,6 +41,7 @@ describe("getAiUpstreamCode", () => {
   function namedError(name: string, message: string): Error {
     const error = new Error(message);
     error.name = name;
+
     return error;
   }
 
@@ -84,9 +85,11 @@ describe("AI SDK error name allowlist", () => {
   it("covers every AI_* error name in the installed ai and @ai-sdk/provider builds", () => {
     const require = createRequire(import.meta.url);
     const sdkNames = new Set<string>();
+
     for (const pkg of ["ai", "@ai-sdk/provider"]) {
       const packageDir = dirname(require.resolve(`${pkg}/package.json`));
       const source = readFileSync(join(packageDir, "dist", "index.mjs"), "utf8");
+
       for (const match of source.matchAll(/"(AI_[A-Za-z]+Error)"/g)) {
         sdkNames.add(match[1]);
       }
@@ -124,6 +127,7 @@ describe("createEmailRef", () => {
   it("returns 16 hex characters that differ on every call", () => {
     const refs = new Set(Array.from({ length: 50 }, () => createEmailRef()));
     expect(refs.size).toBe(50);
+
     for (const ref of refs) {
       expect(ref).toMatch(EMAIL_REF_PATTERN);
     }
@@ -139,6 +143,7 @@ describe("getEmailRefFromHeaders", () => {
   it("generates distinct fresh refs when the header is missing or malformed", () => {
     const missingA = getEmailRefFromHeaders(new Headers());
     const missingB = getEmailRefFromHeaders(new Headers());
+
     const malformed = getEmailRefFromHeaders(
       new Headers({ [EMAIL_REF_HEADER]: "user@forces.gc.ca" })
     );
@@ -189,6 +194,7 @@ describe("toLoggableShortlistDiagnostics", () => {
     topConfidence: 0.82,
     topMargin: 0.7,
   };
+
   const document = {
     optionCount: 82,
     rankReached: 1,
@@ -220,10 +226,12 @@ describe("toLoggableShortlistDiagnostics", () => {
         extra: { optionCount: 3 },
       })
     );
+
     untrusted.group.topMargin = Number.POSITIVE_INFINITY;
     const logged = toLoggableShortlistDiagnostics(untrusted);
     expect(logged).toEqual({ shortlistGroup: {}, shortlistDocument: { topMargin: 0.2 } });
     const serialized = JSON.stringify(logged);
+
     for (const content of ["leave", "Leave", "doc_4", "member", "vol-1", "extra"]) {
       expect(serialized).not.toContain(content);
     }
@@ -262,6 +270,7 @@ describe("toLoggableQuoteDiagnostics", () => {
         subject: "RE: feedback note please",
       })
     );
+
     const logged = toLoggableQuoteDiagnostics(untrusted);
     expect(logged).toEqual({ quotedHistoryIncluded: false });
     expect(JSON.stringify(logged)).not.toMatch(/luffy|feedback|body/i);

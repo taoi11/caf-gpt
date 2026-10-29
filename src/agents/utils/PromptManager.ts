@@ -26,8 +26,10 @@ export class PromptManager {
 
   async getPrompt(promptName: string): Promise<string> {
     const cached = this.promptCache.get(promptName);
+
     if (cached) {
       this.logger.debug("Returning cached prompt", { promptName });
+
       return cached;
     }
 
@@ -40,6 +42,7 @@ export class PromptManager {
         const content = await assetResponse.text();
         this.promptCache.set(promptName, content);
         this.logger.debug("Loaded prompt from static assets", { promptName });
+
         return content;
       }
     } catch (error) {
@@ -64,6 +67,7 @@ export class PromptManager {
       if (key === "user_input") {
         return "";
       }
+
       return variables[key] ?? `{${key}}`;
     });
 

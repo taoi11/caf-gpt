@@ -10,5 +10,7 @@
  */
 
 export { formatQuotedContent } from "./EmailComposer";
+
 export { HtmlEmailComposer } from "./HtmlEmailComposer";
+
 export { buildQuotedHistory, formatOutlookMailbox } from "./QuotedHistory";

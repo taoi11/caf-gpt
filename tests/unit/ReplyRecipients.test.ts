@@ -125,6 +125,7 @@ describe("resolveReplyRecipients", () => {
         monitoredAddresses: ["service@forces.gc.ca", "pace@example.net"],
       },
     };
+
     const result = resolveReplyRecipients(
       createMockParsedEmail({
         to: ["service@forces.gc.ca", "pace@example.net", "member@example.net"],

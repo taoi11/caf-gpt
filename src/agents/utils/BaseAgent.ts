@@ -32,7 +32,9 @@ interface LLMCallParams {
 }
 
 type JsonValue = string | number | boolean | null | JsonValue[] | JsonObject;
+
 type JsonObject = { [key: string]: JsonValue | undefined };
+
 type ModelProviderOptions = Record<string, JsonObject>;
 
 // Injectable provider factories used to construct an OpenAI Responses model.
@@ -82,9 +84,11 @@ export function createModel(
       gateway: CLOUDFLARE_AI_GATEWAY,
     }),
   });
+
   const modelId = model.startsWith(OPENAI_MODEL_PREFIX)
     ? model.slice(OPENAI_MODEL_PREFIX.length)
     : model;
+
   return openai.responses(modelId);
 }
 
@@ -114,11 +118,13 @@ export abstract class BaseAgent {
 
   protected getCachedModel(model: string): LanguageModel {
     let cached = this.modelCache.get(model);
+
     if (!cached) {
       cached = this.dependencies.createModel(this.env, model);
       this.modelCache.set(model, cached);
       this.logger.debug("Created and cached new AI SDK model");
     }
+
     return cached;
   }
 
@@ -132,6 +138,7 @@ export abstract class BaseAgent {
       const rendered = await this.promptManager.renderPrompt(params.promptName, params.variables);
       const model = this.getCachedModel(params.model);
       const providerOptions = createProviderOptions(params.model);
+
       const generationOptions = {
         model,
         system: rendered.system,
@@ -139,9 +146,11 @@ export abstract class BaseAgent {
         temperature: params.temperature,
         maxOutputTokens: params.maxOutputTokens,
       };
+
       if (providerOptions) {
         Object.assign(generationOptions, { providerOptions });
       }
+
       const result = await this.dependencies.generateText(generationOptions);
 
       if (!result.text || result.text.trim().length === 0) {
@@ -149,6 +158,7 @@ export abstract class BaseAgent {
       }
 
       this.logger.info("AI SDK call successful");
+
       return result.text;
     } catch (error) {
       this.logger.error("AI SDK call failed", {

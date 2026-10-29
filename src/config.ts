@@ -65,6 +65,7 @@ export interface AppConfig {
 /** Creates configuration from code-reviewed policy with explicit test overrides. */
 export function createConfig(_env?: Env, overrides?: Partial<AppConfig>): AppConfig {
   const llmOverride = overrides?.llm;
+
   const authorization = overrides?.authorization ?? {
     authorizedDomains: [...STATIC_AUTHORIZATION_POLICY.authorizedDomains],
     authorizedEmails: [...STATIC_AUTHORIZATION_POLICY.authorizedEmails],

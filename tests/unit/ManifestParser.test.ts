@@ -18,6 +18,7 @@ describe("parseManifestTable", () => {
 |---|---|---|
 | 5019-0 | Conduct and Performance Deficiencies | 5019-0.md |
 | vol-1-administration/ch-16-leave.md | Leave Regulations | vol-1-administration/ch-16-leave.md |`);
+
     expect([...manifest.entries()]).toEqual([
       ["5019-0", "5019-0.md"],
       ["vol-1-administration/ch-16-leave.md", "vol-1-administration/ch-16-leave.md"],
@@ -39,6 +40,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 1. This mentions vol-8-misleading/ch-88-not-an-entry.md in prose.
 
 | 5031-1 | Grievance | 5031-1.md |`);
+
     expect([...manifest.keys()]).toEqual(["5019-0", "5031-1"]);
   });
 
@@ -48,6 +50,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 | 5019-0 | Conduct | 5019-0.md |
 | 6000-1 | Only two cells |
 | 6000-2 | One | extra | cell |`);
+
     expect([...manifest.keys()]).toEqual(["5019-0"]);
   });
 
@@ -61,6 +64,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 | vol-1//a.md | Empty segment | vol-1/a.md |
 | vol-1/./a.md | Dot segment | vol-1/a.md |
 | good-1 | Valid | good-1.md |`);
+
     expect([...manifest.keys()]).toEqual(["good-1"]);
   });
 
@@ -73,6 +77,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
 | 4-1 | Absolute | /4-1.md |
 | 5-1 | Empty segment | 5//1.md |
 | 6-1 | Valid | 6-1.md |`);
+
     expect([...manifest.keys()]).toEqual(["6-1"]);
   });
 
@@ -80,6 +85,7 @@ For background, read vol-9-misleading/ch-99-not-an-entry.md before continuing.
     const manifest = parseManifestTable(
       "| Id | Title | File |\r\n|---|---|---|\r\n| 5019-0 | Conduct | 5019-0.md |\r\n"
     );
+
     expect(manifest.get("5019-0")).toBe("5019-0.md");
   });
 
@@ -117,6 +123,7 @@ describe("parseManifestRows", () => {
 |---|---|---|
 | 5019-0 | Conduct and Performance | 5019-0.md |
 | 5031-1 | Grievance | 5031-1.md |`);
+
     expect(rows).toEqual([
       { id: "5019-0", title: "Conduct and Performance", file: "5019-0.md" },
       { id: "5031-1", title: "Grievance", file: "5031-1.md" },

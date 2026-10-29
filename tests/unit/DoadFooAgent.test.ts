@@ -43,10 +43,12 @@ function shortlistResponse(
   picks.forEach((pick, index) => {
     answers[`pick_${index + 1}`] = choiceAnswer(pick.choice, pick.confidence ?? 0.9);
   });
+
   // Pad remaining ranks with high-confidence none so incomplete fixtures are not malformed.
   for (let rank = picks.length + 1; rank <= totalRanks; rank++) {
     answers[`pick_${rank}`] = choiceAnswer("none", 0.9);
   }
+
   return { model: "clef-flash", answers, usage: { input_tokens: 10, output_tokens: 3 } };
 }
 
@@ -156,6 +158,7 @@ Members are entitled to relocation assistance when posted.`
         prompt?: string;
         tools?: unknown;
       };
+
       expect(call.tools).toBeUndefined();
       expect(call.system).toContain("<DOAD_5019-0>");
       expect(call.system).toContain("Conduct and Performance");
@@ -183,10 +186,9 @@ Members are entitled to relocation assistance when posted.`
 
     it("groups DOAD rows by series for the stage-1 question", async () => {
       await agent.research({ question: "conduct?" });
-      // SAFETY: the ClefAiRunner mock is invoked with the stage-1 Clef System One request first.
-      const request = vi.mocked(clefAi.run).mock.calls[0][1] as {
-        questions: { group_pick: { criteria: Record<string, string> } };
-      };
+
+      const request = vi.mocked(clefAi.run).mock.calls[0][1];
+
       expect(request.questions.group_pick.criteria).toEqual({
         none: expect.any(String),
         group_0:
@@ -233,6 +235,7 @@ Members are entitled to relocation assistance when posted.`
       const failure = loggerError.mock.calls.find(
         ([message]) => message === "doad_foo shortlist-prefetch research failed"
       );
+
       expect(failure?.[1]).toEqual({
         processingTime: expect.any(Number),
         questionLength: "Sensitive member question".length,
@@ -257,9 +260,11 @@ Members are entitled to relocation assistance when posted.`
         },
       });
       const logged = JSON.stringify(failure?.[1]);
+
       for (const content of ["Sensitive", "doc_999", "group_0", "5019", "Conduct", "DAOD"]) {
         expect(logged).not.toContain(content);
       }
+
       loggerError.mockRestore();
     });
 
@@ -278,6 +283,7 @@ Members are entitled to relocation assistance when posted.`
       const failure = loggerError.mock.calls.find(
         ([message]) => message === "doad_foo shortlist-prefetch research failed"
       );
+
       expect(failure?.[1]).toEqual({
         processingTime: expect.any(Number),
         questionLength: "Test question".length,

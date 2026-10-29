@@ -34,6 +34,7 @@ describe("createConfig", () => {
     const legacyEnv = Object.assign(createMockEnv(), {
       AUTHORIZED_SENDERS: "evil.com,attacker@example.com",
     });
+
     const config = createConfig(legacyEnv);
 
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);

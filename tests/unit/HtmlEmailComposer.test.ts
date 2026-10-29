@@ -29,6 +29,7 @@ describe("HtmlEmailComposer", () => {
     it("places the quoted history after the signature inside WordSection1", () => {
       const replyContent =
         '<p>Answer</p>\n<div class="MsoNormal">\n<br><br>\nCAF-GPT<br>\nSource Code:<br>\n<pre><code>https://github.com/taoi11/caf-gpt</code></pre>\nHow to use CAF-GPT:<br>\n<pre><code>https://caf-gpt.com</code></pre>\n</div>';
+
       const html = composer.composeHtmlReply(replyContent, QUOTE);
 
       expect(html).toContain("Source Code:");
