@@ -15,6 +15,7 @@ type ParameterOwner =
   | ESTree.TSFunctionType
   | ESTree.TSMethodSignature;
 
+/** Return whether a parameter is the subject of its owner's `x is T` type predicate. */
 function isTypePredicateSubject(owner: ParameterOwner, parameterName: string): boolean {
   const predicate = owner.returnType?.typeAnnotation;
   return (

@@ -22,6 +22,7 @@ function isConstAssertion(node: TypeAssertion): boolean {
   );
 }
 
+/** Read non-empty configured safety markers, falling back to the default markers when none are set. */
 function configuredSafetyMarkers(option: unknown): readonly string[] {
   if (typeof option !== "object" || option === null || !("markers" in option)) {
     return DEFAULT_SAFETY_MARKERS;
@@ -34,6 +35,7 @@ function configuredSafetyMarkers(option: unknown): readonly string[] {
   return markers.length > 0 ? markers : DEFAULT_SAFETY_MARKERS;
 }
 
+/** Build a pattern matching a `MARKER: reason` comment for any of the (regex-escaped) markers. */
 function markerPattern(markers: readonly string[]): RegExp {
   const alternation = markers
     .map((marker) => marker.replaceAll(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`))
@@ -41,6 +43,7 @@ function markerPattern(markers: readonly string[]): RegExp {
   return new RegExp(String.raw`(?:^|[^\p{L}\p{N}_])(?:${alternation})\s*:\s*\S`, "u");
 }
 
+/** Return whether a safety comment precedes both the owner node and the assertion. */
 function hasSafetyJustificationBefore(
   sourceCode: SourceCode,
   owner: ESTree.Node,
@@ -52,6 +55,7 @@ function hasSafetyJustificationBefore(
     .some((comment) => comment.end <= assertion.start && pattern.test(comment.value));
 }
 
+/** Return whether a safety comment sits above the assertion's statement, declaration, or its export. */
 function hasSafetyComment(sourceCode: SourceCode, node: TypeAssertion, pattern: RegExp): boolean {
   let current: ESTree.Node = node;
   while (true) {

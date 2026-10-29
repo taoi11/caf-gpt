@@ -77,6 +77,7 @@ function isPlainAliasConsumerUse(node: ESTree.TSType, environment: TypeEnvironme
   );
 }
 
+/** Return whether a type appears inside a type parameter's `extends` constraint. */
 function isInsideTypeParameterConstraint(node: ESTree.TSType): boolean {
   let child: ESTree.Node = node;
   let parent: ESTree.Node | null = child.parent;

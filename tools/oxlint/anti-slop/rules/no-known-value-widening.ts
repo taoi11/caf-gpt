@@ -71,6 +71,7 @@ function hasKnownEvidence(
   return hasKnownEvidence(sourceCode, declarator.init, visitedVariables);
 }
 
+/** Return whether a node is any function form (declaration, expression, arrow, or bodiless signature). */
 function isFunctionExpression(node: ESTree.Node): node is FunctionExpression {
   return (
     node.type === "ArrowFunctionExpression" ||
@@ -81,6 +82,7 @@ function isFunctionExpression(node: ESTree.Node): node is FunctionExpression {
   );
 }
 
+/** Resolve a call's callee to its single local function definition, or null when it is not local. */
 function localFunctionForCall(
   sourceCode: SourceCode,
   callee: ESTree.Expression
@@ -104,6 +106,7 @@ function localFunctionForCall(
   return isFunctionExpression(unwrappedInitializer) ? unwrappedInitializer : null;
 }
 
+/** Return the type annotation of a variable's single declarator or function parameter binding. */
 function variableTypeAnnotation(
   sourceCode: SourceCode,
   variable: Variable
@@ -127,10 +130,12 @@ function variableTypeAnnotation(
   return parameter === undefined ? null : (functionParameterTypeAnnotation(parameter) ?? null);
 }
 
+/** Return whether a type is not an unsafe dictionary value (unknown/any-like), so it is real evidence. */
 function hasInformativeType(type: ESTree.TSType, environment: TypeEnvironment): boolean {
   return classifyUnsafeDictionaryValue(type, environment) === null;
 }
 
+/** Return whether a call argument has known-value evidence: an informative assertion, return or annotation type, or a known const initializer. */
 function hasKnownCallArgumentEvidence(
   sourceCode: SourceCode,
   expression: ESTree.Expression,
@@ -180,6 +185,7 @@ function hasKnownCallArgumentEvidence(
   return hasKnownCallArgumentEvidence(sourceCode, declarator.init, environment, visitedVariables);
 }
 
+/** Return the index of the parameter a function's `x is T` type predicate narrows, or null. */
 function typePredicateSubjectIndex(
   sourceCode: SourceCode,
   owner: FunctionExpression
