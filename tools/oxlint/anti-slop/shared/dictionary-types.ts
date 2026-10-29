@@ -54,6 +54,7 @@ function declaredStatement(statement: ESTree.Statement): ESTree.Node | null {
     : statement;
 }
 
+/** Collect a program's top-level interfaces and its lexical type-alias environment. */
 export function createTypeEnvironment(
   program: ESTree.Program,
   visitorKeys: Readonly<Record<string, readonly string[]>>
@@ -78,6 +79,7 @@ function typeReferenceName(type: ESTree.TSTypeReference): string | null {
   return type.typeName.type === "Identifier" ? type.typeName.name : null;
 }
 
+/** Return whether a name is a built-in type not shadowed by a visible local declaration. */
 function isBuiltIn(name: string, use: ESTree.Node, environment: TypeEnvironment): boolean {
   return BUILT_INS.has(name) && !hasVisibleTypeBinding(name, use, environment.typeAliases);
 }
@@ -360,6 +362,7 @@ export function classifyWideningTarget(
   return resolved;
 }
 
+/** Return whether a Record reference has a missing key type or a broad (string, number or symbol) key. */
 function hasBroadRecordKey(
   type: ESTree.TSTypeReference,
   environment: TypeEnvironment,
