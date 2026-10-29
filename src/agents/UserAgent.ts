@@ -16,7 +16,10 @@
  * Replies carry the agent answer and signature, then Outlook-style quoted history of the inbound
  * email (components/QuotedHistory; its body already carries the earlier chain). A quote that
  * cannot be built throws QuotedHistoryError before sending, so the funny error reply runs instead
- * of a quoteless reply. Replies thread via In-Reply-To/References, plus a child
+ * of a quoteless reply. The quote's Sent: line uses the user's UTC offset learned from their own
+ * Outlook quote of our previous reply (utils/SentTimeZone); a quoted CAF-GPT Sent: line that
+ * teaches nothing is logged at error level with a fixed reason and the reply still goes out with
+ * the saved offset or America/Edmonton. Replies thread via In-Reply-To/References, plus a child
  * Thread-Index/Thread-Topic when the inbound email has a Thread-Index (Exchange groups conversations by it, not by RFC 5322 headers). Prior turns (inbound email plus our reply) are kept in DO SQLite
  * (utils/ThreadHistory) and appended to the model context of the user's next reply.
  *
@@ -37,6 +40,7 @@ import {
   formatOutlookMailbox,
   formatQuotedContent,
   HtmlEmailComposer,
+  OUTLOOK_SENT_TIME_ZONE,
 } from "../email/components";
 import type { ParsedEmailData } from "../email/types";
 import { detectAutoReply } from "../email/utils/EmailLoopGuard";
@@ -44,6 +48,7 @@ import {
   getEmailRefFromHeaders,
   getLogSafeDomain,
   toLoggableQuoteDiagnostics,
+  toLoggableSentZoneDiagnostics,
 } from "../email/utils/LogRedaction";
 import { normalizeEmailAddress } from "../email/utils/EmailNormalizer";
 import {
@@ -71,6 +76,13 @@ import {
 } from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
 import { decideShouldReply, decideShouldUpdateMemory } from "./utils/ClefDecision";
+import {
+  pruneSentTimes,
+  recordReplySentTime,
+  resolveSentZone,
+  type SentZoneDecision,
+  saveSentOffset,
+} from "./utils/SentTimeZone";
 import {
   loadThreadHistory,
   pruneThreadHistory,
@@ -120,6 +132,9 @@ interface SentReply {
   quotedHtml: boolean;
   quoteSourceBytes: number;
   quoteRemovedNodes: number;
+  /** Epoch milliseconds captured immediately before sendEmail. */
+  sentAtMs: number;
+  sentZone: SentZoneDecision;
 }
 
 interface ReplyThreadingOptions {
@@ -239,6 +254,8 @@ export class UserAgent extends Agent<Env, UserAgentState> {
         }
       );
 
+      const sentTimeRecorded = await this.recordSentTime(sentReply, logContext);
+
       await this.recordThread(
         parsedEmail,
         response.content,
@@ -258,6 +275,8 @@ export class UserAgent extends Agent<Env, UserAgentState> {
           quoteSourceBytes: sentReply.quoteSourceBytes,
           quoteRemovedNodes: sentReply.quoteRemovedNodes,
         }),
+        ...toLoggableSentZoneDiagnostics(sentReply.sentZone),
+        sentTimeRecorded,
         ...describeThreadTopic(parsedEmail.headers, parsedEmail.subject),
       });
       outcome = "replied";
@@ -548,7 +567,8 @@ ${parsedEmail.body}`;
   ): Promise<SentReply> {
     // Answer + signature, then the Outlook-style quote of the inbound email (carrying its chain).
     // Built before markSendAttempted so a failure still gets the funny error reply.
-    const quoted = buildQuotedHistory(parsedEmail);
+    const sentZone = this.resolveQuotedSentZone(parsedEmail, config, logContext);
+    const quoted = buildQuotedHistory(parsedEmail, sentZone.zone);
 
     if (!quoted.ok) {
       this.logger.error("Quoted history build failed", {
@@ -593,15 +613,91 @@ ${parsedEmail.body}`;
       Object.assign(emailOptions, { cc: recipients.cc });
     }
 
+    const sentAtMs = Date.now();
     const result = await this.sendEmail(emailOptions);
 
     return {
       messageId: result?.messageId,
+      sentAtMs,
+      sentZone,
       outlookThreaded: outlookHeaders["Thread-Index"] !== undefined,
       quotedHtml: quoted.quote.quotedHtml,
       quoteSourceBytes: quoted.quote.sourceBytes,
       quoteRemovedNodes: quoted.quote.removedNodes,
     };
+  }
+
+  /**
+   * Decides the quoted Sent: zone. A quoted CAF-GPT Sent: line that cannot be parsed or matched
+   * (or a storage failure) is logged at error level with a fixed reason, but never blocks the
+   * reply: it goes out with the saved offset or America/Edmonton.
+   */
+  private resolveQuotedSentZone(
+    parsedEmail: ParsedEmailData,
+    config: AppConfig,
+    logContext: InboundLogContext
+  ): SentZoneDecision {
+    const selfAddresses = [config.email.agentFromEmail, ...config.email.monitoredAddresses].map(
+      (address) => normalizeEmailAddress(address)
+    );
+
+    let decision: SentZoneDecision;
+
+    try {
+      decision = resolveSentZone(this.sql.bind(this), parsedEmail, selfAddresses, Date.now());
+    } catch (error) {
+      decision = {
+        zone: { timeZone: OUTLOOK_SENT_TIME_ZONE },
+        source: "default",
+        lineFound: false,
+        reason: "quoted_sent_storage_failed",
+      };
+      this.logger.error("Quoted Sent time zone storage failed", {
+        ...logContext,
+        ...getSafeErrorMetadata(error),
+      });
+    }
+
+    if (decision.reason) {
+      this.logger.error("Quoted Sent time zone not learned", {
+        ...logContext,
+        ...toLoggableSentZoneDiagnostics(decision),
+      });
+    }
+
+    return decision;
+  }
+
+  /**
+   * Stores the reply's real UTC send time (and a newly learned offset) for the user's next reply.
+   * The daily prune schedule is ensured first so retention holds. Never fails the reply.
+   * @returns True when the send time was stored under the reply's Message-ID
+   */
+  private async recordSentTime(
+    sentReply: SentReply,
+    logContext: InboundLogContext
+  ): Promise<boolean> {
+    try {
+      await this.scheduleEvery(THREAD_HISTORY_PRUNE_INTERVAL_SECONDS, "runThreadHistoryPrune");
+      const now = Date.now();
+      const sql = this.sql.bind(this);
+
+      if (
+        sentReply.sentZone.source === "learned" &&
+        sentReply.sentZone.offsetMinutes !== undefined
+      ) {
+        saveSentOffset(sql, sentReply.sentZone.offsetMinutes, now);
+      }
+
+      return recordReplySentTime(sql, sentReply.messageId, sentReply.sentAtMs, now);
+    } catch (error) {
+      this.logger.warn("Reply send time save failed", {
+        ...logContext,
+        ...getSafeErrorMetadata(error),
+      });
+
+      return false;
+    }
   }
 
   /** Loads stored prior turns for the thread this email continues; storage failure yields none. */
@@ -651,9 +747,12 @@ ${parsedEmail.body}`;
     }
   }
 
-  /** Scheduled: prunes expired thread history; cancels itself once no turns remain. */
+  /** Scheduled: prunes expired thread history and send times; cancels itself once none remain. */
   async runThreadHistoryPrune(_payload: undefined, schedule?: { id: string }): Promise<void> {
-    const remaining = pruneThreadHistory(this.sql.bind(this), Date.now());
+    const now = Date.now();
+
+    const remaining =
+      pruneThreadHistory(this.sql.bind(this), now) + pruneSentTimes(this.sql.bind(this), now);
 
     if (remaining === 0 && schedule) {
       await this.cancelSchedule(schedule.id);

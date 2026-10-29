@@ -12,6 +12,7 @@
  * - getSafeErrorMetadata never leaks non-allowlisted error names or codes
  * - toLoggableShortlistDiagnostics keeps only allowlisted numeric/boolean fields and the fixed stage code
  * - toLoggableQuoteDiagnostics keeps only quote flags, counts, and the fixed failure reason
+ * - toLoggableSentZoneDiagnostics keeps only the zone source, offset, found flag, and fixed reason
  */
 
 import { readFileSync } from "node:fs";
@@ -29,6 +30,7 @@ import {
   toLoggableErrorCode,
   toLoggableErrorName,
   toLoggableQuoteDiagnostics,
+  toLoggableSentZoneDiagnostics,
   toLoggableShortlistDiagnostics,
 } from "../../src/email/utils/LogRedaction";
 import { EmailParsingError, QuotedHistoryError } from "../../src/errors";
@@ -290,6 +292,48 @@ describe("toLoggableQuoteDiagnostics", () => {
       errorName: "QuotedHistoryError",
       errorCode: "EMAIL_COMPOSITION_ERROR",
       recoverable: false,
+    });
+  });
+});
+
+describe("toLoggableSentZoneDiagnostics", () => {
+  it("keeps only the zone source, offset, found flag, and fixed reason", () => {
+    // A SentZoneDecision also carries the zone; extra keys never reach the log fields.
+    const decision = {
+      source: "learned" as const,
+      offsetMinutes: -180,
+      lineFound: true,
+      zone: { offsetMinutes: -180 },
+      sent: "October 28, 2026 2:30 PM",
+    };
+
+    expect(toLoggableSentZoneDiagnostics(decision)).toEqual({
+      quoteSentZoneSource: "learned",
+      quoteSentOffsetMinutes: -180,
+      quoteSentLineFound: true,
+    });
+  });
+
+  it("drops unknown reasons and out-of-range offsets", () => {
+    expect(
+      // SAFETY: deliberately invalid values prove the allowlist rejects them.
+      toLoggableSentZoneDiagnostics({
+        source: "agent@caf-gpt.com",
+        offsetMinutes: 9999,
+        lineFound: true,
+        reason: "October 28, 2026 2:30 PM",
+      } as never)
+    ).toEqual({ quoteSentZoneSource: "default", quoteSentLineFound: true });
+    expect(
+      toLoggableSentZoneDiagnostics({
+        source: "default",
+        lineFound: true,
+        reason: "quoted_sent_unmatched",
+      })
+    ).toEqual({
+      quoteSentZoneSource: "default",
+      quoteSentLineFound: true,
+      quoteSentReason: "quoted_sent_unmatched",
     });
   });
 });

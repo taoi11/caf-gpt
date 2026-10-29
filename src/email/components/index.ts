@@ -6,11 +6,11 @@
  * Top-level exports:
  * - formatQuotedContent: Export formatQuotedContent (model-context history block) from EmailComposer.ts
  * - HtmlEmailComposer: Export HtmlEmailComposer from HtmlEmailComposer.ts
- * - buildQuotedHistory / formatOutlookMailbox: Export the reply quoted-history builders from QuotedHistory.ts
+ * - buildQuotedHistory / formatOutlookMailbox / OUTLOOK_SENT_TIME_ZONE: Export the reply quoted-history builders from QuotedHistory.ts
  */
 
 export { formatQuotedContent } from "./EmailComposer";
 
 export { HtmlEmailComposer } from "./HtmlEmailComposer";
 
-export { buildQuotedHistory, formatOutlookMailbox } from "./QuotedHistory";
+export { buildQuotedHistory, formatOutlookMailbox, OUTLOOK_SENT_TIME_ZONE } from "./QuotedHistory";

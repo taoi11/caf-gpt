@@ -7,7 +7,8 @@
  * forward one level per reply. Nothing is rebuilt from storage.
  *
  * Top-level declarations:
- * - OUTLOOK_SENT_TIME_ZONE: Time zone of the quoted Sent: line
+ * - OUTLOOK_SENT_TIME_ZONE: Default time zone of the quoted Sent: line (nothing learned yet)
+ * - SentZone: Zone the Sent: line is written in (fixed learned offset or an IANA zone)
  * - OUTLOOK_TEXT_RULE: Plain-text divider Outlook writes above a quoted header block
  * - QuoteHeaders: Display headers of the inbound email used for the quoted header block
  * - QuoteFailureReason: Fixed, content-free reasons the quote could not be built
@@ -16,7 +17,7 @@
  * - QuotedHistoryResult: Built quote, or the fixed failure reason
  * - QuoteSource: Inbound fields the quote is built from
  * - formatOutlookMailbox: Formats parsed mailboxes as Outlook does (Name <address>)
- * - formatOutlookSentDate: Formats a date as Outlook's Sent: value in America/Edmonton
+ * - formatOutlookSentDate: Formats a date as Outlook's Sent: value in a SentZone
  * - sanitizeQuotedHtml: Allowlist sanitizer for inbound HTML embedded in the reply
  * - buildQuotedHistory: Builds the HTML and plain-text quote for one inbound email
  * - escapeHtml: Escapes text for HTML element content and attribute values
@@ -33,8 +34,14 @@ import type { ChildNode, Element } from "domhandler";
 import { parseDocument } from "htmlparser2";
 import type { Address } from "postal-mime";
 
-/** Time zone of the quoted Sent: line (the CAF-GPT users' local time). */
+/** Default time zone of the quoted Sent: line, used only until the user's offset is known. */
 export const OUTLOOK_SENT_TIME_ZONE = "America/Edmonton";
+
+/**
+ * Zone the quoted Sent: line is written in: a fixed UTC offset learned from the user's own
+ * Outlook quote (agents/utils/SentTimeZone), or an IANA zone (the default).
+ */
+export type SentZone = { offsetMinutes: number } | { timeZone: string };
 
 /** Plain-text divider Outlook writes above a quoted header block (32 underscores). */
 export const OUTLOOK_TEXT_RULE = "________________________________";
@@ -283,15 +290,16 @@ const STYLE_PROPERTY_PATTERN = /^-?[a-z][a-z0-9-]*$/;
 /** The only CSS functions a kept value may call (colours); url(), image-set(), etc. are dropped. */
 const ALLOWED_STYLE_FUNCTIONS: ReadonlySet<string> = new Set(["rgb", "rgba", "hsl", "hsla"]);
 
-const OUTLOOK_SENT_FORMAT = new Intl.DateTimeFormat("en-US", {
-  timeZone: OUTLOOK_SENT_TIME_ZONE,
+const OUTLOOK_SENT_FORMAT_OPTIONS: Intl.DateTimeFormatOptions = {
   year: "numeric",
   month: "long",
   day: "numeric",
   hour: "numeric",
   minute: "2-digit",
   hour12: true,
-});
+};
+
+const OUTLOOK_SENT_FORMATS = new Map<string, Intl.DateTimeFormat>();
 
 /**
  * Formats parsed mailboxes the way Outlook's quoted header shows them: `Name <address>` when a
@@ -311,14 +319,29 @@ export function formatOutlookMailbox(addresses: Address[] | undefined): string[]
 }
 
 /**
- * Formats a date as Outlook's quoted Sent: value in America/Edmonton, for example
- * `October 28, 2026 11:29 AM` (no weekday, no "at", matching Outlook's reply header).
+ * Formats a date as Outlook's quoted Sent: value, for example `October 28, 2026 11:29 AM` (no
+ * weekday, no "at", matching Outlook's reply header). A learned offset shifts the instant and
+ * formats it as UTC wall-clock time; otherwise the IANA zone (default America/Edmonton) applies.
  * @param date - Inbound Date header value
+ * @param zone - Zone to write the time in
  */
-export function formatOutlookSentDate(date: Date): string {
-  const parts = new Map(
-    OUTLOOK_SENT_FORMAT.formatToParts(date).map((part) => [part.type, part.value])
-  );
+export function formatOutlookSentDate(
+  date: Date,
+  zone: SentZone = { timeZone: OUTLOOK_SENT_TIME_ZONE }
+): string {
+  const timeZone = "offsetMinutes" in zone ? "UTC" : zone.timeZone;
+
+  const instant =
+    "offsetMinutes" in zone ? new Date(date.getTime() + zone.offsetMinutes * 60_000) : date;
+
+  let format = OUTLOOK_SENT_FORMATS.get(timeZone);
+
+  if (!format) {
+    format = new Intl.DateTimeFormat("en-US", { ...OUTLOOK_SENT_FORMAT_OPTIONS, timeZone });
+    OUTLOOK_SENT_FORMATS.set(timeZone, format);
+  }
+
+  const parts = new Map(format.formatToParts(instant).map((part) => [part.type, part.value]));
 
   return `${parts.get("month")} ${parts.get("day")}, ${parts.get("year")} ${parts.get("hour")}:${parts.get("minute")} ${parts.get("dayPeriod")}`;
 }
@@ -344,8 +367,12 @@ export function sanitizeQuotedHtml(html: string): SanitizedHtml {
  * block, then the inbound body (sanitized HTML when present, otherwise escaped text). Fails with a
  * fixed reason instead of guessing when the headers, sender, or Date are missing.
  * @param source - Inbound headers and bodies
+ * @param sentZone - Zone of the Sent: line (learned offset, saved offset, or the default)
  */
-export function buildQuotedHistory(source: QuoteSource): QuotedHistoryResult {
+export function buildQuotedHistory(
+  source: QuoteSource,
+  sentZone: SentZone = { timeZone: OUTLOOK_SENT_TIME_ZONE }
+): QuotedHistoryResult {
   const headers = source.quoteHeaders;
 
   if (!headers) return { ok: false, reason: "quote_missing_headers" };
@@ -357,7 +384,7 @@ export function buildQuotedHistory(source: QuoteSource): QuotedHistoryResult {
     return { ok: false, reason: "quote_missing_date" };
   }
 
-  const sent = formatOutlookSentDate(headers.sent);
+  const sent = formatOutlookSentDate(headers.sent, sentZone);
   const to = headers.to.map(collapseHeaderValue).join("; ");
   const cc = headers.cc.map(collapseHeaderValue).join("; ");
   const subject = collapseHeaderValue(source.subject);
