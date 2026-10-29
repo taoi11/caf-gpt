@@ -8,7 +8,7 @@
  * - parseOutlookSentLine suite: English and French formats, 12/24-hour clocks, invalid values
  * - learnSentOffset suite: 15-minute rounding, half-hour zones, DST, skew and range rejection
  * - findTopQuotedHeader suite: Plain-text, HTML-converted, French, label-alone, and nested layouts
- * - isSelfQuotedSender suite: CAF-GPT display name and own addresses
+ * - isSelfQuotedSender suite: CAF-GPT display name and own addresses, incl. linked HTML senders
  */
 
 import { describe, expect, it } from "vitest";
@@ -182,7 +182,54 @@ describe("isSelfQuotedSender", () => {
     ["Dhaliwal, MCpl Luffy <luffy@forces.gc.ca>", false],
     ["CAF-GPT fan club <fans@example.com>", false],
     ["Mallory <mallory@example.com> agent@caf-gpt.com", false],
+    ["CAF-GPT (agent@caf-gpt.com)", true],
+    ["Someone (MAILTO:PaceNote@caf-gpt.com)", true],
+    ["Someone (mailto:agent@caf-gpt.com?subject=x)", true],
+    ['"Someone" <mailto:agent@caf-gpt.com (agent@caf-gpt.com)>', true],
+    ["mailto:agent@caf-gpt.com", true],
+    ["Mallory (mallory@example.com)", false],
+    ["CAF-GPT fan club (fans@example.com)", false],
+    ["Mallory (agent@caf-gpt.com.example.com)", false],
+    ["Mallory (mallory@example.com) (agent)", false],
+    ["Mallory <mailto:mallory@example.com (agent@caf-gpt.com)>", false],
+    ["Mallory <agent@caf-gpt.com> (mallory@example.com)", false],
   ])("%s -> %s", (from, expected) => {
     expect(isSelfQuotedSender(from, self)).toBe(expected);
+  });
+
+  it.each([
+    [
+      "English",
+      "<b>From:</b> <a href='mailto:agent@caf-gpt.com'>CAF-GPT</a><br>" +
+        "<b>Sent:</b> Wednesday, October 28, 2026 2:30 PM<br>",
+      "Wednesday, October 28, 2026 2:30 PM",
+    ],
+    [
+      "French",
+      "<b>De&nbsp;:</b> <a href=\"mailto:agent@caf-gpt.com\">CAF-GPT</a><br>" +
+        "<b>Envoy&eacute;&nbsp;:</b> mercredi 28 octobre 2026 14:30<br>",
+      "mercredi 28 octobre 2026 14:30",
+    ],
+  ])("matches a %s HTML header whose sender is a mailto link", (_language, header, sent) => {
+    const html =
+      "<div class=WordSection1><p class=MsoNormal>Thanks</p>" +
+      "<div style='border:none;border-top:solid #E1E1E1 1.0pt;padding:3.0pt 0cm 0cm 0cm'>" +
+      `<p class=MsoNormal>${header}<b>To:</b> Luffy &lt;luffy@forces.gc.ca&gt;</p></div></div>`;
+
+    const block = findTopQuotedHeader(htmlToText(html));
+
+    expect(block).toEqual({ from: "CAF-GPT (agent@caf-gpt.com)", sent });
+    expect(isSelfQuotedSender(block?.from ?? "", self)).toBe(true);
+  });
+
+  it("rejects a linked sender that is not CAF-GPT", () => {
+    const html =
+      "<p><b>From:</b> <a href='mailto:mallory@example.com'>Mallory</a><br>" +
+      "<b>Sent:</b> October 28, 2026 2:30 PM</p>";
+
+    const block = findTopQuotedHeader(htmlToText(html));
+
+    expect(block?.from).toBe("Mallory (mallory@example.com)");
+    expect(isSelfQuotedSender(block?.from ?? "", self)).toBe(false);
   });
 });

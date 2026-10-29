@@ -11,6 +11,11 @@
  * - QUOTED_SENT_MAX_SKEW_MINUTES: Largest distance from a 15-minute offset still accepted as a match
  * - QuotedHeaderBlock: From and Sent values of the topmost quoted header block
  * - findTopQuotedHeader: Finds the topmost quoted From/Sent header block in an email body
+ * - normalizeLine: Normalizes one body line (non-breaking spaces, quote and bold markers)
+ * - LabelValue / labelValue: A header label's value, read inline or from the next line
+ * - TrailingGroup / splitTrailingGroup: Splits a trailing <…> or (…) group off a From value
+ * - isSelfAddressToken: Checks one bare or mailto: address token against CAF-GPT's addresses
+ * - isSelfMailbox: Checks a mailbox, including a linked `mailto:addr (addr)`, against CAF-GPT's addresses
  * - isSelfQuotedSender: Checks whether a quoted From value is CAF-GPT itself
  * - parseOutlookSentLine: Parses an English or French Outlook Sent: value as wall-clock time
  * - learnSentOffset: Offset (minutes, 15-minute steps) between a quoted wall-clock time and the real send time
@@ -154,24 +159,76 @@ export function findTopQuotedHeader(body: string): QuotedHeaderBlock | undefined
   return undefined;
 }
 
+/** A trailing `<…>` or `(…)` group split from the text before it. */
+interface TrailingGroup {
+  outer: string;
+  inner: string;
+}
+
+/**
+ * Splits a trailing `<…>` (or, when allowed, `(…)`) group off a lowercased From value. The group
+ * must close the value, and its inner text cannot contain another opener of the same kind.
+ * @param value - Lowercased, trimmed text
+ * @param openers - Group openers to accept
+ */
+function splitTrailingGroup(value: string, openers: string): TrailingGroup | undefined {
+  const opener = value.endsWith(">") ? "<" : value.endsWith(")") ? "(" : undefined;
+
+  if (!opener || !openers.includes(opener)) return undefined;
+  const start = value.lastIndexOf(opener);
+
+  if (start === -1) return undefined;
+
+  return { outer: value.slice(0, start).trim(), inner: value.slice(start + 1, -1).trim() };
+}
+
+/**
+ * Checks one mailbox token against CAF-GPT's addresses: the bare address, or a `mailto:` link
+ * (any case, query ignored). Anything else, including a longer address, does not match.
+ * @param token - Lowercased mailbox token
+ * @param selfAddresses - CAF-GPT's own normalized addresses
+ */
+function isSelfAddressToken(token: string, selfAddresses: readonly string[]): boolean {
+  const address = token.replace(/^mailto:/, "").replace(/\?.*$/, "");
+
+  return selfAddresses.some((own) => address === own.toLowerCase());
+}
+
+/**
+ * Checks a mailbox (the bracketed or bare address part) against CAF-GPT's addresses. A linked
+ * address converted to text, `mailto:addr (addr)`, matches only when both halves are ours.
+ * @param mailbox - Lowercased mailbox text
+ * @param selfAddresses - CAF-GPT's own normalized addresses
+ */
+function isSelfMailbox(mailbox: string, selfAddresses: readonly string[]): boolean {
+  const linked = splitTrailingGroup(mailbox, "(");
+
+  if (linked) {
+    return (
+      isSelfAddressToken(linked.outer, selfAddresses) &&
+      isSelfAddressToken(linked.inner, selfAddresses)
+    );
+  }
+
+  return isSelfAddressToken(mailbox, selfAddresses);
+}
+
 /**
  * Checks whether a quoted From value is CAF-GPT itself: the CAF-GPT display name or one of its
- * own sending addresses.
+ * own sending addresses, as `Name`, `Name <addr>`, a bare or `mailto:` address, or the
+ * `Name (addr)` form html-to-text writes for a linked sender (any of these in English or French
+ * Outlook headers, which share the From value format).
  * @param from - Quoted From value, e.g. `CAF-GPT <agent@caf-gpt.com>`
  * @param selfAddresses - CAF-GPT's own normalized addresses
  */
 export function isSelfQuotedSender(from: string, selfAddresses: readonly string[]): boolean {
   const value = from.toLowerCase().trim();
-  const angle = value.indexOf("<");
-  const name = (angle === -1 ? value : value.slice(0, angle)).replace(/["']/g, "").trim();
+  const group = splitTrailingGroup(value, "<(");
+  const name = (group ? group.outer : value).replace(/["']/g, "").trim();
 
   if (name === "caf-gpt") return true;
 
-  return selfAddresses.some((address) => {
-    const own = address.toLowerCase();
-
-    return value === own || value.includes(`<${own}>`);
-  });
+  return isSelfMailbox(group ? group.inner : value, selfAddresses);
 }
 
 /**
