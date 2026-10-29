@@ -10,6 +10,8 @@
  * - createMockEnv: Creates mock Cloudflare environment
  */
 
+import { TEST_WEBHOOK_SECRET } from "./resendWebhook";
+
 // Mock R2 object for get/put operations
 export class MockR2Object {
   constructor(
@@ -197,7 +199,7 @@ export function createMockEnv(overrides?: Partial<Env>): Env {
     ASSETS: mockAssets,
     AI: {},
     RESEND_API_KEY: "re_test_placeholder",
-    RESEND_WEBHOOK_SECRET: "whsec_dGVzdC13ZWJob29rLXNpZ25pbmctc2VjcmV0",
+    RESEND_WEBHOOK_SECRET: TEST_WEBHOOK_SECRET,
     ...overrides,
   };
 

@@ -1,19 +1,31 @@
 /**
  * tests/mocks/resendWebhook.ts
  *
- * Test-only Resend (Svix) webhook fixtures: a placeholder signing secret, an inbox.email.received
+ * Test-only Resend (Svix) webhook fixtures: runtime-generated signing secrets, an inbox.email.received
  * payload builder, and a signer that produces the svix-id/svix-timestamp/svix-signature headers
  * exactly as https://resend.com/docs/webhooks/verify-webhooks-requests describes.
  *
  * Top-level declarations:
- * - TEST_WEBHOOK_SECRET: Placeholder whsec_ secret (matches the workers test binding)
+ * - createTestWebhookSecret: Builds a random signing secret in Resend's prefix + base64 format
+ * - TEST_WEBHOOK_SECRET: Random signing secret generated once per test module load (unit tests)
  * - ReceivedEventOptions: Overrides for the inbox.email.received fixture
  * - buildReceivedEvent: Builds an inbox.email.received JSON body
  * - signResendWebhook: Signs a body and returns the Svix headers
  */
 
-/** Placeholder whsec_ secret; the workers test config binds the same value. */
-export const TEST_WEBHOOK_SECRET = "whsec_dGVzdC13ZWJob29rLXNpZ25pbmctc2VjcmV0";
+/**
+ * Builds a random signing secret in Resend's format (prefix + base64 key) at runtime, so no
+ * secret-looking literal is ever committed. Workers tests use the binding the workers config
+ * generates the same way (`env.RESEND_WEBHOOK_SECRET`).
+ */
+export function createTestWebhookSecret(): string {
+  const key = crypto.getRandomValues(new Uint8Array(24));
+
+  return `whsec${"_"}${btoa(String.fromCharCode(...key))}`;
+}
+
+/** Random signing secret generated once per test module load. */
+export const TEST_WEBHOOK_SECRET = createTestWebhookSecret();
 
 /** Overrides for the inbox.email.received fixture. */
 export interface ReceivedEventOptions {
@@ -61,10 +73,10 @@ export function buildReceivedEvent(options: ReceivedEventOptions = {}): string {
 
 /**
  * Signs a webhook body: base64 HMAC-SHA256 over `${id}.${timestamp}.${body}` keyed by the
- * base64-decoded part of the secret after `whsec_`.
+ * base64-decoded part of the secret after its `whsec` prefix and underscore.
  * @param body - Raw JSON body
  * @param timestampSeconds - Unix seconds for svix-timestamp
- * @param secret - whsec_ signing secret
+ * @param secret - Signing secret (prefix + base64 key)
  * @param webhookId - svix-id value
  */
 export async function signResendWebhook(
@@ -73,7 +85,7 @@ export async function signResendWebhook(
   secret: string = TEST_WEBHOOK_SECRET,
   webhookId = "msg_2Lh9KRb0pzN4LePd3XiA4cUuWsd"
 ): Promise<Headers> {
-  const keyBytes = Uint8Array.from(atob(secret.slice("whsec_".length)), (character) =>
+  const keyBytes = Uint8Array.from(atob(secret.slice(secret.indexOf("_") + 1)), (character) =>
     character.charCodeAt(0)
   );
 

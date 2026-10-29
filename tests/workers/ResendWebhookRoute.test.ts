@@ -18,7 +18,11 @@ import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import worker, { RESEND_WEBHOOK_PATH } from "../../src/index";
-import { buildReceivedEvent, signResendWebhook } from "../mocks/resendWebhook";
+import {
+  buildReceivedEvent,
+  createTestWebhookSecret,
+  signResendWebhook,
+} from "../mocks/resendWebhook";
 import { installResendMock } from "./resendHarness";
 
 const EMAIL_REF_PATTERN = /^[0-9a-f]{16}$/;
@@ -70,7 +74,7 @@ describe("Resend webhook route", () => {
 
   it("rejects a bad signature", async () => {
     const response = await postWebhook(buildReceivedEvent(), {
-      secret: "whsec_b3RoZXItc2VjcmV0",
+      secret: createTestWebhookSecret(),
     });
 
     expect(response.status).toBe(401);
@@ -217,7 +221,7 @@ interface PostOptions {
   timestampSeconds?: number;
 }
 
-/** Sends a webhook request (signed with the test secret by default) through worker.fetch. */
+/** Sends a webhook request (signed with the bound env.RESEND_WEBHOOK_SECRET by default) through worker.fetch. */
 async function postWebhook(
   body: string,
   options: PostOptions = {},
@@ -228,7 +232,7 @@ async function postWebhook(
     : await signResendWebhook(
         body,
         options.timestampSeconds ?? Math.floor(Date.now() / 1000),
-        options.secret
+        options.secret ?? env.RESEND_WEBHOOK_SECRET
       );
 
   return await worker.fetch(

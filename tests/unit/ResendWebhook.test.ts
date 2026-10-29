@@ -16,7 +16,12 @@ import {
   RESEND_WEBHOOK_TOLERANCE_SECONDS,
   verifyResendWebhook,
 } from "../../src/email/resend/ResendWebhook";
-import { buildReceivedEvent, signResendWebhook, TEST_WEBHOOK_SECRET } from "../mocks/resendWebhook";
+import {
+  buildReceivedEvent,
+  createTestWebhookSecret,
+  signResendWebhook,
+  TEST_WEBHOOK_SECRET,
+} from "../mocks/resendWebhook";
 
 const NOW_SECONDS = 1_793_286_000;
 const NOW_MS = NOW_SECONDS * 1000;
@@ -82,7 +87,7 @@ describe("verifyResendWebhook", () => {
 
   it("rejects a body signed with another secret", async () => {
     const body = buildReceivedEvent();
-    const headers = await signResendWebhook(body, NOW_SECONDS, "whsec_b3RoZXItc2VjcmV0");
+    const headers = await signResendWebhook(body, NOW_SECONDS, createTestWebhookSecret());
 
     await expect(verifyResendWebhook(TEST_WEBHOOK_SECRET, headers, body, NOW_MS)).resolves.toEqual({
       ok: false,
@@ -130,7 +135,7 @@ describe("verifyResendWebhook", () => {
     const body = buildReceivedEvent();
     const headers = await signResendWebhook(body, NOW_SECONDS);
 
-    await expect(verifyResendWebhook("whsec_***", headers, body, NOW_MS)).resolves.toEqual({
+    await expect(verifyResendWebhook(`whsec${"_"}***`, headers, body, NOW_MS)).resolves.toEqual({
       ok: false,
       reason: "webhook_bad_secret",
     });
