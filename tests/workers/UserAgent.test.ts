@@ -200,6 +200,52 @@ describe("UserAgent email processing", () => {
     ]);
   });
 
+  it("moves policy To mailboxes that Resend's reply will not reach into Cc", async () => {
+    const sender = "cc-fallback@forces.gc.ca";
+
+    const result = await runInDurableObject(getUserAgentStub(sender), async (instance) => {
+      const resend = installResendMock();
+      const warnings = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+
+      mockSuccessfulSchedule(instance, "schedule-1");
+      mockPrimeFoo(vi.fn(async () => ({ shouldRespond: true, content: "<p>Answer</p>" })));
+
+      // Policy drops CAF-GPT Reply-To mailboxes and falls back to From, but Resend still sends
+      // To the Reply-To, so the sender would be missed unless it moves to Cc.
+      await resend.deliver(
+        instance,
+        createInboundEmail({
+          envelopeFrom: sender,
+          envelopeTo: "agent@caf-gpt.com",
+          from: `CC Fallback <${sender}>`,
+          replyTo: ["agent@caf-gpt.com"],
+          to: ["agent@caf-gpt.com", "ally@forces.gc.ca"],
+          subject: "Cc fallback",
+          body: "Question",
+          messageId: "<cc-fallback@forces.gc.ca>",
+        })
+      );
+
+      return {
+        replies: resend.replies,
+        warnings: warnings.mock.calls.map(([payload]) => JSON.stringify(payload)),
+      };
+    });
+
+    expect(result.replies).toHaveLength(1);
+    expect(result.replies[0].body.cc).toEqual([sender, "ally@forces.gc.ca"]);
+    expect(result.replies[0].body.reply_all).toBe(false);
+
+    const mismatch = result.warnings.find((line) =>
+      line.includes("Reply To set by Resend differs from recipient policy")
+    );
+
+    expect(mismatch).toBeDefined();
+    expect(mismatch).toContain('"policyToCount":1');
+    expect(mismatch).toContain('"resendToCount":1');
+    expect(mismatch).not.toContain(sender);
+  });
+
   it("swallows rejected memory scheduling after a successful reply", async () => {
     const sender = "schedule-failure@forces.gc.ca";
 
