@@ -2,8 +2,8 @@
  * tests/workers/ResendWebhookRoute.test.ts
  *
  * Workers tests for the Resend webhook route in src/index.ts: Svix verification (valid, missing,
- * bad, stale, malformed), ignored events, sender and recipient gates, dedupe of repeated
- * deliveries, fail-loud configuration and routing errors, and privacy-safe boundary logs
+ * bad, stale, malformed), the streamed body limit, ignored events, the sender gate, Cc-delivered
+ * mail, dedupe of repeated deliveries, fail-loud configuration and routing errors, and privacy-safe boundary logs
  *
  * Top-level declarations:
  * - LoggedLine: Structured log payload captured from console
@@ -99,6 +99,42 @@ describe("Resend webhook route", () => {
     expect(response.status).toBe(413);
   });
 
+  it("stops reading a chunked body without Content-Length once it passes the limit", async () => {
+    let pulled = 0;
+
+    const stream = new ReadableStream<Uint8Array>({
+      pull(controller) {
+        pulled += 1;
+
+        if (pulled > 64) {
+          controller.close();
+
+          return;
+        }
+
+        controller.enqueue(new Uint8Array(64 * 1024));
+      },
+    });
+
+    const response = await worker.fetch(
+      new Request(`https://caf-gpt.com${RESEND_WEBHOOK_PATH}`, { method: "POST", body: stream }),
+      env
+    );
+
+    expect(response.status).toBe(413);
+    // 256 KiB limit / 64 KiB chunks: rejected on the fifth chunk, never the remaining 4 MiB.
+    expect(pulled).toBeLessThan(10);
+  });
+
+  it("hands off mail that Cc'd a monitored inbox; the inbox check happens in the UserAgent", async () => {
+    const response = await postWebhook(
+      buildReceivedEvent({ emailId: "route-cc-only-1", to: ["colleague@forces.gc.ca"] })
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual({ outcome: "accepted" });
+  });
+
   it.each([
     ["another event type", { type: "email.delivered" }, "event_ignored"],
     ["a deleted email", { omitEmail: true }, "email_missing"],
@@ -108,7 +144,6 @@ describe("Resend webhook route", () => {
       { from: "Outsider <outsider.person@example.com>" },
       "sender_not_authorized",
     ],
-    ["an unmonitored inbox", { to: ["other@caf-gpt.com"] }, "recipient_not_monitored"],
   ])("acknowledges %s with 200 and does nothing", async (_label, options, outcome) => {
     const logs = captureLogs();
     const response = await postWebhook(buildReceivedEvent(options));

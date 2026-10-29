@@ -12,7 +12,6 @@
  * - EmailBoundaryMetadata: Safe sender/recipient domain and emailRef metadata for boundary logs
  * - WebhookOutcome: Fixed outcome codes for the webhook route
  * - isAuthorizedSender: Checks configured sender allow list
- * - isMonitoredRecipient: Checks monitored recipient addresses
  * - readBoundedBody: Reads the raw request body, refusing bodies over the size limit
  * - jsonResponse: Small JSON response with a fixed, content-free outcome code
  * - handleResendWebhook: Verifies a Resend webhook and routes the email to its UserAgent
@@ -54,7 +53,6 @@ type WebhookOutcome =
   | "email_missing"
   | "outbound_ignored"
   | "sender_not_authorized"
-  | "recipient_not_monitored"
   | "accepted"
   | "duplicate"
   | "routing_failed";
@@ -64,26 +62,47 @@ function isAuthorizedSender(senderEmail: string, config: ReturnType<typeof creat
   return isAuthorizedEmailAddress(senderEmail, config.authorization);
 }
 
-/** Checks monitored recipient addresses. */
-function isMonitoredRecipient(
-  recipientEmail: string,
-  config: ReturnType<typeof createConfig>
-): boolean {
-  return config.email.monitoredAddresses.some(
-    (address) => recipientEmail === normalizeEmailAddress(address)
-  );
-}
-
-/** Reads the raw request body as text, or undefined when it is over the size limit. */
+/**
+ * Reads the raw request body as text, or undefined when it is over the size limit. The stream is
+ * read incrementally and cancelled as soon as the limit is passed, so an unsigned chunked request
+ * without Content-Length can never make the Worker buffer more than the limit.
+ */
 async function readBoundedBody(request: Request): Promise<string | undefined> {
   const declared = Number(request.headers.get("content-length") ?? "0");
 
   if (declared > RESEND_WEBHOOK_MAX_BODY_BYTES) return undefined;
-  const body = await request.text();
 
-  return new TextEncoder().encode(body).byteLength > RESEND_WEBHOOK_MAX_BODY_BYTES
-    ? undefined
-    : body;
+  if (!request.body) return "";
+
+  const reader = request.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let total = 0;
+
+  for (;;) {
+    const { done, value } = await reader.read();
+
+    if (done) break;
+
+    total += value.byteLength;
+
+    if (total > RESEND_WEBHOOK_MAX_BODY_BYTES) {
+      await reader.cancel();
+
+      return undefined;
+    }
+
+    chunks.push(value);
+  }
+
+  const bytes = new Uint8Array(total);
+  let offset = 0;
+
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+
+  return new TextDecoder().decode(bytes);
 }
 
 /** Small JSON response carrying only a fixed outcome code. */
@@ -194,11 +213,8 @@ async function handleResendWebhook(request: Request, env: Env): Promise<Response
     return jsonResponse(200, "sender_not_authorized");
   }
 
-  if (!recipients.some((recipient) => isMonitoredRecipient(recipient, config))) {
-    logger.info("Email ignored - recipient not monitored", metadata);
-
-    return jsonResponse(200, "recipient_not_monitored");
-  }
+  // The monitored-inbox check runs in UserAgent.processResendEmail against the receiving inbox's
+  // own address (GET /inboxes/{id}); the To header alone would miss mail that Cc'd the inbox.
 
   logger.info("Email routed", {
     ...metadata,
