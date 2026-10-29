@@ -1,3 +1,12 @@
+/**
+ * tools/oxlint/anti-slop/rules/no-array-filter-map.ts
+ *
+ * Anti-slop rule that rejects eager adjacent array filter/map passes.
+ *
+ * Top-level declarations:
+ * - noArrayFilterMapRule: Reports `.filter().map()`-style chains on known arrays
+ */
+
 import { defineRule } from "@oxlint/plugins";
 
 import {

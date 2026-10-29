@@ -1,3 +1,21 @@
+/**
+ * tools/oxlint/anti-slop/vendor/eslint-stylistic/padding-line-ast.ts
+ *
+ * Local replacements for the upstream ESLint Stylistic AST helper imports, built on Oxlint's
+ * public source-code and token API. See UPSTREAM.md.
+ *
+ * Top-level declarations:
+ * - Token: Token or comment
+ * - LINEBREAKS: Line terminators recognized by the padding matcher
+ * - isClosingBraceToken / isSemicolonToken / isNotSemicolonToken: Punctuation token tests
+ * - isTokenOnSameLine: Checks whether two nodes or tokens share a line
+ * - isFunction: Checks whether a node is a function
+ * - isSingleLine: Checks whether a node fits on one line
+ * - skipChainExpression: Unwraps an optional-chain expression
+ * - isTopLevelExpressionStatement: Checks for an expression statement directly in a program or block
+ * - isParenthesized: Checks for one pair of parentheses around a node
+ */
+
 // Local replacements for the upstream helper imports. See UPSTREAM.md.
 import type { ESTree, SourceCode, Token as SyntaxToken, Comment, Location } from "@oxlint/plugins";
 

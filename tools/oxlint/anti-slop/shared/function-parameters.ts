@@ -1,3 +1,15 @@
+/**
+ * tools/oxlint/anti-slop/shared/function-parameters.ts
+ *
+ * Shared helpers for reading function parameter annotations and binding names.
+ *
+ * Top-level declarations:
+ * - FunctionParameter: Function parameter AST node type
+ * - containsUnknownType: Checks whether a type is or contains `unknown`
+ * - functionParameterTypeAnnotation: Returns the type annotation of a parameter or its wrapped binding
+ * - functionParameterBindingName: Returns the local binding text of a parameter
+ */
+
 import type { ESTree, SourceCode } from "@oxlint/plugins";
 
 export type FunctionParameter = ESTree.ParamPattern;

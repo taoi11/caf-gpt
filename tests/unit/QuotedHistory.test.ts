@@ -141,6 +141,34 @@ describe("sanitizeQuotedHtml", () => {
     expect(removedNodes).toBe(7);
   });
 
+  it("drops string-sourced resource loads on allowlisted properties", () => {
+    const { html, removedNodes } = sanitizeQuotedHtml(
+      [
+        `<span style='font-family:-webkit-image-set("https://track.example/a.gif" 1x)'>a</span>`,
+        `<span style='mso-bg:IMAGE-SET("https://track.example/b.gif" 1x)'>b</span>`,
+        `<span style='border-top:cross-fade("https://track.example/c.gif", rgb(0,0,0) 50%)'>c</span>`,
+        "<span style='mso-x:element(#track)'>d</span>",
+        `<span style='font-family:src("https://track.example/e.gif")'>e</span>`,
+        `<span style='color:rgb(1,2,3) image ("https://track.example/f.gif")'>f</span>`,
+        `<span style='@import "https://track.example/g.css";color:red'>g</span>`,
+      ].join("")
+    );
+
+    expect(html).toBe(
+      [
+        "<span>a</span>",
+        "<span>b</span>",
+        "<span>c</span>",
+        "<span>d</span>",
+        "<span>e</span>",
+        "<span>f</span>",
+        '<span style="color:red">g</span>',
+      ].join("")
+    );
+    expect(html).not.toContain("track");
+    expect(removedNodes).toBe(7);
+  });
+
   it("scans long CSS values in linear time", () => {
     const longValue = "a".repeat(1_000_000);
     const started = performance.now();

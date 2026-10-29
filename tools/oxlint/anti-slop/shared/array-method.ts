@@ -1,3 +1,16 @@
+/**
+ * tools/oxlint/anti-slop/shared/array-method.ts
+ *
+ * Shared helpers for recognizing array method calls and local array bindings.
+ *
+ * Top-level declarations:
+ * - unwrapArrayExpression: Strips syntax-only wrappers (parentheses, chains, type assertions)
+ * - resolveArrayBinding: Resolves an identifier to its scope binding
+ * - arrayMethodTarget: Reads a static method name and receiver from a callee
+ * - isArrayAnnotation: Checks whether a type annotation is an array or tuple type
+ * - isKnownArrayExpression: Checks whether an expression is locally known to be an array
+ */
+
 import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
 
 /** Unwrap syntax-only wrappers when inspecting array methods and accumulator references. */
@@ -44,6 +57,7 @@ export function arrayMethodTarget(
   return null;
 }
 
+/** Return whether a type annotation is an array, tuple, readonly array, or Array/ReadonlyArray reference. */
 function isArrayAnnotation(type: ESTree.TSType): boolean {
   if (type.type === "TSArrayType" || type.type === "TSTupleType") return true;
   if (type.type === "TSParenthesizedType") return isArrayAnnotation(type.typeAnnotation);
