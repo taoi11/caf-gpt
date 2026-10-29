@@ -33,7 +33,7 @@ export interface AuthorizationConfig {
 
 const STATIC_AUTHORIZATION_POLICY: Readonly<AuthorizationConfig> = {
   authorizedDomains: ["forces.gc.ca"],
-  authorizedEmails: ["luffy@luffy.email", "munshi@dhaliwal.info"],
+  authorizedEmails: ["luffy@luffy.email"],
 };
 
 interface EmailConfig {

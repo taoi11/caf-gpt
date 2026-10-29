@@ -24,10 +24,7 @@ describe("createConfig", () => {
       temperature: 0,
     });
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);
-    expect(config.authorization.authorizedEmails).toEqual([
-      "luffy@luffy.email",
-      "munshi@dhaliwal.info",
-    ]);
+    expect(config.authorization.authorizedEmails).toEqual(["luffy@luffy.email"]);
   });
 
   it("does not allow a legacy runtime value to broaden authorization", () => {
@@ -38,9 +35,6 @@ describe("createConfig", () => {
     const config = createConfig(legacyEnv);
 
     expect(config.authorization.authorizedDomains).toEqual(["forces.gc.ca"]);
-    expect(config.authorization.authorizedEmails).toEqual([
-      "luffy@luffy.email",
-      "munshi@dhaliwal.info",
-    ]);
+    expect(config.authorization.authorizedEmails).toEqual(["luffy@luffy.email"]);
   });
 });
