@@ -206,7 +206,7 @@ describe("isSelfQuotedSender", () => {
     ],
     [
       "French",
-      "<b>De&nbsp;:</b> <a href=\"mailto:agent@caf-gpt.com\">CAF-GPT</a><br>" +
+      '<b>De&nbsp;:</b> <a href="mailto:agent@caf-gpt.com">CAF-GPT</a><br>' +
         "<b>Envoy&eacute;&nbsp;:</b> mercredi 28 octobre 2026 14:30<br>",
       "mercredi 28 octobre 2026 14:30",
     ],
