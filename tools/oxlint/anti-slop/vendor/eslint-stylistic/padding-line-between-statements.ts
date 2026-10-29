@@ -1,3 +1,23 @@
+/**
+ * tools/oxlint/anti-slop/vendor/eslint-stylistic/padding-line-between-statements.ts
+ *
+ * Vendored ESLint Stylistic padding-line-between-statements engine, adapted to Oxlint; the
+ * anti-slop spacing policy lives in ../../rules/require-readable-spacing.ts. See UPSTREAM.md.
+ *
+ * Top-level declarations:
+ * - NodeTestObject: Statement-type tester
+ * - PolicyStatementOption / PolicyOptions: Typed padding policy options
+ * - isSelectorOption: Checks whether a policy entry is a selector option
+ * - newKeywordTester / newNodeTypeTester: Build statement-type testers
+ * - isIIFEStatement / isCJSRequire / isCJSExport / isBlockLikeStatement / isDirective / isDirectivePrologue / isExpression: Statement classifiers
+ * - getActualLastToken: Returns a statement's last token, ignoring a semicolon-less-style leading semicolon
+ * - replacerToRemovePaddingLines: Regex replacer that removes padding lines
+ * - getReportLoc: Returns the location a padding diagnostic is reported at
+ * - verifyForAny / verifyForNever / verifyForAlways: Check and fix one padding type
+ * - PaddingTypes / MaybeMultilineStatementType / StatementTypes: Padding and statement-type tables
+ * - createPaddingLineRule: Builds the padding rule from caller-owned options (default export)
+ */
+
 // Vendored from ESLint Stylistic; see UPSTREAM.md and LICENSE in this directory.
 import type {
   ESTree,
@@ -65,6 +85,7 @@ export type PolicyOptions<Extra extends string = never> = {
 const LT = `[${Array.from(LINEBREAKS).join("")}]`;
 const PADDING_LINE_SEQUENCE = new RegExp(String.raw`^(\s*?${LT})\s*${LT}(\s*;?)$`, "u");
 
+/** Return whether a policy entry is a `{ selector }` option rather than a statement type. */
 function isSelectorOption(option: PolicyStatementOption<string>): option is SelectorOption {
   return typeof option === "object" && !Array.isArray(option);
 }
@@ -299,6 +320,7 @@ function replacerToRemovePaddingLines(
   return trailingSpaces + indentSpaces;
 }
 
+/** Return the report location: the whole node when single-line, else its first line. */
 function getReportLoc(node: ASTNode, sourceCode: SourceCode): Location {
   if (isSingleLine(node)) return node.loc;
 

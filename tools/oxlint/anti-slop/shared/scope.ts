@@ -1,3 +1,12 @@
+/**
+ * tools/oxlint/anti-slop/shared/scope.ts
+ *
+ * Shared lexical scope lookup for anti-slop rules.
+ *
+ * Top-level declarations:
+ * - resolveVariable: Resolves an identifier to its binding by walking scopes upward
+ */
+
 import type { ESTree, Scope, SourceCode, Variable } from "@oxlint/plugins";
 
 /** Resolve an identifier to its binding by walking lexical scopes upward. */

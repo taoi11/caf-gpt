@@ -1,3 +1,18 @@
+/**
+ * tools/oxlint/anti-slop/rules/require-readable-spacing.ts
+ *
+ * Anti-slop rule that requires blank lines between declarations and logical statement groups,
+ * built on the vendored ESLint Stylistic padding-line engine.
+ *
+ * Top-level declarations:
+ * - isSinglelineBinding: Matches a one-line variable declaration, optionally exported
+ * - hasLeadingComment: Checks whether a statement has its own leading comment
+ * - singlelineBinding: Statement type for one-line bindings
+ * - undocumentedSinglelineBinding: Statement type for one-line bindings without a leading comment
+ * - paddingRule: Padding rule built from the spacing policy
+ * - requireReadableSpacingRule: Exported rule with whitespace-only fixes
+ */
+
 import type { CreateRule, ESTree, SourceCode } from "@oxlint/plugins";
 
 import createPaddingLineRule from "../vendor/eslint-stylistic/padding-line-between-statements.ts";

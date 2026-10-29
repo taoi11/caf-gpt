@@ -1,3 +1,28 @@
+/**
+ * tools/oxlint/anti-slop/shared/type-alias-resolution.ts
+ *
+ * Shared lexical type-alias resolution: collects type bindings per program and matches types
+ * after resolving visible aliases and substituting their type parameters.
+ *
+ * Top-level declarations:
+ * - VisitorKeys / TypeScope / TypeBinding / Substitution / Substitutions: Internal resolution types
+ * - TypeAliasEnvironment: Collected aliases and type bindings of one program
+ * - ResolvedTypeMatcher: Callback that matches a resolved type
+ * - environmentsByProgram: Per-program environment cache
+ * - isNode: Checks whether a value is an ESTree node
+ * - enclosingTypeScope: Finds the block-like scope that owns a declaration
+ * - declaredTypeBinding: Reads the type name a declaration or import introduces
+ * - collectTypeBindings: Walks the AST collecting type bindings and aliases
+ * - createTypeAliasEnvironment: Builds (and caches) the environment for a program
+ * - ancestorDistance: Counts parent steps from a node up to an ancestor
+ * - nearestTypeBindings: Returns the innermost visible bindings for a name
+ * - visibleTypeAlias: Resolves the nearest visible alias with a name
+ * - hasVisibleTypeBinding: Checks whether a local declaration shadows a type name
+ * - typeReferenceName: Reads the identifier name of a type reference
+ * - aliasSubstitutions: Maps an alias's type parameters to a reference's arguments or defaults
+ * - resolvedTypeMatches: Matches a type after alias resolution and substitution
+ */
+
 import type { ESTree } from "@oxlint/plugins";
 
 import { lexicalTypeParameterNames } from "./lexical-type-parameters.ts";
@@ -31,12 +56,14 @@ export type ResolvedTypeMatcher = (
 
 const environmentsByProgram = new WeakMap<ESTree.Program, TypeAliasEnvironment>();
 
+/** Return whether a visitor-key field value is an ESTree node. */
 function isNode(value: unknown): value is ESTree.Node {
   return (
     typeof value === "object" && value !== null && "type" in value && typeof value.type === "string"
   );
 }
 
+/** Return the nearest program, block, module block, static block or switch owning a declaration. */
 function enclosingTypeScope(node: ESTree.Node): TypeScope {
   let current: ESTree.Node | null = node.parent;
   while (current !== null) {
@@ -54,6 +81,7 @@ function enclosingTypeScope(node: ESTree.Node): TypeScope {
   return node;
 }
 
+/** Return the type name a type alias, interface, enum, class or import introduces, if any. */
 function declaredTypeBinding(node: ESTree.Node): {
   readonly alias: ESTree.TSTypeAliasDeclaration | null;
   readonly name: string;
@@ -79,6 +107,7 @@ function declaredTypeBinding(node: ESTree.Node): {
   return null;
 }
 
+/** Walk a subtree by visitor keys, recording every type binding and type alias. */
 function collectTypeBindings(
   node: ESTree.Node,
   visitorKeys: VisitorKeys,
@@ -125,6 +154,7 @@ export function createTypeAliasEnvironment(
   return environment;
 }
 
+/** Return the number of parent steps from a node to an ancestor, or null when it is not one. */
 function ancestorDistance(ancestor: ESTree.Node, node: ESTree.Node): number | null {
   let current: ESTree.Node | null = node;
   let distance = 0;
@@ -136,6 +166,7 @@ function ancestorDistance(ancestor: ESTree.Node, node: ESTree.Node): number | nu
   return null;
 }
 
+/** Return the bindings for a name in the innermost scope enclosing the use. */
 function nearestTypeBindings(
   name: string,
   use: ESTree.Node,
@@ -180,10 +211,12 @@ export function hasVisibleTypeBinding(
   );
 }
 
+/** Return a type reference's simple identifier name, or null for qualified names. */
 function typeReferenceName(type: ESTree.TSTypeReference): string | null {
   return type.typeName.type === "Identifier" ? type.typeName.name : null;
 }
 
+/** Map an alias's type parameters to the reference's arguments or defaults; null when one is missing. */
 function aliasSubstitutions(
   alias: ESTree.TSTypeAliasDeclaration,
   reference: ESTree.TSTypeReference,

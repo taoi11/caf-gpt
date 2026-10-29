@@ -1,3 +1,15 @@
+/**
+ * tools/oxlint/anti-slop/rules/no-reduce-accumulator-copy.ts
+ *
+ * Anti-slop rule that rejects copying a growing reducer accumulator on every iteration.
+ *
+ * Top-level declarations:
+ * - enclosingReducer: Finds the reduce/reduceRight callback and accumulator enclosing a node
+ * - referencesAccumulator: Checks whether an expression resolves to the reducer accumulator
+ * - isGlobalCopyOwner: Checks whether a copy call targets an unshadowed global such as Object or Array
+ * - noReduceAccumulatorCopyRule: Reports Object.assign, Array.from and array copy calls on the accumulator
+ */
+
 import { defineRule } from "@oxlint/plugins";
 import type { ESTree, SourceCode, Variable } from "@oxlint/plugins";
 
@@ -8,6 +20,7 @@ import {
   unwrapArrayExpression,
 } from "../shared/array-method.ts";
 
+/** Find the reduce/reduceRight callback enclosing a node, with its accumulator and initial value. */
 function enclosingReducer(node: ESTree.Node) {
   let parent = node.parent;
   while (parent !== null) {
@@ -38,6 +51,7 @@ function enclosingReducer(node: ESTree.Node) {
   return null;
 }
 
+/** Return whether an expression is the accumulator, following const aliases without reassignment. */
 function referencesAccumulator(
   sourceCode: SourceCode,
   node: ESTree.Node,
@@ -64,6 +78,7 @@ function referencesAccumulator(
   return false;
 }
 
+/** Return whether an identifier is the named global (for example Object or Array), not a local binding. */
 function isGlobalCopyOwner(sourceCode: SourceCode, node: ESTree.Node, name: string): boolean {
   node = unwrapArrayExpression(node);
   if (node.type !== "Identifier" || node.name !== name) return false;
