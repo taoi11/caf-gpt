@@ -10,7 +10,7 @@
  * - createEmailRef is random, 16 hex chars, and unique per call
  * - getEmailRefFromHeaders reuses a well-formed Worker ref and never falls back to a shared constant
  * - getSafeErrorMetadata never leaks non-allowlisted error names or codes
- * - toLoggableShortlistDiagnostics keeps only allowlisted numeric/boolean fields and the fixed stage code
+ * - toLoggableToolReadDiagnostics keeps only read_file counts and the fixed reason code
  * - toLoggableQuoteDiagnostics keeps only quote flags, counts, and the fixed failure reason
  * - toLoggableSentZoneDiagnostics keeps only the zone source, offset, found flag, and fixed reason
  */
@@ -31,7 +31,7 @@ import {
   toLoggableErrorName,
   toLoggableQuoteDiagnostics,
   toLoggableSentZoneDiagnostics,
-  toLoggableShortlistDiagnostics,
+  toLoggableToolReadDiagnostics,
 } from "../../src/email/utils/LogRedaction";
 import { EmailParsingError, QuotedHistoryError } from "../../src/errors";
 import { getSafeErrorMetadata } from "../../src/Logger";
@@ -188,59 +188,48 @@ describe("getSafeErrorMetadata", () => {
   });
 });
 
-describe("toLoggableShortlistDiagnostics", () => {
-  const group = {
-    optionCount: 9,
-    rankReached: 1,
-    topIsNone: false,
-    topConfidence: 0.82,
-    topMargin: 0.7,
-  };
+describe("toLoggableToolReadDiagnostics", () => {
+  it("keeps the fixed reason and read counts", () => {
+    const diagnostics = {
+      readReason: "read_ok" as const,
+      totalCalls: 3,
+      successfulReads: 2,
+      badCalls: 1,
+      steps: 4,
+      indexRows: 82,
+      skippedRows: 0,
+    };
 
-  const document = {
-    optionCount: 82,
-    rankReached: 1,
-    topIsNone: true,
-    topConfidence: 0.41,
-    topMargin: 0.05,
-  };
-
-  it("keeps the stage code and per-stage numbers under stage-named fields", () => {
-    expect(toLoggableShortlistDiagnostics({ shortlistStage: "document", group, document })).toEqual(
-      { shortlistStage: "document", shortlistGroup: group, shortlistDocument: document }
-    );
+    expect(toLoggableToolReadDiagnostics(diagnostics)).toEqual(diagnostics);
   });
 
-  it("drops strings, unknown fields, unknown stages, and non-finite numbers", () => {
+  it("drops strings, unknown reasons, unknown fields, and non-count numbers", () => {
     const untrusted = JSON.parse(
       JSON.stringify({
-        shortlistStage: "member question text",
+        readReason: "member question text",
         question: "What is my leave entitlement?",
-        choice: "doc_4",
-        group: {
-          optionCount: "9",
-          rankReached: "1",
-          topIsNone: "no",
-          topConfidence: "high",
-          title: "Leave Regulations",
-        },
-        document: { topChoice: "vol-1-administration/ch-16-leave.md", topMargin: 0.2 },
-        extra: { optionCount: 3 },
+        file: "vol-1-administration/ch-16-leave.md",
+        title: "Leave Regulations",
+        totalCalls: "3",
+        successfulReads: 1.5,
+        badCalls: -1,
+        steps: 2,
+        extra: { totalCalls: 3 },
       })
     );
 
-    untrusted.group.topMargin = Number.POSITIVE_INFINITY;
-    const logged = toLoggableShortlistDiagnostics(untrusted);
-    expect(logged).toEqual({ shortlistGroup: {}, shortlistDocument: { topMargin: 0.2 } });
+    untrusted.indexRows = Number.POSITIVE_INFINITY;
+    const logged = toLoggableToolReadDiagnostics(untrusted);
+    expect(logged).toEqual({ steps: 2 });
     const serialized = JSON.stringify(logged);
 
-    for (const content of ["leave", "Leave", "doc_4", "member", "vol-1", "extra"]) {
+    for (const content of ["leave", "Leave", "member", "vol-1", "extra"]) {
       expect(serialized).not.toContain(content);
     }
   });
 
-  it("returns no fields for missing diagnostics", () => {
-    expect(toLoggableShortlistDiagnostics(undefined)).toEqual({});
+  it("returns no fields for empty diagnostics", () => {
+    expect(toLoggableToolReadDiagnostics({})).toEqual({});
   });
 });
 
