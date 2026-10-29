@@ -8,6 +8,7 @@ import { describe, expect, it } from "vitest";
 import {
   isSafeFilePath,
   isSafeId,
+  parseManifestIndex,
   parseManifestRows,
   parseManifestTable,
 } from "../../src/agents/utils/ManifestParser";
@@ -128,5 +129,24 @@ describe("parseManifestRows", () => {
       { id: "5019-0", title: "Conduct and Performance", file: "5019-0.md" },
       { id: "5031-1", title: "Grievance", file: "5031-1.md" },
     ]);
+  });
+});
+
+describe("parseManifestIndex", () => {
+  it("counts malformed and unsafe body rows but not the header or separator", () => {
+    const index = parseManifestIndex(`# Index
+| Id | Title | File |
+|---|---|---|
+| 5019-0 | Conduct | 5019-0.md |
+| ../escape | Traversal | ../escape.md |
+| 5031-1 | Not markdown | 5031-1.txt |
+| Two | Columns |`);
+
+    expect(index.rows).toEqual([{ id: "5019-0", title: "Conduct", file: "5019-0.md" }]);
+    expect(index.skippedRows).toBe(3);
+  });
+
+  it("returns zero rows and zero skips for an index with no table", () => {
+    expect(parseManifestIndex("Just prose about 5019-0.md")).toEqual({ rows: [], skippedRows: 0 });
   });
 });

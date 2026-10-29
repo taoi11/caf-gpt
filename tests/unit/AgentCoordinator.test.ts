@@ -141,12 +141,12 @@ describe("Prime Foo tool error mapping", () => {
   it("passes app errors through so the reply names the real cause", () => {
     const storage = new StorageConnectionError("r2 down");
 
-    const shortlist = new AgentValidationError(
-      "DOAD policy Clef shortlist failed: clef_invalid_choice"
+    const readFailure = new AgentValidationError(
+      "DOAD policy model did not successfully read any documents"
     );
 
     expect(toPrimeFooToolError(storage)).toBe(storage);
-    expect(toPrimeFooToolError(shortlist)).toBe(shortlist);
+    expect(toPrimeFooToolError(readFailure)).toBe(readFailure);
   });
 
   it("maps Workers AI binding failures to AgentAPIError", () => {
@@ -210,9 +210,7 @@ describe("Prime Foo fail-loudly on tool errors", () => {
   it("stops after the first failed batch_research step with no re-calls", async () => {
     const model = alwaysResearchModel();
 
-    const failure = new AgentValidationError(
-      "DOAD policy Clef shortlist failed: clef_empty_shortlist"
-    );
+    const failure = new AgentValidationError("DOAD policy read_file correction budget exhausted");
 
     const research = vi.spyOn(DoadFooAgent.prototype, "research").mockRejectedValue(failure);
     const testEnv = createMockEnv();

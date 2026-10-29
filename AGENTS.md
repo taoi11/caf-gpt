@@ -50,11 +50,10 @@ Emails are processed through **Cloudflare Email Workers**:
 - `batch_research` accepts leave, DOAD, and QR&O query arrays, then runs the requested sub-agent research calls concurrently.
   - Research sub-agents are `LeaveFooAgent`, `DoadFooAgent`, and `QroFooAgent`.
   - Each domain accepts up to 3 questions per `batch_research` call.
-  - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent`: Clef-flash shortlists allowlisted index ids, DocumentRetriever prefetches those docs (max 3), then one `generateText()` answer call uses only the prefetched content (no `read_file` selection loop).
-  - The shortlist is two-stage, because one choice over the whole 10–15 KB manifest never reached the 0.6 confidence threshold. Stage 1 (`group_pick`, one request) picks one group: the QR&O volume folder (first id segment, e.g. `vol-1-administration`, `qroVolumeGroup`) or the DAOD thousand series (`5019-0` → 5000 series, `doadSeriesGroup`); each group option lists its documents' titles. Stage 2 ranks documents in that group only (`pick_1..3`), so a shortlist is at most 1 + 3 = 4 Clef-flash calls. The same `CLEF_SHORTLIST_CONFIDENCE_THRESHOLD` (0.6) applies at every rank of both stages.
-  - Shortlist validation failures (malformed / invented or already-chosen / too many options / empty-failed) throw to the error-email boundary. A low-confidence group, a low-confidence stage-1 `none`, or no confident document in the chosen group (a stage-2 `none` included) is `clef_empty_shortlist`; only a confident stage-1 `none` (no group applies) may answer with zero prefetched docs. There is no fallback: a failed shortlist always ends in a visible error reply.
-  - Clef answers each question in a request independently, so stage 2 asks one rank per `AI.run` request and drops already-chosen documents from the next rank's options. Each request sends the manifest (or the chosen group) once, as option descriptions; Clef accepts at most 255 options per choice question (`CLEF_CHOICE_MAX_OPTIONS`), and both stages (group count, and every group's size, plus `none`) are checked before anything is sent.
-  - The failure log carries only the fixed `shortlistReason` code, the content-free shortlist diagnostics, and, for Workers AI binding errors, `errorName` plus the numeric `aiUpstreamCode` (never the error message, picks, choice keys, titles, question text, or model output). Diagnostics pass through `toLoggableShortlistDiagnostics` in `LogRedaction.ts`, which keeps only `shortlistStage` (`group` | `document`, the last stage reached) and, per stage (`shortlistGroup` / `shortlistDocument` objects), `optionCount`, `rankReached`, `topIsNone`, `topConfidence` (rank-1 confidence) and `topMargin` (rank-1 gap between the two highest probabilities), as finite numbers and booleans only; the success performance log carries the same fields.
+  - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent` and use one bounded `generateText()` tool loop (Luna) to select and read indexed documents. The full `| Id | Title | File |` index is in the prompt (`{doad_table}` / `{qro_index}`), and the model calls `read_file({ file })` with an exact Id from it.
+  - Their `read_file` tool allows at most 5 attempts, 3 successful reads, and 2 correctable bad calls, within `stopWhen: [stepCountIs(6), stopOnReadToolError]`. Successful-read slots are reserved before asynchronous loads so concurrent tool execution cannot exceed the cap. A bad call (Id not in the index, or past the read cap) returns an error result to the model so it can correct itself; the 3rd bad call, a 6th attempt, or any tool failure throws and ends the loop at that step.
+  - There is no fallback: zero successful reads, an empty answer, rejected tool input, or ending on a tool call at the step limit fails loudly to the error-reply boundary. Typed app errors from a read (for example `StorageNotFoundError`) pass through unchanged; anything else becomes `AgentValidationError`. An index with zero usable rows fails with `StorageValidationError`.
+  - Logs carry counts only, through `toLoggableToolReadDiagnostics` in `LogRedaction.ts`: `readReason` (a fixed code from `TOOL_READ_REASONS`), `totalCalls`, `successfulReads`, `badCalls`, `steps`, `indexRows`, `skippedRows`, plus `questionLength` and, for Workers AI binding errors, the numeric `aiUpstreamCode`. Never the question, Ids, titles, bodies, prompts, or model output.
   - Prime Foo passes a tool's own app error through to the error reply (for example a `StorageError` gets the storage template); Workers AI binding errors become `AgentAPIError`; anything else stays `AgentValidationError`.
   - DOAD and QR&O identifiers come from shared `| Id | Title | File |` manifest tables on R2 (`doad/index_v2.md`, `qro/index_v2.md`), parsed by `parseManifestTable` / `parseManifestRows` in `src/agents/utils/ManifestParser.ts`; it rejects absolute paths, dot or empty segments, backslashes, traversal, and non-`.md` files.
 - `generate_feedback_note` delegates to `PaceFooAgent.generateNote(rank, context)`.
@@ -68,7 +67,7 @@ Emails are processed through **Cloudflare Email Workers**:
 AI SDK tool inputs are validated with Zod schemas:
 
 - Prime Foo defines its tool input schemas inline in `AgentCoordinator`.
-- `ToolReadingAgent` shortlists via Clef-flash against the domain index allowlist, then prefetches validated File paths from R2 before the answer call.
+- `ToolReadingAgent` defines the `read_file` input schema inline and validates file values against the domain index allowlist before loading R2.
 - `MemoryFooAgent` uses `MemoryUpdateToolInputSchema` and `MemoryUnchangedToolInputSchema` from `src/schemas.ts` with a required `generateText()` tool call.
 - AI SDK validates tool inputs before execution; agents additionally validate recognized tool names and domain-specific values.
 
@@ -114,18 +113,16 @@ The codebase uses **Vercel AI SDK** (`ai` + `@ai-sdk/openai`) with the OpenAI Re
 3. Add prompt file: `public/prompts/your_agent.md`
 4. Add model config: add `yourAgent` to `LLMConfig.models` in `src/config.ts`
 
-### Indexed Shortlist-Prefetch Agents (One Call)
+### Indexed Tool-Reading Agents (One Call)
 
 For agents that answer from indexed documents (like `DoadFooAgent` and `QroFooAgent`):
 
 1. Create an agent class extending `ToolReadingAgent`.
-2. Configure its category, model key, prompt name, `documentsVariableName`, and `maxPrefetchDocuments`.
-3. Implement `getIndexContent()` and `formatDocumentTag()`.
-4. Rely on `parseManifestRows` / `parseManifestTable` for the shared `| Id | Title | File |` allowlist; identifiers are validated before any R2 read.
-5. Provide a `groupOf(row)` stage-1 grouping (`{ key, label }`) derived from the manifest ids.
-6. Clef-flash shortlists allowlisted ids (`shortlistManifestFiles`: one group request, then one rank per request inside it); `DocumentRetriever` prefetches those docs; the specialist answers once from `{prefetched_documents}` with no `read_file` selection loop.
-7. Add one answer prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md` that cites only prefetched documents.
-8. Add model config in `src/config.ts`.
+2. Configure its category, model key, prompt name, `indexVariableName`, and `readLimits`.
+3. Implement `getIndexContent()` (or set `indexFile`) and `formatDocumentTag()`.
+4. Rely on `parseManifestIndex` / `parseManifestRows` / `parseManifestTable` for the shared `| Id | Title | File |` allowlist; identifiers are validated before any R2 read, and skipped rows are counted.
+5. Add one tool-reader prompt such as `public/prompts/doad_foo_tool_reader.md` or `public/prompts/qro_foo_tool_reader.md`. The model chooses files, calls the bounded `read_file` tool, and answers in the same `generateText()` run.
+6. Add model config in `src/config.ts`.
 
 The current policy prompt assets are `doad_foo_tool_reader.md`, `qro_foo_tool_reader.md`, and `leave_foo_research.md`. The DOAD and QR&O indexes live on R2, not in `public/prompts/`. There are no separate DOAD or QR&O selector/answer prompts.
 

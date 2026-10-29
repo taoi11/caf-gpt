@@ -9,8 +9,9 @@
  * - toLoggableErrorName: Maps an error name to an allowlisted value or OTHER_ERROR_NAME
  * - toLoggableErrorCode: Maps an error code to an allowlisted value or OTHER_ERROR_CODE
  * - getAiUpstreamCode: Extracts only the numeric Workers AI error code from a binding error
- * - LoggableShortlistDiagnostics: Allowlisted shortlist diagnostic log fields (stage code, per-stage numbers)
- * - toLoggableShortlistDiagnostics: Keeps only allowlisted numeric/boolean shortlist diagnostics
+ * - TOOL_READ_REASONS / ToolReadReason: Fixed read_file research outcome codes
+ * - ToolReadDiagnostics / LoggableToolReadDiagnostics: Read_file research log fields (counts, fixed reason)
+ * - toLoggableToolReadDiagnostics: Keeps only allowlisted read_file counts and the fixed reason
  * - QuoteDiagnostics / LoggableQuoteDiagnostics: Quoted-history log fields (flags, counts, fixed reason)
  * - toLoggableQuoteDiagnostics: Keeps only allowlisted boolean/count/reason quoted-history fields
  * - SentZoneDiagnostics / LoggableSentZoneDiagnostics: Quoted Sent: zone log fields (source, offset, flag, reason)
@@ -21,7 +22,6 @@
  */
 
 import { z } from "zod";
-import type { ShortlistDiagnostics } from "../../agents/utils/ClefDecision";
 import type { SentZoneReason, SentZoneSource } from "../../agents/utils/SentTimeZone";
 import type { QuoteFailureReason } from "../components/QuotedHistory";
 import { normalizeEmailAddress } from "./EmailNormalizer";
@@ -147,55 +147,79 @@ export function getAiUpstreamCode<ErrorValue>(error: ErrorValue): number | undef
   return match ? Number(match[1]) : undefined;
 }
 
-/** Finite number, or dropped (strings, NaN, Infinity, and other types never reach the log). */
-const LoggableNumberSchema = z.number().finite().optional().catch(undefined);
+/** Fixed, content-free outcome codes of a DOAD/QR&O read_file research run; safe to log. */
+export const TOOL_READ_REASONS = [
+  "read_ok",
+  "empty_question",
+  "index_no_rows",
+  "bad_call_budget_exhausted",
+  "call_limit_exceeded",
+  "tool_failed",
+  "tool_input_invalid",
+  "step_limit_reached",
+  "no_successful_reads",
+  "empty_answer",
+] as const;
 
-/** Allowlisted per-stage shortlist diagnostics; unknown keys are stripped. */
-const ShortlistStageLogSchema = z
-  .object({
-    optionCount: LoggableNumberSchema,
-    rankReached: LoggableNumberSchema,
-    topIsNone: z.boolean().optional().catch(undefined),
-    topConfidence: LoggableNumberSchema,
-    topMargin: LoggableNumberSchema,
-  })
-  .optional()
-  .catch(undefined);
+/** One fixed read_file research outcome code. */
+export type ToolReadReason = (typeof TOOL_READ_REASONS)[number];
 
-/** Allowlisted shortlist diagnostics: the fixed stage code plus per-stage numbers and booleans. */
-const ShortlistDiagnosticsLogSchema = z
+/** Read_file research facts a caller may offer for logging (counts and a fixed reason only). */
+export interface ToolReadDiagnostics {
+  readReason?: ToolReadReason;
+  totalCalls?: number;
+  successfulReads?: number;
+  badCalls?: number;
+  steps?: number;
+  indexRows?: number;
+  skippedRows?: number;
+}
+
+/** Non-negative integer count, or dropped (strings, NaN, negatives, and other types never pass). */
+const LoggableCountSchema = z.number().int().nonnegative().optional().catch(undefined);
+
+/** Allowlisted read_file research log fields; unknown keys (ids, titles, text) are stripped. */
+const ToolReadDiagnosticsLogSchema = z
   .object({
-    shortlistStage: z.enum(["group", "document"]).optional().catch(undefined),
-    group: ShortlistStageLogSchema,
-    document: ShortlistStageLogSchema,
+    readReason: z.enum(TOOL_READ_REASONS).optional().catch(undefined),
+    totalCalls: LoggableCountSchema,
+    successfulReads: LoggableCountSchema,
+    badCalls: LoggableCountSchema,
+    steps: LoggableCountSchema,
+    indexRows: LoggableCountSchema,
+    skippedRows: LoggableCountSchema,
   })
   .catch({});
 
-/** Shortlist diagnostic log fields: `shortlistStage` plus `shortlistGroup` / `shortlistDocument` numbers. */
-export interface LoggableShortlistDiagnostics {
-  shortlistStage?: "group" | "document";
-  shortlistGroup?: z.infer<typeof ShortlistStageLogSchema>;
-  shortlistDocument?: z.infer<typeof ShortlistStageLogSchema>;
-}
+/** Read_file research log fields after the allowlist. */
+export type LoggableToolReadDiagnostics = z.infer<typeof ToolReadDiagnosticsLogSchema>;
 
 /**
- * Returns shortlist diagnostics as log fields, keeping only the fixed stage code and allowlisted
- * numeric/boolean per-stage fields (stage 1 under shortlistGroup, stage 2 under shortlistDocument).
- * Anything else (strings, choice keys, titles, question text, unknown fields) is dropped, so a
- * caller bug cannot leak content into logs.
- * @param diagnostics - ShortlistDiagnostics from shortlistManifestFiles
+ * Returns read_file research diagnostics as log fields: the fixed outcome code plus call, read,
+ * bad-call, step, index-row, and skipped-row counts. Anything else (the question, document ids,
+ * titles, bodies, prompts, model output, unknown fields) is dropped, so a caller bug cannot leak
+ * content into logs.
+ * @param diagnostics - Counts and reason from ToolReadingAgent
  */
-export function toLoggableShortlistDiagnostics(
-  diagnostics: ShortlistDiagnostics | undefined
-): LoggableShortlistDiagnostics {
-  const parsed = ShortlistDiagnosticsLogSchema.parse(diagnostics ?? {});
-  const fields: LoggableShortlistDiagnostics = {};
+export function toLoggableToolReadDiagnostics(
+  diagnostics: ToolReadDiagnostics
+): LoggableToolReadDiagnostics {
+  const parsed = ToolReadDiagnosticsLogSchema.parse(diagnostics);
+  const fields: LoggableToolReadDiagnostics = {};
 
-  if (parsed.shortlistStage !== undefined) fields.shortlistStage = parsed.shortlistStage;
+  if (parsed.readReason !== undefined) fields.readReason = parsed.readReason;
 
-  if (parsed.group !== undefined) fields.shortlistGroup = parsed.group;
+  if (parsed.totalCalls !== undefined) fields.totalCalls = parsed.totalCalls;
 
-  if (parsed.document !== undefined) fields.shortlistDocument = parsed.document;
+  if (parsed.successfulReads !== undefined) fields.successfulReads = parsed.successfulReads;
+
+  if (parsed.badCalls !== undefined) fields.badCalls = parsed.badCalls;
+
+  if (parsed.steps !== undefined) fields.steps = parsed.steps;
+
+  if (parsed.indexRows !== undefined) fields.indexRows = parsed.indexRows;
+
+  if (parsed.skippedRows !== undefined) fields.skippedRows = parsed.skippedRows;
 
   return fields;
 }
