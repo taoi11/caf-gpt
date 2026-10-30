@@ -10,9 +10,6 @@
  * - persistPrunedVersions: Shared memory-version prune + conditional state write helper
  * - getUserAgentId: Converts a normalized sender email into a stable Agent instance id
  *
- * Clef (27B) prompt-injection/abuse screen runs in getAIResponse (with memory) before Prime Foo.
- * Clef-flash memory update gate runs in runMemoryUpdate before MemoryFoo.
- *
  * Replies carry the agent answer and signature, then Outlook-style quoted history of the inbound
  * email (components/QuotedHistory; its body already carries the earlier chain). A quote that
  * cannot be built throws QuotedHistoryError before sending, so the funny error reply runs instead
@@ -75,7 +72,6 @@ import {
   retainMemoryVersions,
 } from "./memoryPolicy";
 import { MemoryFooAgent } from "./sub-agents";
-import { decideShouldReply, decideShouldUpdateMemory } from "./utils/ClefDecision";
 import {
   pruneSentTimes,
   recordReplySentTime,
@@ -118,11 +114,10 @@ interface InboundLogContext {
   senderDomain: string;
 }
 
-/** Prime Foo response plus a content-free skip reason when no reply will be sent. */
+/** Prime Foo response indicating whether there is content to send. */
 interface AIResponseResult {
   shouldRespond: boolean;
   content?: string;
-  skipReason?: string;
 }
 
 /** Content-free result of the normal reply send. */
@@ -228,15 +223,15 @@ export class UserAgent extends Agent<Env, UserAgentState> {
       this.validateEmail(parsedEmail, logContext);
       const thread = this.loadThread(parsedEmail, logContext);
       const emailContext = this.buildEmailContext(parsedEmail) + thread.history;
-      const response = await this.getAIResponse(emailContext, config, logContext);
+      const response = await this.getAIResponse(emailContext, config);
 
       if (!response.shouldRespond || !response.content?.trim()) {
         this.logger.info("Inbound email completed without a reply", {
           ...logContext,
-          skipReason: response.skipReason ?? "prime_foo_no_response",
+          skipReason: "prime_foo_no_response",
         });
         outcome = "skipped";
-        outcomeReason = response.skipReason ?? "prime_foo_no_response";
+        outcomeReason = "prime_foo_no_response";
 
         return;
       }
@@ -342,33 +337,12 @@ export class UserAgent extends Agent<Env, UserAgentState> {
   /** Runs a durable scheduled memory update after a successful email reply. */
   async runMemoryUpdate(task: MemoryUpdateTask): Promise<void> {
     try {
-      // Clef is a System One decision model; cast until wrangler AiModels lists it.
-      const memoryGate = await decideShouldUpdateMemory(
-        {
-          // SAFETY: ClefDecision constructs System One requests; generated AiModels does not yet list Clef.
-          run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
-        },
-        task.emailContext,
-        task.agentReply,
-        this.state.memory
-      );
-
-      if (!memoryGate.shouldUpdate) {
-        this.persistPrunedVersions(Date.now());
-        this.logger.info("Clef memory gate skipped MemoryFoo", {
-          reason: memoryGate.reason,
-        });
-
-        return;
-      }
-
       const memoryAgent = new MemoryFooAgent(this.env, createConfig(this.env));
 
       const result = await memoryAgent.updateMemory(
         this.state.memory,
         task.emailContext,
-        task.agentReply,
-        { promptName: "memory_foo_edit" }
+        task.agentReply
       );
 
       const now = Date.now();
@@ -519,36 +493,7 @@ ${parsedEmail.body}`;
   }
 
   /** Gets the Prime Foo response using the current Agent state memory. */
-  private async getAIResponse(
-    emailContext: string,
-    config: AppConfig,
-    logContext: InboundLogContext
-  ): Promise<AIResponseResult> {
-    // Clef is a System One decision model; cast until wrangler AiModels lists it.
-    const replyGate = await decideShouldReply(
-      {
-        // SAFETY: ClefDecision constructs System One requests; generated AiModels does not yet list Clef.
-        run: (model, inputs) => this.env.AI.run(model as never, inputs as never),
-      },
-      emailContext,
-      this.state.memory
-    );
-
-    const gateFields = {
-      ...logContext,
-      reason: replyGate.reason,
-      choice: replyGate.choice ?? "none",
-      confidence: replyGate.confidence ?? null,
-    };
-
-    if (!replyGate.shouldReply) {
-      this.logger.info("Clef injection screen blocked Prime Foo", gateFields);
-
-      return { shouldRespond: false, skipReason: replyGate.reason };
-    }
-
-    this.logger.info("Clef injection screen allowed Prime Foo", gateFields);
-
+  private async getAIResponse(emailContext: string, config: AppConfig): Promise<AIResponseResult> {
     if (!this.agentCoordinator) {
       this.agentCoordinator = await AgentCoordinator.create(this.env, config);
     }
