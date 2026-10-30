@@ -1,7 +1,7 @@
 /**
  * tests/workers/EmailPathLogging.test.ts
  *
- * Workers tests for the inbound email logging contract: receipt, skip, Clef, and terminal outcome
+ * Workers tests for the inbound email logging contract: receipt, skip, and terminal outcome
  * lines share one emailRef and never contain addresses, subjects, bodies, or Message-IDs; quoted
  * history is logged as flags, counts, and a fixed failure reason only; the learned Sent: zone as
  * source, offsetMinutes, a found flag, and a fixed reason only
@@ -9,10 +9,8 @@
  * Top-level declarations:
  * - LoggedLine: Structured log payload captured from console
  * - LogFieldValue: Field values emitted by Logger payloads
- * - AiRunStub / getAiRunStub: Minimal AI binding surface for spying
  * - captureLogs: Spies on console methods and collects structured log payloads
  * - expectNoSensitiveContent: Asserts serialized logs omit addresses, subject, body, and Message-ID
- * - mockClefChoice: Mocks env.AI.run to return a Clef reply/no_reply choice
  * - getUserAgentStub: Gets a per-sender UserAgent Durable Object stub
  * - getEmailBinding: Gets the UserAgent's structured Email Service binding
  * - createAgentEmail: Builds a mock AgentEmail
@@ -26,7 +24,6 @@ import type { AgentEmail } from "agents/email";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
-import { CLEF_MODEL } from "../../src/agents/utils/ClefDecision";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
 import { EMAIL_REF_HEADER } from "../../src/email/utils/LogRedaction";
 import worker, { createUserAgentResolver } from "../../src/index";
@@ -45,16 +42,15 @@ afterEach(async () => {
 });
 
 describe("inbound email logging contract", () => {
-  it("logs receipt, Clef decision with choice/confidence, and a skipped outcome", async () => {
+  it("logs receipt and one skipped outcome when Prime Foo declines a reply", async () => {
     const stub = getUserAgentStub(SENDER);
 
     const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
       const logs = captureLogs();
       vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockResolvedValue({
-        shouldRespond: true,
-        content: "<p>should not send</p>",
+        shouldRespond: false,
+        content: "",
       });
-      mockClefChoice("no_reply", 0.93);
       await instance.onEmail(createAgentEmail({}));
 
       return logs;
@@ -63,7 +59,6 @@ describe("inbound email logging contract", () => {
     const emailRef = WORKER_EMAIL_REF;
     expect(lines.map((line) => line.message)).toEqual([
       "Inbound email received by UserAgent",
-      "Clef injection screen blocked Prime Foo",
       "Inbound email completed without a reply",
       "Inbound email outcome",
     ]);
@@ -72,17 +67,12 @@ describe("inbound email logging contract", () => {
       senderDomain: "forces.gc.ca",
       receivingDomain: "caf-gpt.com",
     });
-    expect(lines[1]).toMatchObject({
-      choice: "no_reply",
-      confidence: 0.93,
-      reason: "clef_suspected_injection",
-    });
-    expect(lines[3]).toMatchObject({
+    expect(lines[2]).toMatchObject({
       level: "info",
       outcome: "skipped",
-      reason: "clef_suspected_injection",
+      reason: "prime_foo_no_response",
     });
-    expect(lines[3].durationMs).toEqual(expect.any(Number));
+    expect(lines[2].durationMs).toEqual(expect.any(Number));
     expectNoSensitiveContent(lines);
   });
 
@@ -124,7 +114,7 @@ describe("inbound email logging contract", () => {
     expect(lines.at(-1)).toMatchObject({ outcome: "skipped", reason: "self_sender" });
   });
 
-  it("logs Clef allow and a replied outcome", async () => {
+  it("logs a replied outcome without model output", async () => {
     const stub = getUserAgentStub(SENDER);
 
     const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
@@ -133,7 +123,6 @@ describe("inbound email logging contract", () => {
         shouldRespond: true,
         content: "<p>Model output that must not be logged</p>",
       });
-      mockClefChoice("reply", 0.91);
       // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
       vi.spyOn(instance, "schedule").mockResolvedValue({
         id: "schedule-1",
@@ -151,9 +140,6 @@ describe("inbound email logging contract", () => {
       return logs;
     });
 
-    expect(
-      lines.find((line) => line.message === "Clef injection screen allowed Prime Foo")
-    ).toMatchObject({ choice: "reply", confidence: 0.91, reason: "clef_reply" });
     expect(lines.at(-1)).toMatchObject({ outcome: "replied", reason: "reply_sent" });
     expect(JSON.stringify(lines)).not.toContain("Model output");
     expectNoSensitiveContent(lines);
@@ -168,7 +154,6 @@ describe("inbound email logging contract", () => {
         shouldRespond: true,
         content: "<p>Reply</p>",
       });
-      mockClefChoice("reply", 0.91);
       // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
       vi.spyOn(instance, "schedule").mockResolvedValue({
         id: "schedule-1",
@@ -206,7 +191,6 @@ describe("inbound email logging contract", () => {
         shouldRespond: true,
         content: "<p>Reply</p>",
       });
-      mockClefChoice("reply", 0.91);
       // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
       vi.spyOn(instance, "schedule").mockResolvedValue({
         id: "schedule-1",
@@ -255,7 +239,6 @@ describe("inbound email logging contract", () => {
         shouldRespond: true,
         content: "<p>Reply that must not go out without its quote</p>",
       });
-      mockClefChoice("reply", 0.91);
 
       const send = vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
         messageId: "error-reply",
@@ -311,7 +294,6 @@ describe("inbound email logging contract", () => {
         shouldRespond: true,
         content: "<p>Reply</p>",
       });
-      mockClefChoice("reply", 0.91);
       // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
       vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
 
@@ -377,7 +359,6 @@ describe("inbound email logging contract", () => {
         shouldRespond: true,
         content: "<p>Reply</p>",
       });
-      mockClefChoice("reply", 0.91);
       // SAFETY: schedule is mocked; UserAgent ignores the returned Schedule object.
       vi.spyOn(instance, "schedule").mockResolvedValue({ id: "schedule-1" } as never);
       vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({ messageId: "next-reply" });
@@ -405,7 +386,7 @@ describe("inbound email logging contract", () => {
 
     const lines = await runInDurableObject(stub, async (instance: UserAgent) => {
       const logs = captureLogs();
-      vi.spyOn(getAiRunStub(), "run").mockRejectedValue(
+      vi.spyOn(AgentCoordinator.prototype, "processWithPrimeFoo").mockRejectedValue(
         new Error(`AI failed for ${SENDER}: ${BODY}`)
       );
       vi.spyOn(getEmailBinding(instance), "send").mockResolvedValue({
@@ -549,23 +530,6 @@ interface LoggedLine {
 /** Field values emitted by Logger payloads. */
 type LogFieldValue = string | number | boolean | null | undefined | string[];
 
-/** Inputs passed to the AI binding by the Clef gate. */
-interface AiRunInputs {
-  text?: string;
-  state?: string;
-}
-
-/** Minimal AI binding surface spied on by these tests. */
-interface AiRunStub {
-  run(model: string, inputs: AiRunInputs): Promise<object>;
-}
-
-/** Gets env.AI through the minimal run surface used by the Clef gate. */
-function getAiRunStub(): AiRunStub {
-  // SAFETY: env.AI exposes run(model, inputs); tests only spy on that single method.
-  return env.AI as AiRunStub;
-}
-
 /** Spies on console methods and collects structured log payloads in call order. */
 function captureLogs(): LoggedLine[] {
   const lines: LoggedLine[] = [];
@@ -588,27 +552,6 @@ function expectNoSensitiveContent(lines: LoggedLine[]): void {
   expect(serialized).not.toContain(BODY.toLowerCase());
   expect(serialized).not.toContain("private-message-id");
   expect(serialized).not.toContain("agent@caf-gpt.com");
-}
-
-/** Mocks env.AI.run to return a Clef reply/no_reply choice for the gate. */
-function mockClefChoice(choice: "reply" | "no_reply", confidence: number): void {
-  vi.spyOn(getAiRunStub(), "run").mockImplementation(async (model: string) => {
-    if (model === CLEF_MODEL) {
-      return {
-        model: "clef",
-        answers: {
-          should_reply: {
-            type: "choice",
-            choice,
-            confidence,
-            probabilities: { reply: 0.5, no_reply: 0.5 },
-          },
-        },
-      };
-    }
-
-    throw new Error("Unexpected AI.run model");
-  });
 }
 
 /** Gets a per-sender UserAgent Durable Object stub. */
