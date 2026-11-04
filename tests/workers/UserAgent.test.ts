@@ -1409,29 +1409,30 @@ describe("UserAgent email processing", () => {
     const stub = getUserAgentStub("memory@forces.gc.ca");
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
-      vi.spyOn(env.AI, "run").mockRejectedValue(new Error("Unexpected classification request"));
-      const gateway = env.AI.gateway("caf-gpt");
-
-      const run = vi.spyOn(gateway, "run").mockResolvedValue(
-        Response.json({
-          id: "memory-response",
-          created_at: 1_750_000_000,
-          model: "gpt-5.6-luna",
-          output: [
-            {
-              type: "function_call",
-              id: "memory-tool-item",
-              call_id: "memory-decision",
-              name: toolName,
-              arguments: JSON.stringify(
-                toolName === "update_memory" ? { content: "Updated memory content" } : {}
-              ),
+      const run = vi.spyOn(env.AI, "run").mockResolvedValue({
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              role: "assistant",
+              content: "",
+              tool_calls: [
+                {
+                  id: "memory-decision",
+                  type: "function",
+                  function: {
+                    name: toolName,
+                    arguments: JSON.stringify(
+                      toolName === "update_memory" ? { content: "Updated memory content" } : {}
+                    ),
+                  },
+                },
+              ],
             },
-          ],
-        })
-      );
+          },
+        ],
+      });
 
-      vi.spyOn(env.AI, "gateway").mockReturnValue(gateway);
       const now = Date.now();
       const expired = now - MEMORY_VERSION_RETENTION_MS;
       const archived = { ts: expired - 1000, text: "Newest expired memory" };
@@ -1451,17 +1452,20 @@ describe("UserAgent email processing", () => {
     });
 
     expect(result.requests).toHaveLength(1);
-    expect(result.requests[0][0]).toEqual([
-      expect.objectContaining({
-        provider: "openai",
-        endpoint: "v1/responses",
-        query: expect.objectContaining({
-          model: "gpt-5.6-luna",
-          tool_choice: "required",
+    expect(result.requests[0][0]).toBe("@cf/zai-org/glm-5.3-flash");
+    expect(result.requests[0][1]).toMatchObject({
+      reasoning_effort: "high",
+      tool_choice: "required",
+      tools: expect.arrayContaining([
+        expect.objectContaining({ function: expect.objectContaining({ name: "update_memory" }) }),
+        expect.objectContaining({
+          function: expect.objectContaining({ name: "leave_memory_unchanged" }),
         }),
-      }),
-    ]);
-    const request = JSON.stringify(result.requests[0][0]);
+      ]),
+    });
+    expect(result.requests[0][2]).toMatchObject({ gateway: { id: "caf-gpt" } });
+    const request = JSON.stringify(result.requests[0][1]);
+
     expect(request).toContain("Old memory");
     expect(request).toContain("Memory Update Agent");
     expect(request).toContain("I prefer short answers.");

@@ -53,7 +53,9 @@ npm install
 
 ### 2. Configure Cloudflare AI Binding
 
-The committed `wrangler.jsonc` configures the `AI` Worker binding and routes OpenAI Responses requests through the `caf-gpt` AI Gateway. No Cloudflare REST API token is required.
+The committed `wrangler.jsonc` configures the `AI` Worker binding. The main agent uses native Workers AI `@cf/zai-org/glm-5.3`; specialists and memory use `@cf/zai-org/glm-5.3-flash`. Both explicitly request `reasoning_effort: "high"` through `workers-ai-provider` and the existing `caf-gpt` AI Gateway. No Cloudflare REST API token is required. OpenAI Responses routing remains available for explicit OpenAI model overrides.
+
+Both GLM models require a Workers Paid plan or prepaid AI Gateway credits. Account eligibility and the billing path must be confirmed before production use; local tests do not make paid inference calls. Cloudflare supports `low`, `high`, and `max` for these models; its compatibility alias `medium` maps to `max`, not a separate medium setting.
 
 Workers Logs and Traces are enabled via `observability` in `wrangler.jsonc` (takes effect on the next deploy).
 

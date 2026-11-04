@@ -75,7 +75,7 @@ ${agentReply}
 
       const providerOptions = createProviderOptions(modelConfig.model);
 
-      const memoryProviderOptions = providerOptions
+      const memoryProviderOptions = providerOptions?.openai
         ? {
             ...providerOptions,
             openai: {
@@ -83,7 +83,7 @@ ${agentReply}
               parallelToolCalls: false,
             },
           }
-        : undefined;
+        : providerOptions;
 
       let recorded: MemoryUpdateResult | undefined;
       let extraDecision = false;
