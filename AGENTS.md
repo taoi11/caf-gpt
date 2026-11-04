@@ -50,7 +50,7 @@ Emails are processed through **Cloudflare Email Workers**:
 - `batch_research` accepts leave, DOAD, and QR&O query arrays, then runs the requested sub-agent research calls concurrently.
   - Research sub-agents are `LeaveFooAgent`, `DoadFooAgent`, and `QroFooAgent`.
   - Each domain accepts up to 3 questions per `batch_research` call.
-  - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent` and use one bounded `generateText()` tool loop (Luna) to select and read indexed documents. The full `| Id | Title | File |` index is in the prompt (`{doad_table}` / `{qro_index}`), and the model calls `read_file({ file })` with an exact Id from it.
+  - `DoadFooAgent` and `QroFooAgent` extend `ToolReadingAgent` and use one bounded `generateText()` tool loop (GLM-5.3 Flash) to select and read indexed documents. The full `| Id | Title | File |` index is in the prompt (`{doad_table}` / `{qro_index}`), and the model calls `read_file({ file })` with an exact Id from it.
   - Their `read_file` tool allows at most 5 attempts, 3 successful reads, and 2 correctable bad calls, within `stopWhen: [stepCountIs(6), stopOnReadToolError]`. Successful-read slots are reserved before asynchronous loads so concurrent tool execution cannot exceed the cap. A bad call (Id not in the index, or past the read cap) returns an error result to the model so it can correct itself; the 3rd bad call, a 6th attempt, or any tool failure throws and ends the loop at that step.
   - There is no fallback: zero successful reads, an empty answer, rejected tool input, or ending on a tool call at the step limit fails loudly to the error-reply boundary. Typed app errors from a read (for example `StorageNotFoundError`) pass through unchanged; anything else becomes `AgentValidationError`. An index with zero usable rows fails with `StorageValidationError`.
   - Logs carry counts only, through `toLoggableToolReadDiagnostics` in `LogRedaction.ts`: `readReason` (a fixed code from `TOOL_READ_REASONS`), `totalCalls`, `successfulReads`, `badCalls`, `steps`, `indexRows`, `skippedRows`, plus `questionLength` and, for Workers AI binding errors, the numeric `aiUpstreamCode`. Never the question, Ids, titles, bodies, prompts, or model output.
@@ -92,7 +92,7 @@ R2 organization: `${category}/${filename}`
 
 ## LLM Integration
 
-The codebase uses **Vercel AI SDK** (`ai` + `@ai-sdk/openai`) with the OpenAI Responses provider routed through Cloudflare AI Gateway via the Worker AI binding.
+The codebase uses **Vercel AI SDK** (`ai` + `workers-ai-provider`) with native Workers AI models routed through Cloudflare AI Gateway via the Worker AI binding. The model factory retains the OpenAI Responses route for existing OpenAI configurations.
 
 **Key points:**
 
@@ -100,8 +100,8 @@ The codebase uses **Vercel AI SDK** (`ai` + `@ai-sdk/openai`) with the OpenAI Re
 - **Prompt templating**: Uses `PromptManager` with `{variable}` syntax for template rendering
 - **Tool validation**: Uses Zod input schemas for Prime Foo, memory, and `read_file` tool calls
 - **Tool calling**: Prime Foo, Memory Foo, and indexed policy agents use AI SDK `generateText()` tools
-- **AI Gateway**: Routes OpenAI Responses requests through the `AI` Worker binding using `workers-ai-provider/gateway`; no Cloudflare REST API token is used
-- **Models**: `openai/gpt-5.6-terra` (orchestrator), `openai/gpt-5.6-luna` (specialists); both use temperature 0 and high reasoning effort
+- **AI Gateway**: Routes native models through `createWorkersAI` with the `AI` Worker binding and gateway `caf-gpt`; the OpenAI Responses route uses `workers-ai-provider/gateway`. No Cloudflare REST API token is used.
+- **Models**: `@cf/zai-org/glm-5.3` (orchestrator), `@cf/zai-org/glm-5.3-flash` (specialists); both use temperature 0 and explicit `reasoning_effort: "high"`.
 - **Streaming is disabled** for CPU efficiency in Cloudflare Workers
 
 ## Adding New Agents/Sub-agents
