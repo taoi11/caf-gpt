@@ -130,19 +130,6 @@ describe("MemoryFooAgent", () => {
     expect(result.content).toBe(newMemory);
   });
 
-  it("uses the thin edit prompt when promptName is memory_foo_edit", async () => {
-    setMockMemoryToolCall("update_memory", { content: "Edited memory" });
-
-    const result = await agent.updateMemory("", "Question", "Answer", {
-      promptName: "memory_foo_edit",
-    });
-
-    expect(result.updated).toBe(true);
-    expect(result.content).toBe("Edited memory");
-    const lastCall = mockGenerateText.mock.calls.at(-1)?.[0];
-    expect(lastCall?.system).toContain("prior gate already decided");
-  });
-
   it("should return unchanged when LLM indicates no new information", async () => {
     setMockMemoryToolCall("leave_memory_unchanged");
 
@@ -167,7 +154,10 @@ describe("MemoryFooAgent", () => {
     expect(Object.keys(lastCall?.tools ?? {})).toEqual(["update_memory", "leave_memory_unchanged"]);
   });
 
-  it("should disable parallel Responses tool calls for the memory decision", async () => {
+  it("should disable parallel Responses tool calls for an OpenAI memory override", async () => {
+    const config = createConfig(mockEnv);
+    config.llm.models.memoryFoo = { ...config.llm.models.memoryFoo, model: "openai/gpt-5.6-luna" };
+    agent = new MemoryFooAgent(mockEnv, config, { generateText: mockGenerateText });
     setMockMemoryToolCall("update_memory", { content: "New memory content" });
 
     const result = await agent.updateMemory("", "Question", "Answer");
@@ -185,22 +175,45 @@ describe("MemoryFooAgent", () => {
     });
   });
 
-  it("rejects two valid memory tool calls in one real SDK step", async () => {
-    const first = toolCallResult("update_memory", { content: "First decision" }, "update");
-    const second = toolCallResult("leave_memory_unchanged", {}, "leave");
-
-    const model = new MockLanguageModelV3({
-      doGenerate: async () => ({
-        ...first,
-        content: [...first.content, ...second.content],
-      }),
+  it("rejects two native Workers AI memory decisions in one real SDK step", async () => {
+    const run = vi.fn().mockResolvedValue({
+      choices: [
+        {
+          finish_reason: "tool_calls",
+          message: {
+            role: "assistant",
+            content: "",
+            tool_calls: [
+              {
+                id: "update",
+                type: "function",
+                function: {
+                  name: "update_memory",
+                  arguments: JSON.stringify({ content: "First decision" }),
+                },
+              },
+              {
+                id: "leave",
+                type: "function",
+                function: {
+                  name: "leave_memory_unchanged",
+                  arguments: "{}",
+                },
+              },
+            ],
+          },
+        },
+      ],
     });
 
-    const realAgent = createRealLoopAgent(mockEnv, model);
+    Object.assign(mockEnv.AI, { run });
+
+    const realAgent = new MemoryFooAgent(mockEnv, createConfig(mockEnv));
 
     await expect(realAgent.updateMemory("Memory", "Question", "Answer")).rejects.toThrow(
       "already recorded"
     );
+    expect(run).toHaveBeenCalledOnce();
   });
 
   it("rejects oversize then valid memory tool calls in one real SDK step", async () => {

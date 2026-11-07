@@ -30,6 +30,7 @@ import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from "vite
 import { AgentCoordinator } from "../../src/agents/AgentCoordinator";
 import { MemoryFooAgent } from "../../src/agents/sub-agents";
 import { getUserAgentId, type UserAgent } from "../../src/agents/UserAgent";
+import { MEMORY_VERSION_RETENTION_MS } from "../../src/agents/memoryPolicy";
 import worker, { createUserAgentResolver } from "../../src/index";
 
 const mockGenerateText = vi.fn();
@@ -152,6 +153,7 @@ describe("UserAgent email processing", () => {
 
     const result = await runInDurableObject(stub, async (instance: UserAgent) => {
       const sentMessages: StructuredEmailMessage[] = [];
+      vi.spyOn(env.AI, "run").mockRejectedValue(new Error("Unexpected classification request"));
 
       const processWithPrimeFoo = vi.fn<AgentCoordinator["processWithPrimeFoo"]>(
         async (_context, memory) => ({
@@ -1400,25 +1402,82 @@ describe("UserAgent email processing", () => {
     expect(result).toEqual({ aiCalls: 0, replies: 0 });
   });
 
-  it("persists memory updates into Agent state", async () => {
+  it.each([
+    "update_memory",
+    "leave_memory_unchanged",
+  ] as const)("persists the scheduled LLM's %s decision and prunes expired versions", async (toolName) => {
     const stub = getUserAgentStub("memory@forces.gc.ca");
-    vi.spyOn(MemoryFooAgent.prototype, "updateMemory").mockResolvedValue({
-      updated: true,
-      content: "Updated memory content",
-    });
 
-    const state = await runInDurableObject(stub, async (instance: UserAgent) => {
-      instance.setState({ memory: "Old memory", versions: [] });
-      await instance.runMemoryUpdate({
-        emailContext: "Subject: Test\n\nUser details",
-        agentReply: "Agent reply",
+    const result = await runInDurableObject(stub, async (instance: UserAgent) => {
+      const run = vi.spyOn(env.AI, "run").mockResolvedValue({
+        choices: [
+          {
+            finish_reason: "tool_calls",
+            message: {
+              role: "assistant",
+              content: "",
+              tool_calls: [
+                {
+                  id: "memory-decision",
+                  type: "function",
+                  function: {
+                    name: toolName,
+                    arguments: JSON.stringify(
+                      toolName === "update_memory" ? { content: "Updated memory content" } : {}
+                    ),
+                  },
+                },
+              ],
+            },
+          },
+        ],
       });
 
-      return instance.state;
+      const now = Date.now();
+      const expired = now - MEMORY_VERSION_RETENTION_MS;
+      const archived = { ts: expired - 1000, text: "Newest expired memory" };
+      instance.setState({
+        memory: "Old memory",
+        versions: [{ ts: expired - 2000, text: "Older expired memory" }, archived],
+      });
+
+      const task = {
+        emailContext: "Subject: Preference\n\nI prefer short answers.",
+        agentReply: "Understood.",
+      };
+
+      await instance.runMemoryUpdate(task);
+
+      return { state: instance.state, requests: run.mock.calls, archived, task };
     });
 
-    expect(state.memory).toBe("Updated memory content");
-    expect(state.versions).toEqual([expect.objectContaining({ text: "Old memory" })]);
+    expect(result.requests).toHaveLength(1);
+    expect(result.requests[0][0]).toBe("@cf/zai-org/glm-5.3-flash");
+    expect(result.requests[0][1]).toMatchObject({
+      reasoning_effort: "high",
+      tool_choice: "required",
+      tools: expect.arrayContaining([
+        expect.objectContaining({ function: expect.objectContaining({ name: "update_memory" }) }),
+        expect.objectContaining({
+          function: expect.objectContaining({ name: "leave_memory_unchanged" }),
+        }),
+      ]),
+    });
+    expect(result.requests[0][2]).toMatchObject({ gateway: { id: "caf-gpt" } });
+    const request = JSON.stringify(result.requests[0][1]);
+
+    expect(request).toContain("Old memory");
+    expect(request).toContain("Memory Update Agent");
+    expect(request).toContain("I prefer short answers.");
+    expect(request).toContain(result.task.agentReply);
+    expect(result.state.memory).toBe(
+      toolName === "update_memory" ? "Updated memory content" : "Old memory"
+    );
+    expect(result.state.versions).toEqual(
+      toolName === "update_memory"
+        ? [result.archived, expect.objectContaining({ text: "Old memory" })]
+        : [result.archived]
+    );
   });
 
   it("does not persist oversize memory updates", async () => {

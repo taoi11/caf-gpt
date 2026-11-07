@@ -3,7 +3,7 @@
  * https://developers.cloudflare.com/workers/wrangler/configuration/
  *
  * Required bindings:
- * - AI: Cloudflare Workers AI binding used to route OpenAI Responses requests through AI Gateway
+ * - AI: Native Workers AI and optional OpenAI Responses requests through AI Gateway
  */
 {
   "$schema": "node_modules/wrangler/config-schema.json",
