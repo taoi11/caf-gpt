@@ -5,7 +5,7 @@
  * formatting, and the inbound HTML sanitizer
  *
  * Top-level declarations:
- * - formatOutlookSentDate suite: Edmonton time, no weekday, final DST start, permanent UTC-6, learned offsets
+ * - formatOutlookSentDate suite: Edmonton time, no weekday, DST start/end boundaries, learned offsets
  * - formatOutlookMailbox suite: Name <address>, bare address, groups
  * - sanitizeQuotedHtml suite: Active content, document wrappers, attributes, URLs, CSS allowlist
  * - buildQuotedHistory suite: HTML/text layout, Cc only when present, escaping, fail-loud reasons
@@ -31,11 +31,12 @@ describe("formatOutlookSentDate", () => {
     // DST starts 2026-03-08 02:00 MST -> 03:00 MDT.
     ["2026-03-08T08:59:00Z", "March 8, 2026 1:59 AM"],
     ["2026-03-08T09:00:00Z", "March 8, 2026 3:00 AM"],
-    // Alberta stays on UTC-6: no November 2026 fall-back, including through winter.
-    ["2026-11-01T07:30:00Z", "November 1, 2026 1:30 AM"],
-    ["2026-11-01T08:30:00Z", "November 1, 2026 2:30 AM"],
-    ["2026-11-01T09:00:00Z", "November 1, 2026 3:00 AM"],
-    ["2027-01-01T06:59:00Z", "January 1, 2027 12:59 AM"],
+    // DST ends 2025-11-02 02:00 MDT -> 01:00 MST (1:30 AM happens twice). A 2025 date keeps
+    // these fixtures independent of runtime tzdata versions that change later Alberta rules.
+    ["2025-11-02T07:30:00Z", "November 2, 2025 1:30 AM"],
+    ["2025-11-02T08:30:00Z", "November 2, 2025 1:30 AM"],
+    ["2025-11-02T09:00:00Z", "November 2, 2025 2:00 AM"],
+    ["2026-01-01T06:59:00Z", "December 31, 2025 11:59 PM"],
   ])("formats %s as %s in America/Edmonton without a weekday", (iso, expected) => {
     expect(formatOutlookSentDate(new Date(iso))).toBe(expected);
   });
