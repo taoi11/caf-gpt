@@ -1,14 +1,14 @@
 /**
  * src/agents/utils/BaseAgent.ts
  *
- * Base agent with OpenAI Responses integration routed through Cloudflare AI Gateway
+ * Base agent with native Workers AI and OpenAI Responses integration through AI Gateway
  *
  * Top-level declarations:
  * - BaseAgentDependencies: Injectable model and generation functions for BaseAgent workflows
  * - CreateModelDependencies: Injectable provider factories for model construction
  * - BaseAgent: Base agent with AI SDK integration and template-based prompts
  * - isOpenAIResponsesModel: Checks if a model uses the OpenAI Responses provider
- * - createModel: Creates an OpenAI Responses model routed through Cloudflare AI Gateway
+ * - createModel: Routes native Workers AI or OpenAI Responses models through AI Gateway
  * - createProviderOptions: Creates model-specific provider options
  * - callLangChain: Plain-text model call used by one-call sub-agents
  */
@@ -16,6 +16,7 @@
 import { createOpenAI } from "@ai-sdk/openai";
 import type { LanguageModel } from "ai";
 import { generateText } from "ai";
+import { createWorkersAI } from "workers-ai-provider";
 import { createGatewayFetch } from "workers-ai-provider/gateway";
 import type { AppConfig } from "../../config";
 import { AgentAPIError, AgentTimeoutError, AgentValidationError } from "../../errors";
@@ -66,17 +67,28 @@ function isOpenAIResponsesModel(model: string): boolean {
   return model.startsWith(GPT_56_MODEL_PREFIX);
 }
 
-// Creates model-specific provider options for AI SDK calls.
+/** Creates model-specific reasoning and storage options for AI SDK calls. */
 export function createProviderOptions(model: string): ModelProviderOptions | undefined {
+  if (model === "@cf/zai-org/glm-5.3" || model === "@cf/zai-org/glm-5.3-flash") {
+    return { "workers-ai": { reasoning_effort: "high" } };
+  }
+
   return isOpenAIResponsesModel(model) ? OPENAI_RESPONSES_OPTIONS : undefined;
 }
 
-// Creates an OpenAI Responses model whose native request is routed by the AI binding Gateway API.
+/** Routes native Workers AI models through the binding, retaining Responses for other models. */
 export function createModel(
   env: Env,
   model: string,
   dependencies: CreateModelDependencies = { createOpenAI, createGatewayFetch }
 ): LanguageModel {
+  if (model.startsWith("@cf/")) {
+    return createWorkersAI({
+      binding: env.AI,
+      gateway: { id: CLOUDFLARE_AI_GATEWAY },
+    })(model);
+  }
+
   const openai = dependencies.createOpenAI({
     apiKey: "unused",
     fetch: dependencies.createGatewayFetch({
@@ -131,7 +143,7 @@ export abstract class BaseAgent {
   // Plain-text model call used by one-call sub-agents
   protected async callLangChain(params: LLMCallParams): Promise<string> {
     try {
-      this.logger.info("Calling OpenAI Responses via Cloudflare AI Gateway", {
+      this.logger.info("Calling AI SDK via Cloudflare AI Gateway", {
         promptName: params.promptName,
       });
 

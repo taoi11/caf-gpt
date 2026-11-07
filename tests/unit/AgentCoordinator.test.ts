@@ -35,11 +35,14 @@ describe("AgentCoordinator failure logging", () => {
     mockGenerateText.mockReset();
   });
 
-  it("passes ZDR-safe Responses options to the Prime Foo tool loop", async () => {
+  it("passes ZDR-safe Responses options for an OpenAI Prime Foo override", async () => {
     mockGenerateText.mockResolvedValueOnce({ text: "answer", steps: [] });
     const testEnv = createMockEnv();
 
-    const coordinator = await AgentCoordinator.create(testEnv, createConfig(testEnv), {
+    const config = createConfig(testEnv);
+    config.llm.models.primeFoo = { ...config.llm.models.primeFoo, model: "openai/gpt-5.6-terra" };
+
+    const coordinator = await AgentCoordinator.create(testEnv, config, {
       createModel: createTestModel,
       generateText: mockGenerateText,
     });

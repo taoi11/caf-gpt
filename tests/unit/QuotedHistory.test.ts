@@ -31,11 +31,12 @@ describe("formatOutlookSentDate", () => {
     // DST starts 2026-03-08 02:00 MST -> 03:00 MDT.
     ["2026-03-08T08:59:00Z", "March 8, 2026 1:59 AM"],
     ["2026-03-08T09:00:00Z", "March 8, 2026 3:00 AM"],
-    // DST ends 2026-11-01 02:00 MDT -> 01:00 MST (1:30 AM happens twice).
-    ["2026-11-01T07:30:00Z", "November 1, 2026 1:30 AM"],
-    ["2026-11-01T08:30:00Z", "November 1, 2026 1:30 AM"],
-    ["2026-11-01T09:00:00Z", "November 1, 2026 2:00 AM"],
-    ["2027-01-01T06:59:00Z", "December 31, 2026 11:59 PM"],
+    // DST ends 2025-11-02 02:00 MDT -> 01:00 MST (1:30 AM happens twice). A 2025 date keeps
+    // these fixtures independent of runtime tzdata versions that change later Alberta rules.
+    ["2025-11-02T07:30:00Z", "November 2, 2025 1:30 AM"],
+    ["2025-11-02T08:30:00Z", "November 2, 2025 1:30 AM"],
+    ["2025-11-02T09:00:00Z", "November 2, 2025 2:00 AM"],
+    ["2026-01-01T06:59:00Z", "December 31, 2025 11:59 PM"],
   ])("formats %s as %s in America/Edmonton without a weekday", (iso, expected) => {
     expect(formatOutlookSentDate(new Date(iso))).toBe(expected);
   });
